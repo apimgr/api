@@ -12,6 +12,7 @@
 
 ## Project Structure
 ```
+
 api/
 ├── cmd/
 │   └── api/
@@ -88,6 +89,7 @@ api/
 └── .github/
     └── workflows/
         └── ci.yml                # GitHub Actions
+
 ```
 
 ## Core Implementation Rules
@@ -128,7 +130,9 @@ type MetaInfo struct {
 ```
 
 ### 3. Path Parameter Pattern
+
 Use path parameters instead of query strings where logical:
+
 ```go
 // Good
 router.HandleFunc("/api/v1/network/ip/{ip}", handleIPLookup)
@@ -140,18 +144,22 @@ router.HandleFunc("/api/v1/network/ip?ip={ip}", handleIPLookup)
 ```
 
 ### 4. Help Endpoints
+
 Every category MUST have a `:help` endpoint:
+
 ```go
 router.HandleFunc("/api/v1/{category}/:help", handleCategoryHelp)
 router.HandleFunc("/api/v1/{category}/:help/{format}", handleCategoryHelpFormatted)
 ```
 
 ### 5. Environment Variables
+
 All configuration via environment variables, NO config files:
+
 ```go
 var (
     apiHost     = getEnv("API_HOST", "0.0.0.0")
-    apiPort     = getEnv("API_PORT", "8080")
+    apiPort     = getEnv("API_PORT", "80")
     rateLimit   = getEnv("RATE_LIMIT", "100/minute")
     corsOrigins = getEnv("CORS_ORIGINS", "*")
     dbPath      = getEnv("DB_PATH", "/var/lib/api/data.db")
@@ -161,7 +169,9 @@ var (
 ```
 
 ### 6. Error Codes
+
 Standardized error codes:
+
 ```
 {CATEGORY}_{SPECIFIC_ERROR}
 
@@ -177,8 +187,10 @@ Categories:
 ```
 
 ### 7. Rate Limiting
+
 Default: 100 requests/minute per IP
 Headers:
+
 ```
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 95
@@ -186,7 +198,9 @@ X-RateLimit-Reset: 1704067200
 ```
 
 ### 8. CORS
+
 Default: Allow all origins (`*`)
+
 ```go
 w.Header().Set("Access-Control-Allow-Origin", "*")
 w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
@@ -194,7 +208,9 @@ w.Header().Set("Access-Control-Allow-Headers", "*")
 ```
 
 ### 9. Reverse Proxy Support
+
 Trust these headers:
+
 ```go
 realIP := r.Header.Get("X-Real-IP")
 if realIP == "" {
@@ -206,7 +222,9 @@ if realIP == "" {
 ```
 
 ### 10. Dark Theme Default
+
 Frontend defaults to dark theme:
+
 ```javascript
 const defaultTheme = localStorage.getItem('theme') || 'dark';
 document.documentElement.setAttribute('data-theme', defaultTheme);
@@ -265,6 +283,7 @@ document.documentElement.setAttribute('data-theme', defaultTheme);
 ## Implementation Guidelines
 
 ### Handler Template
+
 ```go
 func handleEndpoint(w http.ResponseWriter, r *http.Request) {
     // 1. Parse parameters
@@ -290,14 +309,18 @@ func handleEndpoint(w http.ResponseWriter, r *http.Request) {
 ```
 
 ### External API Integration
+
 Only use FREE, token-free, commercially-friendly APIs:
+
 - OpenStreetMap (geocoding)
 - IP-API (IP geolocation)
 - REST Countries (country data)
 - ExchangeRate-API (currency)
 
 ### Database Schema
+
 SQLite for static data:
+
 ```sql
 CREATE TABLE codes (
     type TEXT,
@@ -314,6 +337,7 @@ CREATE TABLE cache (
 ```
 
 ### Frontend Requirements
+
 - Dark theme default
 - Mobile responsive (98% width <720px, 90% ≥720px)
 - Footer always at bottom (not sticky)
@@ -321,6 +345,7 @@ CREATE TABLE cache (
 - Cookie-based preferences (no backend storage)
 
 ### Performance Targets
+
 - Response time: <100ms (cached)
 - Response time: <500ms (external API)
 - Startup time: <2 seconds
@@ -330,6 +355,7 @@ CREATE TABLE cache (
 ## Testing Strategy
 
 ### Unit Tests
+
 ```go
 func TestEndpoint(t *testing.T) {
     // Test valid input
@@ -340,12 +366,14 @@ func TestEndpoint(t *testing.T) {
 ```
 
 ### Integration Tests
+
 - Test each category
 - Test rate limiting
 - Test CORS
 - Test error responses
 
 ### Load Tests
+
 - 1000 req/sec sustained
 - 5000 req/sec burst
 - 10000 concurrent connections
@@ -353,6 +381,7 @@ func TestEndpoint(t *testing.T) {
 ## Deployment
 
 ### Docker
+
 ```dockerfile
 FROM golang:1.21-alpine AS builder
 # Build stage
@@ -362,6 +391,7 @@ FROM alpine:latest
 ```
 
 ### Systemd
+
 ```ini
 [Unit]
 Description=API Service
@@ -380,6 +410,7 @@ WantedBy=multi-user.target
 ## Monitoring
 
 ### Health Check
+
 ```
 GET /api/v1/health
 GET /api/v1/status
@@ -387,6 +418,7 @@ GET /healthz
 ```
 
 ### Metrics
+
 - Request count
 - Response times
 - Error rates
@@ -404,6 +436,7 @@ GET /healthz
 ## External Dependencies
 
 ### Go Modules
+
 - `gorilla/mux` - Routing
 - `go-redis/redis` - Caching (optional)
 - `mattn/go-sqlite3` - Database
@@ -411,6 +444,7 @@ GET /healthz
 - `golang.org/x/time/rate` - Rate limiting
 
 ### Frontend
+
 - Tailwind CSS (CDN)
 - Alpine.js (CDN)
 - No build process required
@@ -427,6 +461,7 @@ GET /healthz
 ## Common Patterns
 
 ### Batch Operations
+
 ```go
 POST /api/v1/batch
 {
@@ -436,12 +471,14 @@ POST /api/v1/batch
 ```
 
 ### Format Selection
+
 ```
 GET /endpoint?format=json|xml|yaml|csv
 Accept: application/json
 ```
 
 ### Pagination
+
 ```
 GET /endpoint?page=1&limit=20
 ```
@@ -449,6 +486,7 @@ GET /endpoint?page=1&limit=20
 ## Notes for Claude Code
 
 When implementing with Claude Code:
+
 1. Start with router setup
 2. Implement one category fully as template
 3. Replicate pattern for other categories
@@ -459,6 +497,7 @@ When implementing with Claude Code:
 8. Create Docker setup
 
 Remember:
+
 - No authentication required
 - Everything is public
 - Rate limiting is the main protection
@@ -468,6 +507,7 @@ Remember:
 ## Questions/Clarifications Needed
 
 Before implementation:
+
 1. Redis required or optional for caching?
 2. PostgreSQL option or SQLite only?
 3. CDN for static assets?
@@ -480,6 +520,7 @@ Before implementation:
 - Future: GraphQL support?
 - Future: WebSocket support?
 - Future: gRPC support?
+
 ```
 
 This CLAUDE.md file provides a complete implementation guide for Claude Code, with all the context, patterns, and rules needed to build the API service correctly. It includes the structure, conventions, and specific requirements while following the "no code generation" rule - focusing on planning and organization instead.
