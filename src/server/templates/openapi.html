@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - {{.SiteTitle}}</title>
+    <meta name="description" content="REST API documentation for CasTools - Universal API Toolkit">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav">
+            <a href="/" class="nav-brand">
+                <div class="nav-brand-icon">🛠️</div>
+                <span>{{.SiteTitle}}</span>
+            </a>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/text" class="nav-link">Text</a>
+                <a href="/crypto" class="nav-link">Crypto</a>
+                <a href="/datetime" class="nav-link">DateTime</a>
+                <a href="/api" class="nav-link active">API</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="search-section">
+            <div class="container">
+                <div class="section-header">
+                    <h1 class="section-title">API Documentation</h1>
+                    <p class="section-description">REST API endpoints for all utilities. Add <code>.txt</code> to any endpoint for plain text output.</p>
+                </div>
+
+                <!-- Text APIs -->
+                <div class="api-section">
+                    <h2 class="api-section-title">Text Utilities</h2>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/uuid</code>
+                        </div>
+                        <p class="endpoint-desc">Generate a random UUID v4</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/uuid</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/uuid/{version}</code>
+                        </div>
+                        <p class="endpoint-desc">Generate UUID of specific version (1, 4, or 7)</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/uuid/7</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/uuid/{version}/{count}</code>
+                        </div>
+                        <p class="endpoint-desc">Generate multiple UUIDs (max 100)</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/uuid/4/5</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/hash/{algorithm}/{text}</code>
+                        </div>
+                        <p class="endpoint-desc">Calculate hash of text. Algorithms: md5, sha1, sha256, sha384, sha512</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/hash/sha256/hello</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/hash/multi/{text}</code>
+                        </div>
+                        <p class="endpoint-desc">Calculate all hash algorithms at once</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/hash/multi/hello</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/encode/{encoding}/{text}</code>
+                        </div>
+                        <p class="endpoint-desc">Encode text. Encodings: base64, base64url, base32, hex, url</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/encode/base64/hello</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/decode/{encoding}/{text}</code>
+                        </div>
+                        <p class="endpoint-desc">Decode text from encoding</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/decode/base64/aGVsbG8=</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/text/lorem/{type}/{count}</code>
+                        </div>
+                        <p class="endpoint-desc">Generate lorem ipsum. Types: paragraphs, sentences, words</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/text/lorem/paragraphs/3</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Crypto APIs -->
+                <div class="api-section">
+                    <h2 class="api-section-title">Cryptography</h2>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/crypto/password/{length}</code>
+                        </div>
+                        <p class="endpoint-desc">Generate secure random password. Query params: upper, lower, numbers, symbols (bool)</p>
+                        <div class="endpoint-example">
+                            <code>curl "{{.BaseURL}}/api/v1/crypto/password/24?symbols=false"</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/crypto/password/strength/{password}</code>
+                        </div>
+                        <p class="endpoint-desc">Analyze password strength</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/crypto/password/strength/MyP4ssw0rd!</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/crypto/bcrypt/hash/{password}</code>
+                        </div>
+                        <p class="endpoint-desc">Generate bcrypt hash. Query param: cost (4-31, default 10)</p>
+                        <div class="endpoint-example">
+                            <code>curl "{{.BaseURL}}/api/v1/crypto/bcrypt/hash/mypassword?cost=12"</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/crypto/bcrypt/verify/{password}/{hash}</code>
+                        </div>
+                        <p class="endpoint-desc">Verify password against bcrypt hash</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/crypto/bcrypt/verify/mypassword/$2a$10$...</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/crypto/totp/{secret}</code>
+                        </div>
+                        <p class="endpoint-desc">Generate TOTP code. Query params: digits (6/8), period (30/60)</p>
+                        <div class="endpoint-example">
+                            <code>curl "{{.BaseURL}}/api/v1/crypto/totp/JBSWY3DPEHPK3PXP?digits=6&period=30"</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/crypto/totp/secret</code>
+                        </div>
+                        <p class="endpoint-desc">Generate new TOTP secret (Base32)</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/crypto/totp/secret</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DateTime APIs -->
+                <div class="api-section">
+                    <h2 class="api-section-title">DateTime</h2>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/now</code>
+                        </div>
+                        <p class="endpoint-desc">Get current time in multiple formats. Query param: timezone</p>
+                        <div class="endpoint-example">
+                            <code>curl "{{.BaseURL}}/api/v1/datetime/now?timezone=America/New_York"</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/from/{timestamp}</code>
+                        </div>
+                        <p class="endpoint-desc">Convert Unix timestamp to various formats. Handles s/ms/us/ns</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/datetime/from/1700000000</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/to/{datetime}</code>
+                        </div>
+                        <p class="endpoint-desc">Convert datetime string to Unix timestamp</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/datetime/to/2024-01-15T10:30:00Z</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/add/{timestamp}/{duration}</code>
+                        </div>
+                        <p class="endpoint-desc">Add duration to timestamp. Formats: 1h, 2d, 1w, 1M, 1y</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/datetime/add/1700000000/7d</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/diff/{from}/{to}</code>
+                        </div>
+                        <p class="endpoint-desc">Calculate difference between two timestamps</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/datetime/diff/1700000000/1700086400</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/timezones</code>
+                        </div>
+                        <p class="endpoint-desc">List common timezones with current times</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/datetime/timezones</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/timezone/{name}</code>
+                        </div>
+                        <p class="endpoint-desc">Get info about specific timezone</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/datetime/timezone/America/New_York</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/api/v1/datetime/convert/{timestamp}/{from}/{to}</code>
+                        </div>
+                        <p class="endpoint-desc">Convert timestamp between timezones</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/api/v1/datetime/convert/1700000000/UTC/Asia/Tokyo</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System APIs -->
+                <div class="api-section">
+                    <h2 class="api-section-title">System</h2>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/healthz</code>
+                        </div>
+                        <p class="endpoint-desc">Health check endpoint</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/healthz</code>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-card">
+                        <div class="endpoint-header">
+                            <span class="method get">GET</span>
+                            <code class="endpoint-path">/readyz</code>
+                        </div>
+                        <p class="endpoint-desc">Readiness check endpoint</p>
+                        <div class="endpoint-example">
+                            <code>curl {{.BaseURL}}/readyz</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Response Formats -->
+                <div class="api-section">
+                    <h2 class="api-section-title">Response Formats</h2>
+                    <div class="info-card">
+                        <h3>JSON (Default)</h3>
+                        <p>All endpoints return JSON by default:</p>
+                        <code class="block-code">curl {{.BaseURL}}/api/v1/text/uuid</code>
+                        <pre>{"uuid": "550e8400-e29b-41d4-a716-446655440000"}</pre>
+                    </div>
+                    <div class="info-card">
+                        <h3>Plain Text (.txt)</h3>
+                        <p>Add <code>.txt</code> to any endpoint for plain text output:</p>
+                        <code class="block-code">curl {{.BaseURL}}/api/v1/text/uuid.txt</code>
+                        <pre>550e8400-e29b-41d4-a716-446655440000</pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <div class="footer-logo">🛠️</div>
+                <span class="footer-text">{{.SiteTitle}} - Part of apimgr</span>
+            </div>
+            <div class="footer-links">
+                <a href="/api" class="footer-link">API Docs</a>
+                <a href="/healthz" class="footer-link">Status</a>
+                <a href="https://github.com/apimgr" class="footer-link">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+
+    <style>
+        .api-section {
+            margin-bottom: var(--space-8);
+        }
+
+        .api-section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: var(--space-4);
+            padding-bottom: var(--space-2);
+            border-bottom: 2px solid var(--primary);
+        }
+
+        .endpoint-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            margin-bottom: var(--space-3);
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-2);
+        }
+
+        .method {
+            display: inline-block;
+            padding: var(--space-1) var(--space-2);
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .method.get {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .method.post {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .endpoint-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .endpoint-desc {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: var(--space-2);
+        }
+
+        .endpoint-example {
+            background: var(--bg-tertiary);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            overflow-x: auto;
+        }
+
+        .endpoint-example code {
+            color: var(--primary);
+        }
+
+        .info-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            margin-bottom: var(--space-3);
+        }
+
+        .info-card h3 {
+            font-size: 1rem;
+            margin-bottom: var(--space-2);
+        }
+
+        .info-card p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: var(--space-2);
+        }
+
+        .block-code {
+            display: block;
+            background: var(--bg-tertiary);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            margin-bottom: var(--space-2);
+            color: var(--primary);
+        }
+
+        .info-card pre {
+            background: var(--bg-primary);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            overflow-x: auto;
+        }
+
+        @media (max-width: 768px) {
+            .endpoint-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: var(--space-1);
+            }
+        }
+    </style>
+</body>
+</html>
