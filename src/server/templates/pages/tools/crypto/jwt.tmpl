@@ -1,0 +1,79 @@
+{{define "content"}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+      <a href="/">Home</a> / <a href="/crypto">Crypto</a> / JWT Decoder
+    </nav>
+    
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">JWT Decoder</h1>
+        <button class="btn btn-icon" onclick="addToFavorites('crypto-jwt')" title="Add to favorites">⭐</button>
+      </div>
+      
+      <p class="tool-description">
+        Decode and inspect JSON Web Tokens (JWT). View header, payload, and signature details.
+      </p>
+      
+      <form id="jwt-form" class="tool-form" onsubmit="event.preventDefault(); executeJWTTool();">
+        <div class="form-group">
+          <label class="form-label">JWT Token</label>
+          <textarea name="token" class="form-input" rows="5" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." required></textarea>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Decode JWT</button>
+      </form>
+      
+      <div id="jwt-result" class="tool-result" style="display:none;"></div>
+      
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">POST Request</span>
+            <button class="btn btn-sm" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl -X POST {{.BaseURL}}/api/v1/crypto/jwt/decode \
+  -H "Content-Type: application/json" \
+  -d '{"token": "eyJhbGci..."}'</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+function executeJWTTool() {
+  const form = document.getElementById('jwt-form');
+  const token = form.token.value;
+  const resultDiv = document.getElementById('jwt-result');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Decoding...';
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+  
+  fetch('/api/v1/crypto/jwt/decode', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: token})
+  })
+    .then(response => response.json())
+    .then(data => {
+      resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Decode JWT';
+      addToHistory('crypto-jwt');
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Decode JWT';
+      showToast('Request failed', 'danger');
+    });
+}
+</script>
+{{end}}

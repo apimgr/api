@@ -1,0 +1,92 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">⛅ Weather</h1>
+    <p class="hero-subtitle">
+      15 tools for current weather, forecasts, and air quality data
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="category-grid">
+      <a href="/weather/current" class="category-card">
+        <div class="category-icon">🌤️</div>
+        <h3 class="category-title">Current Weather</h3>
+        <p class="category-description">Get current weather for a location</p>
+      </a>
+      
+      <a href="/weather/forecast" class="category-card">
+        <div class="category-icon">📅</div>
+        <h3 class="category-title">Weather Forecast</h3>
+        <p class="category-description">7-day weather forecast</p>
+      </a>
+      
+      <a href="/weather/hourly" class="category-card">
+        <div class="category-icon">⏰</div>
+        <h3 class="category-title">Hourly Forecast</h3>
+        <p class="category-description">Hourly weather forecast</p>
+      </a>
+      
+      <a href="/weather/historical" class="category-card">
+        <div class="category-icon">📊</div>
+        <h3 class="category-title">Historical Weather</h3>
+        <p class="category-description">Past weather data</p>
+      </a>
+      
+      <a href="/weather/air-quality" class="category-card">
+        <div class="category-icon">🌫️</div>
+        <h3 class="category-title">Air Quality</h3>
+        <p class="category-description">Air quality index and pollutants</p>
+      </a>
+      
+      <a href="/weather/uv" class="category-card">
+        <div class="category-icon">☀️</div>
+        <h3 class="category-title">UV Index</h3>
+        <p class="category-description">UV radiation forecast</p>
+      </a>
+      
+      <a href="/weather/alerts" class="category-card">
+        <div class="category-icon">⚠️</div>
+        <h3 class="category-title">Weather Alerts</h3>
+        <p class="category-description">Active weather warnings</p>
+      </a>
+      
+      <a href="/weather/radar" class="category-card">
+        <div class="category-icon">📡</div>
+        <h3 class="category-title">Weather Radar</h3>
+        <p class="category-description">Precipitation radar data</p>
+      </a>
+      
+      <a href="/weather/marine" class="category-card">
+        <div class="category-icon">🌊</div>
+        <h3 class="category-title">Marine Weather</h3>
+        <p class="category-description">Ocean and coastal forecasts</p>
+      </a>
+      
+      <a href="/weather/astronomy" class="category-card">
+        <div class="category-icon">🌙</div>
+        <h3 class="category-title">Astronomy</h3>
+        <p class="category-description">Moon phase, sunrise, sunset</p>
+      </a>
+      
+      <a href="/weather/pollen" class="category-card">
+        <div class="category-icon">🌸</div>
+        <h3 class="category-title">Pollen Forecast</h3>
+        <p class="category-description">Allergy and pollen data</p>
+      </a>
+      
+      <a href="/weather/maps" class="category-card">
+        <div class="category-icon">🗺️</div>
+        <h3 class="category-title">Weather Maps</h3>
+        <p class="category-description">Temperature, precipitation maps</p>
+      </a>
+    </div>
+    
+    <p class="text-center text-muted mt-3">
+      Showing 12 of 15 tools.
+    </p>
+  </div>
+</section>
+{{end}}
