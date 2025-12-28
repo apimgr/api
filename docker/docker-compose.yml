@@ -1,0 +1,28 @@
+name: api
+
+services:
+  api:
+    image: ghcr.io/apimgr/api:latest
+    container_name: api
+    restart: unless-stopped
+    environment:
+      # Hardcoded with sane defaults - NO .env files
+      - MODE=production
+      - TZ=America/New_York
+      # Tor is auto-enabled (tor binary installed in image)
+    ports:
+      # Production: bound to Docker bridge only
+      - "172.17.0.1:64580:80"
+    volumes:
+      # Volume paths relative to where docker-compose runs from (temp dir)
+      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
+      # SELinux: :z suffix for shared label
+      - ./rootfs/config:/config:z
+      - ./rootfs/data:/data:z
+    networks:
+      - api
+
+networks:
+  api:
+    name: api
+    external: false

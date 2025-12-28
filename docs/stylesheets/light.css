@@ -1,0 +1,48 @@
+/* Light Theme Customization for MkDocs Material (OPTIONAL) */
+/* MkDocs Material's built-in 'default' scheme already provides a light theme */
+/* This file adds additional light theme customization */
+
+:root {
+  /* Light theme color palette */
+  --light-bg: #ffffff;
+  --light-bg-alt: #f5f5f5;
+  --light-text: #2e3440;
+  --light-text-muted: #5e81ac;
+  --light-accent-cyan: #88c0d0;
+  --light-accent-green: #a3be8c;
+  --light-accent-orange: #d08770;
+  --light-accent-blue: #5e81ac;
+  --light-accent-purple: #b48ead;
+  --light-accent-red: #bf616a;
+  --light-accent-yellow: #ebcb8b;
+}
+
+/* Apply light theme customization */
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: var(--light-bg);
+  --md-default-fg-color: var(--light-text);
+  --md-default-fg-color--light: var(--light-text-muted);
+  --md-default-fg-color--lighter: var(--light-bg-alt);
+  --md-default-fg-color--lightest: var(--light-bg-alt);
+
+  --md-primary-fg-color: var(--light-accent-blue);
+  --md-primary-fg-color--light: var(--light-accent-cyan);
+  --md-primary-fg-color--dark: var(--light-accent-blue);
+  --md-primary-bg-color: var(--light-text);
+  --md-primary-bg-color--light: var(--light-text);
+
+  --md-accent-fg-color: var(--light-accent-purple);
+  --md-accent-fg-color--transparent: rgba(180, 142, 173, 0.1);
+  --md-accent-bg-color: var(--light-accent-purple);
+
+  --md-code-fg-color: var(--light-text);
+  --md-code-bg-color: var(--light-bg-alt);
+
+  --md-code-hl-color: rgba(235, 203, 139, 0.2);
+  --md-code-hl-number-color: var(--light-accent-purple);
+  --md-code-hl-special-color: var(--light-accent-blue);
+  --md-code-hl-function-color: var(--light-accent-green);
+  --md-code-hl-constant-color: var(--light-accent-purple);
+  --md-code-hl-keyword-color: var(--light-accent-blue);
+  --md-code-hl-string-color: var(--light-accent-green);
+}

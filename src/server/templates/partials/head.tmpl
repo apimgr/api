@@ -1,0 +1,26 @@
+{{define "head"}}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="CasTools - Everything but the kitchen sink... actually, that too. 1,418 utility endpoints.">
+<meta name="keywords" content="developer tools, api utilities, text tools, crypto tools, converters, validators">
+<title>{{if .PageTitle}}{{.PageTitle}} - {{end}}CasTools</title>
+
+<link rel="icon" href="/static/images/favicon.ico">
+
+<link rel="stylesheet" href="/static/css/common.css">
+<link rel="stylesheet" href="/static/css/components.css">
+{{if eq .Layout "public"}}
+<link rel="stylesheet" href="/static/css/public.css">
+{{else if eq .Layout "admin"}}
+<link rel="stylesheet" href="/static/css/admin.css">
+{{end}}
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#007bff">
+
+<meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}CasTools{{end}}">
+<meta property="og:description" content="Universal API toolkit with 1,418 utility endpoints">
+<meta property="og:type" content="website">
+
+{{block "head-extra" .}}{{end}}
+{{end}}

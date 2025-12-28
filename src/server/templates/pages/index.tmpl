@@ -1,0 +1,218 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">Everything but the kitchen sink...<br>actually, that too.</h1>
+    <p class="hero-subtitle">
+      CasTools is a universal API toolkit with <strong>1,418 utility endpoints</strong> across 21 categories.
+      Text manipulation, cryptography, network tools, converters, validators, and much more.
+    </p>
+    <div class="hero-actions">
+      <a href="/categories" class="btn btn-primary btn-lg">Browse Categories</a>
+      <a href="/openapi" class="btn btn-secondary btn-lg">API Documentation</a>
+    </div>
+  </div>
+</section>
+
+<section class="features">
+  <div class="container">
+    <h2 class="text-center mb-3">21 Tool Categories · 1,418 Endpoints</h2>
+    <p class="text-center text-muted mb-3">All tools work via web interface, REST API, and CLI</p>
+    
+    <div class="category-grid">
+      <a href="/text" class="category-card">
+        <div class="category-icon">📝</div>
+        <h3 class="category-title">Text Utilities</h3>
+        <p class="category-description">Lorem generators, IDs, encoding, hashing, case conversion, diff, regex, ciphers, extraction</p>
+        <span class="category-count">89 tools</span>
+      </a>
+      
+      <a href="/crypto" class="category-card">
+        <div class="category-icon">🔐</div>
+        <h3 class="category-title">Cryptography</h3>
+        <p class="category-description">Hash functions, password hashing, encryption, JWT, TOTP, key generation, random data</p>
+        <span class="category-count">147 tools</span>
+      </a>
+      
+      <a href="/network" class="category-card">
+        <div class="category-icon">🌐</div>
+        <h3 class="category-title">Network Tools</h3>
+        <p class="category-description">IP tools, DNS lookup, WHOIS, SSL checking, MAC address, URL parsing, user agents</p>
+        <span class="category-count">98 tools</span>
+      </a>
+      
+      <a href="/docker" class="category-card">
+        <div class="category-icon">🐳</div>
+        <h3 class="category-title">Docker Tools</h3>
+        <p class="category-description">Run ↔ Compose conversion, validation, linting, Dockerfile analysis</p>
+        <span class="category-count">24 tools</span>
+      </a>
+      
+      <a href="/datetime" class="category-card">
+        <div class="category-icon">⏰</div>
+        <h3 class="category-title">Date & Time</h3>
+        <p class="category-description">Timestamps, timezone conversion, cron parsing, astronomy calculations, holidays</p>
+        <span class="category-count">67 tools</span>
+      </a>
+      
+      <a href="/weather" class="category-card">
+        <div class="category-icon">🌤️</div>
+        <h3 class="category-title">Weather</h3>
+        <p class="category-description">Current weather, forecasts, air quality, UV index (via Open-Meteo)</p>
+        <span class="category-count">15 tools</span>
+      </a>
+      
+      <a href="/geo" class="category-card">
+        <div class="category-icon">🗺️</div>
+        <h3 class="category-title">Geolocation</h3>
+        <p class="category-description">IP geolocation, geocoding, distance calculation, geohash, H3, MGRS encoding</p>
+        <span class="category-count">52 tools</span>
+      </a>
+      
+      <a href="/math" class="category-card">
+        <div class="category-icon">🔢</div>
+        <h3 class="category-title">Math & Numbers</h3>
+        <p class="category-description">Calculator, statistics, primes, sequences, base conversion, trigonometry, matrix operations</p>
+        <span class="category-count">84 tools</span>
+      </a>
+      
+      <a href="/convert" class="category-card">
+        <div class="category-icon">🔄</div>
+        <h3 class="category-title">Unit Conversion</h3>
+        <p class="category-description">Length, weight, temperature, currency, color, data size, pressure, energy</p>
+        <span class="category-count">42 tools</span>
+      </a>
+      
+      <a href="/generate" class="category-card">
+        <div class="category-icon">✨</div>
+        <h3 class="category-title">Generators</h3>
+        <p class="category-description">IDs, QR codes, barcodes, avatars, config files, licenses, README templates</p>
+        <span class="category-count">76 tools</span>
+      </a>
+      
+      <a href="/validate" class="category-card">
+        <div class="category-icon">✅</div>
+        <h3 class="category-title">Validators</h3>
+        <p class="category-description">Email, phone, URL, credit card, IBAN, JSON, XML, YAML, regex validation</p>
+        <span class="category-count">68 tools</span>
+      </a>
+      
+      <a href="/parse" class="category-card">
+        <div class="category-icon">🔍</div>
+        <h3 class="category-title">Parsers</h3>
+        <p class="category-description">JSON, YAML, XML, CSV format parsing and conversion, JWT decoding, URL parsing</p>
+        <span class="category-count">72 tools</span>
+      </a>
+      
+      <a href="/language" class="category-card">
+        <div class="category-icon">📚</div>
+        <h3 class="category-title">Language Tools</h3>
+        <p class="category-description">Spell checking, dictionary, thesaurus, language detection, sentiment analysis</p>
+        <span class="category-count">48 tools</span>
+      </a>
+      
+      <a href="/test" class="category-card">
+        <div class="category-icon">🧪</div>
+        <h3 class="category-title">Testing Tools</h3>
+        <p class="category-description">Mock data generation, fixtures, assertions, API client generation</p>
+        <span class="category-count">36 tools</span>
+      </a>
+      
+      <a href="/osint" class="category-card">
+        <div class="category-icon">🔎</div>
+        <h3 class="category-title">OSINT Tools</h3>
+        <p class="category-description">Email/domain/IP intelligence, username checking, phone validation</p>
+        <span class="category-count">42 tools</span>
+      </a>
+      
+      <a href="/research" class="category-card">
+        <div class="category-icon">📖</div>
+        <h3 class="category-title">Research Tools</h3>
+        <p class="category-description">Content extraction, text summarization, citation generation</p>
+        <span class="category-count">28 tools</span>
+      </a>
+      
+      <a href="/fun" class="category-card">
+        <div class="category-icon">🎲</div>
+        <h3 class="category-title">Fun & Content</h3>
+        <p class="category-description">Jokes, quotes, facts, Magic 8-ball, dice, cards, fortune cookies</p>
+        <span class="category-count">71 tools</span>
+      </a>
+      
+      <a href="/lorem" class="category-card">
+        <div class="category-icon">👤</div>
+        <h3 class="category-title">Lorem & Fake Data</h3>
+        <p class="category-description">Person, address, company, financial, internet, product fake data generation</p>
+        <span class="category-count">89 tools</span>
+      </a>
+      
+      <a href="/dev" class="category-card">
+        <div class="category-icon">⚡</div>
+        <h3 class="category-title">Developer Tools</h3>
+        <p class="category-description">HTTP echo, formatters, minifiers, escape/unescape, diff, linters</p>
+        <span class="category-count">94 tools</span>
+      </a>
+      
+      <a href="/image" class="category-card">
+        <div class="category-icon">🖼️</div>
+        <h3 class="category-title">Images</h3>
+        <p class="category-description">Generation, manipulation, filters, QR codes, barcodes, charts, badges</p>
+        <span class="category-count">68 tools</span>
+      </a>
+      
+      <a href="/system" class="category-card">
+        <div class="category-icon">💚</div>
+        <h3 class="category-title">Health & System</h3>
+        <p class="category-description">Health checks, system information, version, metrics, endpoint listing</p>
+        <span class="category-count">18 tools</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="search-section">
+  <div class="container container-sm">
+    <h2 class="text-center mb-3">Quick Start Examples</h2>
+    <p class="text-center text-muted mb-3">Try these from your command line (curl auto-detects and returns plain text)</p>
+    
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Generate UUID</span>
+        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+      </div>
+      <div class="code-content">
+        <pre>curl {{.BaseURL}}/api/v1/text/uuid</pre>
+      </div>
+    </div>
+    
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Hash Text (SHA256)</span>
+        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+      </div>
+      <div class="code-content">
+        <pre>curl {{.BaseURL}}/api/v1/crypto/hash/sha256/hello</pre>
+      </div>
+    </div>
+    
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Current Timestamp</span>
+        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+      </div>
+      <div class="code-content">
+        <pre>curl {{.BaseURL}}/api/v1/datetime/now</pre>
+      </div>
+    </div>
+    
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Convert Temperature</span>
+        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+      </div>
+      <div class="code-content">
+        <pre>curl {{.BaseURL}}/api/v1/convert/temperature -d '{"value":32,"from":"f","to":"c"}'</pre>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

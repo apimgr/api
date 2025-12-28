@@ -1,0 +1,95 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+      <a href="/">Home</a> / <a href="/text">Text</a> / UUID Generator
+    </nav>
+    
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">UUID Generator</h1>
+        <button class="btn btn-icon" onclick="addToFavorites('text-uuid')" title="Add to favorites">⭐</button>
+      </div>
+      
+      <p class="tool-description">
+        Generate universally unique identifiers (UUIDs) in versions 1, 4, 5, 6, or 7. 
+        UUIDs are 128-bit values guaranteed to be unique across space and time.
+      </p>
+      
+      <form id="uuid-form" class="tool-form" onsubmit="event.preventDefault(); executeUUIDTool();">
+        <div class="form-group">
+          <label class="form-label">Version</label>
+          <select name="version" class="form-select">
+            <option value="4" selected>v4 (Random)</option>
+            <option value="1">v1 (Timestamp)</option>
+            <option value="7">v7 (Timestamp + Random)</option>
+          </select>
+          <span class="form-help">v4 is most common, v7 is sortable by time</span>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Count</label>
+          <input type="number" name="count" class="form-input" value="1" min="1" max="100">
+          <span class="form-help">Generate multiple UUIDs at once (max 100)</span>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Generate UUID</button>
+      </form>
+      
+      <div id="uuid-result" class="tool-result" style="display:none;"></div>
+      
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">GET Request</span>
+            <button class="btn btn-sm" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl {{.BaseURL}}/api/v1/text/uuid
+curl {{.BaseURL}}/api/v1/text/uuid/4
+curl {{.BaseURL}}/api/v1/text/uuid/4/10  # Generate 10 UUIDs</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+function executeUUIDTool() {
+  const form = document.getElementById('uuid-form');
+  const version = form.version.value;
+  const count = form.count.value;
+  const resultDiv = document.getElementById('uuid-result');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Generating...';
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+  
+  const endpoint = count > 1 
+    ? `/api/v1/text/uuid/${version}/${count}`
+    : `/api/v1/text/uuid/${version}`;
+  
+  fetch(endpoint)
+    .then(response => response.text())
+    .then(result => {
+      resultDiv.textContent = result;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate UUID';
+      addToHistory('text-uuid');
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate UUID';
+      showToast('Request failed', 'danger');
+    });
+}
+</script>
+{{end}}
+{{end}}

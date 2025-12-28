@@ -1,0 +1,25 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">Browse All Categories</h1>
+    <p class="hero-subtitle">
+      1,418 utility tools organized into 21 categories
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="category-grid">
+      {{range .Categories}}
+      <a href="{{.Path}}" class="category-card">
+        <div class="category-icon">{{.Icon}}</div>
+        <h3 class="category-title">{{.Name}}</h3>
+        <p class="category-description">{{.Description}}</p>
+        <span class="category-count">{{.Count}} tools</span>
+      </a>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}

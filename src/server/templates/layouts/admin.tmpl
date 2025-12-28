@@ -1,0 +1,21 @@
+{{/* layouts/admin.tmpl - Admin layout per PART 17 */}}
+<!DOCTYPEhtml>
+<html lang="en">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  {{template "admin-header" .}}
+  
+  <div class="admin-layout">
+    {{template "admin-sidebar" .}}
+    
+    <div class="admin-main">
+      {{template "content" .}}
+    </div>
+  </div>
+  
+  {{template "footer" .}}
+  {{template "scripts" .}}
+</body>
+</html>

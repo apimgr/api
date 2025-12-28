@@ -1,0 +1,27 @@
+name: api-test
+
+services:
+  api:
+    image: ghcr.io/apimgr/api:latest
+    container_name: api-test
+    restart: "no"
+    environment:
+      # Test mode: DEBUG enabled for detailed logging and profiling
+      - MODE=development
+      - DEBUG=true
+      - TZ=America/New_York
+    ports:
+      # Test: accessible from all interfaces on different port
+      - "64581:80"
+    volumes:
+      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
+      # Test data is ephemeral - temp dir cleaned after tests
+      - ./rootfs/config:/config
+      - ./rootfs/data:/data
+    networks:
+      - api-test
+
+networks:
+  api-test:
+    name: api-test
+    external: false

@@ -1,0 +1,24 @@
+{{define "header"}}
+<header class="header">
+  <div class="container">
+    <a href="/" class="site-brand">CasTools</a>
+    
+    <div class="user-menu">
+      {{if .User}}
+        <div class="dropdown">
+          <button class="dropdown-toggle user-icon" aria-label="User menu">👤</button>
+          <div class="dropdown-content">
+            <span class="dropdown-header">{{.User.Username}}</span>
+            <a href="/user/profile">Profile</a>
+            <a href="/user/settings">Settings</a>
+            <hr>
+            <a href="/auth/logout">Logout</a>
+          </div>
+        </div>
+      {{else}}
+        <a href="/auth/login" class="user-icon" aria-label="Login">👤</a>
+      {{end}}
+    </div>
+  </div>
+</header>
+{{end}}

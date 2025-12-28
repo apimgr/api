@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="admin-dashboard">
+    <h1>Dashboard</h1>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{.Stats.Requests}}</div>
+            <div class="stat-label">Total Requests</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{.Stats.Uptime}}</div>
+            <div class="stat-label">Uptime</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{.Stats.Version}}</div>
+            <div class="stat-label">Version</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{.Stats.Mode}}</div>
+            <div class="stat-label">Mode</div>
+        </div>
+    </div>
+</div>
+{{end}}

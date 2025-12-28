@@ -2,6 +2,33 @@
 # Disable reminder in prompt
 ignoredirmessage
 
+# Build outputs (per AI.md spec)
+binaries/
+!binaries/.gitkeep
+releases/
+!releases/.gitkeep
+
+# Runtime volumes (NEVER in repo - temp dir workflow)
+rootfs/
+
+# Environment files (spec prohibits .env files)
+.env
+.env.*
+*.env
+
+# Example/sample files (spec prohibits these)
+*.example.*
+*.sample.*
+
+# Git commit message file
+.git/COMMIT_MESS
+
+# Legacy spec files (only AI.md should exist)
+TEMPLATE.md
+SPEC.md
+CLAUDE.md
+TODO.md
+
 # OS generated files
 ### Linux ###
 *~

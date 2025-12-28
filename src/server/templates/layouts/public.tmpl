@@ -1,0 +1,18 @@
+{{/* layouts/public.tmpl - Public layout per PART 17 */}}
+<!DOCTYPEhtml>
+<html lang="en">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  {{template "header" .}}
+  {{template "nav" .}}
+  
+  <main>
+    {{template "content" .}}
+  </main>
+  
+  {{template "footer" .}}
+  {{template "scripts" .}}
+</body>
+</html>

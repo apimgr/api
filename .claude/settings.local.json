@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(docker run:*)",
+      "Bash(cat:*)",
+      "Bash(make help:*)",
+      "Bash(chmod:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(/tmp/api:*)"
+    ]
+  }
+}

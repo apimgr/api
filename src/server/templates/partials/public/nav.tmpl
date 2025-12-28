@@ -1,0 +1,26 @@
+{{define "nav"}}
+<nav class="nav">
+  <div class="container">
+    <input type="checkbox" id="nav-toggle" class="nav-checkbox" hidden>
+    
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/categories">Categories</a>
+      <a href="/openapi">API Docs</a>
+      <a href="/about">About</a>
+    </div>
+    
+    <label for="nav-toggle" class="nav-toggle" aria-label="Toggle navigation">☰</label>
+    
+    <div class="nav-panel">
+      <label for="nav-toggle" class="nav-close" aria-label="Close menu">✕</label>
+      <a href="/">Home</a>
+      <a href="/categories">Categories</a>
+      <a href="/openapi">API Docs</a>
+      <a href="/about">About</a>
+    </div>
+    
+    <label for="nav-toggle" class="nav-overlay"></label>
+  </div>
+</nav>
+{{end}}

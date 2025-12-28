@@ -1,0 +1,183 @@
+{{define "content"}}
+<section class="search-section">
+    <div class="container container-sm">
+        <div class="section-header">
+            <h1 class="section-title">System Health</h1>
+            <p class="section-description">Current status and health information</p>
+        </div>
+
+        <div class="health-card {{if eq .Status "healthy"}}healthy{{else}}unhealthy{{end}}">
+            <div class="health-status">
+                <span class="health-indicator"></span>
+                <span class="health-text">{{.Status}}</span>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Version</div>
+                <div class="info-value">{{.Version}}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Mode</div>
+                <div class="info-value">{{.Mode}}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Uptime</div>
+                <div class="info-value">{{.Uptime}}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Started</div>
+                <div class="info-value">{{.StartTime}}</div>
+            </div>
+        </div>
+
+        {{if .Checks}}
+        <div class="checks-section">
+            <h3>Health Checks</h3>
+            <div class="checks-grid">
+                {{range $name, $status := .Checks}}
+                <div class="check-item {{if eq $status "ok"}}ok{{else}}fail{{end}}">
+                    <span class="check-name">{{$name}}</span>
+                    <span class="check-status">{{$status}}</span>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+</section>
+{{end}}
+
+{{define "page-scripts"}}
+<style>
+    .health-card {
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-primary);
+        border-radius: var(--radius-lg);
+        padding: var(--space-6);
+        text-align: center;
+        margin-bottom: var(--space-6);
+    }
+
+    .health-card.healthy {
+        border-color: #22c55e;
+    }
+
+    .health-card.unhealthy {
+        border-color: #ef4444;
+    }
+
+    .health-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-3);
+    }
+
+    .health-indicator {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+
+    .healthy .health-indicator {
+        background: #22c55e;
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+
+    .unhealthy .health-indicator {
+        background: #ef4444;
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 currentColor; }
+        70% { box-shadow: 0 0 0 10px transparent; }
+        100% { box-shadow: 0 0 0 0 transparent; }
+    }
+
+    .health-text {
+        font-size: 1.5rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .healthy .health-text {
+        color: #22c55e;
+    }
+
+    .unhealthy .health-text {
+        color: #ef4444;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+    }
+
+    .info-item {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-lg);
+        padding: var(--space-4);
+        text-align: center;
+    }
+
+    .info-label {
+        font-size: 0.75rem;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        margin-bottom: var(--space-1);
+    }
+
+    .info-value {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .checks-section h3 {
+        margin-bottom: var(--space-4);
+    }
+
+    .checks-grid {
+        display: grid;
+        gap: var(--space-2);
+    }
+
+    .check-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-md);
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .check-name {
+        font-weight: 500;
+    }
+
+    .check-status {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.875rem;
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-sm);
+    }
+
+    .check-item.ok .check-status {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+    }
+
+    .check-item.fail .check-status {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+</style>
+{{end}}

@@ -11,16 +11,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/admin"
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/graphql"
+	"github.com/apimgr/api/src/metrics"
+	"github.com/apimgr/api/src/server/handler"
 	"github.com/apimgr/api/src/services/crypto"
 	"github.com/apimgr/api/src/services/datetime"
 	"github.com/apimgr/api/src/services/text"
+	"github.com/apimgr/api/src/swagger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.tmpl templates/**/*.tmpl
 var templatesFS embed.FS
 
 //go:embed static/*
@@ -28,26 +33,34 @@ var staticFS embed.FS
 
 var templates *template.Template
 
+// Version information
+var (
+	Version   = "1.0.0"
+	BuildTime = "unknown"
+	startTime = time.Now()
+)
+
 // New creates a new HTTP server
 func New(cfg *config.Config) *http.Server {
-	// Parse templates
-	var err error
-	templates, err = template.ParseFS(templatesFS, "templates/*.html")
-	if err != nil {
+	// Initialize page templates
+	if err := initTemplates(); err != nil {
 		panic(fmt.Sprintf("Failed to parse templates: %v", err))
 	}
 
 	r := chi.NewRouter()
 
-	// Middleware
+	// Core middleware
 	r.Use(middleware.RealIP)
+	r.Use(requestIDMiddleware)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
+	r.Use(securityHeadersMiddleware(cfg))
+	r.Use(RateLimitMiddleware(cfg))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{cfg.WebSecurity.CORS},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Content-Type"},
+		AllowedOrigins:   []string{cfg.Web.CORS},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization", "X-Request-ID"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
@@ -61,10 +74,28 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/crypto", cryptoPageHandler(cfg))
 	r.Get("/datetime", datetimePageHandler(cfg))
 	r.Get("/api", apiDocsHandler(cfg))
+	r.Get("/openapi", openapiHandler(cfg))
+	r.Get("/openapi.json", openapiJSONHandler(cfg))
+	r.Get("/openapi.yaml", openapiYAMLHandler(cfg))
 	r.Get("/swagger", swaggerHandler(cfg))
+	r.Get("/graphql", graphqlHandler(cfg))
+	r.Post("/graphql", graphqlQueryHandler(cfg))
+
+	// Standard pages (/server/*)
+	r.Get("/server/about", aboutPageHandler(cfg))
+	r.Get("/server/privacy", privacyPageHandler(cfg))
+	r.Get("/server/contact", contactPageHandler(cfg))
+	r.Get("/server/help", helpPageHandler(cfg))
+
+	// Admin routes (from admin package)
+	admin.SetupRoutes(r, cfg)
 
 	// Health check
 	r.Get("/healthz", healthHandler)
+
+	// Metrics endpoint (Prometheus-compatible)
+	r.Get("/metrics", metricsPrometheusHandler)
+	r.Get("/api/v1/metrics", metricsJSONHandler)
 
 	// Special files
 	r.Get("/robots.txt", robotsHandler(cfg))
@@ -74,6 +105,13 @@ func New(cfg *config.Config) *http.Server {
 
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
+		// Health check and version (JSON)
+		r.Get("/healthz", handler.HandleHealthCheck)
+		r.Get("/version", handler.HandleVersion)
+
+		// Theme switching
+		r.Post("/theme", HandleThemeSwitch)
+
 		// Text utilities
 		r.Route("/text", func(r chi.Router) {
 			// UUID
@@ -191,59 +229,232 @@ func New(cfg *config.Config) *http.Server {
 
 // Template data
 type PageData struct {
-	SiteTitle string
-	BaseURL   string
-	Theme     string
+	SiteTitle         string
+	SiteIcon          string
+	BaseURL           string
+	Theme             string
+	ActivePage        string
+	PageTitle         string
+	PageDescription   string
+	Tagline           string
+	Version           string
+	BuildTime         string
+	Mode              string
+	AdminEmail        string
+	SecurityEmail     string
+	UpdatedAt         string
+	RateLimitRequests int
+	RateLimitWindow   int
 }
 
-func newPageData(cfg *config.Config) PageData {
+func newPageData(cfg *config.Config, activePage string) PageData {
+	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
+	if cfg.Server.FQDN == "" || cfg.Server.FQDN == "localhost" {
+		baseURL = fmt.Sprintf("http://localhost:%s", cfg.Server.Port)
+	}
 	return PageData{
-		SiteTitle: "CasTools",
-		BaseURL:   fmt.Sprintf("http://localhost:%s", cfg.Server.Port),
-		Theme:     cfg.WebUI.Theme,
+		SiteTitle:  cfg.Server.Branding.Title,
+		SiteIcon:   "🛠️",
+		BaseURL:    baseURL,
+		Theme:      cfg.Web.UI.Theme,
+		ActivePage: activePage,
+	}
+}
+
+// pageTemplates holds pre-parsed templates for each page
+var pageTemplates map[string]*template.Template
+
+// initTemplates initializes all page templates with their dependencies
+func initTemplates() error {
+	pageTemplates = make(map[string]*template.Template)
+
+	// Public pages use base layout
+	publicPages := []string{"index", "text", "crypto", "datetime", "openapi", "error", "healthz", "about", "privacy", "contact", "help"}
+
+	for _, page := range publicPages {
+		tmpl, err := template.ParseFS(templatesFS,
+			"templates/layouts/base.tmpl",
+			"templates/partials/*.tmpl",
+			"templates/components/*.tmpl",
+			fmt.Sprintf("templates/pages/%s.tmpl", page),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to parse %s template: %w", page, err)
+		}
+		pageTemplates[page] = tmpl
+	}
+
+	// Admin pages use admin layout
+	adminPages := []string{"dashboard", "settings"}
+
+	for _, page := range adminPages {
+		tmpl, err := template.ParseFS(templatesFS,
+			"templates/layouts/admin.tmpl",
+			"templates/partials/*.tmpl",
+			"templates/components/*.tmpl",
+			fmt.Sprintf("templates/admin/%s.tmpl", page),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to parse admin/%s template: %w", page, err)
+		}
+		pageTemplates["admin-"+page] = tmpl
+	}
+
+	return nil
+}
+
+// renderPage renders a page using the base layout
+func renderPage(w http.ResponseWriter, page string, data PageData) {
+	tmpl, ok := pageTemplates[page]
+	if !ok {
+		http.Error(w, "Template not found: "+page, http.StatusInternalServerError)
+		return
+	}
+
+	err := tmpl.ExecuteTemplate(w, "base", data)
+	if err != nil {
+		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
 	}
 }
 
 // Web handlers
 func homeHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg)
-		templates.ExecuteTemplate(w, "home.html", data)
+		data := newPageData(cfg, "home")
+		data.PageTitle = ""
+		data.PageDescription = "Universal API Toolkit with text, crypto, datetime, and network utilities"
+		renderPage(w, "index", data)
 	}
 }
 
 func textPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg)
-		templates.ExecuteTemplate(w, "text.html", data)
+		data := newPageData(cfg, "text")
+		data.PageTitle = "Text Utilities"
+		data.PageDescription = "UUID generation, hashing, encoding, and text manipulation"
+		renderPage(w, "text", data)
 	}
 }
 
 func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg)
-		templates.ExecuteTemplate(w, "crypto.html", data)
+		data := newPageData(cfg, "crypto")
+		data.PageTitle = "Cryptography Tools"
+		data.PageDescription = "Password hashing, TOTP generation, and secure passwords"
+		renderPage(w, "crypto", data)
 	}
 }
 
 func datetimePageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg)
-		templates.ExecuteTemplate(w, "datetime.html", data)
+		data := newPageData(cfg, "datetime")
+		data.PageTitle = "DateTime Tools"
+		data.PageDescription = "Timestamp conversion, timezone handling, and date calculations"
+		renderPage(w, "datetime", data)
+	}
+}
+
+func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, "about")
+		data.PageTitle = "About"
+		data.PageDescription = "About " + cfg.Server.Branding.Title
+		data.Tagline = cfg.Server.Branding.Tagline
+		data.Version = Version
+		data.BuildTime = BuildTime
+		data.Mode = cfg.Server.Mode
+		renderPage(w, "about", data)
+	}
+}
+
+func privacyPageHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, "privacy")
+		data.PageTitle = "Privacy Policy"
+		data.PageDescription = "Privacy policy for " + cfg.Server.Branding.Title
+		data.UpdatedAt = time.Now().Format("January 2006")
+		renderPage(w, "privacy", data)
+	}
+}
+
+func contactPageHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, "contact")
+		data.PageTitle = "Contact"
+		data.PageDescription = "Contact information"
+		data.AdminEmail = cfg.Server.Admin.Email
+		data.SecurityEmail = cfg.Web.Security.Contact
+		renderPage(w, "contact", data)
+	}
+}
+
+func helpPageHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, "help")
+		data.PageTitle = "Help"
+		data.PageDescription = "Getting started with " + cfg.Server.Branding.Title
+		data.RateLimitRequests = cfg.Server.RateLimit.Requests
+		data.RateLimitWindow = cfg.Server.RateLimit.Window
+		renderPage(w, "help", data)
 	}
 }
 
 func apiDocsHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg)
-		templates.ExecuteTemplate(w, "openapi.html", data)
+		data := newPageData(cfg, "api")
+		data.PageTitle = "API Documentation"
+		data.PageDescription = "REST API documentation for CasTools - Universal API Toolkit"
+		renderPage(w, "openapi", data)
 	}
 }
 
 func swaggerHandler(cfg *config.Config) http.HandlerFunc {
+	// Use new swagger package for Swagger UI with theme support
+	baseURL := getBaseURL(cfg)
+	return swagger.ServeUI(baseURL + "/openapi.json")
+}
+
+func openapiHandler(cfg *config.Config) http.HandlerFunc {
+	// Redirect /openapi to /swagger for consistency
+	return swaggerHandler(cfg)
+}
+
+func openapiJSONHandler(cfg *config.Config) http.HandlerFunc {
+	// Use new swagger package to generate OpenAPI spec
+	baseURL := getBaseURL(cfg)
+	return swagger.ServeSpec(Version, baseURL)
+}
+
+func openapiYAMLHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/api", http.StatusFound)
+		// Note: Per AI.md PART 20, OpenAPI spec uses JSON format only (NO YAML)
+		// Redirect to JSON endpoint as per specification
+		http.Redirect(w, r, "/openapi.json", http.StatusFound)
 	}
+}
+
+// getBaseURL returns the base URL for the server
+func getBaseURL(cfg *config.Config) string {
+	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
+	if cfg.Server.FQDN == "" || cfg.Server.FQDN == "localhost" {
+		baseURL = fmt.Sprintf("http://localhost:%s", cfg.Server.Port)
+	}
+	if cfg.Server.SSL.Enabled {
+		baseURL = fmt.Sprintf("https://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
+	}
+	return baseURL
+}
+
+
+func graphqlHandler(cfg *config.Config) http.HandlerFunc {
+	// Use new graphql package for GraphiQL UI with theme support
+	baseURL := getBaseURL(cfg)
+	return graphql.ServeUI(baseURL + "/graphql")
+}
+
+func graphqlQueryHandler(cfg *config.Config) http.HandlerFunc {
+	// Use new graphql package to handle queries
+	return graphql.HandleQuery
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -255,23 +466,47 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func apiHealthHandler(w http.ResponseWriter, r *http.Request) {
+	jsonResponse(w, map[string]interface{}{
+		"status":    "healthy",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"service":   "CasTools",
+		"version":   "1.0.0",
+	})
+}
+
+// metricsPrometheusHandler serves metrics in Prometheus format
+func metricsPrometheusHandler(w http.ResponseWriter, r *http.Request) {
+	metrics.Get().ServePrometheus(w, r)
+}
+
+// metricsJSONHandler serves metrics in JSON format
+func metricsJSONHandler(w http.ResponseWriter, r *http.Request) {
+	metrics.Get().ServeJSON(w, r)
+}
+
 func robotsHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Fprintln(w, "User-agent: *")
-		for _, path := range cfg.WebRobots.Allow {
+		for _, path := range cfg.Web.Robots.Allow {
 			fmt.Fprintf(w, "Allow: %s\n", path)
 		}
-		for _, path := range cfg.WebRobots.Deny {
+		for _, path := range cfg.Web.Robots.Deny {
 			fmt.Fprintf(w, "Disallow: %s\n", path)
 		}
+		// Add sitemap reference
+		baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
+		fmt.Fprintf(w, "Sitemap: %s/sitemap.xml\n", baseURL)
 	}
 }
 
 func securityHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "Contact: mailto:%s\n", cfg.WebSecurity.Admin)
+		// RFC 9116 compliant security.txt
+		fmt.Fprintf(w, "Contact: mailto:%s\n", cfg.Web.Security.Contact)
+		fmt.Fprintf(w, "Expires: %s\n", cfg.Web.Security.Expires.Format(time.RFC3339))
 		fmt.Fprintln(w, "Preferred-Languages: en")
 	}
 }
@@ -1082,4 +1317,23 @@ func apiConvertTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, result)
+}
+
+// Middleware functions
+
+// requestIDMiddleware adds a unique request ID to each request
+func getUptime() string {
+	d := time.Since(startTime)
+
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }

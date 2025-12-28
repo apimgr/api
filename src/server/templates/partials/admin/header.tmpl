@@ -1,0 +1,22 @@
+{{/* partials/admin/header.tmpl - Admin header per PART 17 */}}
+<header class="header">
+  <div class="container">
+    <a href="/admin" class="site-brand">CasTools Admin</a>
+    
+    <div class="user-menu">
+      <div class="dropdown">
+        <button class="dropdown-toggle user-icon" aria-label="Admin menu">
+          ⚙️
+        </button>
+        <div class="dropdown-content">
+          <span class="dropdown-header">Admin</span>
+          <a href="/admin/settings">Settings</a>
+          <a href="/admin/users">Users</a>
+          <hr>
+          <a href="/">View Site</a>
+          <a href="/auth/logout">Logout</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>

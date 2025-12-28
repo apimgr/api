@@ -1,0 +1,12 @@
+{{/* partials/admin/sidebar.tmpl - Admin sidebar per PART 17 */}}
+<aside class="admin-sidebar">
+  <nav class="admin-sidebar-nav">
+    <a href="/admin" class="{{if eq .Page "dashboard"}}active{{end}}">📊 Dashboard</a>
+    <a href="/admin/server" class="{{if eq .Page "server"}}active{{end}}">📦 Server</a>
+    <a href="/admin/security" class="{{if eq .Page "security"}}active{{end}}">🔒 Security</a>
+    <a href="/admin/users" class="{{if eq .Page "users"}}active{{end}}">👥 Users</a>
+    <a href="/admin/logs" class="{{if eq .Page "logs"}}active{{end}}">📝 Logs</a>
+    <a href="/admin/backup" class="{{if eq .Page "backup"}}active{{end}}">💾 Backup</a>
+    <a href="/admin/settings" class="{{if eq .Page "settings"}}active{{end}}">⚙️ Settings</a>
+  </nav>
+</aside>
