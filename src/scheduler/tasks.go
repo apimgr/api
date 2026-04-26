@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/apimgr/api/src/backup"
@@ -220,15 +219,8 @@ func healthCheckTask() error {
 	}
 
 	// Check disk space
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(paths.DataDir(), &stat); err == nil {
-		freeBytes := stat.Bfree * uint64(stat.Bsize)
-		totalBytes := stat.Blocks * uint64(stat.Bsize)
-		percentFree := float64(freeBytes) / float64(totalBytes) * 100
-
-		if percentFree < 10 {
-			log.Printf("Scheduler: Health check - low disk space: %.1f%% free", percentFree)
-		}
+	if percentFree, ok := checkDiskSpace(); ok && percentFree < 10 {
+		log.Printf("Scheduler: Health check - low disk space: %.1f%% free", percentFree)
 	}
 
 	return nil

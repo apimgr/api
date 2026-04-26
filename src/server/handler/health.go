@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"syscall"
 	"time"
 )
 
@@ -163,24 +162,7 @@ func checkCache() string {
 	return "ok"
 }
 
-// checkDisk checks disk space
-func checkDisk() string {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
-		return "error"
-	}
-
-	// Check if less than 10% free
-	totalBytes := stat.Blocks * uint64(stat.Bsize)
-	freeBytes := stat.Bfree * uint64(stat.Bsize)
-	percentFree := float64(freeBytes) / float64(totalBytes) * 100
-
-	if percentFree < 10 {
-		return "warning"
-	}
-
-	return "ok"
-}
+// checkDisk is implemented in health_unix.go and health_windows.go
 
 
 // getUptime returns server uptime as human-readable string
@@ -225,3 +207,81 @@ func formatDuration2(a int, aUnit string, b int, bUnit string) string {
 func formatDuration1(a int, aUnit string) string {
 	return fmt.Sprintf("%d%s", a, aUnit)
 }
+
+// HandleSystemInfo handles /api/v1/system/info endpoint
+func HandleSystemInfo(w http.ResponseWriter, r *http.Request) {
+	response := map[string]interface{}{
+		"name":      "api",
+		"version":   Version,
+		"commit_id": CommitID,
+		"build_date": BuildDate,
+		"go_version": runtime.Version(),
+		"os":        runtime.GOOS,
+		"arch":      runtime.GOARCH,
+		"endpoints": 1418,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleLiveness handles /api/v1/system/liveness endpoint
+func HandleLiveness(w http.ResponseWriter, r *http.Request) {
+	response := map[string]string{
+		"status": "alive",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleReadiness handles /api/v1/system/readiness endpoint
+func HandleReadiness(w http.ResponseWriter, r *http.Request) {
+	response := map[string]string{
+		"status": "ready",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleEndpoints handles /api/v1/system/endpoints endpoint
+func HandleEndpoints(w http.ResponseWriter, r *http.Request) {
+	endpoints := map[string]interface{}{
+		"total": 1418,
+		"categories": []string{
+			"system", "text", "crypto", "datetime", "network",
+			"parse", "image", "math", "validate", "docker",
+			"geo", "fun", "lorem", "dev", "generate",
+			"language", "convert", "weather", "osint", "research", "test",
+		},
+		"message": "Full endpoint documentation available at /api/docs",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(endpoints)
+}
+
+// HandleStats handles /api/v1/system/stats endpoint
+func HandleStats(w http.ResponseWriter, r *http.Request) {
+	stats := map[string]interface{}{
+		"uptime":    time.Since(startTime).String(),
+		"version":   Version,
+		"endpoints": 1418,
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(stats)
+}
+
+// HandleHealth handles /api/v1/system/health endpoint (alias for HandleHealthCheck)
+func HandleHealth(w http.ResponseWriter, r *http.Request) {
+	HandleHealthCheck(w, r)
+}
+

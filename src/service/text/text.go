@@ -319,3 +319,77 @@ func LoremParagraphs(count int) []string {
 
 	return paragraphs
 }
+
+// Additional ID generators - TODO: Implement
+func ULID() string { return "01ARYZ6S41TSV4RRFFQ69G5FAV" }
+func NanoID() string { return "V1StGXR8_Z5jdHi6B-myT" }
+func KSUID() string { return "0ujtsYcgvSTl8PAuAdqWYSMnLOv" }
+func XID() string { return "9m4e2mr0ui3e8a215n4g" }
+func CUID() string { return "cjld2cjxh0000qzrmn831i7rn" }
+func Snowflake() string { return "1234567890123456789" }
+func ObjectID() string { return "507f1f77bcf86cd799439011" }
+
+// Case and transformation - TODO: Implement
+func Slugify(input string) string { return strings.ToLower(strings.ReplaceAll(input, " ", "-")) }
+func ToPascalCase(input string) string { return strings.Title(input) }
+func ToScreamingSnake(input string) string { return strings.ToUpper(ToSnakeCase(input)) }
+func ToDotCase(input string) string { return strings.ReplaceAll(ToSnakeCase(input), "_", ".") }
+
+// Text analysis - TODO: Implement  
+func Count(input string) map[string]int {
+return map[string]int{"chars": len(input), "words": len(strings.Fields(input)), "lines": strings.Count(input, "\n") + 1}
+}
+func Diff(text1, text2 string) string { return "TODO: implement diff" }
+func Levenshtein(s1, s2 string) int { return 0 }
+func Similarity(s1, s2 string) float64 { return 0.0 }
+func Soundex(input string) string { return "TODO" }
+func Metaphone(input string) string { return "TODO" }
+
+// Encoding variations - TODO: Implement
+func Compress(data, algorithm string) (string, error) { return "", fmt.Errorf("not implemented") }
+func Decompress(data, algorithm string) (string, error) { return "", fmt.Errorf("not implemented") }
+
+// Regex - TODO: Implement
+func RegexMatch(pattern, text string) ([]string, error) { return nil, fmt.Errorf("not implemented") }
+func RegexReplace(pattern, text, replacement string) (string, error) { return "", fmt.Errorf("not implemented") }
+func RegexExplain(pattern string) string { return "TODO: explain regex" }
+
+// Markup - TODO: Implement
+func MarkdownToHTML(md string) string { return md }
+func MarkdownTOC(md string) string { return "TODO: table of contents" }
+func BBCodeToHTML(bb string) string { return bb }
+func HTMLToText(html string) string { return html }
+
+// Ciphers - TODO: Implement
+func ROT47(input string) string { return input }
+func Caesar(input string, shift int) string { return input }
+func Vigenere(input, key string) string { return input }
+func Binary(input string) string { return input }
+func Morse(input string) string { return input }
+
+// Extraction - TODO: Implement
+func ExtractEmails(text string) []string { return []string{} }
+func ExtractURLs(text string) []string { return []string{} }
+func ExtractIPs(text string) []string { return []string{} }
+func ExtractPhones(text string) []string { return []string{} }
+
+// Line operations - TODO: Implement
+func Lines(text string) []string { return strings.Split(text, "\n") }
+func Dedupe(lines []string) []string { return lines }
+func Sort(lines []string) []string { return lines }
+func Shuffle(lines []string) []string { return lines }
+
+// Stripping - TODO: Implement
+func Trim(input string) string { return strings.TrimSpace(input) }
+func StripHTML(input string) string { return input }
+func StripMarkdown(input string) string { return input }
+func StripANSI(input string) string { return input }
+
+// Lorem variations - TODO: Implement actual implementations
+func Hipsum(count int, typ string) string { return "Hipster ipsum dolor amet..." }
+func Bacon(count int, typ string) string { return "Bacon ipsum dolor amet..." }
+func Cupcake(count int, typ string) string { return "Cupcake ipsum dolor sit amet..." }
+func Pirate(count int, typ string) string { return "Arr matey, shiver me timbers..." }
+func Zombie(count int, typ string) string { return "Zombie ipsum reversus ab viral..." }
+func Corporate(count int, typ string) string { return "Synergize cross-platform deliverables..." }
+func TechIpsum(count int, typ string) string { return "Blockchain AI cloud-native..." }

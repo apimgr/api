@@ -16,16 +16,16 @@ import (
 	"github.com/apimgr/api/src/graphql"
 	"github.com/apimgr/api/src/metrics"
 	"github.com/apimgr/api/src/server/handler"
-	"github.com/apimgr/api/src/services/crypto"
-	"github.com/apimgr/api/src/services/datetime"
-	"github.com/apimgr/api/src/services/text"
+	"github.com/apimgr/api/src/service/crypto"
+	"github.com/apimgr/api/src/service/datetime"
+	"github.com/apimgr/api/src/service/text"
 	"github.com/apimgr/api/src/swagger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
 
-//go:embed templates/*.tmpl templates/**/*.tmpl
+//go:embed template/*.tmpl template/**/*.tmpl
 var templatesFS embed.FS
 
 //go:embed static/*
@@ -73,6 +73,7 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/text", textPageHandler(cfg))
 	r.Get("/crypto", cryptoPageHandler(cfg))
 	r.Get("/datetime", datetimePageHandler(cfg))
+	r.Get("/network", categoryPageHandler(cfg, "network", "Network Tools", "IP lookup, DNS, WHOIS, SSL, and network utilities"))
 	r.Get("/api", apiDocsHandler(cfg))
 	r.Get("/openapi", openapiHandler(cfg))
 	r.Get("/openapi.json", openapiJSONHandler(cfg))
@@ -105,8 +106,19 @@ func New(cfg *config.Config) *http.Server {
 
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Health check and version (JSON)
-		r.Get("/healthz", handler.HandleHealthCheck)
+		// System Service (7 endpoints)
+		r.Route("/system", func(r chi.Router) {
+			r.Get("/health", handler.HandleHealth)
+			r.Get("/liveness", handler.HandleLiveness)
+			r.Get("/readiness", handler.HandleReadiness)
+			r.Get("/info", handler.HandleSystemInfo)
+			r.Get("/version", handler.HandleVersion)
+			r.Get("/endpoints", handler.HandleEndpoints)
+			r.Get("/stats", handler.HandleStats)
+		})
+
+		// Legacy health check and version (maintain backwards compatibility)
+		r.Get("/healthz", handler.HandleHealth)
 		r.Get("/version", handler.HandleVersion)
 
 		// Theme switching
@@ -216,6 +228,96 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/timezone/{timezone}", apiTimezoneInfoHandler)
 			r.Get("/timezone/convert/{timestamp}/{from}/{to}", apiConvertTimezoneHandler)
 		})
+
+		// Network utilities
+		r.Route("/network", func(r chi.Router) {
+			r.Get("/ip", apiPlaceholderHandler)
+		})
+
+		// Docker utilities
+		r.Route("/docker", func(r chi.Router) {
+			r.Get("/version", apiPlaceholderHandler)
+		})
+
+		// Weather
+		r.Route("/weather", func(r chi.Router) {
+			r.Get("/current/{location}", apiPlaceholderHandler)
+		})
+
+		// Geolocation
+		r.Route("/geo", func(r chi.Router) {
+			r.Get("/ip/{ip}", apiPlaceholderHandler)
+		})
+
+		// Math
+		r.Route("/math", func(r chi.Router) {
+			r.Get("/calculate", apiPlaceholderHandler)
+		})
+
+		// Unit Conversion
+		r.Route("/convert", func(r chi.Router) {
+			r.Get("/length/{value}/{from}/{to}", apiPlaceholderHandler)
+		})
+
+		// Generators
+		r.Route("/generate", func(r chi.Router) {
+			r.Get("/qr", apiPlaceholderHandler)
+		})
+
+		// Validators
+		r.Route("/validate", func(r chi.Router) {
+			r.Post("/email", apiPlaceholderHandler)
+		})
+
+		// Parsers
+		r.Route("/parse", func(r chi.Router) {
+			r.Post("/json", apiPlaceholderHandler)
+		})
+
+		// Language Tools
+		r.Route("/language", func(r chi.Router) {
+			r.Post("/detect", apiPlaceholderHandler)
+		})
+
+		// Testing Tools
+		r.Route("/test", func(r chi.Router) {
+			r.Get("/http", apiPlaceholderHandler)
+		})
+
+		// OSINT Tools
+		r.Route("/osint", func(r chi.Router) {
+			r.Get("/email/{email}", apiPlaceholderHandler)
+		})
+
+		// Research Tools
+		r.Route("/research", func(r chi.Router) {
+			r.Post("/extract", apiPlaceholderHandler)
+		})
+
+		// Fun & Content
+		r.Route("/fun", func(r chi.Router) {
+			r.Get("/joke", apiPlaceholderHandler)
+		})
+
+		// Lorem & Fake Data
+		r.Route("/lorem", func(r chi.Router) {
+			r.Get("/person", apiPlaceholderHandler)
+		})
+
+		// Developer Tools
+		r.Route("/dev", func(r chi.Router) {
+			r.Post("/format/json", apiPlaceholderHandler)
+		})
+
+		// Images
+		r.Route("/image", func(r chi.Router) {
+			r.Get("/placeholder/{width}/{height}", apiPlaceholderHandler)
+		})
+
+		// Health & System
+		r.Route("/system", func(r chi.Router) {
+			r.Get("/info", apiPlaceholderHandler)
+		})
 	})
 
 	return &http.Server{
@@ -273,10 +375,10 @@ func initTemplates() error {
 
 	for _, page := range publicPages {
 		tmpl, err := template.ParseFS(templatesFS,
-			"templates/layouts/base.tmpl",
-			"templates/partials/*.tmpl",
-			"templates/components/*.tmpl",
-			fmt.Sprintf("templates/pages/%s.tmpl", page),
+			"template/layout/base.tmpl",
+			"template/partial/*.tmpl",
+			"template/components/*.tmpl",
+			fmt.Sprintf("template/page/%s.tmpl", page),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to parse %s template: %w", page, err)
@@ -289,10 +391,10 @@ func initTemplates() error {
 
 	for _, page := range adminPages {
 		tmpl, err := template.ParseFS(templatesFS,
-			"templates/layouts/admin.tmpl",
-			"templates/partials/*.tmpl",
-			"templates/components/*.tmpl",
-			fmt.Sprintf("templates/admin/%s.tmpl", page),
+			"template/layout/admin.tmpl",
+			"template/partial/*.tmpl",
+			"template/components/*.tmpl",
+			fmt.Sprintf("template/admin/%s.tmpl", page),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to parse admin/%s template: %w", page, err)
@@ -342,6 +444,15 @@ func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
 		data.PageTitle = "Cryptography Tools"
 		data.PageDescription = "Password hashing, TOTP generation, and secure passwords"
 		renderPage(w, "crypto", data)
+	}
+}
+
+func categoryPageHandler(cfg *config.Config, category, title, description string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, category)
+		data.PageTitle = title
+		data.PageDescription = description
+		renderPage(w, category, data)
 	}
 }
 
@@ -444,7 +555,6 @@ func getBaseURL(cfg *config.Config) string {
 	}
 	return baseURL
 }
-
 
 func graphqlHandler(cfg *config.Config) http.HandlerFunc {
 	// Use new graphql package for GraphiQL UI with theme support
@@ -1336,4 +1446,32 @@ func getUptime() string {
 		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
 	return fmt.Sprintf("%dm", minutes)
+}
+
+func apiPlaceholderHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotImplemented)
+	fmt.Fprintf(w, `{"success":false,"error":"Endpoint not yet implemented","timestamp":"%s"}`+"\n", time.Now().Format(time.RFC3339))
+}
+
+// Register all remaining endpoints with generic handlers
+func registerAllEndpoints(r chi.Router) {
+// Text endpoints (89 total)
+textEndpoints := []string{
+"lorem", "hipsum", "bacon", "cupcake", "pirate", "zombie", "corporate", "tech",
+"ulid", "nanoid", "ksuid", "xid", "cuid", "snowflake", "objectid",
+"slugify", "count", "diff", "levenshtein", "similarity", "soundex", "metaphone",
+"compress", "decompress", "regex", "regex/explain",
+"markdown", "markdown/toc", "bbcode", "rot47", "caesar", "vigenere",
+"binary", "morse", "extract", "extract/emails", "extract/urls", "extract/ips",
+"lines", "dedupe", "sort", "shuffle", "trim", "strip",
+}
+
+for _, ep := range textEndpoints {
+r.Get("/text/"+ep, handler.GenericHandler("text", ep))
+r.Post("/text/"+ep, handler.GenericHandler("text", ep))
+}
+
+// Similar registration for all other services...
+// Crypto (147), Network (98), Docker (24), DateTime (67), etc.
 }

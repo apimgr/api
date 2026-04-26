@@ -75,7 +75,7 @@ build: clean
 	# Build for host OS/ARCH
 	@echo "Building host binary..."
 	@$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
-		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) src"
+		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
 
 	# Build all platforms
 	@for platform in $(PLATFORMS); do \
@@ -86,7 +86,7 @@ build: clean
 		echo "Building $$OS/$$ARCH..."; \
 		$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
 			go build -ldflags \"$(LDFLAGS)\" \
-			-o $$OUTPUT src" || exit 1; \
+			-o $$OUTPUT ./src" || exit 1; \
 	done
 
 	@echo "Build complete: $(BINDIR)/"
