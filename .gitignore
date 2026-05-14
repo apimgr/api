@@ -8,8 +8,8 @@ binaries/
 releases/
 !releases/.gitkeep
 
-# Runtime volumes (NEVER in repo - temp dir workflow)
-rootfs/
+# Runtime volumes (docker compose, never committed)
+volumes/
 
 # Environment files (spec prohibits .env files)
 .env
