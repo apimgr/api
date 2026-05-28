@@ -703,6 +703,11 @@ Renovate covers `github-actions` SHA updates automatically via `pinDigests: true
 
 Every project ships workflow files for all five CI/CD providers. Same gates, different syntax — no vendor lock-in.
 
+**Workflow creation order — not all workflows carry the same risk:**
+1. **Security-only workflows** (secret scan, SHA/digest policy, dependency audit) — no build dependency; safe to add anytime
+2. **`build-toolchain.yml`** (`:build` image) — add once `docker/Dockerfile.build` builds successfully locally; required by all subsequent workflows
+3. **`ci.yml` and `release.yml`** — add **last**, only after all code is complete, `make test` passes, and the lint gate is clean; these trigger a full build on push and will fail immediately if the code is not ready
+
 | Provider | Workflow location | Syntax |
 |----------|------------------|--------|
 | GitHub  | `.github/workflows/ci.yml` / `release.yml` / `build-toolchain.yml` | GitHub Actions |
@@ -30070,12 +30075,12 @@ PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/
 PROJECTORG := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
 
 # Version precedence: release.txt > env/default fallback
-VERSION := $(shell [ -f release.txt ] && cat release.txt || echo "${VERSION:-0.1.0}")
+VERSION ?= $(shell cat release.txt 2>/dev/null || echo "devel")
 
 # Build info - use TZ env var or system timezone
 # Format: "December 4, 2025 at 13:05:13"
 BUILD_DATE := $(shell date +"%%B %%-d, %%Y at %%H:%%M:%%S")
-COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 # COMMIT_ID used directly - no VCS_REF alias
 
 # Official site URL (OPTIONAL - never guess or assume)
@@ -30102,7 +30107,7 @@ GODIR := $(HOME)/.local/share/go
 GOCACHE := $(HOME)/.local/share/go/build
 
 # Build targets
-PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
+PLATFORMS ?= linux/amd64,linux/arm64
 
 # Docker - Set REGISTRY based on your platform (ghcr.io, registry.gitlab.com, git.example.com)
 REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
@@ -30242,7 +30247,7 @@ docker:
 	@docker buildx create --name $(PROJECTNAME)-builder --use 2>/dev/null || \
 		docker buildx use $(PROJECTNAME)-builder
 
-	# Build and push multi-arch (multi-stage Dockerfile handles Go compilation)
+	# Build multi-arch locally (no push — pushing is CI/CD's responsibility)
 	@docker buildx build \
 		-f docker/Dockerfile \
 		--platform linux/amd64,linux/arm64 \
@@ -30251,10 +30256,9 @@ docker:
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
 		-t $(REGISTRY):$(VERSION) \
 		-t $(REGISTRY):latest \
-		--push \
 		.
 
-	@echo "Docker push complete: $(REGISTRY):$(VERSION)"
+	@echo "Docker build complete: $(REGISTRY):$(VERSION)"
 
 # =============================================================================
 # TEST - Run all tests with coverage enforcement (via Docker)
@@ -30313,9 +30317,9 @@ Every binary MUST have these values embedded at build time:
 ```go
 // Build info - set via -ldflags at build time
 var (
-    Version      = "dev"
-    CommitID     = "unknown"
-    BuildDate    = "unknown"
+    Version      = "devel"
+    CommitID     = "N/A"
+    BuildDate    = "N/A"
     OfficialSite = ""  // Empty = users must use --server flag
 )
 ```
