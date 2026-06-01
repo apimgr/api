@@ -376,7 +376,7 @@ permission rules, business invariants. The HOW lives in AI.md PARTS 0-33; PART 3
 | `go test ...` | `make test` |
 | `go run ...` | `make dev` then run binary in Docker |
 
-**Makefile targets use Docker internally (`golang:alpine`) with GODIR/GOCACHE - local machine stays clean.**
+**Makefile targets use Docker internally (`casjaysdev/go:latest`) with the `go-state` named volume — local machine stays clean.**
 
 ### Debugging & Quick Tests (Docker with Tools)
 
@@ -422,7 +422,7 @@ docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | he
 - Consistent environment (same as CI/CD and production)
 - No Go installation required on local machine
 - No local machine contamination with test data
-- Reproducible builds (GODIR/GOCACHE speeds up rebuilds)
+- Reproducible builds (`go-state` named volume speeds up rebuilds)
 
 **Local Development Workflow:**
 ```bash
@@ -574,7 +574,7 @@ if cacheSize > 1024*1024*1024 {
 
 | Rule | Description |
 |------|-------------|
-| **Multi-stage Dockerfile** | Builder stage (golang:alpine) + Runtime stage (alpine:latest) |
+| **Multi-stage Dockerfile** | Builder stage (casjaysdev/go:latest) + Runtime stage (alpine:latest) |
 | **Dockerfile location** | `docker/Dockerfile` - NEVER in project root |
 | **Default timezone** | `America/New_York` (override with `TZ` env var) |
 | **Internal port** | Default `80` - app listens on `0.0.0.0:80` (override with `PORT` env var) |
@@ -4165,8 +4165,8 @@ When working on this project, the following roles are assumed based on the task:
 
 | Task | Container | Notes |
 |------|-----------|-------|
-| **Building** | Docker `golang:alpine` | ALWAYS - Go compilation |
-| **Unit tests** | Docker `golang:alpine` | `go test` commands |
+| **Building** | Docker `casjaysdev/go:latest` | ALWAYS - Go compilation |
+| **Unit tests** | Docker `casjaysdev/go:latest` | `go test` commands |
 | **Quick testing** | Docker `alpine:latest` | Fast, ephemeral |
 | **Full OS testing** | Incus `debian:latest` | PREFERRED - systemd, services |
 | **Debugging** | Incus `debian:latest` | PREFERRED - persistent, SSH-able |
@@ -5920,7 +5920,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 ├── docker/                 # Docker files
 │   ├── Dockerfile          # Production Dockerfile
 │   ├── Dockerfile.dev      # devel image — same as release but binary runs in debug mode; tagged :devel (project-specific)
-│   ├── Dockerfile.build    # toolchain image — golang:alpine + all build/test/lint/scan tools; built monthly; tagged :build   (project-specific)
+│   ├── Dockerfile.build    # toolchain image — casjaysdev/go:latest + all build/test/lint/scan tools; built monthly; tagged :build   (project-specific)
 │   ├── docker-compose.yml  # Production compose (NO debug)
 │   ├── docker-compose.dev.yml  # Development compose
 │   ├── docker-compose.test.yml # Test compose (DEBUG=true)
@@ -6272,8 +6272,8 @@ cd /path/to/project && docker build -f docker/Dockerfile .
 | **Always Latest Stable** | Use latest stable Go version (NEVER hardcode specific versions) |
 | **Build Only** | Go is only for building, not runtime (single static binary) |
 | **go.mod** | Set to current latest stable version |
-| **Docker** | Use `golang:alpine` for builds (always use this exact unpinned image) |
-| **CI/CD** | Build/test inside `golang:alpine` jobs or `docker run ... golang:alpine` (never `setup-go`, never pinned tags) |
+| **Docker** | Use `casjaysdev/go:latest` for builds (always use this exact unpinned image) |
+| **CI/CD** | Build/test inside `casjaysdev/go:latest` jobs or `docker run ... casjaysdev/go:latest` (never `setup-go`, never pinned tags) |
 | **No Pinning** | Don't hardcode specific Go versions in docs, examples, Docker, or CI workflows |
 
 **go.mod Example:**
@@ -30103,8 +30103,7 @@ BINDIR := binaries
 RELDIR := releases
 
 # Go directories (persistent across builds)
-GODIR := $(HOME)/.local/share/go
-GOCACHE := $(HOME)/.local/share/go/build
+# Go state is kept in the named Docker volume go-state:/usr/local/share/go
 
 # Build targets
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -30113,12 +30112,11 @@ PLATFORMS ?= linux/amd64,linux/arm64
 REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 GO_DOCKER := docker run --rm -it \
 	--name $(PROJECTNAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
-	-v $(PWD):/build \
-	-v $(GOCACHE):/root/.cache/go-build \
-	-v $(GODIR):/go \
-	-w /build \
+	-v $(PWD):/app \
+	-v go-state:/usr/local/share/go \
+	-w /app \
 	-e CGO_ENABLED=0 \
-	golang:alpine
+	casjaysdev/go:latest
 
 .PHONY: build local release docker test dev clean
 
@@ -30128,7 +30126,6 @@ GO_DOCKER := docker run --rm -it \
 build: clean
 	@mkdir -p $(BINDIR)
 	@echo "Building version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GODIR)
 
 	# Tidy and download modules
 	@echo "Tidying and downloading Go modules..."
@@ -30175,7 +30172,6 @@ build: clean
 local: clean
 	@mkdir -p $(BINDIR)
 	@echo "Building local binaries version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GODIR)
 
 	# Tidy and download modules
 	@echo "Tidying and downloading Go modules..."
@@ -30265,7 +30261,6 @@ docker:
 # =============================================================================
 test:
 	@echo "Running tests with coverage..."
-	@mkdir -p $(GOCACHE) $(GODIR)
 	@$(GO_DOCKER) go mod download
 	@$(GO_DOCKER) go test -v -cover -coverprofile=coverage.out ./...
 	@COVERAGE=$$($(GO_DOCKER) go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
@@ -30281,7 +30276,6 @@ test:
 # Fast: local platform only, no ldflags, random temp dir for isolation
 # Builds server + CLI (if they exist)
 dev:
-	@mkdir -p $(GOCACHE) $(GODIR)
 	@$(GO_DOCKER) go mod tidy
 	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)" && \
 		BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
@@ -30335,7 +30329,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 | Cache | Local Path | Container Path |
 |-------|-----------|----------------|
 | Go directory | `~/.local/share/go` | `/go` |
-| Build cache | `~/.local/share/go/build` | `/root/.cache/go-build` |
+| Go state | `go-state` (named volume) | `/usr/local/share/go` |
 
 **Benefits:**
 - First build downloads modules once
@@ -30355,7 +30349,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 6. Builds all platform binaries: `binaries/{project_name}-{os}-{arch}`
 7. Uses `CGO_ENABLED=0` for static binaries
 8. Embeds Version, CommitID, BuildDate via `-ldflags`
-9. All builds via Docker (`golang:alpine`)
+9. All builds via Docker (`casjaysdev/go:latest`)
 
 ### `make release`
 
@@ -30380,7 +30374,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 ### `make test`
 
 1. Downloads Go modules (cached)
-2. Runs tests inside Docker container (`golang:alpine`)
+2. Runs tests inside Docker container (`casjaysdev/go:latest`)
 3. Mounts project directory to `/build`
 4. Runs `go test` with coverage
 5. Tests all packages (`./...`)
@@ -30392,7 +30386,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 2. Builds local platform only (fastest)
 3. No `-ldflags` (version info not embedded)
 4. Outputs to `{tempdir}/{project_org}/{internal_name}-XXXXXX/` (isolated, org-identifiable)
-5. Uses Docker (`golang:alpine`) - keeps local machine clean
+5. Uses Docker (`casjaysdev/go:latest`) - keeps local machine clean
 6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}"/${PROJECT_ORG}.*/` or auto-deleted on reboot
 
 ### `make local`
@@ -30401,7 +30395,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 2. Builds local platform binaries only (fast)
 3. Outputs to `binaries/` (server, cli)
 4. Full `-ldflags` (version info embedded)
-5. Uses Docker (`golang:alpine`) - keeps local machine clean
+5. Uses Docker (`casjaysdev/go:latest`) - keeps local machine clean
 6. **Use for local testing before full cross-platform build**
 
 **When to use (Local Development - NOT CI/CD):**
@@ -30654,7 +30648,7 @@ Docker build/runtime definitions are split between `docker/` and runtime `./volu
 docker/
 ├── Dockerfile              # Production Dockerfile
 ├── Dockerfile.dev          # devel image — same as release but binary runs in debug mode; tagged :devel (project-specific)
-├── Dockerfile.build        # toolchain image — golang:alpine + all build/test/lint/scan tools; built monthly; tagged :build   (project-specific)
+├── Dockerfile.build        # toolchain image — casjaysdev/go:latest + all build/test/lint/scan tools; built monthly; tagged :build   (project-specific)
 ├── docker-compose.yml      # Production compose - HUMAN USE ONLY
 ├── docker-compose.dev.yml  # Development compose - HUMAN USE ONLY
 ├── docker-compose.test.yml # Test compose - AI/AUTOMATED TESTING ONLY
@@ -30684,7 +30678,7 @@ docker/
 |-------------|-------|
 | Location | `docker/Dockerfile` |
 | **Build type** | **Multi-stage** (builder + runtime) |
-| Builder stage | `golang:alpine` |
+| Builder stage | `casjaysdev/go:latest` |
 | Runtime stage | `alpine:latest` |
 | Meta labels | All OCI labels (see below) |
 | Required packages | git, curl, bash, tini, tor |
@@ -30852,7 +30846,7 @@ See dockerfile_conventions.md → OCI Annotations for the complete list of requi
 # =============================================================================
 # Build Stage - Compile Go binary
 # =============================================================================
-FROM golang:alpine AS builder
+FROM casjaysdev/go:latest AS builder
 
 # Install git and bash (git: required for go mod download; bash: for build scripts)
 RUN apk add --no-cache git bash
@@ -30862,7 +30856,7 @@ ARG VERSION=dev
 ARG BUILD_DATE
 ARG COMMIT_ID
 
-WORKDIR /build
+WORKDIR /app
 
 # Copy go.mod first for layer caching
 COPY go.mod go.sum ./
@@ -30872,7 +30866,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIAL_SITE}'" \
-    -o /build/binary/{project_name} ./src
+    -o /app/binary/{project_name} ./src
 
 # =============================================================================
 # Runtime Stage - Minimal Alpine image
@@ -30905,7 +30899,7 @@ RUN apk add --no-cache \
 # Docker volume mounts auto-create mount points
 
 # Copy binary from builder stage (multi-stage build)
-COPY --from=builder /build/binary/{project_name} /usr/local/bin/{project_name}
+COPY --from=builder /app/binary/{project_name} /usr/local/bin/{project_name}
 
 # Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
 # Note: This is docker/rootfs/ (build context), NOT runtime ./volumes/ mounts
@@ -31350,7 +31344,7 @@ networks:
 
 ```dockerfile
 # All-in-One Dockerfile - includes app + valkey + tor
-# Build: golang:alpine (static binary, CGO_ENABLED=0)
+# Build: casjaysdev/go:latest (static binary, CGO_ENABLED=0)
 # Runtime: debian:latest (stable, broad compatibility)
 # Image name: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest-aio
 # PORTS: Only 80 exposed (db/cache are internal-only)
@@ -31358,12 +31352,12 @@ networks:
 # =============================================================================
 # Stage 1: Build Go binary
 # =============================================================================
-FROM golang:alpine AS builder
+FROM casjaysdev/go:latest AS builder
 
 # Install git (required for go mod download with private repos)
 RUN apk add --no-cache git
 
-WORKDIR /build
+WORKDIR /app
 
 # Copy go.mod/go.sum first for better layer caching
 COPY go.mod go.sum ./
@@ -31408,7 +31402,7 @@ RUN mkdir -p /config/valkey \
 COPY docker/rootfs/ /
 
 # Copy application binary from builder
-COPY --from=builder /build/{project_name} /usr/local/bin/
+COPY --from=builder /app/{project_name} /usr/local/bin/
 RUN chmod +x /usr/local/bin/{project_name} /usr/local/bin/entrypoint.sh
 
 # Default environment
@@ -32034,15 +32028,15 @@ networks:
 
 | Aspect | Local Development | CI/CD Workflows |
 |--------|-------------------|-----------------|
-| **Go installation** | Docker `golang:alpine` | Docker `golang:alpine` |
-| **Caching** | GODIR/GOCACHE in `~/.local/share/go` | CI-native cache mounted into `golang:alpine` |
+| **Go installation** | Docker `casjaysdev/go:latest` | Docker `casjaysdev/go:latest` |
+| **Caching** | Named volume `go-state:/usr/local/share/go` | CI-native cache mounted into `casjaysdev/go:latest` |
 | **Build command** | `make dev`, `make local`, `make build` | Direct `go build` with explicit flags |
-| **Testing** | Docker/Incus containers | `golang:alpine` job container or explicit `docker run` |
+| **Testing** | Docker/Incus containers | `casjaysdev/go:latest` job container or explicit `docker run` |
 | **Makefile** | ALWAYS use Makefile targets | NEVER use Makefile (explicit commands) |
 
 **CI/CD workflows MUST:**
 - Use explicit `go build` commands with all flags visible
-- Use CI-native caching (NOT local GODIR/GOCACHE paths)
+- Use CI-native caching (NOT local host paths)
 - Set VERSION, COMMIT_ID, BUILD_DATE explicitly
 - Build all platforms in matrix
 - Auto-cancel older in-progress runs for the same ref on push workflows targeting `main`, `master`, `devel`, `dev`, or `beta`
@@ -34396,8 +34390,7 @@ pipeline {
         PROJECTORG = '{project_org}'
         BINDIR = 'binaries'
         RELDIR = 'releases'
-        GODIR = "/tmp/${PROJECT_ORG}/go"
-        GOCACHE = "/tmp/${PROJECT_ORG}/go/build"
+        // Go state kept in named Docker volume go-state:/usr/local/share/go
 
         // =========================================================================
         // GIT PROVIDER CONFIGURATION
@@ -34472,14 +34465,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-linux-amd64 ./src
                         '''
                     }
@@ -34490,14 +34482,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-linux-arm64 ./src
                         '''
                     }
@@ -34509,14 +34500,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-darwin-amd64 ./src
                         '''
                     }
@@ -34527,14 +34517,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-darwin-arm64 ./src
                         '''
                     }
@@ -34546,14 +34535,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-windows-amd64.exe ./src
                         '''
                     }
@@ -34564,14 +34552,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-windows-arm64.exe ./src
                         '''
                     }
@@ -34583,14 +34570,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-freebsd-amd64 ./src
                         '''
                     }
@@ -34601,14 +34587,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-freebsd-arm64 ./src
                         '''
                     }
@@ -34628,14 +34613,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-linux-amd64 ./src/client
                         '''
                     }
@@ -34646,14 +34630,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-linux-arm64 ./src/client
                         '''
                     }
@@ -34664,14 +34647,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-darwin-amd64 ./src/client
                         '''
                     }
@@ -34682,14 +34664,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-darwin-arm64 ./src/client
                         '''
                     }
@@ -34700,14 +34681,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-windows-amd64.exe ./src/client
                         '''
                     }
@@ -34718,14 +34698,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-windows-arm64.exe ./src/client
                         '''
                     }
@@ -34736,14 +34715,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=amd64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-freebsd-amd64 ./src/client
                         '''
                     }
@@ -34754,14 +34732,13 @@ pipeline {
                         sh '''
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v ${WORKSPACE}:/build \
-                                -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GODIR}:/go \
-                                -w /build \
+                                -v ${WORKSPACE}:/app \
+                                -v go-state:/usr/local/share/go \
+                                -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=arm64 \
-                                golang:alpine \
+                                casjaysdev/go:latest \
                                 go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECT_NAME}-cli-freebsd-arm64 ./src/client
                         '''
                     }
@@ -34775,11 +34752,10 @@ pipeline {
                 sh '''
                     docker run --rm -it \
                         --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                        -v ${WORKSPACE}:/build \
-                        -v ${GOCACHE}:/root/.cache/go-build \
-                        -v ${GODIR}:/go \
-                        -w /build \
-                        golang:alpine \
+                        -v ${WORKSPACE}:/app \
+                        -v go-state:/usr/local/share/go \
+                        -w /app \
+                        casjaysdev/go:latest \
                         go test -v -cover ./...
                 '''
             }
@@ -34999,7 +34975,7 @@ pipeline {
 | Setting | Value |
 |---------|-------|
 | Agent labels | `amd64` and `arm64` MUST be available |
-| Docker | Required for builds (golang:alpine) |
+| Docker | Required for builds (casjaysdev/go:latest) |
 | Docker buildx | Required on amd64 runner for multi-arch builds |
 | Go caches | `/tmp/{project_org}/go-cache` and `/tmp/{project_org}/go-mod-cache` |
 
@@ -35335,7 +35311,7 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 
 | Purpose | Tool | Image | When to Use |
 |---------|------|-------|-------------|
-| **Building** | Docker | `golang:alpine` | Compiling Go code |
+| **Building** | Docker | `casjaysdev/go:latest` | Compiling Go code |
 | **Container testing** | Docker | `alpine:latest` | Quick tests, CI/CD |
 | **Full OS testing** | Incus | `debian:latest` | Systemd, services, integration |
 
@@ -35641,12 +35617,12 @@ test:
 
     - name: Run tests with coverage
       run: |
-        docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/build -w /build golang:alpine \
+        docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app casjaysdev/go:latest \
           go test -cover -coverprofile=coverage.out ./...
 
     - name: Check coverage is 100%
       run: |
-        COVERAGE=$(docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/build -w /build golang:alpine \
+        COVERAGE=$(docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app casjaysdev/go:latest \
           go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         if [ $(echo "$COVERAGE < 100" | bc -l) -eq 1 ]; then
           echo "ERROR: Coverage is $COVERAGE%, must be 100%"
@@ -35794,7 +35770,7 @@ verify_all_endpoints_tested
 - Service installation testing
 - Full integration tests
 
-**Fallback: Docker with golang:alpine**
+**Fallback: Docker with casjaysdev/go:latest**
 - When Incus not available
 - CI/CD environments
 - Quick validation tests
@@ -35804,7 +35780,7 @@ verify_all_endpoints_tested
 | Aspect | Incus (Preferred) | Docker (Fallback) |
 |--------|-------------------|-------------------|
 | **Use for** | Full OS/systemd testing | Container/app testing |
-| **Image** | `debian:latest` | `golang:alpine` or `alpine:latest` |
+| **Image** | `debian:latest` | `casjaysdev/go:latest` or `alpine:latest` |
 | **Init system** | Full systemd | None (single process) |
 | **Best for** | Service install, integration | Quick tests, CI/CD |
 | **Startup** | ~5s | Fast (~1s) |
@@ -35816,8 +35792,8 @@ verify_all_endpoints_tested
 # 1. Build in Docker (always use Docker for builds)
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{project_name} ./src
+docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app -e CGO_ENABLED=0 \
+  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # 2. Test (prefer Incus, fallback to Docker)
 if command -v incus &>/dev/null; then
@@ -35862,8 +35838,8 @@ fi
 | `tests/incus.sh` | Beta testing with Incus | `debian:latest` | Full integration + systemd tests |
 
 **docker.sh and incus.sh MUST:**
-1. Set up Go cache directories (GODIR/GOCACHE) for faster builds
-2. Build all binaries using Docker (golang:alpine) in temp directory:
+1. Named volume `go-state` provides persistent Go cache across builds
+2. Build all binaries using Docker (casjaysdev/go:latest) in temp directory:
    - Server (`./src`)
    - Client (`./src/client`) if exists
 3. Install test tools in container (Docker: `apk add --no-cache curl bash file jq`)
@@ -35899,19 +35875,16 @@ BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 trap "rm -rf $BUILD_DIR" EXIT
 
 # Go cache directories (same as Makefile)
-GODIR="${HOME}/.local/share/go"
-GOCACHE="${HOME}/.local/share/go/build"
-mkdir -p "$GODIR" "$GOCACHE"
+# Go state is kept in the named Docker volume go-state:/usr/local/share/go
 
 # Common docker run for Go builds
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
-  -v $(pwd):/build \
-  -v ${GOCACHE}:/root/.cache/go-build \
-  -v ${GODIR}:/go \
-  -w /build \
+  -v $(pwd):/app \
+  -v go-state:/usr/local/share/go \
+  -w /app \
   -e CGO_ENABLED=0 \
-  golang:alpine"
+  casjaysdev/go:latest"
 
 echo "Building server binary in Docker..."
 $GO_DOCKER go build -o "$BUILD_DIR/${PROJECT_NAME}" ./src
@@ -36075,19 +36048,16 @@ BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 trap "rm -rf $BUILD_DIR; incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
 
 # Go cache directories (same as Makefile)
-GODIR="${HOME}/.local/share/go"
-GOCACHE="${HOME}/.local/share/go/build"
-mkdir -p "$GODIR" "$GOCACHE"
+# Go state is kept in the named Docker volume go-state:/usr/local/share/go
 
 # Common docker run for Go builds
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
-  -v $(pwd):/build \
-  -v ${GOCACHE}:/root/.cache/go-build \
-  -v ${GODIR}:/go \
-  -w /build \
+  -v $(pwd):/app \
+  -v go-state:/usr/local/share/go \
+  -w /app \
   -e CGO_ENABLED=0 \
-  golang:alpine"
+  casjaysdev/go:latest"
 
 echo "Building server binary in Docker..."
 $GO_DOCKER go build -o "$BUILD_DIR/${PROJECT_NAME}" ./src
@@ -36268,8 +36238,8 @@ fi
 |------|-------------|
 | **Location** | `tests/run_tests.sh`, `tests/docker.sh`, `tests/incus.sh` |
 | **Permissions** | Executable (`chmod +x tests/*.sh`) |
-| **Build method** | ALWAYS use Docker (golang:alpine) with GODIR/GOCACHE |
-| **Go cache** | Use `GODIR="${HOME}/.local/share/go"` and `GOCACHE="${HOME}/.local/share/go/build"` |
+| **Build method** | ALWAYS use Docker (casjaysdev/go:latest) with `go-state` named volume |
+| **Go cache** | Named volume `go-state:/usr/local/share/go` (no host directory needed) |
 | **Build location** | ALWAYS use temp directory |
 | **Build all components** | Build server, client (if `src/client/` exists) |
 | **Test container tools** | Docker alpine MUST install: `apk add --no-cache curl bash file jq` |
@@ -36368,7 +36338,7 @@ echo '=== All open API smoke tests passed ==='
 
 | Purpose | Image | Required Packages | Why |
 |---------|-------|-------------------|-----|
-| Building Go | `golang:alpine` | `git`, `bash` | Latest Go, dependencies need git |
+| Building Go | `casjaysdev/go:latest` | `git`, `bash` | Latest Go, dependencies need git |
 | Container runtime | `alpine:latest` | `git`, `bash`, `curl`, `tini`, `tor` | Minimal, all runtime tools included |
 | Full OS runtime | `debian:latest` (Incus) | Full OS | Complete systemd, realistic environment |
 
@@ -36386,68 +36356,61 @@ PROJECT_PATH="/root/Projects/github/apimgr/{project_name}"  # Example 1
 # PROJECT_PATH="/workspace/dev/myproject"                  # Example 4
 
 # Go cache directories (same as Makefile - speeds up builds significantly)
-GODIR="${HOME}/.local/share/go"
-GOCACHE="${HOME}/.local/share/go/build"
-mkdir -p "$GODIR" "$GOCACHE"
+# Go state is kept in the named Docker volume go-state:/usr/local/share/go
 
 # Common docker run for Go commands
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
-  -v $PROJECT_PATH:/build \
-  -v $GOCACHE:/root/.cache/go-build \
-  -v $GODIR:/go \
-  -w /build \
+  -v $PROJECT_PATH:/app \
+  -v go-state:/usr/local/share/go \
+  -w /app \
   -e CGO_ENABLED=0"
 
 # Build (outputs to binaries/ which can be mounted into test containers)
-$GO_DOCKER golang:alpine go build -o /build/binaries/{project_name} ./src
+$GO_DOCKER casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Run tests
-$GO_DOCKER golang:alpine go test ./...
+$GO_DOCKER casjaysdev/go:latest go test ./...
 
 # Run specific test
-$GO_DOCKER golang:alpine go test -v ./src/server/...
+$GO_DOCKER casjaysdev/go:latest go test -v ./src/server/...
 
 # Tidy modules
-$GO_DOCKER golang:alpine go mod tidy
+$GO_DOCKER casjaysdev/go:latest go mod tidy
 
 # Download dependencies
-$GO_DOCKER golang:alpine go mod download
+$GO_DOCKER casjaysdev/go:latest go mod download
 
 # Check formatting
-$GO_DOCKER golang:alpine go fmt ./...
+$GO_DOCKER casjaysdev/go:latest go fmt ./...
 
 # Run vet
-$GO_DOCKER golang:alpine go vet ./...
+$GO_DOCKER casjaysdev/go:latest go vet ./...
 
 # Interactive shell (for debugging)
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v $PROJECT_PATH:/build \
-  -v $GOCACHE:/root/.cache/go-build \
-  -v $GODIR:/go \
-  -w /build \
-  golang:alpine sh
+  -v $PROJECT_PATH:/app \
+  -v go-state:/usr/local/share/go \
+  -w /app \
+  casjaysdev/go:latest sh
 ```
 
 ## Build and Test
 
-**Build outputs to `binaries/`, test by running in container. Always use GODIR/GOCACHE for faster builds.**
+**Build outputs to `binaries/`, test by running in container. Named volume `go-state` keeps builds fast.**
 
 ```bash
 # Go cache directories (same as Makefile)
-GODIR="${HOME}/.local/share/go"
-GOCACHE="${HOME}/.local/share/go/build"
-mkdir -p "$GODIR" "$GOCACHE"
+# Go state is kept in the named Docker volume go-state:/usr/local/share/go
 
 # Build (with caching)
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v $(pwd):/build \
-  -v $GOCACHE:/root/.cache/go-build \
-  -v $GODIR:/go \
-  -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{project_name} ./src
+  -v $(pwd):/app \
+  -v go-state:/usr/local/share/go \
+  -w /app -e CGO_ENABLED=0 \
+  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Test in Docker (quick) - install tools first
 docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd)/binaries:/app alpine:latest sh -c "
@@ -36467,9 +36430,7 @@ incus delete test-{project_name} --force
 
 ```bash
 # Go cache directories (same as Makefile)
-GODIR="${HOME}/.local/share/go"
-GOCACHE="${HOME}/.local/share/go/build"
-mkdir -p "$GODIR" "$GOCACHE"
+# Go state is kept in the named Docker volume go-state:/usr/local/share/go
 
 # Create prefixed temp dir for test data
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
@@ -36479,11 +36440,10 @@ mkdir -p $TEST_DIR/{config,data,logs}
 # Build to binaries/ (with caching)
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v $(pwd):/build \
-  -v $GOCACHE:/root/.cache/go-build \
-  -v $GODIR:/go \
-  -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{project_name} ./src
+  -v $(pwd):/app \
+  -v go-state:/usr/local/share/go \
+  -w /app -e CGO_ENABLED=0 \
+  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Quick test in Docker (install tools first)
 docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd)/binaries:/app alpine:latest sh -c "
@@ -36517,8 +36477,8 @@ TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{project_name} ./src
+docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app -e CGO_ENABLED=0 \
+  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Launch Incus container (use latest Debian stable)
 incus launch images:debian/trixie test-{project_name}
@@ -43163,7 +43123,7 @@ make build
 ### CI/CD (Direct go build - NOT Makefile)
 
 ```bash
-# CI/CD runs inside `golang:alpine` (or uses `docker run ... golang:alpine`), NOT `actions/setup-go`
+# CI/CD runs inside `casjaysdev/go:latest` (or uses `docker run ... casjaysdev/go:latest`), NOT `actions/setup-go`
 # See PART 27: CI/CD WORKFLOWS for complete examples
 go build -ldflags "${LDFLAGS}" -o ${PROJECT_NAME}-cli ./src/client
 ```
@@ -43941,9 +43901,9 @@ maintainer_email: jane@example.com
 ### Container Rules
 
 **Building (ALWAYS Docker):**
-- [ ] **NEVER run `go build` locally** - ALWAYS use Docker `golang:alpine`
-- [ ] **NEVER run `go test` locally** - ALWAYS use Docker `golang:alpine`
-- [ ] **NEVER run `go run` locally** - ALWAYS use Docker `golang:alpine`
+- [ ] **NEVER run `go build` locally** - ALWAYS use Docker `casjaysdev/go:latest`
+- [ ] **NEVER run `go test` locally** - ALWAYS use Docker `casjaysdev/go:latest`
+- [ ] **NEVER run `go run` locally** - ALWAYS use Docker `casjaysdev/go:latest`
 
 **Testing (Docker OR Incus):**
 - [ ] **Quick tests** - Docker `alpine:latest` for unit tests, CI/CD
@@ -43992,11 +43952,11 @@ maintainer_email: jane@example.com
 | `./binaries/{project_name}` locally | Run binary inside Docker/Incus container |
 | Go installed locally | Use Makefile targets (they use Docker internally) |
 
-**GODIR (Go Module Cache):**
+**Go State (Named Volume):**
 ```bash
-GODIR := $(HOME)/.local/share/go        # Local machine path for Go module cache
-GOCACHE := $(HOME)/.local/share/go/build  # Local machine path for build cache
-# Mount in Docker: -v $(GODIR):/go -v $(GOCACHE):/root/.cache/go-build
+# Go state uses the named Docker volume go-state mounted at /usr/local/share/go
+# No host directories needed — Docker manages the volume automatically
+# Mount in Docker: -v go-state:/usr/local/share/go
 ```
 
 **Temp Directory Workflow:**
@@ -44032,8 +43992,8 @@ cd "$TEMP_DIR" && docker compose up -d
 **Testing:**
 | Type | Container | Purpose |
 |------|-----------|---------|
-| Build | Docker `golang:alpine` | Compile Go code |
-| Unit tests | Docker `golang:alpine` | `go test ./...` |
+| Build | Docker `casjaysdev/go:latest` | Compile Go code |
+| Unit tests | Docker `casjaysdev/go:latest` | `go test ./...` |
 | Integration | Docker `alpine:latest` OR Incus `debian:latest` | Full server tests |
 | Full OS/systemd | Incus `debian:latest` (PREFERRED) | Services, real environment |
 
@@ -45527,7 +45487,7 @@ Implement the required client, then any project-specific optional features:
 
 - [ ] Docker builds successfully
 - [ ] Docker Compose files work (prod, dev, test)
-- [ ] `docker/Dockerfile.build` base is the official toolchain image (`golang:alpine`); committed first before any CI workflow
+- [ ] `docker/Dockerfile.build` base is the official toolchain image (`casjaysdev/go:latest`); committed first before any CI workflow
 - [ ] `build-toolchain.yml` triggered via `workflow_dispatch`; build image verified in registry before committing `ci.yml`/`release.yml`
 - [ ] CI/CD workflows configured
 - [ ] Automated builds work
