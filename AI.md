@@ -313,7 +313,7 @@ permission rules, business invariants. The HOW lives in AI.md PARTS 0-33; PART 3
 1. Write the code (new handler, service, etc.)
 2. Update IDEA.md - add feature description
 3. Update README.md - add feature to list
-4. Update the relevant docs/*.md pages - API, admin, configuration, security, integrations, or CLI docs as applicable
+4. Update the relevant docs/*.md pages - API, configuration, security, integrations, or CLI docs as applicable
 5. Add Swagger annotations to new handlers
 6. Update GraphQL schema if applicable
 ```
@@ -578,7 +578,7 @@ if cacheSize > 1024*1024*1024 {
 | **Dockerfile location** | `docker/Dockerfile` - NEVER in project root |
 | **Default timezone** | `America/New_York` (override with `TZ` env var) |
 | **Internal port** | Default `80` - app listens on `0.0.0.0:80` (override with `PORT` env var) |
-| **External port** | Random `64xxx` port mapped to internal 80: `64580:80` |
+| **External port** | Random `64xxx` port mapped to internal 80: `172.17.0.1:64580:80` (production); `64580:80` is dev-only (binds all interfaces) |
 | **STOPSIGNAL** | `SIGRTMIN+3` |
 | **ENTRYPOINT** | `["tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh"]` |
 | **NEVER modify ENTRYPOINT/CMD** | All customization via entrypoint.sh |
@@ -592,7 +592,8 @@ if cacheSize > 1024*1024*1024 {
 │  CONTAINER DEFAULT: 0.0.0.0:80                                          │
 │                                                                         │
 │  Inside container:  app --address 0.0.0.0 --port 80                    │
-│  Docker mapping:    -p {randomport}:80  (e.g., -p 64580:80)            │
+│  Docker mapping:    -p 172.17.0.1:{randomport}:80  (prod)              │
+│                     -p {randomport}:80  (dev only, all interfaces)     │
 │                                                                         │
 │  Override with env vars:                                                │
 │    - PORT=8080      (change internal port, update docker-compose too)  │
@@ -602,8 +603,9 @@ if cacheSize > 1024*1024*1024 {
 
 | Context | Address | Port | Example |
 |---------|---------|------|---------|
-| **Container (default)** | `0.0.0.0` | `80` | `-p 64580:80` |
-| **Container (custom)** | `0.0.0.0` | `PORT` env | `PORT=8080` + `-p 64580:8080` |
+| **Container (default, prod)** | `0.0.0.0` | `80` | `-p 172.17.0.1:64580:80` |
+| **Container (default, dev)** | `0.0.0.0` | `80` | `-p 64580:80` (all interfaces, dev only) |
+| **Container (custom, prod)** | `0.0.0.0` | `PORT` env | `PORT=8080` + `-p 172.17.0.1:64580:8080` |
 | **Local (dev)** | `0.0.0.0` | Random `64xxx` | `--address 0.0.0.0 --port 64580` |
 | **Local (prod)** | Specific IP | Random `64xxx` | `--address 192.168.1.100 --port 64580` |
 
@@ -983,7 +985,6 @@ src/
 | `middleware/` | HTTP middleware | Auth, logging, rate limiting, CORS |
 | `template/` | HTML templates | Go templates for WebUI |
 | `static/` | Static assets | CSS, JS, images (embedded) |
-| `migration/` | DB migrations | SQL migration files |
 | `swagger/` | OpenAPI/Swagger | Spec generation, UI handler, theming (always `src/swagger/`) |
 | `graphql/` | GraphQL API | Schema, resolvers, UI handler, theming (always `src/graphql/`) |
 
@@ -1123,15 +1124,21 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 ### AI-Specific Files and Directories
 
-| Directory | Gitignored | Purpose |
-|-----------|:----------:|---------|
-| `.claude/` | ✓ | Claude Code configuration (regenerated from AI.md) |
-| `.cursor/` | ✓ | Cursor AI configuration (regenerated from AI.md) |
-| `.aider/` | ✓ | Aider AI configuration (regenerated from AI.md) |
-| `.ai/` | ✓ | Generic AI configuration (regenerated from AI.md) |
-| `.windsurf/` | ✓ | Windsurf AI configuration (regenerated from AI.md) |
+| Path | Gitignored | Purpose |
+|------|:----------:|---------|
+| `.claude/settings.json` | — | Claude Code team settings — **committed** |
+| `.claude/settings.local.json` | ✓ | Personal local overrides — gitignored |
+| `.claude/*.lock` | ✓ | Claude Code lock files — gitignored |
+| `.claude/backups/`, `.claude/cache/`, `.claude/history.jsonl` | ✓ | Runtime state — gitignored |
+| `.claude/CLAUDE.md`, `.claude/agents/`, `.claude/hooks/`, `.claude/commands/`, `.claude/plans/`, `.claude/rules/` | — | Team config — **committed** |
+| `.cursor/rules/`, `.cursor/mcp.json` | — | Cursor team config — **committed** |
+| `.cursor/settings.json` | ✓ | Cursor personal settings — gitignored |
+| `.windsurf/rules/` | — | Windsurf team config — **committed** |
+| `.windsurf/settings.json` | ✓ | Windsurf personal settings — gitignored |
+| `.aider/` | ✓ | Aider AI configuration — gitignored |
+| `.ai/` | ✓ | Generic AI configuration — gitignored |
 
-**All AI config directories are gitignored** - regenerated from AI.md (source of truth).
+**Rule:** team config (rules, agents, hooks, shared settings) is committed; personal overrides, credentials, cache, and lock files are gitignored.
 
 **Claude Code Rules (.claude/rules/):**
 
@@ -2077,7 +2084,6 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | **TUI** | Terminal User Interface - interactive terminal app with menus/panels (client supports TUI mode) |
 | **Text Browsers** | INTERACTIVE browsers (lynx, w3m, links, elinks) that receive **no-JS HTML** and render it in text mode; NO JavaScript support - forms via POST, server-rendered only |
 | **HTTP Tools** | NON-INTERACTIVE tools (curl, wget, httpie) that receive pre-formatted text via HTML2TextConverter; they just dump output |
-| **Admin API** | Server administration is file-only — configuration is managed via config file, not web routes |
 | **WebUI** | Web User Interface - browser-based interface served by the server |
 | **SCM** | Windows Service Control Manager - manages Windows services (replaces PID files on Windows) |
 | **Hostname** | Short hostname (e.g., `web01`) - equivalent to `hostname -s` |
@@ -2539,7 +2545,7 @@ Before I proceed, can you confirm [specific question]?
 
 | Task | Business Logic | Implementation |
 |------|----------------|----------------|
-| Admin auth | — | PART 11 |
+| Operator token (`server.token`) | — | PART 11 |
 | Frontend/UI | IDEA.md | PART 16 |
 | API endpoints | IDEA.md | PART 14 |
 | Tests | IDEA.md | PART 28 |
@@ -2936,7 +2942,7 @@ Implemented core server functionality and API.
 - Added mode package with production/development modes
 - Implemented SSL certificate handling
 - Created scheduler for background tasks
-- Built admin API with authentication
+- Wired operator token (`server.token`) authentication for protected endpoints
 ```
 
 **TODO Completion Rules:**
@@ -3942,7 +3948,6 @@ User preferences like theme, language, and UI settings can be stored client-side
 | **Missing CI/CD** | "Not needed for MVP" | CI/CD is mandatory, implement now |
 | **Custom error format** | Invents error response structure | Use EXACT format from SPEC |
 | **Simplified health** | Returns just `{"status":"ok"}` | Implement FULL health response |
-| **Skipping settings API** | "Admins don't need API control" | Settings API is mandatory |
 
 ## Implementation Discipline
 
@@ -4252,12 +4257,14 @@ go build -o binary/{project_name} ./src
 | **Password whitespace** | Passwords must NOT start or end with whitespace (reject, don't trim) |
 
 ```go
-// CORRECT - Parameterized query
-db.Query("SELECT * FROM users WHERE email = ?", email)
+// CORRECT - Parameterized query, columns named explicitly
+db.Query("SELECT id, email, created_at FROM users WHERE email = ?", email)
 
 // WRONG - SQL injection vulnerable
 db.Query("SELECT * FROM users WHERE email = '" + email + "'")
 ```
+
+**Never use `SELECT *` in application code — always name columns explicitly.** `SELECT *` couples queries to schema drift (new columns silently flow into responses, dropped columns crash decoders), defeats covering indexes, and leaks sensitive columns when a row's shape changes. Acceptable only in ad-hoc `psql`/`sqlite3` shell exploration, never in committed code.
 
 ### Attack Prevention
 
@@ -4291,7 +4298,7 @@ db.Query("SELECT * FROM users WHERE email = '" + email + "'")
 | Destination | Detail Level | Purpose |
 |-------------|--------------|---------|
 | **User (WebUI/API)** | Minimal, helpful | Guide user to fix issue, no internals |
-| **Admin (Panel)** | Actionable | Enough to diagnose, no stack traces |
+| **Operator (CLI / log)** | Actionable | Enough to diagnose, no stack traces |
 | **Console (stdout)** | Full | Debugging during development |
 | **Log file** | Full + context | Structured, timestamps, request IDs |
 | **Audit log** | Who/what/when | Security events, compliance |
@@ -4892,8 +4899,8 @@ For code that runs in the application, NEVER use bare `/path`. Always use `{fqdn
 
 | Context | ❌ Wrong | ✅ Correct |
 |---------|----------|------------|
-| **Go code** | `"/api/v1/items"` | `fmt.Sprintf("https://%s/api/v1/items", cfg.FQDN)` |
-| **JavaScript** | `fetch('/api/v1/items')` | `fetch(\`${window.location.origin}/api/v1/items\`)` |
+| **Go code** | `"/api/{api_version}/items"` | `fmt.Sprintf("https://%s/api/%s/items", cfg.FQDN, apiVersion)` |
+| **JavaScript** | `fetch('/api/{api_version}/items')` | `fetch(\`${window.location.origin}/api/${apiVersion}/items\`)` |
 | **HTML templates** | `href="/api/docs"` | `href="https://{{.FQDN}}/api/docs"` |
 | **Config files** | `url: /callback` | `url: https://{fqdn}/callback` |
 | **Email templates** | `<a href="/server/alert">` | `<a href="https://{{.FQDN}}/server/alert">` |
@@ -4909,29 +4916,29 @@ For code that runs in the application, NEVER use bare `/path`. Always use `{fqdn
 
 ```go
 // ❌ WRONG - Bare path
-link := "/api/v1/items/" + itemID
+link := "/api/" + apiVersion + "/items/" + itemID
 
 // ✅ CORRECT - Using FQDN
-link := fmt.Sprintf("https://%s/api/v1/items/%s", cfg.FQDN, itemID)
+link := fmt.Sprintf("https://%s/api/%s/items/%s", cfg.FQDN, apiVersion, itemID)
 
 // ✅ CORRECT - Helper function
 func BuildURL(path string) string {
     return fmt.Sprintf("https://%s%s", cfg.FQDN, path)
 }
-link := BuildURL("/api/v1/items/" + itemID)
+link := BuildURL("/api/" + apiVersion + "/items/" + itemID)
 ```
 
 **JavaScript examples:**
 
 ```javascript
 // ❌ WRONG - Bare path (breaks with base paths)
-fetch('/api/v1/items')
+fetch(`/api/${apiVersion}/items`)
 
 // ✅ CORRECT - Full URL
-fetch(`${window.location.origin}/api/v1/items`)
+fetch(`${window.location.origin}/api/${apiVersion}/items`)
 
 // ✅ CORRECT - From config
-fetch(`${config.apiBaseUrl}/api/v1/items`)
+fetch(`${config.apiBaseUrl}/api/${apiVersion}/items`)
 ```
 
 **HTML template examples:**
@@ -4947,7 +4954,7 @@ fetch(`${config.apiBaseUrl}/api/v1/items`)
 **Exception - Internal routing only:**
 ```go
 // OK to use bare paths for internal router registration
-router.GET("/api/v1/items", handleItems)
+router.GET("/api/"+apiVersion+"/items", handleItems)
 router.GET("/server/healthz", handleHealth)
 if cfg.Server.Healthz.Root.Enabled {
     router.GET("/healthz", handleHealth) // same handler, no redirect
@@ -4963,7 +4970,7 @@ if cfg.Server.Healthz.Root.Enabled {
 | Go code | `{fqdn}/path` | `fmt.Sprintf("https://%s/path", cfg.FQDN)` |
 | JS code | `origin/path` | `${window.location.origin}/path` |
 | Email templates | `{fqdn}/path` | `https://{{.FQDN}}/server/security/report/{{.Token}}` |
-| Router registration | `/path` | `router.GET("/api/v1/items", ...)` (internal only) |
+| Router registration | `/path` | `router.GET("/api/"+apiVersion+"/items", ...)` (internal only) |
 
 **Platform-Specific URLs:**
 
@@ -5007,7 +5014,7 @@ if cfg.Server.Healthz.Root.Enabled {
 ```bash
 docker run -d \
   --name {project_name} \
-  -p 64580:80 \
+  -p 172.17.0.1:64580:80 \
   -v ./volumes/config:/config:z \
   -v ./volumes/data:/data:z \
   {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
@@ -5959,9 +5966,18 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 
 **Base: `gitignore --dir . default` + project-specific entries**
 
+**Required header format — every `.gitignore` MUST start with these two lines, in this order:**
+
 ```gitignore
-# gitignore default template
-# Disable reminder in prompt
+# gitignore created on MM/DD/YY at HH:MM
+ignoredirmessage
+```
+
+- Line 1: literal `# gitignore created on ` followed by the creation timestamp in `MM/DD/YY at HH:MM` format (24-hour clock). Generated once on creation; never updated on edit.
+- Line 2: the literal string `ignoredirmessage` — this is the magic token that tells the project tooling to suppress the "directory ignored" reminder in the shell prompt. Do not rename, do not translate, do not prefix with `#`.
+
+```gitignore
+# gitignore created on MM/DD/YY at HH:MM
 ignoredirmessage
 
 # ignore .build_failed files
@@ -7012,15 +7028,16 @@ func SafeFilePath(baseDir, userPath string) (string, error) {
 ```go
 func setupMiddleware(handler http.Handler) http.Handler {
     // Wrapping order: last applied = first to execute (outermost layer)
-    // Execution order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
-    handler = LoggingMiddleware(handler)           // 9. Log requests
-    handler = AuthMiddleware(handler)              // 8. Check auth
-    handler = GeoIPMiddleware(handler)             // 7. Country blocking
-    handler = RateLimitMiddleware(handler)         // 6. Rate limiting
-    handler = BlocklistMiddleware(handler)         // 5. IP/domain blocklist check
-    handler = AllowlistMiddleware(handler)         // 4. Set allowlisted flag (bypasses blocklist/ratelimit/geoip, NOT auth)
-    handler = SecurityHeadersMiddleware(handler)   // 3. Add security headers
-    handler = PathSecurityMiddleware(handler)      // 2. Validate paths, block traversal
+    // Execution order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+    handler = LoggingMiddleware(handler)           // 10. Log requests (after RequestID so logs carry the request_id)
+    handler = AuthMiddleware(handler)              // 9. Check auth
+    handler = GeoIPMiddleware(handler)             // 8. Country blocking
+    handler = RateLimitMiddleware(handler)         // 7. Rate limiting
+    handler = BlocklistMiddleware(handler)         // 6. IP/domain blocklist check
+    handler = AllowlistMiddleware(handler)         // 5. Set allowlisted flag (bypasses blocklist/ratelimit/geoip, NOT auth)
+    handler = SecurityHeadersMiddleware(handler)   // 4. Add security headers
+    handler = PathSecurityMiddleware(handler)      // 3. Validate paths, block traversal
+    handler = RequestIDMiddleware(handler)         // 2. Attach request ID (must run before Logging so logs include it)
     handler = URLNormalizeMiddleware(handler)      // 1. FIRST - normalize URLs (trailing slash, etc.)
     return handler
 }
@@ -7082,7 +7099,7 @@ Operator edits server.yml directly (text editor or config-management tool)
 | State | Condition | Behavior |
 |-------|-----------|----------|
 | **Normal** | All systems healthy | Full functionality |
-| **Maintenance** | Critical error detected | Read-only + admin guidance |
+| **Maintenance** | Critical error detected | Read-only + operator guidance |
 | **Starting** | Application starting up | Checking systems |
 
 ### Maintenance Mode
@@ -7138,9 +7155,9 @@ Self-Healing Successful?                        │
             Log fix instructions to server log
 ```
 
-### Admin API in Maintenance Mode
+### Operator Guidance in Maintenance Mode
 
-**The admin API remains accessible and provides guidance for fixing issues.**
+**The server logs and `server.token`-authenticated status endpoint remain accessible and provide guidance for fixing issues.**
 
 #### Maintenance Status
 
@@ -7515,22 +7532,22 @@ func handleForm(w http.ResponseWriter, r *http.Request) {
 
 // JSON API body
 // All fields are strings to accept flexible boolean input (true/false, yes/no, 1/0)
-type CreateUserRequest struct {
-    Email    string `json:"email"`
-    IsAdmin  string `json:"is_admin"`
-    Verified string `json:"verified"`
+type CreateResourceRequest struct {
+    Name    string `json:"name"`
+    Enabled string `json:"enabled"`
+    Public  string `json:"public"`
 }
 
-func (req *CreateUserRequest) Parse() (*User, error) {
-    isAdmin, err := config.ParseBool(req.IsAdmin, false)
+func (req *CreateResourceRequest) Parse() (*Resource, error) {
+    enabled, err := config.ParseBool(req.Enabled, false)
     if err != nil {
-        return nil, fmt.Errorf("invalid is_admin: %w", err)
+        return nil, fmt.Errorf("invalid enabled: %w", err)
     }
-    verified, err := config.ParseBool(req.Verified, false)
+    public, err := config.ParseBool(req.Public, false)
     if err != nil {
-        return nil, fmt.Errorf("invalid verified: %w", err)
+        return nil, fmt.Errorf("invalid public: %w", err)
     }
-    return &User{Email: req.Email, IsAdmin: isAdmin, Verified: verified}, nil
+    return &Resource{Name: req.Name, Enabled: enabled, Public: public}, nil
 }
 ```
 
@@ -7970,10 +7987,10 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 | `--service status` | ❌ No | N/A - read-only | N/A |
 | `--port <1024` | ⚠️ Check | `isElevated()`? | Random >1024 |
 | `--maintenance backup` | ❌ No | Can write to backup dir? (already owned) | N/A |
-| `--maintenance restore` | 🔐 Auth | Requires admin auth OR root OR first-run | N/A |
+| `--maintenance restore` | 🔐 Auth | Requires `server.token` OR root OR first-run | N/A |
 | `--maintenance update` | ⚠️ Check | Can write to binary path? | None (error) |
 | `--maintenance setup` | 🔐 Auth | Only first-run OR root | N/A |
-| `--maintenance mode` | 🔐 Auth | Requires admin auth OR root | N/A |
+| `--maintenance mode` | 🔐 Auth | Requires `server.token` OR root | N/A |
 | (normal start) | ❌ No | Adapts paths to current user | N/A |
 
 **Key insight:** After service install, the `{project_name}` user owns all data directories. However, sensitive operations require AUTHORIZATION, not just file access.
@@ -7985,8 +8002,8 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 | Operation | Danger | Authorization Required |
 |-----------|--------|----------------------|
 | `--maintenance setup` | Resets server configuration to defaults | First-run only OR root |
-| `--maintenance restore` | Overwrites ALL data | Admin auth OR root OR empty database |
-| `--maintenance mode` | Changes server behavior | Admin auth OR root |
+| `--maintenance restore` | Overwrites ALL data | `server.token` OR root OR empty database |
+| `--maintenance mode` | Changes server behavior | `server.token` OR root |
 
 **Setup authorization flow:**
 
@@ -7994,7 +8011,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 User runs: {project_name} --maintenance setup
 
 Binary checks:
-├─ Is database empty (no admins exist)?
+├─ Is database empty (no resources exist)?
 │   └─ YES → Allow setup (first-run)
 ├─ Is user root/admin?
 │   └─ YES → Allow setup (requires confirmation)
@@ -8042,8 +8059,8 @@ Binary checks:
 | Attack | Without Auth | With Auth |
 |--------|-------------|-----------|
 | Malicious user runs setup | Corrupts server configuration | ❌ Blocked (setup already done) |
-| Malicious user restores bad backup | Overwrites database, takes over | ❌ Blocked (needs admin creds) |
-| Malicious user enables dev mode | Exposes debug endpoints | ❌ Blocked (needs admin creds) |
+| Malicious user restores bad backup | Overwrites database, takes over | ❌ Blocked (needs `server.token` or root) |
+| Malicious user enables dev mode | Exposes debug endpoints | ❌ Blocked (needs `server.token` or root) |
 
 #### How Binary Determines Escalation Need
 
@@ -8306,9 +8323,9 @@ server:
   port: 64580
 ```
 
-### Admin API (Port Configuration)
+### Port Configuration (config file only)
 
-Port can be changed via the config file, but **requires server restart**.
+Port can be changed via the config file, but **requires server restart**. There is no runtime API for changing the port.
 
 ### Example Structure
 
@@ -8532,7 +8549,7 @@ Before proceeding, confirm you understand:
 
 | Setting | Behavior |
 |---------|----------|
-| **Admin authentication** | **BYPASSED** (for manual dev only - NOT for automated tests) |
+| **Operator token (`server.token`) auth** | **BYPASSED** (for manual dev only - NOT for automated tests) |
 | Debug endpoints | **Enabled** (`/debug/*`) |
 | pprof endpoints | **Enabled** (`/debug/pprof/*`) |
 | expvar endpoints | **Enabled** (`/debug/vars`) |
@@ -11699,16 +11716,16 @@ livenessProbe:
 ```
 $ kill -TERM $(cat /var/run/myapp.pid)
 
-[INFO] 2025-01-15 10:30:45 Received SIGTERM, starting graceful shutdown...
-[INFO] 2025-01-15 10:30:45 Stopping HTTP server...
-[INFO] 2025-01-15 10:30:46 Waiting for 3 in-flight requests...
-[INFO] 2025-01-15 10:30:47 HTTP server stopped
-[INFO] 2025-01-15 10:30:47 Stopping Tor process (PID 12346)...
-[INFO] 2025-01-15 10:30:48 Tor stopped
-[INFO] 2025-01-15 10:30:48 Closing database connections...
-[INFO] 2025-01-15 10:30:48 Flushing logs...
-[INFO] 2025-01-15 10:30:48 Removing PID file...
-[INFO] 2025-01-15 10:30:48 Graceful shutdown complete
+[INFO] 2025-01-15T10:30:45-05:00 Received SIGTERM, starting graceful shutdown...
+[INFO] 2025-01-15T10:30:45-05:00 Stopping HTTP server...
+[INFO] 2025-01-15T10:30:46-05:00 Waiting for 3 in-flight requests...
+[INFO] 2025-01-15T10:30:47-05:00 HTTP server stopped
+[INFO] 2025-01-15T10:30:47-05:00 Stopping Tor process (PID 12346)...
+[INFO] 2025-01-15T10:30:48-05:00 Tor stopped
+[INFO] 2025-01-15T10:30:48-05:00 Closing database connections...
+[INFO] 2025-01-15T10:30:48-05:00 Flushing logs...
+[INFO] 2025-01-15T10:30:48-05:00 Removing PID file...
+[INFO] 2025-01-15T10:30:48-05:00 Graceful shutdown complete
 ```
 
 ### Environment Variable Fallbacks
@@ -13327,6 +13344,16 @@ When `DEBUG=true` is active and an error occurs, the canonical error body (PART 
 
 **Rule:** when implementing a feature, walk every layer. Don't assume "the input validator caught it" or "the output template will escape it" — write the code as if every other layer is broken.
 
+### Authentication & Identity Rules (mandatory)
+
+| Rule | Requirement |
+|------|-------------|
+| **Constant-time comparison** | Use `crypto/subtle.ConstantTimeCompare` for ALL token, password-hash, HMAC, signature, and credential comparisons. Never compare with `==`, `bytes.Equal`, or `strings.EqualFold` — they leak timing. Applies whether the inbound value is a token, an API key, a webhook signature, or a TOTP code. |
+| **Identical auth error messages** | Every authentication failure MUST return the SAME message regardless of root cause. "Wrong password", "no such user", "account locked", "token expired", and "token revoked" all return the same generic message (e.g., `"Invalid credentials"`) and the same HTTP status. The underlying reason is logged server-side but NEVER surfaced to the client — surfacing it enables user enumeration. |
+| **Identical auth response timing** | Pad failed-auth response time to a fixed floor (≥100ms) so attackers cannot distinguish "user exists, wrong password" (slow bcrypt path) from "no such user" (fast early-return) by latency. |
+| **Opaque resource IDs** | Resource IDs exposed in URLs, JSON bodies, or logs MUST be opaque — UUID v4 (random) or UUID v7 (time-ordered for indexable workloads). NEVER expose sequential integer primary keys (`/users/1`, `/users/2`, ...) in any public-facing surface; they enable trivial enumeration and IDOR. Internal DB primary keys may remain `BIGSERIAL` for performance, but all external identifiers go through an opaque ID column. |
+| **No credential echo** | Never include the submitted password / token in error responses, logs, or audit events — not even hashed. Log only a stable hash of the identifier (`user_id`, `token_prefix_sha256[:8]`). |
+
 ### Output Sanitization Pipeline
 
 **Every public response passes through a sanitization pipeline before it leaves the server. The pipeline is a single chokepoint — features cannot opt out, only add additional filters.**
@@ -13348,7 +13375,7 @@ When `DEBUG=true` is active and an error occurs, the canonical error body (PART 
 |---------------|------------------------|-------------------|-------|
 | Plain text / source code / config files | Render as escaped text inside `<pre><code>` or equivalent. Syntax highlighting may add server-generated wrapper spans/classes only AFTER escaping the source. | `text/plain; charset=utf-8` is the safe default for raw views. | Never inject file bytes into templates as trusted HTML. |
 | Markdown | Store the original markdown. HTML preview MUST disable raw HTML passthrough, then sanitize the rendered output through an allow-list policy. | Raw markdown download remains plain text. | Keep fenced code blocks, tables, lists, and links working. External links get `rel="noopener noreferrer nofollow ugc"`. |
-| User-supplied HTML | Do NOT render inline by default. Show escaped source or a sanitized preview only for explicitly approved admin-controlled customization fields. | Force `Content-Disposition: attachment` unless the content was sanitized for a very narrow allow-list use case. | User HTML is executable content in a browser origin. Treat it as dangerous. |
+| User-supplied HTML | Do NOT render inline by default. Show escaped source or a sanitized preview only for explicitly approved operator-controlled (`server.yml`) customization fields. | Force `Content-Disposition: attachment` unless the content was sanitized for a very narrow allow-list use case. | User HTML is executable content in a browser origin. Treat it as dangerous. |
 | SVG / XML / other browser-active text | Never inline untrusted SVG/XML in templates, `<img src="data:...">`, or same-origin previews. | Force attachment or convert to a safe raster/text representation before display. | SVG can execute scripts, external loads, and event handlers. |
 | Binary/file downloads | Serve with exact `Content-Type`, `X-Content-Type-Options: nosniff`, and explicit allow-listing. | For user-controlled active MIME types (`text/html`, `application/xhtml+xml`, `image/svg+xml`, `text/xml`, `application/xml`), force `Content-Disposition: attachment`. | Browsers must not be allowed to "helpfully" execute uploaded content. |
 
@@ -13407,7 +13434,7 @@ When `DEBUG=true` is active and an error occurs, the canonical error body (PART 
 | CORS on by default, credential-aware | "Just works" for public APIs and authenticated apps (PART 16 → CORS) |
 | Rate limit on by default | Per-IP + per-identifier on auth endpoints; configurable but non-zero by default |
 | Argon2id for passwords | No bcrypt/MD5/SHA-* options — secure algorithm not negotiable |
-| Admin credentials defined in `server.yml` | No hardcoded default credentials shipped in binary |
+| Operator token (`server.token`) defined in `server.yml` | No hardcoded default credentials shipped in binary |
 | `--debug` / `DEBUG=true` requires explicit opt-in | Debug endpoints disabled in production by default (PART 6) |
 | Errors return canonical generic messages | Stack traces only in `debug.log`, never in HTTP response (PART 5) |
 | Secret-in-config detection on startup | Warning logged if config contains hardcoded `password=`, `token=`, `secret=` — operator nudged toward env vars / vault |
@@ -13433,7 +13460,7 @@ The root secret all other derived material hangs off. Without it, in-flight HMAC
 | Used by | `{security_id}` HMAC (PART 11 → "Security Reports"); PGP private-key KDF (PART 11 → "GPG Keypair Management"); future derived material (cookie signing salts, etc.). |
 | Rotation | Manual via CLI command or config file. Sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt operator password, log to `audit.log` as `security.installation_secret_rotated`. Rotation re-encrypts the PGP private key and re-bases all live HMACs. The previous secret is kept for 7 days to validate any in-flight `{security_id}` URLs that referenced it. |
 | Backup | Always — see PART 21 → "Backup Contents". Required for any restore: without it, the PGP private key in the backup is undecryptable. |
-| Loss = catastrophic | Lost = cannot decrypt PGP private key (and therefore cannot decrypt in-flight encrypted security reports); cannot validate `{security_id}` URLs on existing security.txt copies until the file regenerates. Recovery requires admin to: regenerate keypair, regenerate `installation_secret`, accept that all in-flight encrypted reports are unreadable. |
+| Loss = catastrophic | Lost = cannot decrypt PGP private key (and therefore cannot decrypt in-flight encrypted security reports); cannot validate `{security_id}` URLs on existing security.txt copies until the file regenerates. Recovery requires the operator to: regenerate keypair, regenerate `installation_secret`, accept that all in-flight encrypted reports are unreadable. |
 
 ### Other Project-Level Secrets
 
@@ -13452,7 +13479,7 @@ The root secret all other derived material hangs off. Without it, in-flight HMAC
 
 **All secrets above:**
 - Generated on first start, before any user-visible operation.
-- NEVER returned in any API response — even to admins. The API returns "configured" / "rotated 12 days ago" / fingerprint hashes only.
+- NEVER returned in any API response — even with `server.token`. The API returns "configured" / "rotated 12 days ago" / fingerprint hashes only.
 - NEVER logged. The Output Sanitization Pipeline (PART 11 → above) treats any field whose name contains `secret`, `key`, `password`, `token` as redacted at the log layer too.
 - Always included in backups (PART 21 → "Backup Contents").
 - Restored verbatim from a backup. Restoring partially (e.g., DB without these secrets) is rejected by the restore flow — the manifest verifies all secrets are present.
@@ -13643,7 +13670,7 @@ web:
 | `Sec-Fetch-Site` | POST/PUT/PATCH/DELETE | `cross-site` AND no Bearer token AND path is not in CSRF `exempt_paths` |
 | `Sec-Fetch-Mode` | all | `navigate` on JSON API endpoints (`/api/*`) — indicates unintended top-level navigation |
 | `Sec-Fetch-Dest` | media/document endpoints | `iframe` for endpoints not in `frame-ancestors` allow-list |
-| `Sec-Fetch-User` | authenticated state-changers | absent on a navigation that should be user-initiated (sensitive admin flows only) |
+| `Sec-Fetch-User` | authenticated state-changers | absent on a navigation that should be user-initiated (sensitive operator-token flows only) |
 
 **Why a separate layer when CSRF tokens already exist:** CSRF tokens defend against cross-origin form POSTs from attacker-controlled pages. `Sec-Fetch-Site=cross-site` catches the same class earlier (before token validation runs), and also catches subresource fetches that don't carry tokens. Both layers stay enabled — see PART 11 → "Public Endpoint Safety Principle" → defense in depth.
 
@@ -13849,7 +13876,7 @@ const (
 // extractContextFromPath determines context from URL path
 func extractContextFromPath(path string) (*Context, error) {
     // /api/{api_version}/ → Public (project root)
-    // /api/{api_version}/server/* → Server pages or admin endpoints
+    // /api/{api_version}/server/* → Server info / operator-token-protected endpoints
     // /api/{api_version}/{resource}/* → Public routes (project-specific: jokes, weather, ip, etc.)
 
     apiBase := APIBasePath() + "/" // e.g., "/api/{api_version}/"
@@ -13862,7 +13889,7 @@ func extractContextFromPath(path string) (*Context, error) {
     case "": // Root /api/{api_version}/
         return &Context{Type: TargetPublic}, nil
     case "server":
-        // /api/{api_version}/server/* - server info and admin endpoints
+        // /api/{api_version}/server/* - server info and operator-token-protected endpoints
         return &Context{Type: TargetServerPages}, nil
     default:
         // Project-specific public routes (e.g., /api/{api_version}/jokes, /weather, /ip)
@@ -13901,14 +13928,14 @@ func extractContextFromPath(path string) (*Context, error) {
 
 **`/.well-known/**` is a root-owned protocol/discovery namespace. It is NOT a general static-file bucket.**
 
-- `/.well-known/**` is reserved to the server and can NEVER be claimed by users, orgs, vanity routes, or admin path settings
+- `/.well-known/**` is reserved to the server and can NEVER be claimed by users, orgs, vanity routes, or operator-configured path settings
 - Well-known endpoints live only at the root `/.well-known/...` namespace, never under `/server/*` or `/api/*`
 - Only documented, allowlisted well-known entries may be served; unsupported entries MUST return `404 Not Found`
 - `GET` and `HEAD` are the only valid methods for `/.well-known/**`; other methods MUST return `405 Method Not Allowed`
 - No auth, no CSRF token, and no session requirement may be needed to read any `/.well-known/**` resource
 - `/.well-known/` itself MUST NOT list a directory index, file browser, or generated listing
 - The namespace MUST NOT expose user-uploaded or user-controlled files directly
-- The namespace is for public-safe protocol metadata only; it MUST NOT expose secrets, internal config, admin-only state, or anything that is unsafe for anonymous users
+- The namespace is for public-safe protocol metadata only; it MUST NOT expose secrets, internal config, operator-only state, or anything that is unsafe for anonymous users
 - Canonical well-known endpoints MUST serve the exact path required by the standard/consumer; do NOT move them under another route and redirect unless the specific standard explicitly requires a redirect behavior
 - `/.well-known/security.txt` is canonical; `/security.txt` is NOT required and SHOULD return `404` unless a project-specific requirement in `IDEA.md` explicitly says otherwise
 
@@ -14050,7 +14077,7 @@ web:
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | Researcher GPG | URL OR pasted pubkey block | Optional | If supplied, server validates the key and uses it for the acknowledgment email. URL form: any `https://`, including keyservers (`https://keys.openpgp.org/vks/v1/by-fingerprint/...`). |
-| Affected component | Dropdown OR free text | Yes | Dropdown populated from project's `IDEA.md` features (auth, API, frontend, admin, etc.); "Other" allows free text. |
+| Affected component | Dropdown OR free text | Yes | Dropdown populated from project's `IDEA.md` features (auth, API, frontend, CLI, etc.); "Other" allows free text. |
 | Affected endpoint / URL | Text | Optional | The exact URL or path where the issue surfaces. |
 | Severity (researcher's self-assessment) | Critical / High / Medium / Low / Informational | Yes | Maintainers re-triage; this is the researcher's expectation. |
 | Vulnerability summary | Text (single line) | Yes | Used as the email subject and tracker entry title. |
@@ -14071,7 +14098,7 @@ web:
 4. **Maintainer notification:** PGP-encrypted email to the configured operator contact (see `server.security.contact_email`); falls back to AES-encrypted attachment + warning if no PGP key is configured.
 5. **Researcher acknowledgment:** PGP-encrypted email to researcher's submitted email (using their submitted pubkey if any), containing the `tracking_id` and the URL `/server/security/report/{tracking_id}` (with a one-shot token only the researcher can use).
 6. **Response to the form POST:** canonical success body — `{"ok": true, "data": {"tracking_id": "sec_..."}}` — with a clear "we received your report; check your email for confirmation" message rendered server-side.
-7. **Logging:** one entry to `security.log` as `security.report_received` — `tracking_id`, severity, sanitized affected-component, NO researcher PII, NO vulnerability content. Maintainers see full content only via the encrypted email or the admin tracker (after auth).
+7. **Logging:** one entry to `security.log` as `security.report_received` — `tracking_id`, severity, sanitized affected-component, NO researcher PII, NO vulnerability content. Maintainers see full content only via the encrypted email (no web tracker — there is no admin web UI).
 
 ### Public Pages
 
@@ -14095,7 +14122,7 @@ web:
 | **Runtime defense** — IP blocks, allow-lists, token revocation | Configured via config file; see PART 11 → "IP Block Management" |
 | **`security.txt` content** — `Expires`, languages, keyservers list | Configured via `web.security.*` config keys |
 
-### GPG Keypair Management (Admin API)
+### GPG Keypair Management (operator CLI / `server.token`)
 
 **One project-level GPG keypair. Used to encrypt incoming security reports at rest, sign outbound notifications, and seed the `Encryption:` line in security.txt.**
 
@@ -14144,9 +14171,36 @@ web:
 | `access.log` | HTTP requests | `apache` | `apache`, `nginx`, `json` |
 | `server.log` | Application events | `text` | `text`, `json` |
 | `error.log` | Error messages | `text` | `text`, `json` |
+| `app.log` (or `{project_name}.log`) | General application events (info/warn) | `logfmt` | `logfmt`, `json` |
+| `auth.log` | Authentication events (login, logout, token issue/revoke, MFA, failures) | `syslog` | `syslog` (RFC 3164), `json` |
 | `audit.log` | Security events | `json` | `json` only (must be machine-parseable) |
 | `security.log` | Security/auth events | `fail2ban` | `fail2ban`, `syslog`, `cef`, `json`, `text` |
 | `debug.log` | Debug (dev mode) | `text` | `text`, `json` |
+
+**`app.log` (logfmt) — example line:**
+
+```
+time=2026-05-13T10:58:00-04:00 level=INFO msg="user created" id=abc123 ip=1.2.3.4
+```
+
+Logfmt: space-separated `key=value` pairs, values with spaces or `=` quoted with double quotes. One event per line. Time in RFC 3339 with timezone offset.
+
+**`auth.log` (syslog RFC 3164) — example line:**
+
+```
+May 13 10:58:00 hostname {project_name}[pid]: auth: user=xxx ip=1.2.3.4 result=fail reason=invalid_credentials
+```
+
+Syslog header: `<MMM DD HH:MM:SS> <hostname> <program>[<pid>]:` followed by the structured message. `result=` is one of `success` / `fail`. `reason=` is a stable machine code (never a free-form message — keeps Fail2ban / SIEM parsers stable).
+
+**All log files (every log listed above) — raw text only:**
+- No ANSI escape codes
+- No emojis
+- No control characters except `\n` line separators
+- No color, no terminal cursor codes
+- One event per line, line ends with `\n`
+
+ANSI/emojis belong on stdout/stderr (interactive console), never in files that ship to log aggregators.
 
 ### Log Format Details
 
@@ -14168,8 +14222,8 @@ web:
 
 **Text Log Format:**
 ```
-2024-10-10 13:55:36 [INFO] Server started on :8080
-2024-10-10 13:55:40 [ERROR] Database connection failed: timeout
+2024-10-10T13:55:36-04:00 [INFO] Server started on :8080
+2024-10-10T13:55:40-04:00 [ERROR] Database connection failed: timeout
 ```
 
 **JSON Log Format:**
@@ -14180,8 +14234,8 @@ web:
 
 **Fail2ban Format:**
 ```
-2024-10-10 13:55:36 [security] Failed authentication attempt from 192.168.1.100
-2024-10-10 13:55:40 [security] Rate limit exceeded from 192.168.1.100
+2024-10-10T13:55:36-04:00 [security] Failed authentication attempt from 192.168.1.100
+2024-10-10T13:55:40-04:00 [security] Rate limit exceeded from 192.168.1.100
 ```
 
 ### Custom Format Variables
@@ -15918,7 +15972,7 @@ server:
         - API tokens are stored as SHA-256 hashes (never in plain text)
         - All connections are encrypted (HTTPS/TLS)
         - Regular security audits and updates
-        - Access controls and audit logging for admin actions
+        - Access controls and audit logging for operator actions
 ```
 
 ### Dynamic Privacy Messaging
@@ -16732,8 +16786,7 @@ type StatsInfo struct {
 | **Database** | Connection strings, host, port, user | Attack vector |
 | **Internal IPs** | Private IPs, internal hostnames | Network reconnaissance |
 | **Paths** | Config paths, data paths, file locations | File system info |
-| **Usernames** | Admin names, user counts with names | User enumeration |
-| **Email** | SMTP host, admin emails | Phishing/spam target |
+| **Email** | SMTP host, operator/contact emails | Phishing/spam target |
 | **Secrets** | Encryption keys, session secrets | Cryptographic breach |
 | **Debug** | Stack traces, detailed errors | Exploitation info |
 | **Internal endpoints** | /metrics status, internal service endpoints | Internal infrastructure info |
@@ -16752,7 +16805,7 @@ type StatsInfo struct {
 **Rule: Health can be expansive if the field is intentionally public-safe and acceptable for any unauthenticated internet viewer to see.**
 
 - OK to include more detail when it is already publicly observable, already exposed elsewhere publicly, or operationally useful without increasing attack surface
-- NOT OK to include internal-only, secret, private-network, filesystem, credential, or admin-only detail
+- NOT OK to include internal-only, secret, private-network, filesystem, credential, or operator-only detail
 - If in doubt, leave it out
 
 #### Plain Text (Accept: text/plain)
@@ -16821,7 +16874,7 @@ Same underlying health response as `/server/healthz`, but formatted using the st
 | `build.commit` | Git commit hash (short) |
 | `build.date` | Build timestamp |
 | `features.*` | Enabled features (bool or object) |
-| `features.tor.enabled` | Tor hidden service enabled (auto-detected or admin setting) |
+| `features.tor.enabled` | Tor hidden service enabled (auto-detected or `server.yml` setting) |
 | `features.tor.running` | Tor process currently running |
 | `features.tor.status` | healthy, error:{short message} |
 | `features.tor.hostname` | Onion address (if running) |
@@ -16882,7 +16935,7 @@ OS/Arch: {GOOS}/{GOARCH}
 # PART 14: API STRUCTURE
 
 **Note:** This section covers API structure and requirements. For specific route listings, see:
-- Admin API Routes: PART 11 (Security & Logging → Admin token routes)
+- Operator-token-protected Routes: PART 11 (Security & Logging → `server.token` routes)
 - Project-specific Routes: IDEA.md
 
 ## Legacy vs Compatibility Endpoints
@@ -17129,6 +17182,16 @@ GET /api/{api_version}/items?status=active            ✓ Filtering
 | **No trailing whitespace** | All files | No spaces/tabs at end of lines |
 
 ### JSON Formatting (API Responses)
+
+**JSON response rules (apply to every `application/json` body):**
+
+| Rule | Requirement |
+|------|-------------|
+| **Indentation** | 2 spaces — never tabs, never 4 spaces |
+| **Trailing newline** | Every JSON response ends with exactly one `\n` |
+| **No bare arrays at root** | Never emit a top-level JSON array — always wrap: `{ "data": [...] }`. Bare arrays cannot grow new sibling fields (pagination, metadata) without a breaking change, and some older clients reject them as JSON. |
+| **Success shape** | `{ "ok": true, "data": { ... } }` — `ok` is the discriminator; `data` carries the payload |
+| **Error shape** | `{ "ok": false, "error": "CODE", "message": "...", "details": {} }` — see PART 14 |
 
 ```go
 // ALL JSON responses MUST be indented and end with newline
@@ -18423,7 +18486,7 @@ Need additional compatible endpoints?"
 |----------|----------------|-----|
 | Trailing-slash 301 normalization (`/api/swagger/` → `/api/swagger`) | **Yes** | URL canonicalization, not version routing — see "Normalization Rules" in PART 16 |
 | HTTP → HTTPS 301 | **Yes** | Transport-level, unrelated to API versioning |
-| Auth redirect for protected endpoints (e.g., admin debug API → login) | **Yes** | Security, unrelated |
+| Auth redirect for protected endpoints (e.g., operator-token-protected debug API → 401) | **Yes** | Security, unrelated |
 
 **Where to apply:** every unversioned `/api/<thing>` alias for a versioned endpoint. Mount the same handler at both the versioned path and the alias — do NOT implement the alias as a redirect to the versioned path.
 
@@ -18488,6 +18551,8 @@ Need additional compatible endpoints?"
 
 **Canonical error shape — same shape everywhere (PART 9, PART 11, PART 14, PART 16). The HTTP status code carries the status; do not duplicate it in the body.**
 
+**All 4xx/5xx responses MUST use this envelope** (RFC 7807-inspired — `ok` + `error` code + human `message` + structured `details`). No endpoint may invent its own error shape; this is the single source of truth for every error response in the service.
+
 ```json
 {
   "ok": false,
@@ -18538,7 +18603,7 @@ Before proceeding, confirm you understand:
 - [ ] Frontend is required for ALL projects
 - [ ] NO inline CSS, NO JS alerts
 - [ ] Project-wide theme system: light/dark/auto (dark is default)
-- [ ] Themes apply to entire project: WebUI, admin, Swagger, GraphQL
+- [ ] Themes apply to entire project: WebUI, Swagger, GraphQL
 - [ ] All 3 API types required: REST, Swagger, GraphQL (Swagger & GraphQL in sync)
 - [ ] Standard endpoints must exist (`/server/healthz`, `/api/{api_version}/server/swagger`, `/api/{api_version}/server/graphql`, `/api/swagger` alias, `/api/graphql` alias, `/server/docs/swagger`, `/server/docs/graphql`)
 - [ ] OpenAPI uses JSON only (no YAML)
@@ -19659,15 +19724,16 @@ func URLNormalizeMiddleware(next http.Handler) http.Handler {
 
 ```go
 // Execution order (request flows top to bottom):
-// 1. URLNormalizeMiddleware    - normalize URLs (trailing slash, etc.)
-// 2. PathSecurityMiddleware    - validate paths, block traversal
-// 3. SecurityHeadersMiddleware - add security headers
-// 4. AllowlistMiddleware       - set allowlisted flag (bypasses blocklist/ratelimit/geoip, NOT auth)
-// 5. BlocklistMiddleware       - IP/domain blocklist check
-// 6. RateLimitMiddleware       - rate limiting
-// 7. GeoIPMiddleware           - country blocking
-// 8. AuthMiddleware            - authentication
-// 9. LoggingMiddleware         - log requests
+// 1.  URLNormalizeMiddleware    - normalize URLs (trailing slash, etc.)
+// 2.  RequestIDMiddleware       - attach request ID (must run before Logging so logs include it)
+// 3.  PathSecurityMiddleware    - validate paths, block traversal
+// 4.  SecurityHeadersMiddleware - add security headers
+// 5.  AllowlistMiddleware       - set allowlisted flag (bypasses blocklist/ratelimit/geoip, NOT auth)
+// 6.  BlocklistMiddleware       - IP/domain blocklist check
+// 7.  RateLimitMiddleware       - rate limiting
+// 8.  GeoIPMiddleware           - country blocking
+// 9.  AuthMiddleware            - authentication
+// 10. LoggingMiddleware         - log requests (carries request_id)
 ```
 
 ### No JavaScript-Disabled Broken State
@@ -19883,7 +19949,6 @@ fi
 | Element | Mobile (base) | Tablet+ (768px) | Desktop+ (1024px) |
 |---------|---------------|-----------------|-------------------|
 | **Container** | 100% width, 1rem padding | 90% width, centered | max-width: 1400px |
-| **Admin Sidebar** | Hidden, hamburger toggle | Visible, collapsible | Expanded by default |
 | **Public Nav** | Hamburger menu | Horizontal links | Horizontal links |
 | **Tables** | Horizontal scroll | Full table | Full table |
 | **Modals** | Full-width (100% - 1rem) | Centered, max-width 600px | Same |
@@ -22656,12 +22721,11 @@ src/server/template/
 
 ## Layout Separation
 
-**Public and Admin routes use DIFFERENT layouts:**
+**All web routes are public — there is no admin web UI:**
 
 | Layout | Routes | Design Philosophy |
 |--------|--------|-------------------|
 | `public.tmpl` | `/`, `/server/*`, project routes | Clean, marketing-friendly, top navigation |
-| `admin.tmpl` | (reserved for future use) | Dashboard-style, sidebar navigation, data-dense |
 
 ### Public Layout (`public.tmpl`)
 
@@ -22695,7 +22759,7 @@ src/server/template/
 |------|-------------|
 | **App-focused** | Navigation reflects the application's features and purpose |
 | **NO admin links** | NEVER link to server administration from public pages |
-| **NO admin hints** | Do not advertise that an admin API exists from public pages |
+| **NO admin hints** | Do not advertise server-administration paths (there is no admin web UI) |
 | **Direct access only** | Server administration is via the config file or CLI only |
 
 **Public nav contains (project-specific):**
@@ -22705,55 +22769,25 @@ src/server/template/
 - User menu (if logged in): Settings, Logout
 
 **Public nav NEVER contains:**
-- ❌ Admin link
-- ❌ Dashboard link (unless user dashboard)
-- ❌ Settings link to admin settings
+- ❌ Any link to server-administration paths (there is no admin web UI)
+- ❌ Dashboard link (no user accounts exist)
+- ❌ Settings link (server settings are config-file only)
 - ❌ Any hint of server administration routes
-
-### Admin Layout (`admin.tmpl`)
-
-**For server administrators:**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  [Logo]        [Search...]              [🔔] [Admin ▼] [Logout] │  ← Header
-├──────────────┬──────────────────────────────────────────────────┤
-│              │                                                  │
-│  Dashboard   │                                                  │
-│              │                                                  │
-│  📦 Server   │              <main>                              │
-│  🔒 Security │          (content area)                          │
-│  🌐 Network  │                                                  │
-│  👥 Users    │                                                  │
-│  ⚙️ Settings  │                                                  │
-│              │                                                  │
-│  Sidebar     │                                                  │
-├──────────────┴──────────────────────────────────────────────────┤
-│                    {projectversion} · Docs · Status             │  ← Footer
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Admin Layout Characteristics:**
-- Collapsible sidebar navigation (left)
-- Header with search, notifications bell, admin menu
-- Data-dense, dashboard-style design
-- Compact footer with version and links
-- Breadcrumbs for navigation context
 
 ### Shared Theme Classes
 
-**Both `public.tmpl` and `admin.tmpl` use the SAME theme CSS classes. No conflicts, no ambiguities.**
+**`public.tmpl` uses theme CSS classes applied globally. No conflicts, no ambiguities.**
 
 | Rule | Description |
 |------|-------------|
-| **Same theme classes** | Both layouts use `theme-dark`, `theme-light` on `<html>` |
-| **Same CSS variables** | Theme colors defined once in `common.css`, used everywhere |
-| **Same color schemes** | `dark.css` and `light.css` apply to both public and admin |
-| **No layout-specific themes** | Do NOT create `admin-dark.css` or `public-light.css` |
+| **Theme classes** | Use `theme-dark`, `theme-light` on `<html>` |
+| **CSS variables** | Theme colors defined once in `common.css`, used everywhere |
+| **Color schemes** | `dark.css` and `light.css` apply globally |
+| **No layout-specific themes** | Do NOT create layout-scoped CSS theme files |
 | **No class conflicts** | Theme class names are global and consistent |
 | **No ambiguity** | One set of theme rules for the entire project |
 
-**Both layouts start with:**
+**Layout starts with:**
 ```html
 <!DOCTYPE html>
 <html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-dark">  <!-- or theme-light -->
@@ -22788,7 +22822,7 @@ html.theme-light {
   /* ... all theme colors ... */
 }
 
-/* public.css and admin.css use the SAME variables */
+/* public.css and components.css use the SAME variables */
 .sidebar { background: var(--bg-color); }
 .header { color: var(--text-color); }
 ```
@@ -22796,15 +22830,14 @@ html.theme-light {
 **Theme preference source:**
 | Context | Preference Source | Fallback |
 |---------|-------------------|----------|
-| Public (guest) | `localStorage.theme` | `dark` |
-| Operator | `operator_preferences.theme` | `dark` |
+| All users | `localStorage.theme` | `dark` |
 
 **JavaScript theme switching (shared):**
 
 **Note:** Per "HTML5 & CSS Over JavaScript" rules - CSS does all theming via variables. JavaScript ONLY handles preference detection and class switching (cannot be done in pure CSS).
 
 ```javascript
-// Same function works for both public and admin
+// Theme function works globally across all pages
 // JS only sets the class - CSS does all the actual styling
 function setTheme(theme) {
   if (theme === 'auto') {
@@ -22833,7 +22866,6 @@ src/server/static/
 ├── css/
 │   ├── common.css      # Reset, variables, utilities (loaded first)
 │   ├── public.css      # Public layout styles
-│   ├── admin.css       # Admin layout styles
 │   └── components.css  # Shared components (modals, buttons, toasts)
 ├── js/
 │   └── app.js          # ALL JavaScript in ONE file (minimal)
@@ -22848,8 +22880,8 @@ src/server/static/
 
 | Rule | Description |
 |------|-------------|
-| **One file per context** | `common.css`, `public.css`, `admin.css`, `components.css` |
-| **Load order matters** | common → components → public/admin |
+| **One file per context** | `common.css`, `public.css`, `components.css` |
+| **Load order matters** | common → components → public |
 | **CSS variables** | Define in `common.css` `:root {}` for theming |
 | **NO inline styles** | All styles in CSS files, never in HTML |
 | **NO `!important`** | Exception: print styles only |
@@ -22964,7 +22996,7 @@ function confirmDelete(form, message = 'Are you sure?') {
 | Rule | Description |
 |------|-------------|
 | **Go templates only** | `html/template` package, `.tmpl` extension |
-| **Layouts for structure** | `layout/public.tmpl`, `layout/admin.tmpl` |
+| **Layouts for structure** | `layout/public.tmpl` |
 | **Partials for reuse** | Header, nav, footer, components |
 | **Pages for content** | One `.tmpl` per page/route |
 | **No logic in templates** | Minimal `{{if}}`, `{{range}}` - logic in handlers |
@@ -23028,20 +23060,6 @@ partial/
 └─────────────────────────────────────────┘
 ```
 
-**Page Structure - Admin:**
-
-```
-┌─────────────────────────────────────────┐
-│              <header>                   │  ← admin/header.tmpl
-├──────────┬──────────────────────────────┤
-│          │                              │
-│  <aside> │         <main>               │  ← admin/sidebar.tmpl + content
-│          │                              │
-├──────────┴──────────────────────────────┤
-│              <footer>                   │  ← admin/footer.tmpl
-└─────────────────────────────────────────┘
-```
-
 **Nav vs Footer :**
 
 | Element | Position | Purpose | Contents |
@@ -23058,7 +23076,6 @@ partial/
 
 **Nav does NOT contain:**
 - API link (users access via `/server/docs/swagger` if needed)
-- Admin link (don't advertise - admins know where it is)
 - Help link (belongs in footer)
 
 **Default Navigation (nav.tmpl):**
@@ -23578,7 +23595,7 @@ var ThemePaletteLight = ThemePalette{
 - Store preference in `localStorage.theme` or cookie
 - Apply theme class to `<html>` element: `theme-light`, `theme-dark`
 - NO page reload required - instant switching via CSS classes
-- All components (Swagger, GraphQL, admin) switch simultaneously
+- All components (Swagger, GraphQL, public pages) switch simultaneously
 
 **Accessibility Requirements:**
 - Both themes MUST pass WCAG AA contrast requirements (4.5:1 minimum)
@@ -24054,7 +24071,7 @@ if err != nil {
 
 ## Announcements
 
-**Admin messages shown in UI for downtime notices, updates, etc.**
+**Operator messages (configured in `server.yml`) shown in UI for downtime notices, updates, etc.**
 
 ### Configuration
 
@@ -24355,10 +24372,10 @@ func ValidateFooterHTML(html string) (string, error) {
 <form action="/steal"><input type="text"></form>
 ```
 
-### Sanitization Preview (API Response)
+### Sanitization Preview (Startup Log)
 
-When admin submits `custom_html` via API, the response includes:
-1. **Raw input** - What was submitted
+When the operator sets `custom_html` in `server.yml`, the server logs at startup:
+1. **Raw input** - What was configured
 2. **Sanitized output** - What will actually render
 3. **Warning** - If content was modified by sanitizer
 
@@ -24994,20 +25011,20 @@ func trackingScript(r *http.Request) template.HTML {
     </div>
   </section>
 
-  <!-- Data Collection - admin-defined content -->
+  <!-- Data Collection - operator-defined content -->
   <section id="data-collection">
     <h2>Data We Collect</h2>
     {{ .Privacy.Content.DataCollection | markdownToHTML }}
   </section>
 
-  <!-- Data Usage - admin-defined content -->
+  <!-- Data Usage - operator-defined content -->
   <!-- Dynamic: GetDataUsageContent() returns data_usage or data_usage_if_sold based on data.sold -->
   <section id="data-usage">
     <h2>How We Use Your Data</h2>
     {{ .Privacy.GetDataUsageContent | markdownToHTML }}
   </section>
 
-  <!-- Data Security - admin-defined content -->
+  <!-- Data Security - operator-defined content -->
   <section id="data-security">
     <h2>Data Security</h2>
     {{ .Privacy.Content.DataSecurity | markdownToHTML }}
@@ -26225,7 +26242,7 @@ server:
         max_size: 100MB
         compress: true
 
-      # Daily backup at 02:00 (admin can disable)
+      # Daily backup at 02:00 (operator can disable in server.yml)
       backup_daily:
         schedule: "0 2 * * *"
         enabled: true
@@ -26503,6 +26520,18 @@ Shutdown complete
 **ALL projects MUST have built-in GeoIP support using sapics/ip-location-db.**
 
 GeoIP databases are NEVER embedded - they are downloaded on first run and updated via scheduler.
+
+## GeoIP is a Risk Signal — Never the Sole Access Gate
+
+**GeoIP MUST be treated as one risk signal among many — never as the sole access-control gate.** A request from a blocked country MUST still pass through every other layer of the security pipeline (rate limiting, authentication, authorization, input validation, audit logging). Conversely, a request from an allowed country MUST NOT skip any check on the assumption that "the country is trusted".
+
+| Rule | Detail |
+|------|--------|
+| **Never sole gate** | Country / ASN / city signals can raise risk score, trigger MFA, lower rate-limit thresholds, or feed audit logs — they MUST NOT be the only thing standing between an attacker and a resource. |
+| **Always after rate limit + auth** | Country check runs alongside or after rate limiting and authentication, never replacing them. A blocked-country request still consumes rate-limit budget and is still logged with its identity. |
+| **VPN / proxy / Tor caveat** | Country data is trivially bypassed via VPN, residential proxy, or Tor. Treat any blocking decision based on country as advisory, not authoritative. |
+| **GeoIP-only auth is forbidden** | "Allow if country = US" is not authentication. Login, API keys, session cookies, and tokens are still required regardless of source country. |
+| **Failure mode** | If GeoIP database is missing, stale, or lookup fails, the request MUST be processed by the rest of the pipeline normally (fail-open for GeoIP, fail-closed for real auth). Never block a request because GeoIP lookup errored. |
 
 ## Configuration
 
@@ -28030,7 +28059,7 @@ groups:
 {
   "version": "1.0.0",
   "created_at": "2025-01-15T10:30:00Z",
-  "created_by": "administrator",
+  "created_by": "operator",
   "app_version": "1.2.3",
   "contents": [
     "server.yml",
@@ -28060,7 +28089,7 @@ groups:
 | Algorithm | AES-256-GCM |
 | Key Derivation | Argon2id (password → encryption key) |
 | File Extension | `.tar.gz` (unencrypted) or `.tar.gz.enc` (encrypted) |
-| Password Storage | **NEVER stored** - admin must remember |
+| Password Storage | **NEVER stored** - operator must remember |
 
 **How Encryption Works:**
 1. Backup creates `.tar.gz` archive in memory
@@ -28193,7 +28222,7 @@ server:
 6. If ANY verification fails:
    - Delete failed backup file
    - Keep existing valid backups
-   - Alert admin
+   - Alert operator (via `server.contact.admin` notification channel)
    - Retry on next scheduled run
 ```
 
@@ -28421,7 +28450,7 @@ on a Sunday counts as daily + weekly + monthly + yearly - uses highest priority)
 
 ### Restore Password Handling
 
-**If backup is encrypted (`.tar.gz.enc`), backup password is required (separate from admin auth).**
+**If backup is encrypted (`.tar.gz.enc`), backup password is required (separate from `server.token`).**
 
 | Interface | Password Not Provided | Behavior |
 |-----------|----------------------|----------|
@@ -30264,11 +30293,22 @@ test:
 	@$(GO_DOCKER) go mod download
 	@$(GO_DOCKER) go test -v -cover -coverprofile=coverage.out ./...
 	@COVERAGE=$$($(GO_DOCKER) go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
-	if [ $$(echo "$$COVERAGE < 100" | bc -l) -eq 1 ]; then \
-		echo "ERROR: Coverage is $$COVERAGE%, must be 100%"; \
+	if [ $$(echo "$$COVERAGE < 80" | bc -l) -eq 1 ]; then \
+		echo "ERROR: Coverage is $$COVERAGE%, must be >= 80%"; \
 		exit 1; \
 	fi
-	@echo "Tests complete - Coverage: 100% ✓"
+	@echo "Tests complete - Coverage: >= 80% ✓"
+
+# =============================================================================
+# Coverage gates by project type:
+#   - SERVER template projects: 80% minimum (go test -cover must report >= 80.0%)
+#   - All other Go projects: 60% minimum; override upward in IDEA.md
+#     (## Project variables -> coverage_minimum: 80) when appropriate.
+#     Never override downward.
+#   - CLI tools and libraries: same 60% floor.
+# Coverage runs in CI on every push and in `make test` locally.
+# Never skip with -short or -count=0. No //go:coverage ignore workarounds.
+# =============================================================================
 
 # =============================================================================
 # DEV - Quick build for local development/testing (to random temp dir)
@@ -30834,10 +30874,12 @@ See dockerfile_conventions.md → OCI Annotations for the complete list of requi
 |------|-------------|
 | **NEVER modify ENTRYPOINT** | Always use entrypoint.sh for customization |
 | **NEVER modify CMD** | Pass commands to entrypoint.sh instead |
+| **Non-root runtime user** | Runtime stage MUST create and switch to a non-root user. Alpine: `RUN addgroup -S app && adduser -S -G app app` then `USER app`. Debian/Ubuntu: `RUN groupadd -r app && useradd -r -g app app` then `USER app`. Exception: only if the app must bind a privileged port (<1024 — and even then prefer `setcap cap_net_bind_service`), or must manage system services. Document any exception in `IDEA.md`. |
 | **STOPSIGNAL** | Use `SIGRTMIN+3` for proper shutdown |
 | **ENTRYPOINT format** | `[ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]` |
 | **HEALTHCHECK timing** | Start: 10m, Interval: 5m, Timeout: 15s |
 | **Customization** | ALL customization via entrypoint.sh |
+| **entrypoint.sh tail** | Must end with `exec "$@"` (or `exec <binary> ... "$@"`) so the application replaces the shell as PID 1 and receives signals directly — without `exec`, tini/Docker signals are delivered to bash, not the app, and graceful shutdown breaks |
 
 ### Dockerfile Example (Multi-Stage)
 
@@ -30979,7 +31021,7 @@ export DATA_DIR="${DATA_DIR:-/data/${APP_NAME}}"
 # Track background PIDs for cleanup
 declare -a PIDS=()
 
-log() { echo "[entrypoint] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log() { echo "[entrypoint] $(date '+%Y-%m-%dT%H:%M:%S%z') $*"; }
 
 # Signal handling for graceful shutdown
 cleanup() {
@@ -31421,7 +31463,7 @@ EXPOSE 80
 HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 \
     CMD timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh"]
 ```
 
 **All-in-One supervisor config (`docker/rootfs/etc/supervisor/conf.d/services.conf`):**
@@ -35340,7 +35382,7 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 **Integration Tests (`./tests/*.sh`):**
 - Test complete running server
 - Test API endpoints, .txt extension, Accept headers
-- Test authentication, admin routes
+- Test authentication, API token validation
 - Test project-specific functionality (from IDEA.md)
 - Run with `./tests/run_tests.sh`
 - `./tests/*` means executable shell scripts in the repository-root `tests/` directory
@@ -35360,7 +35402,7 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 - If the behavior requires a running binary, real HTTP requests, real process execution, or container/Incus setup, it belongs in `./tests/*.sh`
 
 **Reason both are required:**
-- `*_test.go` exists to achieve and enforce **100% Go code coverage** via `go test -cover`
+- `*_test.go` exists to achieve and enforce **≥80% Go code coverage** via `go test -cover`
 - `./tests/*.sh` exists to achieve and enforce **100% endpoint/route/integration coverage**
 - One does **not** replace the other; they measure different things and catch different classes of bugs
 
@@ -35378,7 +35420,7 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 - ✓ Test ALL `.txt` endpoints (robots.txt, security.txt, API .txt extension)
 - ✓ Test content negotiation with ALL required Accept headers (see below)
 - ✓ Test frontend smart detection (browser → HTML, CLI → formatted text)
-- ✓ Test authentication (admin, user if applicable)
+- ✓ Test authentication (`server.token` and resource-owner tokens, if applicable)
 
 ### Content Negotiation Testing (REQUIRED)
 
@@ -35445,9 +35487,9 @@ done
 
 # Backend routes - test BOTH application/json and text/plain
 api_routes=(
-    "/api/v1/status"
-    "/api/v1/jokes/random"
-    "/api/v1/users/john"
+    "/api/${API_VERSION}/status"
+    "/api/${API_VERSION}/jokes/random"
+    "/api/${API_VERSION}/users/john"
 )
 
 for route in "${api_routes[@]}"; do
@@ -35461,8 +35503,8 @@ done
 txt_endpoints=(
     "/robots.txt"
     "/.well-known/security.txt"
-    "/api/v1/jokes/random.txt"
-    "/api/v1/users/john.txt"
+    "/api/${API_VERSION}/jokes/random.txt"
+    "/api/${API_VERSION}/users/john.txt"
 )
 
 for endpoint in "${txt_endpoints[@]}"; do
@@ -35579,24 +35621,24 @@ make test
 
 **Note:** Makefile targets use Docker internally. See PART 25 for underlying commands.
 
-## 100% Test Coverage
+## Test Coverage
 
-**ALL code MUST have 100% test coverage. No exceptions.**
+**Go unit tests must achieve ≥80% code coverage. Integration tests must cover 100% of endpoints.**
 
 ### Coverage Requirements
 
 | Coverage Type | Requirement | Verification |
 |--------------|-------------|--------------|
-| **Go Unit Tests** | 100% code coverage | `go test -cover` must report 100% |
+| **Go Unit Tests** | ≥80% code coverage | `go test -cover` must report ≥80% |
 | **Integration Tests** | 100% endpoint coverage | Every endpoint tested |
-| **Admin Routes** | 100% route coverage | Every admin route tested |
-| **Error Paths** | 100% error handling | All error conditions tested |
+| **API Routes** | 100% route coverage | Every API route tested |
+| **Error Paths** | All critical error paths | Auth, DB, and validation errors tested |
 
-### What 100% Coverage Means
+### What 80% Coverage Means
 
 **Go Code (Unit Tests):**
 ```bash
-# Run tests with coverage enforcement (fails if below 100%)
+# Run tests with coverage enforcement (fails if below 80%)
 make test
 ```
 
@@ -35626,18 +35668,18 @@ test:
         docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app casjaysdev/go:latest \
           go test -cover -coverprofile=coverage.out ./...
 
-    - name: Check coverage is 100%
+    - name: Check coverage is ≥80%
       run: |
         COVERAGE=$(docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app casjaysdev/go:latest \
           go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-        if [ $(echo "$COVERAGE < 100" | bc -l) -eq 1 ]; then
-          echo "ERROR: Coverage is $COVERAGE%, must be 100%"
+        if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
+          echo "ERROR: Coverage is $COVERAGE%, must be >= 80%"
           exit 1
         fi
         echo "Coverage: $COVERAGE% ✓"
 ```
 
-### How to Achieve 100% Coverage
+### How to Achieve 80% Coverage
 
 **1. Test All Code Paths:**
 ```go
@@ -35740,18 +35782,17 @@ verify_all_endpoints_tested
 | All branches covered | Just main branch |
 | Integration test hits endpoint | Documentation says it works |
 
-### Coverage Exceptions (NONE)
+### Coverage Guidance
 
-**There are NO exceptions to 100% coverage:**
+**Prioritize coverage where it matters:**
 
-| Common Excuse | Response |
-|--------------|----------|
-| "It's just a simple getter" | Test it anyway |
-| "The code is obvious" | Obvious code can still have bugs |
-| "It's only used internally" | Internal code needs tests too |
-| "I tested it manually" | Manual tests don't count |
-| "It's just logging" | Mock the logger and test |
-| "It's third-party code" | Test your integration with it |
+| Priority | What to test | Why |
+|----------|-------------|-----|
+| **Always** | Auth, token validation, error paths | Security-critical; bugs here are severe |
+| **Always** | DB queries, schema init, migrations | Data integrity |
+| **Always** | API handlers, request parsing | Public contract |
+| **Best effort** | Simple getters, logging, fmt output | Low risk, high cost to mock |
+| **Skip** | Third-party library internals | Not your code |
 
 **When to run which tests:**
 
@@ -35855,11 +35896,11 @@ fi
    - Version and help checks (server, CLI)
    - Binary info verification
    - **Binary rename tests** (copy binary, verify --help shows new name)
-   - **Admin setup** (login with credentials from server.yml → generate API token)
+   - **Operator setup** (read `server.token` from `server.yml`)
    - Test API endpoints (.txt extension, Accept headers)
    - Test frontend smart detection (browser → HTML, CLI → formatted text)
    - Test project-specific endpoints (from IDEA.md)
-   - Test admin authentication (see "Testing Admin Routes")
+   - Test `server.token` authentication (see "Testing Operator-Token Routes")
    - **CLI full functionality** (with API token against running server)
 7. Clean up on exit
 
@@ -36251,13 +36292,13 @@ fi
 | **Test container tools** | Docker alpine MUST install: `apk add --no-cache curl bash file jq` |
 | **Test all binaries** | Test `--version` and `--help` for server and client if built |
 | **Binary rename test** | Copy binary with new name, verify `--help` shows renamed name (not hardcoded) |
-| **Admin setup** | Login with credentials from server.yml, generate API token |
+| **Operator setup** | Read `server.token` from `server.yml` |
 | **CLI full functionality** | Test CLI with API token against running server (not just --help) |
 | **API endpoint testing** | MUST test .txt extension and Accept headers on API routes |
 | **Frontend testing** | MUST test smart detection (CLI → formatted text, browser → HTML) |
 | **Content negotiation** | Test JSON, text/plain, and text/html responses |
 | **Project-specific tests** | MUST test ALL endpoints from IDEA.md (CRUD, API, frontend) |
-| **Admin authentication** | Test login and rejection (no bypass) |
+| **Operator-token authentication** | Test acceptance and rejection (no bypass) |
 | **Cleanup** | ALWAYS use `trap` for cleanup |
 | **Exit codes** | 0 = success, non-zero = failure |
 | **Output** | Clear progress messages with `echo` |
@@ -36683,9 +36724,9 @@ Documentation uses MkDocs Material theme with dark/light/auto switching.
 
 **`docs/` is the operator/user/integrator documentation set. It MUST explain the shipped product as it actually behaves now.**
 
-- `docs/` MUST cover the browser surface, admin surface, API surface, configuration surface, and any enabled public protocol/integration surface
+- `docs/` MUST cover the browser surface, CLI surface, API surface, configuration surface, and any enabled public protocol/integration surface
 - If the project exposes public discovery or standards endpoints (for example `/.well-known/**`, Swagger/GraphQL docs, autodiscover, OAuth/OIDC provider metadata, native app association files, or security-reporting endpoints), the relevant docs pages MUST explain them
-- If a feature exists in code and affects operators, admins, integrators, or end users, it MUST be reflected in `docs/`
+- If a feature exists in code and affects operators, integrators, or end users, it MUST be reflected in `docs/`
 - `docs/` is prose/reference documentation; generated OpenAPI/GraphQL output does NOT replace the required docs pages
 
 | File | Required | Purpose |
@@ -37148,7 +37189,7 @@ pymdown-extensions>=10.0
 
 ```bash
 # Docker
-docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
+docker run -p 172.17.0.1:64580:80 {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
 
 # Binary
 ./{project_name}-linux-amd64 --config server.yml
@@ -37191,7 +37232,7 @@ MIT - See [LICENSE.md]({PLATFORM_REPO_URL}/blob/main/LICENSE.md)
 ```bash
 docker run -d \
   --name {project_name} \
-  -p 64580:80 \
+  -p 172.17.0.1:64580:80 \
   -v {project_name}-data:/data \
   {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
 ```
@@ -37432,13 +37473,12 @@ make test
 | Layer | What Gets Translated |
 |-------|---------------------|
 | **Web Frontend** | All UI text: navigation, headings, labels, buttons, tooltips, placeholders, footers, legal pages |
-| **Admin API** | All admin API: error messages, status descriptions, notifications |
 | **API Responses** | Error messages, validation messages, status descriptions |
 | **Swagger/OpenAPI** | Endpoint descriptions, parameter descriptions, schema descriptions, error examples |
 | **GraphQL** | Type descriptions, field descriptions, query/mutation descriptions |
 | **Email Templates** | Subject lines, body text, headings, CTAs, regulatory/compliance notices |
 | **Server CLI Output** | Help text, status messages, error messages, startup banners |
-| **Client CLI Output** | Help text, command descriptions, error messages, TUI labels, admin output |
+| **Client CLI Output** | Help text, command descriptions, error messages, TUI labels, operator output |
 | **Agent Output** | Help text, status messages, error messages, startup banners, registration prompts |
 | **Health Page** | Status labels, section headings, field labels |
 | **Cookie Consent** | Banner text, category descriptions, button labels |
@@ -37880,358 +37920,6 @@ var localeFS embed.FS
     }
   },
 
-  "admin": {
-    "panel_title": "Panel de administración de {app_name}",
-
-    "nav": {
-      "dashboard": "Panel de control",
-      "server": "Servidor",
-      "settings": "Configuración",
-      "branding": "Marca",
-      "ssl_tls": "SSL/TLS",
-      "scheduler": "Programador",
-      "email": "Correo electrónico",
-      "logs": "Registros",
-      "backup": "Respaldo",
-      "maintenance": "Mantenimiento",
-      "updates": "Actualizaciones",
-      "info": "Información",
-      "security": "Seguridad",
-      "authentication": "Autenticación",
-      "api_tokens": "Tokens de API",
-      "rate_limiting": "Límite de velocidad",
-      "firewall": "Cortafuegos",
-      "allowlist": "Lista de permitidos",
-      "network": "Red",
-      "tor": "Tor",
-      "geoip": "GeoIP",
-      "blocklists": "Listas de bloqueo",
-      "users": "Usuarios",
-      "user_list": "Lista de usuarios",
-      "invites": "Invitaciones",
-      "roles": "Roles",
-      "help": "Ayuda",
-      "documentation": "Documentación"
-    },
-
-    "header": {
-      "search_placeholder": "Buscar...",
-      "revoke_token": "Revocar token",
-      "operators_online": "Operadores en línea"
-    },
-
-    "dashboard": {
-      "title": "Panel de control",
-      "status": "ESTADO",
-      "uptime": "TIEMPO DE ACTIVIDAD",
-      "requests": "SOLICITUDES",
-      "errors": "ERRORES",
-      "period_24h": "(24h)",
-      "system_resources": "RECURSOS DEL SISTEMA",
-      "cpu": "CPU:",
-      "memory": "Memoria:",
-      "disk": "Disco:",
-      "quick_actions": "ACCIONES RÁPIDAS",
-      "restart_server": "Reiniciar servidor",
-      "clear_cache": "Limpiar caché",
-      "create_backup": "Crear respaldo",
-      "view_logs": "Ver registros",
-      "recent_activity": "ACTIVIDAD RECIENTE",
-      "config_updated": "Configuración actualizada",
-      "admin_login": "Inicio de sesión de administrador",
-      "backup_completed": "Respaldo completado",
-      "ssl_renewed": "SSL renovado",
-      "scheduled_tasks": "TAREAS PROGRAMADAS",
-      "in_x_days": "en {count} días",
-      "in_x_hours": "en {count} horas",
-      "in_x_minutes": "en {count} minutos",
-      "alerts_warnings": "ALERTAS / ADVERTENCIAS",
-      "ssl_expires_in": "El certificado SSL expira en {count} días",
-      "disk_usage_above": "Uso de disco por encima del umbral del {percent}%",
-      "update_available": "Actualización disponible: v{version}"
-    },
-
-    "settings": {
-      "title": "Configuración del servidor",
-      "general": "General",
-      "process": "Proceso",
-      "advanced": "Avanzado",
-      "port": "Puerto",
-      "mode": "Modo",
-      "fqdn": "FQDN",
-      "daemonize": "Demonizar",
-      "tooltip_port": "El puerto en el que escucha el servidor",
-      "tooltip_mode": "Producción aplica validación estricta de host",
-      "tooltip_fqdn": "Nombre de dominio completo (auto-detectado)",
-      "tooltip_daemonize": "Separar del terminal al iniciar (para inicio manual)"
-    },
-
-    "branding": {
-      "title": "Marca",
-      "site_title": "Título",
-      "tagline": "Eslogan",
-      "description": "Descripción",
-      "keywords": "Palabras clave",
-      "author": "Autor",
-      "og_image": "Imagen OG",
-      "twitter_handle": "Usuario de Twitter",
-      "favicon": "Favicon",
-      "logo": "Logo"
-    },
-
-    "security": {
-      "title": "Configuración de seguridad",
-      "rate_limiting": "Límite de velocidad",
-      "requests_per_window": "Solicitudes por ventana",
-      "window": "Ventana",
-      "cors": "CORS",
-      "origins": "Orígenes",
-      "methods": "Métodos",
-      "csp": "Política de seguridad de contenido",
-      "hsts": "HSTS",
-      "account_lockout": "Bloqueo de cuenta",
-      "ip_blocking": "Bloqueo de IP",
-      "enable_ip_blocking": "Habilitar bloqueo de IP",
-      "escalating_durations": "Duraciones de bloqueo escalonadas",
-      "first_block_duration": "Duración del primer bloqueo"
-    },
-
-    "allowlist": {
-      "title": "Lista de permitidos (IPs de confianza)",
-      "description": "Las IPs en la lista de permitidos evitan las listas de bloqueo, los límites de velocidad y el bloqueo por país.",
-      "current_entries": "Entradas actuales",
-      "add_entry": "Agregar entrada",
-      "cidr": "IP/CIDR",
-      "cidr_placeholder": "192.168.1.0/24 o 2001:db8::1",
-      "description_label": "Descripción",
-      "description_placeholder": "Ej: Red de oficina",
-      "source": "Origen",
-      "source_config": "config",
-      "source_admin": "admin",
-      "added_at": "Agregado el",
-      "remove": "Eliminar",
-      "add": "Agregar",
-      "check_ip": "Verificar IP",
-      "check": "Verificar",
-      "check_result_allowed": "{ip} → Permitido ({cidr} \"{description}\")",
-      "check_result_not_allowed": "{ip} → No está en la lista de permitidos",
-      "bypasses": "Qué evita la lista de permitidos",
-      "does_not_bypass": "Qué NO evita la lista de permitidos",
-      "bypass_blocklists": "Listas de bloqueo de IP",
-      "bypass_ratelimit": "Límites de velocidad",
-      "bypass_geoip": "Bloqueo por país (GeoIP)",
-      "bypass_autoblock": "Bloqueo automático de IP",
-      "bypass_lockout": "Bloqueo de cuenta",
-      "no_bypass_auth": "Autenticación de administrador",
-      "no_bypass_tokens": "Validación de tokens de API",
-      "no_bypass_csrf": "Protección CSRF",
-      "no_bypass_path": "Seguridad de rutas",
-      "no_bypass_ssl": "SSL/TLS",
-      "confirm_remove": "¿Está seguro de que desea eliminar {cidr} de la lista de permitidos?",
-      "entry_added": "Entrada agregada a la lista de permitidos",
-      "entry_removed": "Entrada eliminada de la lista de permitidos",
-      "invalid_cidr": "Dirección IP o CIDR no válida",
-      "broad_range_warning": "Este rango es muy amplio ({cidr}). ¿Continuar?"
-    },
-
-    "blocklists_page": {
-      "title": "Listas de bloqueo",
-      "description": "Gestión de listas de bloqueo de IP/dominio estilo Transmission. Descargue, analice y aplique listas de bloqueo externas.",
-      "enabled": "Listas de bloqueo habilitadas",
-      "auto_update": "Actualización automática",
-      "action": "Acción",
-      "action_reject": "Rechazar (403 Prohibido)",
-      "action_drop": "Descartar (cerrar conexión)",
-      "reject_message": "Mensaje de rechazo",
-      "log_blocked": "Registrar solicitudes bloqueadas",
-      "total_rules": "Total de reglas",
-      "blocked_today": "Bloqueados hoy",
-      "last_updated": "Última actualización",
-      "update_all_now": "Actualizar todo ahora",
-      "check_ip": "Verificar IP...",
-      "sources": "Fuentes",
-      "add_source": "Agregar fuente",
-      "source_name": "Nombre",
-      "source_url": "URL",
-      "source_format": "Formato",
-      "format_auto": "Automático",
-      "format_p2p": "P2P (PeerGuardian)",
-      "format_cidr": "CIDR",
-      "format_dat": "DAT (eMule)",
-      "format_plain": "IP simple",
-      "source_enabled": "Habilitada",
-      "source_rules": "{count} reglas",
-      "source_size": "Tamaño: {size}",
-      "source_updated": "Actualizado {time}",
-      "source_never_updated": "Nunca actualizado",
-      "source_error": "Error: {error}",
-      "update": "Actualizar",
-      "remove": "Eliminar",
-      "add": "Agregar",
-      "check": "Verificar",
-      "check_result_blocked": "{ip} → Bloqueado ({lists}) {range}",
-      "check_result_not_blocked": "{ip} → No bloqueado",
-      "confirm_remove_source": "¿Está seguro de que desea eliminar la fuente '{name}'?",
-      "source_added": "Fuente de lista de bloqueo agregada",
-      "source_removed": "Fuente de lista de bloqueo eliminada",
-      "update_started": "Actualización de lista de bloqueo iniciada",
-      "update_completed": "Lista de bloqueo actualizada: {name} ({count} reglas, {duration})",
-      "update_failed": "Error al actualizar la lista de bloqueo: {error}",
-      "supported_formats": "Formatos soportados: P2P, CIDR, DAT, IP simple, .gz comprimido"
-    },
-
-    "geoip_page": {
-      "title": "GeoIP",
-      "description": "Bloqueo por país y bases de datos de geolocalización IP.",
-      "enabled": "GeoIP habilitado",
-      "auto_update": "Actualización automática",
-      "update_schedule": "Horario de actualización",
-      "country_mode": "Modo de país",
-      "country_mode_none": "Ninguno (sin bloqueo por país)",
-      "country_mode_deny": "Denegar (bloquear países listados)",
-      "country_mode_allow": "Permitir (permitir solo países listados)",
-      "deny_countries": "Países a denegar",
-      "deny_countries_placeholder": "Ej: CN, RU, KP",
-      "allow_countries": "Países a permitir",
-      "allow_countries_placeholder": "Ej: US, CA, GB",
-      "country_code_help": "Códigos ISO 3166-1 alfa-2 (2 letras, mayúsculas)",
-      "deny_description": "Bloquear estos países, permitir todos los demás",
-      "allow_description": "Permitir SOLO estos países, bloquear todos los demás",
-      "both_set_warning": "Si ambos están configurados, la lista de permitidos tiene prioridad",
-      "allowlisted_bypass": "Las IPs en la lista de permitidos siempre evitan el bloqueo por país",
-      "databases": "Bases de datos",
-      "database_asn": "ASN (Número de Sistema Autónomo)",
-      "database_country": "País",
-      "database_city": "Ciudad",
-      "database_whois": "WHOIS",
-      "database_status": "Estado de la base de datos",
-      "database_last_updated": "Última actualización: {time}",
-      "database_size": "Tamaño: {size}",
-      "database_missing": "No descargada",
-      "update_now": "Actualizar ahora",
-      "update_started": "Actualización de GeoIP iniciada",
-      "update_completed": "Bases de datos GeoIP actualizadas",
-      "update_failed": "Error al actualizar GeoIP: {error}"
-    },
-
-    "ssl": {
-      "title": "Configuración SSL/TLS",
-      "enable_https": "Habilitar HTTPS",
-      "certificate": "Certificado",
-      "private_key": "Clave privada",
-      "min_tls_version": "Versión mínima de TLS",
-      "lets_encrypt": "Let's Encrypt",
-      "contact_email": "Correo de contacto",
-      "staging_server": "Servidor de pruebas",
-      "challenge_type": "Tipo de desafío"
-    },
-
-    "backup": {
-      "title": "Configuración de respaldo",
-      "enable_scheduled": "Habilitar respaldos programados",
-      "daily_schedule": "Horario diario",
-      "backups_to_keep": "Respaldos a conservar",
-      "weekly_backups": "Respaldos semanales",
-      "monthly_backups": "Respaldos mensuales",
-      "yearly_backups": "Respaldos anuales",
-      "encrypt_backups": "Cifrar respaldos",
-      "encryption_password": "Contraseña de cifrado"
-    },
-
-    "email_settings": {
-      "title": "Configuración de correo electrónico",
-      "smtp_server": "Servidor SMTP",
-      "smtp_port": "Puerto SMTP",
-      "smtp_username": "Usuario SMTP",
-      "smtp_password": "Contraseña SMTP",
-      "tls_mode": "Modo TLS",
-      "sender_name": "Nombre del remitente",
-      "sender_email": "Correo del remitente",
-      "test_connection": "Probar conexión"
-    },
-
-    "scheduler": {
-      "title": "Programador",
-      "task_name": "Nombre de tarea",
-      "schedule": "Horario",
-      "last_run": "Última ejecución",
-      "next_run": "Próxima ejecución",
-      "run_now": "Ejecutar ahora",
-      "hourly": "Cada hora",
-      "daily": "Diario",
-      "weekly": "Semanal",
-      "monthly": "Mensual",
-      "custom": "Personalizado"
-    },
-
-    "logs": {
-      "title": "Registros",
-      "access": "Acceso",
-      "error": "Error",
-      "audit": "Auditoría",
-      "security": "Seguridad",
-      "debug": "Depuración",
-      "last_100": "Últimos 100",
-      "auto_refresh_on": "Auto-actualización: ACTIVADA",
-      "auto_refresh_off": "Auto-actualización: DESACTIVADA",
-      "prev": "Anterior",
-      "next": "Siguiente",
-      "clear_logs": "Limpiar registros"
-    },
-
-    "setup": {
-      "title": "CONFIGURACIÓN REQUERIDA",
-      "token_label": "Token de configuración: {token}",
-      "go_to_url": "Vaya a {url} e ingrese este token para completar la configuración.",
-      "token_once": "Este token solo se mostrará UNA VEZ.",
-      "step_admin": "Crear cuenta de administrador",
-      "step_api_token": "Token de API",
-      "step_server": "Configuración del servidor",
-      "step_security": "Configuración de seguridad",
-      "step_optional": "Servicios opcionales",
-      "step_complete": "Completar",
-      "app_name": "Nombre de la aplicación",
-      "domain_fqdn": "Dominio/FQDN",
-      "timezone": "Zona horaria",
-      "save_configuration": "Guardar configuración",
-      "mark_complete": "Marcar configuración como completa"
-    },
-
-    "admins": {
-      "title": "Administradores del servidor",
-      "your_account": "Su cuenta:",
-      "total_admins": "Total de administradores:",
-      "currently_online": "Actualmente en línea:"
-    },
-
-    "profile": {
-      "notification_email": "Correo de notificaciones:",
-      "notification_email_used_for": "Usado para: actualizaciones del sistema, estado de respaldo, fallos de tareas",
-      "notification_preferences": "Preferencias de notificación",
-      "system_notifications": "Sistema:",
-      "delivery_email": "Entrega: Correo electrónico",
-      "save_preferences": "Guardar preferencias",
-      "appearance": "Configuración de apariencia",
-      "font_size": "Tamaño de fuente",
-      "font_small": "Pequeño",
-      "font_medium": "Mediano",
-      "font_large": "Grande",
-      "reduce_motion": "Reducir movimiento",
-      "reduce_motion_desc": "Minimizar animaciones y transiciones.",
-      "date_format": "Formato de fecha:",
-      "time_format": "Formato de hora:",
-      "save_changes": "Guardar cambios"
-    },
-
-    "footer": {
-      "healthy": "Saludable",
-      "degraded": "Degradado",
-      "issues": "Problemas",
-      "tooltip_healthy": "Todos los sistemas operativos",
-      "tooltip_degraded": "Algunos problemas detectados",
-      "tooltip_issues": "Problemas del sistema"
-    }
-  },
 
   "notifications": {
     "title": "Notificaciones",
@@ -38473,7 +38161,7 @@ var localeFS embed.FS
 | **API responses** | All error/status messages in JSON responses MUST use translation keys |
 | **Config defaults** | Config values shown to users (e.g., `reject_message`) MUST fall back to translated keys |
 | **Wireframes** | ASCII wireframes in this spec show English for documentation only — actual UI renders via `t()` |
-| **Key naming** | Use dot-separated lowercase: `admin.dashboard.title` |
+| **Key naming** | Use dot-separated lowercase: `health.status.title` |
 | **Interpolation** | Use `{variable}` syntax: `"Hello, {name}"` |
 | **Plurals** | Nested under key with `zero`, `one`, `two`, `few`, `many`, `other` |
 | **HTML content** | Store plain text in translations, apply HTML in templates |
@@ -38558,10 +38246,10 @@ func Translate(lang, key string) string {
 
 ```html
 <!-- Simple translation -->
-<h1>{{t .Lang "admin.dashboard.title"}}</h1>
+<h1>{{t .Lang "health.status.title"}}</h1>
 
 <!-- With interpolation -->
-<p>{{tf .Lang "admin.dashboard.ssl_expires_in" .Days}}</p>
+<p>{{tf .Lang "health.ssl_expires_in" .Days}}</p>
 
 <!-- Plurals -->
 <span>{{tp .Lang "plurals.items" .Count}}</span>
@@ -38591,7 +38279,7 @@ function tf(key, vars) {
 
 // Usage
 announce(t('a11y.item_saved'));
-document.title = tf('admin.panel_title', { app_name: config.appName });
+document.title = tf('app.title', { app_name: config.appName });
 ```
 
 ### API Response Translation
@@ -39329,7 +39017,7 @@ When `use_network` is enabled, the torrc includes `SocksPort auto` for outbound 
 
 **See full `getTorConfig()` implementation in the Implementation section below.**
 
-### Admin API (Tor Settings)
+### Tor Settings (config file)
 
 **`server.yml` → `tor` section:**
 
@@ -39619,7 +39307,7 @@ func startDedicatedTor(ctx context.Context, serverPort int, cfg *TorConfig) (*To
     torrcContent := getTorConfig(cfg)
 
     // Create torrc only if it doesn't exist (persistent)
-    // torrc is preserved across restarts - only admin API can update it
+    // torrc is preserved across restarts - only operator-edited server.yml can update it
     created, err := ensureTorrc(torrcPath, []byte(torrcContent))
     if err != nil {
         return nil, fmt.Errorf("failed to ensure torrc: %w", err)
@@ -40048,7 +39736,7 @@ func (tm *TorManager) Restart() error {
 }
 
 // UpdateConfig updates the configuration, regenerates torrc, and restarts Tor
-// This is called when admin saves new Tor settings via the admin API
+// This is called on server start/reload after the operator edits Tor settings in server.yml
 func (tm *TorManager) UpdateConfig(config *TorConfig) error {
     tm.mu.Lock()
     defer tm.mu.Unlock()
@@ -40349,7 +40037,7 @@ func ensureTorrc(path string, content []byte) (bool, error) {
 }
 
 // updateTorrc overwrites torrc with new content (for config changes)
-// Only called when admin explicitly saves new Tor config
+// Only called when the operator explicitly updates Tor config in server.yml
 func updateTorrc(path string, content []byte) error {
     // Ensure parent dir exists
     if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -42714,8 +42402,8 @@ Example commands (project-dependent):
 | Auth Type | When Used |
 |-----------|-----------|
 | None | Public endpoints (e.g., `GET /api/{api_version}/pastes/{id}`) |
-| API Token | Protected endpoints, user-specific data |
-| Session | Admin operations (if CLI supports admin features) |
+| Resource Owner Token | Protected endpoints scoped to a single resource |
+| Operator Token (`server.token`) | Server-wide operator actions (CLI only) |
 
 **Token Storage:**
 - Stored in `cli.yml` under `server.token`
@@ -43494,7 +43182,7 @@ Error: cannot connect to server at https://{project_name}.example.com
   Use --server to specify a different server.
 
 # Auth error
-$ {project_name}-cli admin users --token invalid
+$ {project_name}-cli server status --token invalid
 Error: authentication failed
   Your API token is invalid or expired.
   Update server.token in cli.yml or use --token flag.
@@ -43993,7 +43681,7 @@ cd "$TEMP_DIR" && docker compose up -d
 **Config Files:**
 - NEVER in repository - generated at RUNTIME
 - Binary creates on first run with sane defaults
-- User edits generated file or uses admin API
+- Operator edits the generated `server.yml` and restarts the server
 
 **Testing:**
 | Type | Container | Purpose |
@@ -44233,8 +43921,8 @@ make docker # Build Docker image
 - [ ] SSL renewal: 03:00 daily
 - [ ] GeoIP update: 03:00 Sunday
 - [ ] Session cleanup: hourly
-- [ ] Scheduler status in admin API
-- [ ] Manual task trigger option
+- [ ] Scheduler status in CLI / `server.token`-protected status endpoint
+- [ ] Manual task trigger via CLI
 
 **PART 19: GeoIP**
 - [ ] ip-location-db GeoIP database support
@@ -44272,7 +43960,7 @@ make docker # Build Docker image
 - [ ] `--update branch {name}` - Switch branch
 - [ ] Update channels: stable, beta, daily
 - [ ] Rollback capability
-- [ ] Update notifications in admin
+- [ ] Update notifications via `server.contact.admin` channel
 
 **PART 23: Privilege Escalation & Service**
 - [ ] Privilege escalation for protected operations
@@ -44617,7 +44305,7 @@ make docker # Build Docker image
 - [ ] Documentation pages included
 - [ ] API docs (`/server/docs/swagger`, `/server/docs/graphql`) included
 - [ ] Project resource pages included ONLY if public/published
-- [ ] Admin/server-internal pages NEVER included in sitemap
+- [ ] Server-internal pages NEVER included in sitemap
 - [ ] API endpoints (`/api/*`) NEVER included
 - [ ] `lastmod` dates accurate
 - [ ] Large sites (>50k URLs) use sitemap index
@@ -44933,7 +44621,7 @@ make docker # Build Docker image
 - [ ] `--help` output fully translated (all flag descriptions, section headers)
 - [ ] Error messages use `i18n.T(lang, "cli.*")` — no hardcoded English
 - [ ] Status output (`--status`) translated
-- [ ] Admin command output translated
+- [ ] Operator command output translated
 - [ ] `Accept-Language` header sent on all API requests to server
 
 ### No Hardcoded English
@@ -45128,11 +44816,10 @@ After each significant change:
 **If project has existing database:**
 
 1. **NEVER break existing data**
-2. Create migration scripts in `src/migration/`
-3. Use proper migration tool or SQL migration files
-4. Test migrations on backup data first
-5. Provide rollback capability
-6. Document breaking schema changes
+2. **NO migration files, NO migration directory, NO version tracking** - schema is created/updated idempotently on every startup via `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE IF NOT EXISTS ADD COLUMN IF NOT EXISTS`
+3. New columns must be nullable or have a default so existing rows remain valid
+4. Test idempotent schema changes on backup data first
+5. Document breaking schema changes in release notes
 
 ---
 
@@ -45189,7 +44876,7 @@ Before starting integration:
 ## Critical (P0) - Do First
 
 - [ ] Fix SQL injection vulnerability in resource search
-- [ ] Add missing input validation on admin API endpoints
+- [ ] Add missing input validation on `server.token`-protected endpoints
 - [ ] Fix token validation edge case
 
 ## High (P1) - NON-NEGOTIABLE Requirements
@@ -45274,7 +44961,7 @@ When bootstrapping a new project from this specification:
    cd {project_name}
 
    # Create all required directories
-   mkdir -p src/{config,server,swagger,graphql,mode,paths,ssl,scheduler,service,admin}
+   mkdir -p src/{config,server,swagger,graphql,mode,paths,ssl,scheduler,service}
    mkdir -p src/server/{handler,service,model,store,template}
    mkdir -p docker/rootfs/usr/local/bin
    mkdir -p docs/stylesheets
@@ -45565,7 +45252,7 @@ A successfully bootstrapped project should:
 ✅ Compile to a single static binary for all 8 platforms
 ✅ Run in Docker with proper configuration
 ✅ Have working WebUI with theme support (light/dark/auto)
-✅ Have working admin API with all settings endpoints
+✅ Configure all server settings via `server.yml` (no admin web UI, no runtime mutation API)
 ✅ Expose REST, Swagger, AND GraphQL APIs (all in sync)
 ✅ Have comprehensive documentation on ReadTheDocs
 ✅ Pass all CI/CD workflows
