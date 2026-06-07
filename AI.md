@@ -376,7 +376,7 @@ permission rules, business invariants. The HOW lives in AI.md PARTS 0-33; PART 3
 | `go test ...` | `make test` |
 | `go run ...` | `make dev` then run binary in Docker |
 
-**Makefile targets use Docker internally (`casjaysdev/go:latest`) with the `go-state` named volume — local machine stays clean.**
+**Makefile targets use Docker internally (`casjaysdev/go:latest`) with host cache dirs (`GO_CACHE`/`GO_BUILD`) — local machine stays clean.**
 
 ### Debugging & Quick Tests (Docker with Tools)
 
@@ -422,7 +422,7 @@ docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | he
 - Consistent environment (same as CI/CD and production)
 - No Go installation required on local machine
 - No local machine contamination with test data
-- Reproducible builds (`go-state` named volume speeds up rebuilds)
+- Reproducible builds (host cache dirs `GO_CACHE`/`GO_BUILD` speed up rebuilds)
 
 **Local Development Workflow:**
 ```bash
@@ -683,6 +683,12 @@ Every external action (`uses: owner/action@...`) MUST be pinned to a full commit
 Renovate covers `github-actions` SHA updates automatically via `pinDigests: true` — but it only updates the SHA, not the runtime verification. The runtime check is always manual.
 
 ### Provider CLIs and Local Runner
+
+**Internet access is available and must be used** — never say "I don't have internet access". Fetch docs, versions, READMEs, and any fact that changes over time rather than guessing from training data.
+
+**User-provided URLs:** always fetch with `\curl -q -LSs {url}` — never WebFetch. WebFetch is for AI-initiated lookups only.
+
+**Tool preference for lookups:** `WebSearch` (open-ended query) → `WebFetch` (known URL, no pipe) → `\curl -q -LSs` (pipe to `jq`/`grep`/file) → provider CLI for provider API ops.
 
 **Provider CLIs** (prefer over raw `curl` when installed):
 - `gh` — GitHub (Apache-2.0)
@@ -3313,16 +3319,16 @@ db.Exec(query, id)
 
 **ALL code, responses, and files MUST be properly formatted.**
 
-| File Type | Indentation | Trailing Newline | Format Tool |
-|-----------|-------------|------------------|-------------|
-| **Go** | Tabs | Single `\n` | `gofmt`, `go fmt` |
-| **HTML** | 2 spaces | Single `\n` | Manual or prettier |
-| **JSON** | 2 spaces | Single `\n` | `json.MarshalIndent(data, "", "  ")` |
-| **YAML** | 2 spaces | Single `\n` | Manual |
-| **CSS** | 2 spaces | Single `\n` | Manual or prettier |
-| **JavaScript** | 2 spaces | Single `\n` | Manual or prettier |
+| File Type | Indentation | Line Width | Trailing Newline | Format Tool |
+|-----------|-------------|------------|------------------|-------------|
+| **Go** | Tabs | No limit (`gofmt` doesn't wrap; `lll` soft 120, hard 180) | Single `\n` | `gofmt`, `go fmt` |
+| **HTML** | 2 spaces | 120 | Single `\n` | Manual or prettier |
+| **JSON** | 2 spaces | 120 | Single `\n` | `json.MarshalIndent(data, "", "  ")` |
+| **YAML** | 2 spaces | 120 | Single `\n` | Manual |
+| **CSS** | 2 spaces | 120 | Single `\n` | Manual or prettier |
+| **JavaScript** | 2 spaces | 120 | Single `\n` | Manual or prettier |
 | **Makefile** | Tabs (required) | Single `\n` | Manual |
-| **Shell scripts** | 2 spaces | Single `\n` | shellcheck/shfmt |
+| **Shell scripts** (bash/sh/zsh/fish) | 2 spaces | 180 | Single `\n` | shellcheck/shfmt |
 | **Text responses** | N/A | Single `\n` | `fmt.Fprintf(w, "%s\n", text)` |
 
 **Universal Rules:**
@@ -4636,6 +4642,8 @@ IDEA.md (project spec - update as needed)
 
 #### CI/CD Badge Detection
 
+**Every badge MUST be a linked badge** — `[![alt](image_url)](link_url)` is the only valid form. A bare `![alt](image_url)` with no wrapping link is never acceptable. Each badge links to the resource it represents: CI badge → CI runs page; Release badge → releases page; License badge → `LICENSE.md`; Docs badge → documentation URL.
+
 **The build status badge MUST match the project's hosting platform.**
 
 Detect platform by checking for workflow files in this order:
@@ -5455,9 +5463,9 @@ For MIT/ISC/BSD licenses, a summary table is sufficient. Full text only needed f
 
 | Library | Version | License | Copyright |
 |---------|---------|---------|-----------|
-| github.com/go-chi/chi/v5 | v5.2.0 | MIT | 2015-present Peter Kieltyka, Google Inc. |
-| modernc.org/sqlite | v1.29.1 | BSD-3-Clause | 2017 The Sqlite Authors |
-| github.com/tursodatabase/libsql-client-go | v0.0.0-20240902231107-85af5b9d094d | MIT | 2023-2024 Turso Authors |
+| github.com/go-chi/chi/v5 | {version} | MIT | 2015-present Peter Kieltyka, Google Inc. |
+| modernc.org/sqlite | {version} | BSD-3-Clause | 2017 The Sqlite Authors |
+| github.com/tursodatabase/libsql-client-go | {version} | MIT | 2023-2024 Turso Authors |
 
 Full license texts available at: https://spdx.org/licenses/
 
@@ -5500,12 +5508,12 @@ This software includes the following third-party libraries:
 
 | Library | Version | License | Copyright |
 |---------|---------|---------|-----------|
-| github.com/go-chi/chi/v5 | v5.2.0 | MIT | 2015-present Peter Kieltyka, Google Inc. |
-| github.com/tursodatabase/libsql-client-go | v0.0.0-20240902231107-85af5b9d094d | MIT | 2023-2024 Turso Authors |
-| github.com/redis/go-redis/v9 | v9.7.0 | BSD-2-Clause | 2012-2024 The go-redis Authors |
-| modernc.org/sqlite | v1.29.1 | BSD-3-Clause | 2017 The Sqlite Authors |
-| golang.org/x/crypto | v0.31.0 | BSD-3-Clause | 2009 The Go Authors |
-| github.com/charmbracelet/bubbletea | v0.27.0 | MIT | 2020-2024 Charmbracelet Inc. |
+| github.com/go-chi/chi/v5 | {version} | MIT | 2015-present Peter Kieltyka, Google Inc. |
+| github.com/tursodatabase/libsql-client-go | {version} | MIT | 2023-2024 Turso Authors |
+| github.com/redis/go-redis/v9 | {version} | BSD-2-Clause | 2012-2024 The go-redis Authors |
+| modernc.org/sqlite | {version} | BSD-3-Clause | 2017 The Sqlite Authors |
+| golang.org/x/crypto | {version} | BSD-3-Clause | 2009 The Go Authors |
+| github.com/charmbracelet/bubbletea | {version} | MIT | 2020-2024 Charmbracelet Inc. |
 
 Full license texts: https://spdx.org/licenses/
 
@@ -5517,7 +5525,7 @@ Full license texts: https://spdx.org/licenses/
 For BSD-3-Clause, include the third clause since it has specific restrictions:
 
 ```markdown
-### modernc.org/sqlite v1.29.1 (BSD-3-Clause)
+### modernc.org/sqlite {version} (BSD-3-Clause)
 
 Copyright (c) 2017 The Sqlite Authors. All rights reserved.
 
@@ -6343,7 +6351,7 @@ require (
 | Purpose | Library | Notes |
 |---------|---------|-------|
 | **Embed** | `embed` (stdlib) | Embed static files |
-| **Cron** | `github.com/robfig/cron/v3` | Scheduler |
+| **Scheduler** | `github.com/go-co-op/gocron/v2` | In-process job scheduler |
 | **Rate Limit** | `golang.org/x/time/rate` | Rate limiting |
 | **Validation** | `github.com/go-playground/validator/v10` | Input validation |
 
@@ -6404,7 +6412,7 @@ func openDB(path string) (*sql.DB, error) {
 
 **go.mod:**
 ```
-require modernc.org/sqlite v1.29.1
+require modernc.org/sqlite {version}
 ```
 
 ### libSQL Driver
@@ -6471,7 +6479,7 @@ func openLibSQL(url, token string) (*sql.DB, error) {
 
 **go.mod:**
 ```
-require github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d
+require github.com/tursodatabase/libsql-client-go {version}
 ```
 
 **When to use libSQL vs SQLite:**
@@ -6507,28 +6515,28 @@ go 1.xx  // Use current latest stable version
 
 require (
 	// Database drivers
-	modernc.org/sqlite v1.34.5                      // SQLite (pure Go)
-	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d  // libSQL/Turso (remote)
+	modernc.org/sqlite {version}                    // SQLite (pure Go)
+	github.com/tursodatabase/libsql-client-go {version}  // libSQL/Turso (remote)
 
 	// Cache
-	github.com/redis/go-redis/v9 v9.7.0             // Valkey/Redis
-	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874  // Memcache
+	github.com/redis/go-redis/v9 {version}          // Valkey/Redis
+	github.com/bradfitz/gomemcache {version}        // Memcache
 
 	// Core
-	gopkg.in/yaml.v3 v3.0.1                         // YAML config
-	github.com/google/uuid v1.6.0                   // UUID generation
-	golang.org/x/crypto v0.31.0                     // Argon2, Bcrypt
+	gopkg.in/yaml.v3 {version}                      // YAML config
+	github.com/google/uuid {version}                // UUID generation
+	golang.org/x/crypto {version}                   // Argon2, Bcrypt
 
 	// Network/HTTP
-	github.com/go-chi/chi/v5 v5.2.0                 // Router
-	github.com/cretz/bine v0.2.0                    // Tor controller
-	github.com/gorilla/websocket v1.5.3             // WebSocket
-	github.com/rs/cors v1.11.1                      // CORS middleware
+	github.com/go-chi/chi/v5 {version}              // Router
+	github.com/cretz/bine {version}                 // Tor controller
+	github.com/gorilla/websocket {version}          // WebSocket
+	github.com/rs/cors {version}                    // CORS middleware
 
 	// Utilities
-	github.com/robfig/cron/v3 v3.0.1                // Scheduler
-	golang.org/x/time v0.8.0                        // Rate limiting
-	github.com/go-playground/validator/v10 v10.23.0 // Validation
+	github.com/go-co-op/gocron/v2 {version}        // In-process job scheduler
+	golang.org/x/time {version}                     // Rate limiting
+	github.com/go-playground/validator/v10 {version} // Validation
 )
 ```
 
@@ -9585,14 +9593,14 @@ go 1.xx  // Use current latest stable version
 
 require (
     // Terminal/TUI
-    golang.org/x/term v0.27.0
-    github.com/charmbracelet/bubbletea v1.2.4
-    github.com/charmbracelet/bubbles v0.20.0
-    github.com/charmbracelet/lipgloss v1.0.0
+    golang.org/x/term {version}
+    github.com/charmbracelet/bubbletea {version}
+    github.com/charmbracelet/bubbles {version}
+    github.com/charmbracelet/lipgloss {version}
 
     // CLI
-    github.com/spf13/cobra v1.8.1
-    github.com/spf13/viper v1.19.0
+    github.com/spf13/cobra {version}
+    github.com/spf13/viper {version}
 
     // GUI (build tag: gui)
     // Linux: github.com/diamondburned/gotk4/pkg/gtk/v4
@@ -9600,8 +9608,8 @@ require (
     // Windows: uses cgo with Win32
 
     // Common
-    github.com/rs/zerolog v1.33.0
-    gopkg.in/yaml.v3 v3.0.1
+    github.com/rs/zerolog {version}
+    gopkg.in/yaml.v3 {version}
 )
 ```
 
@@ -9803,7 +9811,7 @@ When the `NO_COLOR` environment variable is set and not empty (value doesn't mat
 
 | Priority | Source | Example |
 |----------|--------|---------|
-| 1 | CLI flag | `--color=always`, `--color=never` |
+| 1 | CLI flag | `--color=yes`, `--color=no` |
 | 2 | Config file | `output.color: false` |
 | 3 | `NO_COLOR` env var | `NO_COLOR=1` |
 | 4 | Auto-detect | TTY check, `TERM` variable |
@@ -9887,10 +9895,10 @@ output:
 NO_COLOR=1 {project_name} --status
 
 # Colors forced on (overrides NO_COLOR for colors only)
-NO_COLOR=1 {project_name} --status --color=always
+NO_COLOR=1 {project_name} --status --color=yes
 
 # Colors forced off (explicit)
-{project_name} --status --color=never
+{project_name} --status --color=no
 
 # Verify no escape codes or emojis in output
 NO_COLOR=1 {project_name} --status | cat -v   # No ^[ sequences
@@ -9920,7 +9928,7 @@ NO_COLOR=1 {project_name} --status | grep -E '✅|❌|⚠️|🚀'  # Should fin
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
 --debug                      # Enable debug mode (verbose logging, debug endpoints)
---color {always|never|auto}  # Color output (default: auto, respects NO_COLOR)
+--color {auto|yes|no}        # Color output (default: auto, respects NO_COLOR)
 --lang {code}                # Language for output (default: auto, from LANG env)
 --maintenance {backup,restore,update,mode,setup,--help} [optional-file-or-setting]
 --update [check|yes|branch {stable|beta|daily}|--help]  # Check/perform updates
@@ -9937,37 +9945,37 @@ Usage:
   {project_name} [flags]
 
 Information:
-  -h, --help                        Show help (--help for any command shows its help)
-  -v, --version                     Show version
-      --status                      Show server status and health
+-h, --help                             - Show help (--help for any command shows its help)
+-v, --version                          - Show version
+--status                               - Show server status and health
 
 Shell Integration:
-      --shell completions [SHELL]   Print shell completions
-      --shell init [SHELL]          Print shell init command
-      --shell --help                Show shell help
+--shell completions [SHELL]            - Print shell completions
+--shell init [SHELL]                   - Print shell init command
+--shell help                           - Show shell help
 
 Server Configuration:
-      --mode {production|development}  Application mode (default: production)
-      --config DIR                  Config directory
-      --data DIR                    Data directory
-      --cache DIR                   Cache directory
-      --log DIR                     Log directory
-      --backup DIR                  Backup directory
-      --pid FILE                    PID file path
-      --address ADDR                Listen address (default: 0.0.0.0)
-      --port PORT                   Listen port (default: random 64xxx, 80 in container)
-      --baseurl PATH                URL path prefix (default: /)
-      --daemon                      Run as daemon (detach from terminal)
-      --debug                       Enable debug mode
-      --color {always|never|auto}   Color output (default: auto)
-      --lang CODE                   Language for output (default: auto)
+--mode {production|development}        - Application mode (default: production)
+--config DIR                           - Config directory
+--data DIR                             - Data directory
+--cache DIR                            - Cache directory
+--log DIR                              - Log directory
+--backup DIR                           - Backup directory
+--pid FILE                             - PID file path
+--address ADDR                         - Listen address (default: 0.0.0.0)
+--port PORT                            - Listen port (default: random 64xxx, 80 in container)
+--baseurl PATH                         - URL path prefix (default: /)
+--daemon                               - Run as daemon (detach from terminal)
+--debug                                - Enable debug mode
+--color {auto|yes|no}                  - Color output (default: auto)
+--lang CODE                            - Language for output (default: auto)
 
 Service Management:
-      --service CMD                 Service management (--service --help for details)
-      --maintenance CMD             Maintenance operations (--maintenance --help for details)
-      --update [CMD]                Check/perform updates (--update --help for details)
+--service CMD                          - Service management (run --service help for details)
+--maintenance CMD                      - Maintenance operations (run --maintenance help for details)
+--update [CMD]                         - Check/perform updates (run --update help for details)
 
-Run '{project_name} <command> --help' for detailed help on any command.
+Run '{project_name} <command> help' for detailed help on any command.
 ```
 
 ## Directory Flags
@@ -12188,7 +12196,7 @@ func GetWildcardDomain() string
 
 **go.mod:**
 ```
-require golang.org/x/net v0.33.0
+require golang.org/x/net {version}
 ```
 
 This properly handles complex suffixes like `.co.uk`, `.com.au`, `.org.uk`, etc.
@@ -18992,7 +19000,7 @@ func PrintServerStartupBanner(appName, version, appMode string, urls []string, f
     useEmojis := output.EmojiEnabled()
     useColors := output.ColorEnabled(forceColor)
 
-    // Plain mode: no emojis (NO_COLOR, TERM=dumb, or --color=never)
+    // Plain mode: no emojis (NO_COLOR, TERM=dumb, or --color=no)
     if !useEmojis {
         printServerBannerPlain(appName, version, appMode, urls)
         return
@@ -19443,10 +19451,10 @@ Started: {startup_datetime}
 **--color flag overrides (applies to all sizes):**
 ```bash
 # Force colors on (overrides NO_COLOR)
-{project_name} --color=always
+{project_name} --color=yes
 
 # Force colors off
-{project_name} --color=never
+{project_name} --color=no
 
 # Auto-detect (default) - respects NO_COLOR, TERM, TTY
 {project_name} --color=auto
@@ -29122,14 +29130,14 @@ ON --service --disable:
 $ {project_name} --service --help
 Service management commands:
 
-  start       Start the service
-  stop        Stop the service
-  restart     Restart the service
-  reload      Reload configuration without restart
+start                                 - Start the service
+stop                                  - Stop the service
+restart                               - Restart the service
+reload                                - Reload configuration without restart
 
-  --install   Install, enable, and start service
-  --disable   Stop and disable service (keeps data)
-  --uninstall Stop, disable, and remove everything (keeps binary)
+--install                              - Install, enable, and start service
+--disable                              - Stop and disable service (keeps data)
+--uninstall                            - Stop, disable, and remove everything (keeps binary)
 
 Current status:
   Service:    installed / not installed
@@ -29144,22 +29152,22 @@ Current status:
 $ {project_name} --maintenance --help
 Maintenance commands:
 
-  backup [file]     Create backup of all data
-                    Default: {backup_dir}/{project_name}-{timestamp}.tar.gz
+backup [file]                         - Create backup of all data
+                                        Default: {backup_dir}/{project_name}-{timestamp}.tar.gz
 
-  restore <file>    Restore from backup file
-                    Stops server, restores data, restarts server
+restore <file>                        - Restore from backup file
+                                        Stops server, restores data, restarts server
 
-  update [cmd]      Manage updates
-                    check         - Check for available updates
-                    yes           - Download and install update
-                    branch <name> - Switch update branch (stable|beta|daily)
+update [cmd]                          - Manage updates
+  check                               - Check for available updates
+  yes                                 - Download and install update
+  branch <name>                       - Switch update branch (stable|beta|daily)
 
-  mode <mode>       Set application mode
-                    production    - Normal operation (default)
-                    development   - Debug logging, dev endpoints
+mode <mode>                           - Set application mode
+  production                          - Normal operation (default)
+  development                         - Debug logging, dev endpoints
 
-  setup             Reset server configuration (first-run or root only)
+setup                                 - Reset server configuration (first-run or root only)
 
 Examples:
   {project_name} --maintenance backup
@@ -29203,16 +29211,16 @@ Usage:
 $ {project_name} --update --help
 Update management:
 
-  check                 Check for available updates
-                        Compares current version with latest release
+check                                 - Check for available updates
+                                        Compares current version with latest release
 
-  yes                   Download and install update
-                        Downloads latest release, replaces binary, restarts
+yes                                   - Download and install update
+                                        Downloads latest release, replaces binary, restarts
 
-  branch <name>         Switch update branch
-                        stable - Stable releases (default)
-                        beta   - Beta/preview releases
-                        daily  - Daily builds (development)
+branch <name>                         - Switch update branch
+  stable                              - Stable releases (default)
+  beta                                - Beta/preview releases
+  daily                               - Daily builds (development)
 
 Examples:
   {project_name} --update check
@@ -30132,7 +30140,9 @@ BINDIR := binaries
 RELDIR := releases
 
 # Go directories (persistent across builds)
-# Go state is kept in the named Docker volume go-state:/usr/local/share/go
+# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+GO_CACHE  ?= $(HOME)/go/pkg/mod
+GO_BUILD  ?= $(HOME)/.cache/go-build
 
 # Build targets
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -30142,7 +30152,8 @@ REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 GO_DOCKER := docker run --rm -it \
 	--name $(PROJECTNAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
 	-v $(PWD):/app \
-	-v go-state:/usr/local/share/go \
+	-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
+	-v $(GO_BUILD):/usr/local/share/go/cache \
 	-w /app \
 	-e CGO_ENABLED=0 \
 	casjaysdev/go:latest
@@ -30153,7 +30164,7 @@ GO_DOCKER := docker run --rm -it \
 # BUILD - Build all platforms + local binary (via Docker with cached modules)
 # =============================================================================
 build: clean
-	@mkdir -p $(BINDIR)
+	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
 	@echo "Building version $(VERSION)..."
 
 	# Tidy and download modules
@@ -30199,7 +30210,7 @@ build: clean
 # LOCAL - Build local binaries only (fast development builds)
 # =============================================================================
 local: clean
-	@mkdir -p $(BINDIR)
+	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
 	@echo "Building local binaries version $(VERSION)..."
 
 	# Tidy and download modules
@@ -30369,7 +30380,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 | Cache | Local Path | Container Path |
 |-------|-----------|----------------|
 | Go directory | `~/.local/share/go` | `/go` |
-| Go state | `go-state` (named volume) | `/usr/local/share/go` |
+| Go state | host cache dirs (`GO_CACHE`/`GO_BUILD`) | `/usr/local/share/go/pkg/mod`, `/usr/local/share/go/cache` |
 
 **Benefits:**
 - First build downloads modules once
@@ -31002,7 +31013,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 
 ```bash
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
 # =============================================================================
 # Container Entrypoint Script - MINIMAL
@@ -31540,7 +31551,7 @@ protected-mode no
 
 ```bash
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # Set timezone
 if [ -n "$TZ" ]; then
@@ -32072,7 +32083,7 @@ networks:
 | Aspect | Local Development | CI/CD Workflows |
 |--------|-------------------|-----------------|
 | **Go installation** | Docker `casjaysdev/go:latest` | Docker `casjaysdev/go:latest` |
-| **Caching** | Named volume `go-state:/usr/local/share/go` | CI-native cache mounted into `casjaysdev/go:latest` |
+| **Caching** | Host cache dirs (`GO_CACHE`/`GO_BUILD`) bind-mounted into container | CI-native cache mounted into `casjaysdev/go:latest` |
 | **Build command** | `make dev`, `make local`, `make build` | Direct `go build` with explicit flags |
 | **Testing** | Docker/Incus containers | `casjaysdev/go:latest` job container or explicit `docker run` |
 | **Makefile** | ALWAYS use Makefile targets | NEVER use Makefile (explicit commands) |
@@ -34438,7 +34449,7 @@ pipeline {
         PROJECTORG = '{project_org}'
         BINDIR = 'binaries'
         RELDIR = 'releases'
-        // Go state kept in named Docker volume go-state:/usr/local/share/go
+        // Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
 
         // =========================================================================
         // GIT PROVIDER CONFIGURATION
@@ -34514,7 +34525,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34531,7 +34543,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34549,7 +34562,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34566,7 +34580,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34584,7 +34599,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34601,7 +34617,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34619,7 +34636,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34636,7 +34654,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34662,7 +34681,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34679,7 +34699,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34696,7 +34717,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34713,7 +34735,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34730,7 +34753,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34747,7 +34771,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34764,7 +34789,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34781,7 +34807,8 @@ pipeline {
                             docker run --rm -it \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v go-state:/usr/local/share/go \
+                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34801,7 +34828,8 @@ pipeline {
                     docker run --rm -it \
                         --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                         -v ${WORKSPACE}:/app \
-                        -v go-state:/usr/local/share/go \
+                        -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                        -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
                         -w /app \
                         casjaysdev/go:latest \
                         go test -v -cover ./...
@@ -35885,7 +35913,7 @@ fi
 | `tests/incus.sh` | Beta testing with Incus | `debian:latest` | Full integration + systemd tests |
 
 **docker.sh and incus.sh MUST:**
-1. Named volume `go-state` provides persistent Go cache across builds
+1. Host cache dirs (`GO_CACHE`/`GO_BUILD`) provide persistent Go cache across builds
 2. Build all binaries using Docker (casjaysdev/go:latest) in temp directory:
    - Server (`./src`)
    - Client (`./src/client`) if exists
@@ -35922,13 +35950,17 @@ BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 trap "rm -rf $BUILD_DIR" EXIT
 
 # Go cache directories (same as Makefile)
-# Go state is kept in the named Docker volume go-state:/usr/local/share/go
+# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 # Common docker run for Go builds
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
   -v $(pwd):/app \
-  -v go-state:/usr/local/share/go \
+  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+  -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app \
   -e CGO_ENABLED=0 \
   casjaysdev/go:latest"
@@ -36095,13 +36127,17 @@ BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 trap "rm -rf $BUILD_DIR; incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
 
 # Go cache directories (same as Makefile)
-# Go state is kept in the named Docker volume go-state:/usr/local/share/go
+# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 # Common docker run for Go builds
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
   -v $(pwd):/app \
-  -v go-state:/usr/local/share/go \
+  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+  -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app \
   -e CGO_ENABLED=0 \
   casjaysdev/go:latest"
@@ -36138,7 +36174,7 @@ incus exec "$CONTAINER_NAME" -- bash -c "command -v curl || apt-get update && ap
 
 echo "Running tests in Incus..."
 incus exec "$CONTAINER_NAME" -- bash -c "
-    set -e
+    set -eo pipefail
 
     echo '=== Version Check ==='
     ${PROJECT_NAME} --version
@@ -36285,8 +36321,8 @@ fi
 |------|-------------|
 | **Location** | `tests/run_tests.sh`, `tests/docker.sh`, `tests/incus.sh` |
 | **Permissions** | Executable (`chmod +x tests/*.sh`) |
-| **Build method** | ALWAYS use Docker (casjaysdev/go:latest) with `go-state` named volume |
-| **Go cache** | Named volume `go-state:/usr/local/share/go` (no host directory needed) |
+| **Build method** | ALWAYS use Docker (casjaysdev/go:latest) with host cache dirs (`GO_CACHE`/`GO_BUILD`) |
+| **Go cache** | Host cache dirs bind-mounted: `GO_CACHE` → mod cache, `GO_BUILD` → build cache |
 | **Build location** | ALWAYS use temp directory |
 | **Build all components** | Build server, client (if `src/client/` exists) |
 | **Test container tools** | Docker alpine MUST install: `apk add --no-cache curl bash file jq` |
@@ -36302,7 +36338,8 @@ fi
 | **Cleanup** | ALWAYS use `trap` for cleanup |
 | **Exit codes** | 0 = success, non-zero = failure |
 | **Output** | Clear progress messages with `echo` |
-| **Error handling** | `set -eo pipefail` at top |
+| **Error handling** | `set -eo pipefail` for bash/zsh; `set -e` for POSIX sh |
+| **License** | All shell scripts are WTFPL — `# @@License : WTFPL` in header |
 
 ### Shell Completions (Built-in)
 
@@ -36403,13 +36440,17 @@ PROJECT_PATH="/root/Projects/github/apimgr/{project_name}"  # Example 1
 # PROJECT_PATH="/workspace/dev/myproject"                  # Example 4
 
 # Go cache directories (same as Makefile - speeds up builds significantly)
-# Go state is kept in the named Docker volume go-state:/usr/local/share/go
+# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 # Common docker run for Go commands
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
   -v $PROJECT_PATH:/app \
-  -v go-state:/usr/local/share/go \
+  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+  -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app \
   -e CGO_ENABLED=0"
 
@@ -36438,24 +36479,29 @@ $GO_DOCKER casjaysdev/go:latest go vet ./...
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v $PROJECT_PATH:/app \
-  -v go-state:/usr/local/share/go \
+  -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+  -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
   -w /app \
   casjaysdev/go:latest sh
 ```
 
 ## Build and Test
 
-**Build outputs to `binaries/`, test by running in container. Named volume `go-state` keeps builds fast.**
+**Build outputs to `binaries/`, test by running in container. Host cache dirs (`GO_CACHE`/`GO_BUILD`) keep builds fast.**
 
 ```bash
 # Go cache directories (same as Makefile)
-# Go state is kept in the named Docker volume go-state:/usr/local/share/go
+# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 # Build (with caching)
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v $(pwd):/app \
-  -v go-state:/usr/local/share/go \
+  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+  -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app -e CGO_ENABLED=0 \
   casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
@@ -36477,7 +36523,10 @@ incus delete test-{project_name} --force
 
 ```bash
 # Go cache directories (same as Makefile)
-# Go state is kept in the named Docker volume go-state:/usr/local/share/go
+# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 # Create prefixed temp dir for test data
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
@@ -36488,7 +36537,8 @@ mkdir -p $TEST_DIR/{config,data,logs}
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v $(pwd):/app \
-  -v go-state:/usr/local/share/go \
+  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+  -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app -e CGO_ENABLED=0 \
   casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
@@ -41889,7 +41939,7 @@ auth:
 # Output preferences
 output:
   format: table                    # Default: table, json, yaml, plain, csv
-  color: auto                      # auto, always, never (match terminal detection)
+  color: auto                      # auto, yes, no (match terminal detection)
   pager: auto                      # auto, always, never (use less/more for long output)
   quiet: false                     # Suppress non-essential output
   verbose: false                   # Extra output (same as --verbose)
@@ -42052,10 +42102,12 @@ Enter choice [1-4]:
 |------|-------|-------------|
 | `--help` | `-h` | Show help |
 | `--version` | `-v` | Show version |
-| `--color {always\|never\|auto}` | — | Color output (default: auto, respects `NO_COLOR`) |
+| `--color {auto\|yes\|no}` | — | Color output (default: auto, respects `NO_COLOR`) |
 | `--lang CODE` | — | Language for output (default: auto-detect from `LANG` env) |
 
 **Only `-h` and `-v` have short forms. Everything else is long-form only.**
+
+- **No escalation** — help at every level (main, subcommand, nested) must never call `sudo`, require root/admin, or check privilege state; exit immediately with the help text.
 
 ### Boolean/Truthy-Falsey Handling (CLI & Agent)
 
@@ -42110,7 +42162,7 @@ server:
 --expire=24h    OR  --expire 24h
 --limit=10      OR  --limit 10
 --output=json   OR  --output json
---color=always  OR  --color always
+--color=yes  OR  --color yes
 ```
 
 ### Project-Specific Flags (by service type)
@@ -42329,26 +42381,26 @@ Usage:
   {project_name}-cli                    # TUI mode (no args)
 
 Flags:
-  -h, --help                        Show help
-  -v, --version                     Show version
-      --shell completions [SHELL]   Print shell completions (auto-detect if SHELL omitted)
-      --shell init [SHELL]          Print shell init command (auto-detect if SHELL omitted)
-      --shell --help                Show shell integration help
+-h, --help                             - Show help
+-v, --version                          - Show version
+--shell completions [SHELL]            - Print shell completions (auto-detect if SHELL omitted)
+--shell init [SHELL]                   - Print shell init command (auto-detect if SHELL omitted)
+--shell help                           - Show shell integration help
 
-      --server URL                  Server URL (default: from config)
-      --token TOKEN                 API token for authentication
-      --token-file FILE             Read token from file
-      --config NAME                 Config profile name (default: cli.yml)
-      --debug                       Debug output
-      --color {always|never|auto}   Color output (default: auto)
-      --lang CODE                   Language for output (default: auto)
+--server URL                           - Server URL (default: from config)
+--token TOKEN                          - API token for authentication
+--token-file FILE                      - Read token from file
+--config NAME                          - Config profile name (default: cli.yml)
+--debug                                - Debug output
+--color {auto|yes|no}                  - Color output (default: auto)
+--lang CODE                            - Language for output (default: auto)
 
   {project-specific flags listed here}
 
 Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
 
 Run without arguments for interactive TUI mode.
-Run '{project_name}-cli <command> --help' for detailed help on any command.
+Run '{project_name}-cli <command> help' for detailed help on any command.
 ```
 
 **If user renames binary:**
@@ -43646,11 +43698,11 @@ maintainer_email: jane@example.com
 | `./binaries/{project_name}` locally | Run binary inside Docker/Incus container |
 | Go installed locally | Use Makefile targets (they use Docker internally) |
 
-**Go State (Named Volume):**
+**Go Cache (Host Bind-Mounts):**
 ```bash
-# Go state uses the named Docker volume go-state mounted at /usr/local/share/go
-# No host directories needed — Docker manages the volume automatically
-# Mount in Docker: -v go-state:/usr/local/share/go
+# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+# Defaults: GO_CACHE=$HOME/go/pkg/mod  GO_BUILD=$HOME/.cache/go-build
+# Mount in Docker: -v $GO_CACHE:/usr/local/share/go/pkg/mod -v $GO_BUILD:/usr/local/share/go/cache
 ```
 
 **Temp Directory Workflow:**
@@ -44509,8 +44561,8 @@ make docker # Build Docker image
 
 - [ ] `NO_COLOR` env var respected (any non-empty value disables colors AND emojis)
 - [ ] `TERM=dumb` disables colors, emojis, and ANSI escape sequences
-- [ ] `--color=always` forces colors ON (overrides NO_COLOR)
-- [ ] `--color=never` forces colors OFF
+- [ ] `--color=yes` forces colors ON (overrides NO_COLOR)
+- [ ] `--color=no` forces colors OFF
 - [ ] `--color=auto` (default) uses priority detection
 - [ ] Priority order: CLI flag > config file > NO_COLOR env > auto-detect
 - [ ] Uses shared `ColorEnabled()` and `EmojiEnabled()` functions (PART 8)
@@ -44527,7 +44579,7 @@ make docker # Build Docker image
 - [ ] Both `--flag=value` and `--flag value` syntax accepted
 - [ ] `-h` (help) and `-v` (version) are the ONLY short flags
 - [ ] All other flags are long-form only (`--config`, `--port`, etc.)
-- [ ] `--color {always|never|auto}` available on all binaries
+- [ ] `--color {auto|yes|no}` available on all binaries
 - [ ] `--lang CODE` available on all binaries
 - [ ] `--debug` available on all binaries
 - [ ] Flag parsing consistent across server, client
