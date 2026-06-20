@@ -3223,6 +3223,7 @@ Spec version: {line count or hash}
 | Running `gitcommit <command>` mid-task with files in an inconsistent state | Every commit is pushed — half-finished work goes public. Finish the unit of work first |
 | Subagent writing `.git/COMMIT_MESS` | Commit message must be written by the parent instance after reviewing the actual diff |
 | Subagent calling `gitcommit` | Only the parent (main) instance runs gitcommit — subagents complete edits and report back |
+| Bare `@name` in commit body | Any `@username` in a commit message creates a GitHub contributor notification/link — never use bare `@` unless intentionally crediting a real contributor; write names without `@` or wrap in backticks |
 | Deleting files without confirmation | Destructive action |
 | Changing NON-NEGOTIABLE sections | Specification violation |
 | Skipping validation | Security requirement |
@@ -30301,14 +30302,15 @@ docker:
 # =============================================================================
 test:
 	@echo "Running tests with coverage..."
-	@$(GO_DOCKER) go mod download
-	@$(GO_DOCKER) go test -v -cover -coverprofile=coverage.out ./...
-	@COVERAGE=$$($(GO_DOCKER) go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
-	if [ $$(echo "$$COVERAGE < 80" | bc -l) -eq 1 ]; then \
-		echo "ERROR: Coverage is $$COVERAGE%, must be >= 80%"; \
-		exit 1; \
-	fi
-	@echo "Tests complete - Coverage: >= 80% ✓"
+	@$(GO_DOCKER) sh -c " \
+		go mod download && \
+		go test -v -cover -coverprofile=/tmp/coverage.out ./... && \
+		COVERAGE=\$$(go tool cover -func=/tmp/coverage.out | grep total | awk '{print \$$3}' | sed 's/%//') && \
+		echo \"Coverage: \$$COVERAGE%\" && \
+		if [ \$$(echo \"\$$COVERAGE < 80\" | bc -l) -eq 1 ]; then \
+			echo \"ERROR: Coverage is \$$COVERAGE%, must be >= 80%\"; exit 1; \
+		fi && \
+		echo \"Tests complete - Coverage: \$$COVERAGE% (>= 80% required) ✓\""
 
 # =============================================================================
 # Coverage gates by project type:
@@ -32215,11 +32217,11 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - run: go test -cover -coverprofile=coverage.out ./...
+      - run: go test -cover -coverprofile=/tmp/coverage.out ./...
       - name: Enforce coverage threshold
         run: |
           THRESHOLD=60
-          PCT=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print int($3)}')
+          PCT=$(go tool cover -func=/tmp/coverage.out | awk '/^total:/ {gsub("%","",$3); print int($3)}')
           if [ "$PCT" -lt "$THRESHOLD" ]; then
             echo "::error::coverage $PCT% < threshold $THRESHOLD%"
             exit 1
@@ -35693,12 +35695,15 @@ test:
 
     - name: Run tests with coverage
       run: |
-        docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app casjaysdev/go:latest \
+        # coverage.out goes to the mounted workspace (/app), not /tmp — two separate docker run
+        # invocations cannot share /tmp; the workspace mount is the only shared path between them.
+        # The runner workspace is ephemeral so this is safe.
+        docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
           go test -cover -coverprofile=coverage.out ./...
 
     - name: Check coverage is ≥80%
       run: |
-        COVERAGE=$(docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app casjaysdev/go:latest \
+        COVERAGE=$(docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
           go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
           echo "ERROR: Coverage is $COVERAGE%, must be >= 80%"
@@ -35867,7 +35872,7 @@ verify_all_endpoints_tested
 # 1. Build in Docker (always use Docker for builds)
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app -e CGO_ENABLED=0 \
+docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app -e CGO_ENABLED=0 \
   casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # 2. Test (prefer Incus, fallback to Docker)
@@ -35885,7 +35890,7 @@ if command -v incus &>/dev/null; then
 else
   # FALLBACK: Quick test in Docker (alpine, no systemd)
   echo "Incus not available, testing with Docker..."
-  docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd)/binaries:/app alpine:latest \
+  docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest \
     /app/{project_name} --help
 fi
 ```
@@ -35958,7 +35963,7 @@ mkdir -p "$GO_CACHE" "$GO_BUILD"
 # Common docker run for Go builds
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
-  -v $(pwd):/app \
+  -v $PWD:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
   -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app \
@@ -36135,7 +36140,7 @@ mkdir -p "$GO_CACHE" "$GO_BUILD"
 # Common docker run for Go builds
 GO_DOCKER="docker run --rm -it \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
-  -v $(pwd):/app \
+  -v $PWD:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
   -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app \
@@ -36499,14 +36504,14 @@ mkdir -p "$GO_CACHE" "$GO_BUILD"
 # Build (with caching)
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v $(pwd):/app \
+  -v $PWD:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
   -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app -e CGO_ENABLED=0 \
   casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Test in Docker (quick) - install tools first
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd)/binaries:/app alpine:latest sh -c "
+docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest sh -c "
   apk add --no-cache curl bash file jq >/dev/null
   /app/{project_name} --help
 "
@@ -36536,14 +36541,14 @@ mkdir -p $TEST_DIR/{config,data,logs}
 # Build to binaries/ (with caching)
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v $(pwd):/app \
+  -v $PWD:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
   -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app -e CGO_ENABLED=0 \
   casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Quick test in Docker (install tools first)
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd)/binaries:/app alpine:latest sh -c "
+docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest sh -c "
   apk add --no-cache curl bash file jq >/dev/null
   /app/{project_name} --help
   /app/{project_name} --version
@@ -36552,7 +36557,7 @@ docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | he
 # Full test with config/data in Docker
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v $(pwd)/binaries:/app \
+  -v $PWD/binaries:/app \
   -v $TEST_DIR:/test \
   alpine:latest /app/{project_name} \
     --config /test/config \
@@ -36574,7 +36579,7 @@ TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $(pwd):/app -w /app -e CGO_ENABLED=0 \
+docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app -e CGO_ENABLED=0 \
   casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Launch Incus container (use latest Debian stable)
