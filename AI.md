@@ -5920,8 +5920,8 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │       │   └── local/
 │       │       └── bin/
 │       │           └── entrypoint.sh  # Container entrypoint
-│       ├── etc/           # Optional service/supervisor configs for container images
-│       └── config/        # Optional image-bundled defaults for AIO/service configs
+│       ├── etc/           # Optional entrypoint/config overrides for container images
+│       └── config/        # Optional image-bundled default configs
 ├── volumes/                # Runtime volume data if created locally (gitignored)
 │   ├── config/             # Config volumes per service
 │   ├── data/               # Data volumes per service
@@ -30815,7 +30815,7 @@ All Dockerfiles MUST include these labels:
 | `org.opencontainers.image.authors` | `{project_org}` |
 | `org.opencontainers.image.title` | `{project_name}` |
 | `org.opencontainers.image.base.name` | `{project_name}` |
-| `org.opencontainers.image.description` | `{project_name} - standard image (alpine)` or `{project_name} - all-in-one (...)` |
+| `org.opencontainers.image.description` | `{project_name} - {brief description}` |
 | `org.opencontainers.image.licenses` | License (e.g., `MIT`) |
 | `org.opencontainers.image.created` | `${BUILD_DATE}` (ARG) |
 | `org.opencontainers.image.version` | `${VERSION}` (ARG) |
@@ -30985,7 +30985,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 
 **Entrypoint is MINIMAL.** It only does:
 1. Set environment variables/flags
-2. Start other services if needed (supervisord, etc.)
+2. Exec server binary
 3. Start server binary
 4. Handle signals for graceful shutdown
 
@@ -31054,7 +31054,7 @@ exec $APP_BIN $FLAGS "$@"
 | **Environment defaults** | Sets `TZ`, `CONFIG_DIR`, `DATA_DIR` |
 | **Flag building** | Constructs CLI flags from env vars (`ADDRESS`, `PORT`, `DEBUG`) |
 | **Signal handling** | Graceful shutdown on SIGTERM/SIGINT/SIGQUIT |
-| **Service startup** | Optional: start supervisord or other services before binary |
+| **Service startup** | Optional: pre-flight checks before binary exec |
 | **Binary exec** | Runs server binary with `exec` (replaces shell) |
 
 **Entrypoint does NOT:**
@@ -31096,23 +31096,25 @@ exec $APP_BIN $FLAGS "$@"
 
 ## Docker Compose Requirements
 
-**Location:** `docker/docker-compose.yml`
+**Locations:** `docker/docker-compose.yml` (production) · `docker/docker-compose.dev.yml` (development)
 
 | Requirement | Value |
 |-------------|-------|
 | `build:` | **NEVER include** |
 | `version:` | **NEVER include** |
 | `name:` | `{project_name}` (top-level) |
-| `container_name:` | `{project_name}-app` (main), `{project_name}-db` (database) |
+| `container_name:` | `{project_name}-app` (main), `{project_name}-cache` (Valkey) |
 | Main service name | `{project_name}` (matches project name) |
 | `pull_policy:` | `always` |
 | `restart:` | `always` |
 | `x-logging:` | Anchor for consistent logging (see below) |
 | Network | Custom `{project_name}` with `external: false` |
-| Environment variables | **Hardcode with sane defaults** (NEVER use .env files) |
-| **environment: MODE** | **production** (strict host validation) |
+| Environment variables | **Inline `${VAR:-default}` fallbacks** — stack works with zero `.env` files |
+| **environment: MODE** | `production` in `docker-compose.yml` · `development` in `docker-compose.dev.yml` |
 
-### Docker Compose Structure
+### Production Compose (`docker/docker-compose.yml`)
+
+App + Valkey for persistent session/rate-limit cache. Use `MODE=production`.
 
 ```yaml
 # {project_name} - {brief description}
@@ -31139,6 +31141,10 @@ services:
       - PORT=80
       - DEBUG=false
       - TZ=${TZ:-America/New_York}
+      - CACHE_URL=valkey://{project_name}-cache:6379
+      # For remote libsql/Turso: set DATABASE_DRIVER=libsql and DATABASE_URL
+      # - DATABASE_DRIVER=libsql
+      # - DATABASE_URL=libsql://your-db.turso.io?authToken=${TURSO_AUTH_TOKEN}
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
@@ -31150,6 +31156,26 @@ services:
       timeout: 5s
       retries: 3
       start_period: 90s
+    depends_on:
+      {project_name}-cache:
+        condition: service_healthy
+    networks:
+      - {project_name}
+
+  {project_name}-cache:
+    image: valkey/valkey:alpine
+    pull_policy: always
+    container_name: {project_name}-cache
+    restart: always
+    logging: *default-logging
+    volumes:
+      - './volumes/data/db/valkey:/data:z'
+    healthcheck:
+      test: valkey-cli ping || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - {project_name}
 
@@ -31192,12 +31218,13 @@ services:
     logging: *default-logging
 ```
 
-### Multi-Service Example
+### Development Compose (`docker/docker-compose.dev.yml`)
+
+Single-service, in-process memory cache, debug mode enabled. Uses the `:devel` image.
 
 ```yaml
-# {project_name} - with Valkey cache
-# nginx proxy address - http://172.17.0.1:64580
-# Database: SQLite (local, auto-created) or set DATABASE_URL for libsql/Turso remote
+# {project_name} - development
+# nginx proxy address - http://172.17.0.1:{port}
 
 name: {project_name}
 
@@ -31209,21 +31236,17 @@ x-logging: &default-logging
 
 services:
   {project_name}:
-    image: ghcr.io/{project_org}/{project_name}:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:devel
     container_name: {project_name}-app
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
     logging: *default-logging
     environment:
-      - MODE=production
+      - MODE=development
       - PORT=80
-      - DEBUG=false
+      - DEBUG=true
       - TZ=${TZ:-America/New_York}
-      - CACHE_HOST={project_name}-cache
-      # For remote libsql/Turso: set DATABASE_DRIVER=libsql and DATABASE_URL
-      # - DATABASE_DRIVER=libsql
-      # - DATABASE_URL=libsql://your-db.turso.io?authToken=${TURSO_AUTH_TOKEN}
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
@@ -31235,26 +31258,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 90s
-    depends_on:
-      {project_name}-cache:
-        condition: service_healthy
-    networks:
-      - {project_name}
-
-  {project_name}-cache:
-    image: valkey/valkey:alpine
-    pull_policy: always
-    container_name: {project_name}-cache
-    restart: always
-    logging: *default-logging
-    volumes:
-      - './volumes/data/db/valkey/{project_name}:/data:z'
-    healthcheck:
-      test: valkey-cli ping || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
     networks:
       - {project_name}
 
@@ -31269,316 +31272,18 @@ networks:
 | Service Type | Service Name | Container Name |
 |--------------|--------------|----------------|
 | Main application | `{project_name}` | `{project_name}-app` |
-| All-in-one | `{project_name}` | `{project_name}-app` |
 | Database | `{project_name}-db` | `{project_name}-db` |
 | Cache (Valkey) | `{project_name}-cache` | `{project_name}-cache` |
-| Search (Meilisearch) | `{project_name}-search` | `{project_name}-search` |
-| Queue (RabbitMQ) | `{project_name}-queue` | `{project_name}-queue` |
 | Proxy (Nginx) | `{project_name}-proxy` | `{project_name}-proxy` |
 
-### All-in-One vs Multi-Service
+### Compose Variants
 
-**Choose based on project complexity:**
+Two compose files ship in the `docker/` directory:
 
-| Type | When to Use | Services in Container |
-|------|-------------|----------------------|
-| **All-in-One** | Simple projects, single binary | App + embedded DB + optional cache |
-| **Multi-Service** | Complex projects, scaling needs | Separate containers per service |
-
-**All-in-One Container:**
-
-⚠️ **Not best practice, but easy to deploy.** Trade-off: simplicity over scalability.
-
-- Single container runs everything
-- Uses SQLite (embedded) or embedded key-value store
-- Valkey/Redis runs inside container via supervisor or embedded
-- Service name: `{project_name}`
-- Container name: `{project_name}-app`
-- Simpler deployment, single image
-- **Trade-offs:** No horizontal scaling, single point of failure, harder to debug
-
-**All-in-One Files:**
-
-| File | Purpose |
-|------|---------|
-| `docker/Dockerfile.aio` | All-in-one Dockerfile (debian-based) |
-| `docker/all-in-one.yml` | All-in-one docker-compose |
-| `docker/Dockerfile` | Standard Dockerfile (alpine-based, app only) |
-| `docker/docker-compose.yml` | Standard docker-compose (multi-service) |
-
-**All-in-One docker-compose (`docker/all-in-one.yml`):**
-
-```yaml
-# {project_name} - All-in-One (app + embedded DB)
-# nginx proxy address - http://172.17.0.1:64580
-# Usage: docker compose -f all-in-one.yml up -d
-
-name: {project_name}
-
-x-logging: &default-logging
-  options:
-    max-size: '5m'
-    max-file: '1'
-  driver: json-file
-
-services:
-  {project_name}:
-    image: ghcr.io/{project_org}/{project_name}:latest-aio
-    container_name: {project_name}-app
-    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
-    restart: always
-    pull_policy: always
-    logging: *default-logging
-    environment:
-      - MODE=production
-      - PORT=80
-      - DEBUG=false
-      - TZ=${TZ:-America/New_York}
-    volumes:
-      - './volumes/config:/config:z'
-      - './volumes/data:/data:z'
-    ports:
-      - '172.17.0.1:64580:80'
-    healthcheck:
-      test: /usr/local/bin/{project_name} --status
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 90s
-    networks:
-      - {project_name}
-
-networks:
-  {project_name}:
-    name: {project_name}
-    external: false
-```
-
-## All-in-One Database and Cache
-
-**Database:** SQLite (embedded, zero config — auto-created at `{data_dir}/db/{internal_name}.db`)
-- Zero configuration, no server required
-- Ships with the binary
-- Automatic backups via `--maintenance backup`
-
-**Cache:** Valkey (Redis-compatible)
-- Low memory footprint
-- Persistence via AOF
-- Unix socket for local communication (faster than TCP)
-
-**Port Exposure:** Only port 80 (server) is exposed. Cache (6379) port is internal-only - no external access.
-
-| Service | Internal Port | External Port | Access |
-|---------|---------------|---------------|--------|
-| App | 80 | 80 | Exposed |
-| Valkey | 6379 (or socket) | - | Internal only |
-| Tor | 9050 | - | Internal only |
-
-**All-in-One Dockerfile (`docker/Dockerfile.aio`):**
-
-```dockerfile
-# All-in-One Dockerfile - includes app + valkey + tor
-# Build: casjaysdev/go:latest (static binary, CGO_ENABLED=0)
-# Runtime: debian:latest (stable, broad compatibility)
-# Image name: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest-aio
-# PORTS: Only 80 exposed (db/cache are internal-only)
-
-# =============================================================================
-# Stage 1: Build Go binary
-# =============================================================================
-FROM casjaysdev/go:latest AS builder
-
-# Install git (required for go mod download with private repos)
-RUN apk add --no-cache git
-
-WORKDIR /app
-
-# Copy go.mod/go.sum first for better layer caching
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source code
-COPY src/ ./src/
-
-# Build static binary (CGO_ENABLED=0)
-ARG VERSION=dev
-ARG COMMIT=unknown
-ARG BUILD_TIME=unknown
-
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILD_TIME}" \
-    -o {project_name} ./src
-
-# =============================================================================
-# Stage 2: Runtime image with Valkey + Tor
-# =============================================================================
-FROM debian:latest
-
-# No LABEL blocks — image metadata applied as OCI annotations at build time.
-
-# Install dependencies (Valkey + Tor + Supervisor)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    valkey \
-    supervisor \
-    tor \
-    tzdata \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create directories for EXTERNAL services only (Valkey)
-# NOTE: App directories (config, data, sqlite, logs, backups) created by server binary
-RUN mkdir -p /config/valkey \
-             /data/db/valkey \
-             /run/valkey
-
-# Copy configs and entrypoint
-COPY docker/rootfs/ /
-
-# Copy application binary from builder
-COPY --from=builder /app/{project_name} /usr/local/bin/
-RUN chmod +x /usr/local/bin/{project_name} /usr/local/bin/entrypoint.sh
-
-# Default environment
-# DATABASE_DIR: SQLite location (binary auto-detects container, but explicit is clearer)
-ENV MODE=production \
-    PORT=80 \
-    DEBUG=false \
-    TZ=America/New_York \
-    DATABASE_DIR=/data/db/sqlite \
-    VALKEY_SOCKET=/run/valkey/valkey.sock
-
-# Only expose app port - db/cache are internal
-EXPOSE 80
-
-HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 \
-    CMD timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
-
-ENTRYPOINT ["tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh"]
-```
-
-**All-in-One supervisor config (`docker/rootfs/etc/supervisor/conf.d/services.conf`):**
-
-```ini
-[supervisord]
-nodaemon=true
-logfile=/data/log/supervisord.log
-pidfile=/var/run/supervisord.pid
-
-[program:valkey]
-command=/usr/bin/valkey-server /config/valkey/valkey.conf
-autostart=true
-autorestart=true
-priority=20
-stdout_logfile=/data/log/valkey.log
-stderr_logfile=/data/log/valkey.log
-
-[program:tor]
-command=/usr/bin/tor -f /config/{project_name}/tor/torrc
-autostart=%(ENV_TOR_ENABLED)s
-autorestart=true
-priority=30
-stdout_logfile=/data/log/tor.log
-stderr_logfile=/data/log/tor.log
-
-[program:app]
-command=/usr/local/bin/{project_name}
-autostart=true
-autorestart=true
-priority=100
-stdout_logfile=/data/log/app.log
-stderr_logfile=/data/log/app.log
-```
-
-**All-in-One Valkey config (`docker/rootfs/config/valkey/valkey.conf`):**
-
-```ini
-# Valkey configuration optimized for AIO containers
-# Low memory, unix socket, persistent
-
-# Network (unix socket only - no TCP, faster + more secure)
-port 0
-unixsocket /run/valkey/valkey.sock
-unixsocketperm 770
-
-# Memory (conservative for AIO)
-maxmemory 64mb
-maxmemory-policy allkeys-lru
-
-# Persistence (AOF for durability)
-dir /data/db/valkey
-appendonly yes
-appendfsync everysec
-auto-aof-rewrite-percentage 100
-auto-aof-rewrite-min-size 32mb
-
-# Disable RDB (AOF is sufficient for AIO)
-save ""
-
-# Performance
-tcp-keepalive 300
-timeout 0
-
-# Logging
-loglevel notice
-logfile ""
-
-# Security (no password needed - socket only, container internal)
-protected-mode no
-```
-
-**All-in-One entrypoint.sh (`docker/rootfs/usr/local/bin/entrypoint.sh`):**
-
-```bash
-#!/bin/bash
-set -eo pipefail
-
-# Set timezone
-if [ -n "$TZ" ]; then
-    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
-    echo $TZ > /etc/timezone
-fi
-
-# Setup directories for EXTERNAL services only (Valkey)
-# NOTE: App directories (config, data, sqlite, logs, backups) are created by the server binary
-mkdir -p /data/db/valkey /run/valkey
-chmod 755 /run/valkey
-
-# Set Tor enabled flag for supervisor
-export TOR_ENABLED="${TOR_ENABLED:-false}"
-
-# Start supervisor (manages valkey + tor + app)
-exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
-```
-
-**Image Names:**
-
-| Image | Dockerfile | Description |
-|-------|------------|-------------|
-| `{name}:latest` | `Dockerfile` | Standard image (app only, alpine) |
-| `{name}:latest-aio` | `Dockerfile.aio` | All-in-one (app + valkey + tor, debian) |
-
-**AIO Environment Variables:**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MODE` | `production` | Application mode |
-| `PORT` | `80` | Application port |
-| `DEBUG` | `false` | Debug mode |
-| `TZ` | `America/New_York` | Timezone |
-| `DATABASE_DRIVER` | `sqlite` | Database driver (`sqlite` or `libsql`) |
-| `DATABASE_URL` | (auto) | SQLite path or libsql URL |
-| `TOR_ENABLED` | `false` | Enable Tor hidden service |
-
-**App Connection Strings (internal):**
-
-```go
-// SQLite (default, auto-created)
-dbURL := "/data/db/sqlite/server.db"
-
-// Valkey via unix socket
-valkeyURL := "unix:///run/valkey/valkey.sock"
-```
+| File | Image Tag | Cache | Purpose |
+|------|-----------|-------|---------|
+| `docker/docker-compose.yml` | `:latest` | Valkey (separate container) | Production deployment |
+| `docker/docker-compose.dev.yml` | `:devel` | Memory (in-process) | Local development |
 
 **Build Commands:**
 
@@ -31586,20 +31291,9 @@ valkeyURL := "unix:///run/valkey/valkey.sock"
 # Standard image (context is project root)
 docker build -t {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest -f docker/Dockerfile .
 
-# All-in-one image (context is project root)
-docker build -t {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest-aio -f docker/Dockerfile.aio .
+# Development image (context is project root)
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:devel -f docker/Dockerfile.dev .
 ```
-
-**When to use All-in-One:**
-- Simple APIs with SQLite storage
-- Projects that don't need horizontal scaling
-- Minimal infrastructure requirements
-- Self-contained deployment (single `docker pull && docker run`)
-
-**When to use Multi-Service:**
-- Need dedicated cache (Valkey) with separate resources
-- Horizontal scaling of specific components
-- Microservice architecture
 
 ### Build-Time `docker/rootfs/` vs Runtime `./volumes/` (CRITICAL - Understand This)
 
@@ -31736,59 +31430,69 @@ rm -rf "$TEMP_DIR"
 
 ### Environment Variables
 
-**ALL environment variables MUST be hardcoded with sane defaults. NEVER require .env files.**
+**Stack must work with zero `.env` files. Use inline `${VAR:-default}` fallbacks.**
 
 | Rule | Description |
 |------|-------------|
-| **NEVER** | Use `${VAR}` or `${VAR:-default}` syntax requiring .env |
 | **NEVER** | Create `.env`, `.env.example`, `.env.sample` files |
-| **ALWAYS** | Hardcode values directly in docker-compose.yml |
-| **ALWAYS** | Use sane, working defaults |
+| **NEVER** | Use `${VAR}` without a fallback (stack breaks if var is unset) |
+| **ALWAYS** | Use `${VAR:-default}` so the stack works without any `.env` |
+| **ALWAYS** | Operators may override via `.env` or shell env — the fallback just handles zero-config |
 
-**Why hardcoded defaults?**
-- Works out of the box - no setup required
-- No confusion about required variables
-- No outdated .env.example files
-- Users can override by editing docker-compose.yml directly
+**Why inline fallbacks?**
+- Works out of the box — no setup required
+- Operators can still override any value via environment
+- No outdated `.env.example` files to maintain
 
 ### Docker Compose (Development) - HUMAN USE ONLY
 
 **Location:** `docker/docker-compose.dev.yml`
 
-**⚠️ FOR HUMAN USE ONLY - AI assistants must NEVER use this file.**
+**FOR HUMAN USE ONLY — AI assistants must NEVER use this file.**
 
-Development mode with optional debug. Humans run this manually for local development.
+Development mode with in-process memory cache and debug enabled. Uses the `:devel` image.
 
 ```yaml
-name: {project_name}-dev
+# {project_name} - development
+# nginx proxy address - http://172.17.0.1:{port}
+
+name: {project_name}
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
 
 services:
   {project_name}:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:devel
     pull_policy: always
-    container_name: {project_name}-dev
+    container_name: {project_name}-app
     restart: always
+    logging: *default-logging
     environment:
-      # Development: relaxed security, verbose logging, no caching
-      # Does NOT enable debug endpoints - uncomment DEBUG=true for that
       - MODE=development
-      - TZ=America/New_York
-      # DEBUG: Uncomment to enable pprof, expvar, detailed request logging
-      # - DEBUG=true
+      - PORT=80
+      - DEBUG=true
+      - TZ=${TZ:-America/New_York}
     ports:
-      # Development: accessible from all interfaces
-      - "64580:80"
+      - '172.17.0.1:64580:80'
     volumes:
-      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
-      # NEVER run from project directory - always use temp dir workflow
-      - ./volumes/config:/config:z
-      - ./volumes/data:/data:z
+      - './volumes/config:/config:z'
+      - './volumes/data:/data:z'
+    healthcheck:
+      test: /usr/local/bin/{project_name} --status
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     networks:
-      - {project_name}-dev
+      - {project_name}
 
 networks:
-  {project_name}-dev:
-    name: {project_name}-dev
+  {project_name}:
+    name: {project_name}
     external: false
 ```
 
@@ -32642,25 +32346,24 @@ jobs:
 
 ### Image Types
 
-| Image | Dockerfile | Tag Suffix | Base | Contents |
-|-------|------------|------------|------|----------|
-| **Standard** | `docker/Dockerfile` | (none) | alpine | App only |
-| **All-in-One** | `docker/Dockerfile.aio` | `-aio` | debian | App + Valkey + Tor |
+| Image | Dockerfile | Base | Contents |
+|-------|------------|------|----------|
+| **Standard** | `docker/Dockerfile` | alpine | App binary only |
+| **Development** | `docker/Dockerfile.dev` | alpine | App binary + debug tooling, `:devel` tag |
 
 ### Triggers and Tags
 
-| Trigger | Standard Tags | All-in-One Tags |
-|---------|---------------|-----------------|
-| **Any push** (all branches) | `devel`, `{commit_id}` | `devel-aio`, `{commit_id}-aio` |
-| Push to beta branch | `devel`, `beta`, `{commit_id}` | `devel-aio`, `beta-aio`, `{commit_id}-aio` |
-| Version tag (`v*`, `*.*.*`) | `{version}`, `latest`, `YYMM` | `{version}-aio`, `latest-aio`, `YYMM-aio` |
+| Trigger | Tags |
+|---------|------|
+| **Any push** (all branches) | `devel`, `{commit_id}` |
+| Push to beta branch | `devel`, `beta`, `{commit_id}` |
+| Version tag (`v*`, `*.*.*`) | `{version}`, `latest`, `YYMM` |
 
 **Notes:**
 - `{commit_id}` = short SHA (7 characters) from `git rev-parse --short HEAD`
 - `YYMM` = year/month (e.g., `2512`)
 - Built for `linux/amd64` and `linux/arm64` using `docker buildx`
 - Registry: `ghcr.io`
-- Standard uses `latest`, All-in-One uses `latest-aio`
 
 **File:** `.github/workflows/docker.yml`
 
@@ -32779,110 +32482,17 @@ jobs:
             manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             manifest:org.opencontainers.image.licenses=MIT
 
-  build-aio:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ gitea.actor }}
-          password: ${{ secrets.GITEA_TOKEN }}
-
-      - name: Set build info
-        run: |
-          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "YYMM=$(date +"%y%m")" >> $GITHUB_ENV
-          if [[ "${{ gitea.ref }}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-            echo "VERSION=${VERSION#v}" >> $GITHUB_ENV
-            echo "IS_TAG=true" >> $GITHUB_ENV
-          else
-            echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-            echo "IS_TAG=false" >> $GITHUB_ENV
-          fi
-          echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
-
-      - name: Determine tags (all-in-one)
-        id: tags
-        run: |
-          # AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          TAGS="${IMAGE}:${{ env.COMMIT_ID }}-aio"
-
-          if [[ "${{ env.IS_TAG }}" == "true" ]]; then
-            TAGS="$TAGS,${IMAGE}:${{ env.VERSION }}-aio"
-            TAGS="$TAGS,${IMAGE}:latest-aio"
-            TAGS="$TAGS,${IMAGE}:${{ env.YYMM }}-aio"
-          else
-            TAGS="$TAGS,${IMAGE}:devel-aio"
-            if [[ "${{ gitea.ref }}" == refs/heads/beta ]]; then
-              TAGS="$TAGS,${IMAGE}:beta-aio"
-            fi
-          fi
-
-          echo "tags=$TAGS" >> $GITHUB_OUTPUT
-
-      - name: Build and push (all-in-one)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
-        with:
-          context: .
-          file: docker/Dockerfile.aio
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          tags: ${{ steps.tags.outputs.tags }}
-          build-args: |
-            VERSION=${{ env.VERSION }}
-            BUILD_DATE=${{ env.BUILD_DATE }}
-            COMMIT_ID=${{ env.COMMIT_ID }}
-          labels: |
-            org.opencontainers.image.vendor={project_org}
-            org.opencontainers.image.authors={project_org}
-            org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
-            org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + valkey + tor)
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.created=${{ env.BUILD_DATE }}
-            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
-            org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.licenses=MIT
-          annotations: |
-            manifest:org.opencontainers.image.vendor={project_org}
-            manifest:org.opencontainers.image.authors={project_org}
-            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
-            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + valkey + tor)
-            manifest:org.opencontainers.image.version=${{ env.VERSION }}
-            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
-            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
-            manifest:org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.licenses=MIT
 ```
 
 **Image Tag Summary:**
 
-| Use Case | Standard Image | All-in-One Image |
-|----------|----------------|------------------|
-| Latest stable | `{name}:latest` | `{name}:latest-aio` |
-| Specific version | `{name}:1.2.3` | `{name}:1.2.3-aio` |
-| Development | `{name}:devel` | `{name}:devel-aio` |
-| Beta | `{name}:beta` | `{name}:beta-aio` |
-| Commit | `{name}:abc1234` | `{name}:abc1234-aio` |
+| Use Case | Image Tag |
+|----------|-----------|
+| Latest stable | `{name}:latest` |
+| Specific version | `{name}:1.2.3` |
+| Development | `{name}:devel` |
+| Beta | `{name}:beta` |
+| Commit | `{name}:abc1234` |
 
 ---
 
@@ -33498,106 +33108,6 @@ jobs:
             manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             manifest:org.opencontainers.image.licenses=MIT
 
-  build-aio:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
-
-      - name: Set registry from server URL
-        run: |
-          SERVER_URL="${{ gitea.server_url }}"
-          REGISTRY="${SERVER_URL#https://}"
-          REGISTRY="${REGISTRY#http://}"
-          echo "REGISTRY=${REGISTRY}" >> $GITEA_ENV
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ gitea.actor }}
-          password: ${{ secrets.GITEA_TOKEN }}
-
-      - name: Set build info
-        run: |
-          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
-          echo "YYMM=$(date +"%y%m")" >> $GITEA_ENV
-          if [[ "${{ gitea.ref }}" == refs/tags/* ]]; then
-            VERSION="${GITEA_REF_NAME}"
-            echo "VERSION=${VERSION#v}" >> $GITEA_ENV
-            echo "IS_TAG=true" >> $GITEA_ENV
-          else
-            echo "VERSION=$(git rev-parse --short HEAD)" >> $GITEA_ENV
-            echo "IS_TAG=false" >> $GITEA_ENV
-          fi
-          echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
-
-      - name: Determine tags (all-in-one)
-        id: tags
-        run: |
-          # AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          TAGS="${IMAGE}:${{ env.COMMIT_ID }}-aio"
-
-          if [[ "${{ env.IS_TAG }}" == "true" ]]; then
-            TAGS="$TAGS,${IMAGE}:${{ env.VERSION }}-aio"
-            TAGS="$TAGS,${IMAGE}:latest-aio"
-            TAGS="$TAGS,${IMAGE}:${{ env.YYMM }}-aio"
-          else
-            TAGS="$TAGS,${IMAGE}:devel-aio"
-            if [[ "${{ gitea.ref }}" == refs/heads/beta ]]; then
-              TAGS="$TAGS,${IMAGE}:beta-aio"
-            fi
-          fi
-
-          echo "tags=$TAGS" >> $GITEA_OUTPUT
-
-      - name: Build and push (all-in-one)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
-        with:
-          context: .
-          file: docker/Dockerfile.aio
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          tags: ${{ steps.tags.outputs.tags }}
-          build-args: |
-            VERSION=${{ env.VERSION }}
-            BUILD_DATE=${{ env.BUILD_DATE }}
-            COMMIT_ID=${{ env.COMMIT_ID }}
-          labels: |
-            org.opencontainers.image.vendor={project_org}
-            org.opencontainers.image.authors={project_org}
-            org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
-            org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + valkey + tor)
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.created=${{ env.BUILD_DATE }}
-            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
-            org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.licenses=MIT
-          annotations: |
-            manifest:org.opencontainers.image.vendor={project_org}
-            manifest:org.opencontainers.image.authors={project_org}
-            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
-            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + valkey + tor)
-            manifest:org.opencontainers.image.version=${{ env.VERSION }}
-            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
-            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
-            manifest:org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.licenses=MIT
 ```
 
 ## Variable Mapping (GitHub → Gitea → Forgejo)
@@ -34049,70 +33559,6 @@ docker:build:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
     - if: $CI_COMMIT_BRANCH == "beta"
 
-docker:build-aio:
-  stage: docker
-  image: docker:latest
-  services:
-    - docker:dind
-  variables:
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_BUILDKIT: "1"
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker buildx create --name multiarch-builder --use 2>/dev/null || docker buildx use multiarch-builder
-  script:
-    - |
-      # AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
-      IMAGE="${CI_REGISTRY_IMAGE}"
-      if [ -n "$CI_COMMIT_TAG" ]; then
-        VERSION="${CI_COMMIT_TAG#v}"
-        YYMM=$(date +%y%m)
-        TAGS="-t ${IMAGE}:${VERSION}-aio -t ${IMAGE}:latest-aio -t ${IMAGE}:${YYMM}-aio -t ${IMAGE}:${CI_COMMIT_SHORT_SHA}-aio"
-      elif [ "$CI_COMMIT_BRANCH" = "beta" ]; then
-        VERSION="beta-$CI_COMMIT_SHORT_SHA"
-        TAGS="-t ${IMAGE}:beta-aio -t ${IMAGE}:devel-aio -t ${IMAGE}:${CI_COMMIT_SHORT_SHA}-aio"
-      else
-        VERSION="devel-$CI_COMMIT_SHORT_SHA"
-        TAGS="-t ${IMAGE}:devel-aio -t ${IMAGE}:${CI_COMMIT_SHORT_SHA}-aio"
-      fi
-      BUILD_DATE="$(date -Iseconds)"
-    - |
-      # Build multi-arch all-in-one with OCI labels and manifest annotations
-      docker buildx build \
-        -f docker/Dockerfile.aio \
-        --platform linux/amd64,linux/arm64 \
-        --build-arg VERSION="${VERSION}" \
-        --build-arg COMMIT_ID="${CI_COMMIT_SHORT_SHA}" \
-        --build-arg BUILD_DATE="${BUILD_DATE}" \
-        --label "org.opencontainers.image.vendor=${PROJECT_ORG}" \
-        --label "org.opencontainers.image.authors=${PROJECT_ORG}" \
-        --label "org.opencontainers.image.title=${PROJECT_NAME}-aio" \
-        --label "org.opencontainers.image.description=${PROJECT_NAME} - all-in-one (debian + valkey + tor)" \
-        --label "org.opencontainers.image.licenses=MIT" \
-        --label "org.opencontainers.image.version=${VERSION}" \
-        --label "org.opencontainers.image.created=${BUILD_DATE}" \
-        --label "org.opencontainers.image.revision=${CI_COMMIT_SHORT_SHA}" \
-        --label "org.opencontainers.image.url=${CI_PROJECT_URL}" \
-        --label "org.opencontainers.image.source=${CI_PROJECT_URL}" \
-        --label "org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
-        --annotation "manifest:org.opencontainers.image.vendor=${PROJECT_ORG}" \
-        --annotation "manifest:org.opencontainers.image.authors=${PROJECT_ORG}" \
-        --annotation "manifest:org.opencontainers.image.title=${PROJECT_NAME}-aio" \
-        --annotation "manifest:org.opencontainers.image.description=${PROJECT_NAME} - all-in-one (debian + valkey + tor)" \
-        --annotation "manifest:org.opencontainers.image.licenses=MIT" \
-        --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
-        --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
-        --annotation "manifest:org.opencontainers.image.revision=${CI_COMMIT_SHORT_SHA}" \
-        --annotation "manifest:org.opencontainers.image.url=${CI_PROJECT_URL}" \
-        --annotation "manifest:org.opencontainers.image.source=${CI_PROJECT_URL}" \
-        --annotation "manifest:org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
-        $TAGS \
-        --push \
-        .
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
-    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
-    - if: $CI_COMMIT_BRANCH == "beta"
 ```
 
 ## GitLab CI Variables
@@ -34719,72 +34165,6 @@ pipeline {
             }
         }
 
-        // Docker All-in-One - matches docker.yml build-aio (ALL branches and tags)
-        // AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
-        stage('Docker AIO') {
-            agent { label 'amd64' }
-            steps {
-                script {
-                    def tags = "-t ${REGISTRY}:${COMMIT_ID}-aio"
-
-                    if (env.BUILD_TYPE == 'release') {
-                        // Release tag - version, latest, YYMM
-                        def yymm = new Date().format('yyMM')
-                        tags += " -t ${REGISTRY}:${VERSION}-aio"
-                        tags += " -t ${REGISTRY}:latest-aio"
-                        tags += " -t ${REGISTRY}:${yymm}-aio"
-                    } else if (env.BUILD_TYPE == 'beta') {
-                        // Beta branch - beta, devel
-                        tags += " -t ${REGISTRY}:beta-aio"
-                        tags += " -t ${REGISTRY}:devel-aio"
-                    } else {
-                        // All other branches - devel only
-                        tags += " -t ${REGISTRY}:devel-aio"
-                    }
-
-                    // Login to container registry
-                    sh """
-                        echo "\${GIT_TOKEN}" | docker login ${REGISTRY.split('/')[0]} -u ${PROJECT_ORG} --password-stdin
-                    """
-
-                    // Build multi-arch all-in-one with OCI labels and manifest annotations
-                    sh """
-                        docker buildx create --name ${PROJECT_NAME}-builder --use 2>/dev/null || docker buildx use ${PROJECT_NAME}-builder
-                        docker buildx build \
-                            -f docker/Dockerfile.aio \
-                            --platform linux/amd64,linux/arm64 \
-                            --build-arg VERSION="${VERSION}" \
-                            --build-arg COMMIT_ID="${COMMIT_ID}" \
-                            --build-arg BUILD_DATE="${BUILD_DATE}" \
-                            --label "org.opencontainers.image.vendor=${PROJECT_ORG}" \
-                            --label "org.opencontainers.image.authors=${PROJECT_ORG}" \
-                            --label "org.opencontainers.image.title=${PROJECT_NAME}-aio" \
-                            --label "org.opencontainers.image.description=${PROJECT_NAME} - all-in-one (debian + valkey + tor)" \
-                            --label "org.opencontainers.image.licenses=MIT" \
-                            --label "org.opencontainers.image.version=${VERSION}" \
-                            --label "org.opencontainers.image.created=${BUILD_DATE}" \
-                            --label "org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${PROJECT_NAME}" \
-                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECT_ORG}/${PROJECT_NAME}" \
-                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECT_ORG}/${PROJECT_NAME}" \
-                            --annotation "manifest:org.opencontainers.image.vendor=${PROJECT_ORG}" \
-                            --annotation "manifest:org.opencontainers.image.authors=${PROJECT_ORG}" \
-                            --annotation "manifest:org.opencontainers.image.title=${PROJECT_NAME}-aio" \
-                            --annotation "manifest:org.opencontainers.image.description=${PROJECT_NAME} - all-in-one (debian + valkey + tor)" \
-                            --annotation "manifest:org.opencontainers.image.licenses=MIT" \
-                            --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
-                            --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
-                            --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${PROJECT_NAME}" \
-                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECT_ORG}/${PROJECT_NAME}" \
-                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECT_ORG}/${PROJECT_NAME}" \
-                            ${tags} \
-                            --push \
-                            .
-                    """
-                }
-            }
-        }
     }
 
     post {
