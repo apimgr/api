@@ -30278,6 +30278,7 @@ docker:
 # TEST - Run all tests with coverage enforcement (via Docker)
 # =============================================================================
 test:
+	@mkdir -p $(GO_CACHE) $(GO_BUILD)
 	@echo "Running tests with coverage..."
 	@$(GO_DOCKER) sh -c " \
 		mkdir -p \"/tmp/$(PROJECTORG)\" && \
@@ -30308,14 +30309,15 @@ test:
 # Fast: local platform only, no ldflags, random temp dir for isolation
 # Builds server + CLI (if they exist)
 dev:
+	@mkdir -p $(GO_CACHE) $(GO_BUILD)
 	@$(GO_DOCKER) go mod tidy
 	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)" && \
 		BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
 		echo "Quick dev build to $$BUILD_DIR..." && \
-		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
+		$(GO_DOCKER) go build -buildvcs=false -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 		if [ -d "src/client" ]; then \
-			$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME)-cli ./src/client && \
+			$(GO_DOCKER) go build -buildvcs=false -o $$BUILD_DIR/$(PROJECTNAME)-cli ./src/client && \
 			echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
 		fi && \
 		echo "Test:  docker run --rm -it --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
@@ -30358,10 +30360,10 @@ var (
 
 All Docker builds use persistent Go module caching to avoid re-downloading dependencies:
 
-| Cache | Local Path | Container Path |
-|-------|-----------|----------------|
-| Go directory | `~/.local/share/go` | `/go` |
-| Go state | host cache dirs (`GO_CACHE`/`GO_BUILD`) | `/usr/local/share/go/pkg/mod`, `/usr/local/share/go/cache` |
+| Cache | Local Path (`?=` default) | Container Path |
+|-------|--------------------------|----------------|
+| Module cache (`GO_CACHE`) | `~/go/pkg/mod` | `/usr/local/share/go/pkg/mod` |
+| Build cache (`GO_BUILD`) | `~/.cache/go-build` | `/usr/local/share/go/cache` |
 
 **Benefits:**
 - First build downloads modules once
@@ -34998,11 +35000,17 @@ verify_all_endpoints_tested
 ### Testing Workflow
 
 ```bash
-# 1. Build in Docker (always use Docker for builds)
-mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app -e CGO_ENABLED=0 \
-  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
+# 1. Build (Makefile-first — always use make when a Makefile exists)
+# If Makefile exists (standard for all bootstrapped projects)
+make build    # → binaries/{project_name}, binaries/{project_name}-cli (all 8 platforms)
+
+# If no Makefile exists yet (bootstrap or manual equivalent)
+GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
+docker run --rm -it --name "${PROJECT_NAME}-build" -v $PWD:/app -w /app \
+  -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+  casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
 # 2. Test (prefer Incus, fallback to Docker)
 if command -v incus &>/dev/null; then
@@ -35078,41 +35086,39 @@ set -eo pipefail
 PROJECTNAME=$(basename "$PWD")
 PROJECTORG=$(basename "$(dirname "$PWD")")
 
-# Create temp directory for build
-mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
-trap "rm -rf $BUILD_DIR" EXIT
-
-# Go cache directories (same as Makefile)
-# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
-GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
-mkdir -p "$GO_CACHE" "$GO_BUILD"
-
-# Common docker run for Go builds
-GO_DOCKER="docker run --rm -it \
-  --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
-  -v $PWD:/app \
-  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
-  -v $GO_BUILD:/usr/local/share/go/cache \
-  -w /app \
-  -e CGO_ENABLED=0 \
-  casjaysdev/go:latest"
-
-echo "Building server binary in Docker..."
-$GO_DOCKER go build -o "$BUILD_DIR/${PROJECT_NAME}" ./src
-
-# Build client if exists
-if [ -d "src/client" ]; then
-    echo "Building client in Docker..."
-    $GO_DOCKER go build -o "$BUILD_DIR/${PROJECT_NAME}-cli" ./src/client
+# Build — use Makefile if present (standard for all bootstrapped projects)
+# Output always lands in binaries/
+if [ -f "Makefile" ]; then
+    echo "Building with make build..."
+    make build
+else
+    # No Makefile yet — fallback to direct docker run
+    echo "Building in Docker (no Makefile)..."
+    GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+    GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+    mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
+    docker run --rm \
+      --name "${PROJECT_NAME}-build" \
+      -v $PWD:/app \
+      -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+      -v $GO_BUILD:/usr/local/share/go/cache \
+      -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+      casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME} ./src
+    if [ -d "src/client" ]; then
+        docker run --rm \
+          --name "${PROJECT_NAME}-build-cli" \
+          -v $PWD:/app \
+          -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+          -v $GO_BUILD:/usr/local/share/go/cache \
+          -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+          casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME}-cli ./src/client
+    fi
 fi
-
 
 echo "Testing in Docker (Alpine)..."
 docker run --rm -it \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v "$BUILD_DIR:/app" \
+  -v "$PWD/binaries:/app" \
   alpine:latest sh -c "
     set -e
 
@@ -35255,34 +35261,36 @@ CONTAINER_NAME="test-${PROJECT_NAME}-$$"
 # Incus image - use latest Debian stable (update when new stable releases)
 INCUS_IMAGE="images:debian/trixie"
 
-# Create temp directory for build
-mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
-trap "rm -rf $BUILD_DIR; incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
+trap "incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
 
-# Go cache directories (same as Makefile)
-# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
-GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
-mkdir -p "$GO_CACHE" "$GO_BUILD"
-
-# Common docker run for Go builds
-GO_DOCKER="docker run --rm -it \
-  --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
-  -v $PWD:/app \
-  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
-  -v $GO_BUILD:/usr/local/share/go/cache \
-  -w /app \
-  -e CGO_ENABLED=0 \
-  casjaysdev/go:latest"
-
-echo "Building server binary in Docker..."
-$GO_DOCKER go build -o "$BUILD_DIR/${PROJECT_NAME}" ./src
-
-# Build client if exists
-if [ -d "src/client" ]; then
-    echo "Building client in Docker..."
-    $GO_DOCKER go build -o "$BUILD_DIR/${PROJECT_NAME}-cli" ./src/client
+# Build — use Makefile if present (standard for all bootstrapped projects)
+# Output always lands in binaries/
+if [ -f "Makefile" ]; then
+    echo "Building with make build..."
+    make build
+else
+    # No Makefile yet — fallback to direct docker run
+    echo "Building in Docker (no Makefile)..."
+    GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
+    GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+    mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
+    docker run --rm \
+      --name "${PROJECT_NAME}-build" \
+      -v $PWD:/app \
+      -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+      -v $GO_BUILD:/usr/local/share/go/cache \
+      -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+      casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME} ./src
+    if [ -d "src/client" ]; then
+        docker run --rm \
+          --name "${PROJECT_NAME}-build-cli" \
+          -v $PWD:/app \
+          -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+          -v $GO_BUILD:/usr/local/share/go/cache \
+          -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+          casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME}-cli ./src/client
+    fi
+fi
 fi
 
 
@@ -35293,12 +35301,12 @@ incus launch "$INCUS_IMAGE" "$CONTAINER_NAME"
 sleep 2
 
 echo "Copying binaries to container..."
-incus file push "$BUILD_DIR/${PROJECT_NAME}" "$CONTAINER_NAME/usr/local/bin/"
+incus file push "binaries/${PROJECT_NAME}" "$CONTAINER_NAME/usr/local/bin/"
 incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/${PROJECT_NAME}"
 
 # Copy client if built
-if [ -f "$BUILD_DIR/${PROJECT_NAME}-cli" ]; then
-    incus file push "$BUILD_DIR/${PROJECT_NAME}-cli" "$CONTAINER_NAME/usr/local/bin/"
+if [ -f "binaries/${PROJECT_NAME}-cli" ]; then
+    incus file push "binaries/${PROJECT_NAME}-cli" "$CONTAINER_NAME/usr/local/bin/"
     incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/${PROJECT_NAME}-cli"
 fi
 
@@ -35562,7 +35570,16 @@ echo '=== All open API smoke tests passed ==='
 
 ### Common Docker Commands
 
-**All Go commands MUST be run through Docker. Here are the patterns:**
+**When a Makefile exists (standard for all bootstrapped projects), always use make targets:**
+
+```bash
+make build    # compile for all 8 platforms → binaries/
+make test     # run unit tests with coverage inside Docker
+make dev      # quick dev build → ${TMPDIR}/{project_org}/{project_name}-XXXXXX/
+make release  # tag + cross-platform release binaries
+```
+
+**No Makefile yet? Use raw docker commands directly (bootstrap / manual equivalent):**
 
 ```bash
 # Set project path to YOUR actual project location (examples shown below)
@@ -35586,10 +35603,11 @@ GO_DOCKER="docker run --rm -it \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
   -v $GO_BUILD:/usr/local/share/go/cache \
   -w /app \
-  -e CGO_ENABLED=0"
+  -e CGO_ENABLED=0 \
+  -e GOFLAGS=-buildvcs=false"
 
 # Build (outputs to binaries/ which can be mounted into test containers)
-$GO_DOCKER casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
+$GO_DOCKER casjaysdev/go:latest go build -buildvcs=false -o /app/binaries/{project_name} ./src
 
 # Run tests
 $GO_DOCKER casjaysdev/go:latest go test ./...
@@ -35621,26 +35639,26 @@ docker run --rm -it \
 
 ## Build and Test
 
-**Build outputs to `binaries/`, test by running in container. Host cache dirs (`GO_CACHE`/`GO_BUILD`) keep builds fast.**
+**Build outputs to `binaries/`, test by running in container. Always use `make build` when a Makefile exists.**
 
 ```bash
-# Go cache directories (same as Makefile)
-# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
+# If Makefile exists (standard for all bootstrapped projects)
+make build    # → binaries/{project_name}-{os}-{arch} (all 8 platforms)
+
+# If no Makefile exists yet (bootstrap or manual equivalent)
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
 GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
-
-# Build (with caching)
 docker run --rm -it \
-  --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+  --name "${PROJECT_NAME}-build" \
   -v $PWD:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
   -v $GO_BUILD:/usr/local/share/go/cache \
-  -w /app -e CGO_ENABLED=0 \
-  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
+  -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+  casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
 # Test in Docker (quick) - install tools first
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest sh -c "
+docker run --rm -it --name "${PROJECT_NAME}-test" -v $PWD/binaries:/app alpine:latest sh -c "
   apk add --no-cache curl bash file jq >/dev/null
   /app/{project_name} --help
 "
@@ -35656,25 +35674,20 @@ incus delete test-{project_name} --force
 ### Testing with Config/Data
 
 ```bash
-# Go cache directories (same as Makefile)
-# Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
-GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
-mkdir -p "$GO_CACHE" "$GO_BUILD"
+# Build (Makefile-first)
+# If Makefile exists (standard for all bootstrapped projects)
+make build    # → binaries/{project_name}
+# If no Makefile exists yet (bootstrap or manual equivalent)
+# GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"; GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+# mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
+# docker run --rm -v $PWD:/app -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+#   -v $GO_BUILD:/usr/local/share/go/cache -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+#   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
 # Create prefixed temp dir for test data
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
-
-# Build to binaries/ (with caching)
-docker run --rm -it \
-  --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-  -v $PWD:/app \
-  -v $GO_CACHE:/usr/local/share/go/pkg/mod \
-  -v $GO_BUILD:/usr/local/share/go/cache \
-  -w /app -e CGO_ENABLED=0 \
-  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
 
 # Quick test in Docker (install tools first)
 docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest sh -c "
@@ -35707,9 +35720,12 @@ mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
-# Build
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app -e CGO_ENABLED=0 \
-  casjaysdev/go:latest go build -o /app/binaries/{project_name} ./src
+# Build (Makefile-first)
+# If Makefile exists (standard for all bootstrapped projects)
+make build    # → binaries/{project_name}
+# If no Makefile exists yet:
+# docker run --rm -v $PWD:/app -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+#   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
 # Launch Incus container (use latest Debian stable)
 incus launch images:debian/trixie test-{project_name}
