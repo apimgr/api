@@ -385,7 +385,7 @@ permission rules, business invariants. The HOW lives in AI.md PARTS 0-33; PART 3
 ```bash
 # After make dev, debug in Docker with tools
 BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-*/ 2>/dev/null | head -1)
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$BUILD_DIR:/app" alpine:latest sh -c "
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$BUILD_DIR:/app" alpine:latest sh -c "
   apk add --no-cache curl bash file jq  # Required debug tools
   /app/{project_name} --help
   /app/{project_name} --version
@@ -431,7 +431,7 @@ make dev                # Quick build to temp dir
 
 # 2. Debug in Docker (with tools)
 BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-*/ 2>/dev/null | head -1)
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$BUILD_DIR:/app" alpine:latest sh -c "
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$BUILD_DIR:/app" alpine:latest sh -c "
   apk add --no-cache curl bash file jq
   /app/{project_name} --help
 "
@@ -30125,7 +30125,7 @@ PLATFORMS ?= linux/amd64,linux/arm64
 
 # Docker - Set REGISTRY based on your platform (ghcr.io, registry.gitlab.com, git.example.com)
 REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
-GO_DOCKER := docker run --rm -it \
+GO_DOCKER := docker run --rm \
 	--name $(PROJECTNAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
 	-v $(PWD):/app \
 	-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
@@ -30320,7 +30320,7 @@ dev:
 			$(GO_DOCKER) go build -buildvcs=false -o $$BUILD_DIR/$(PROJECTNAME)-cli ./src/client && \
 			echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
 		fi && \
-		echo "Test:  docker run --rm -it --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
+		echo "Test:  docker run --rm --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
 
 # =============================================================================
 # CLEAN - Remove build artifacts
@@ -30457,7 +30457,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 ```bash
 # After make dev, test in Docker with debug tools
 BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-*/ 2>/dev/null | head -1)
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v "$BUILD_DIR:/app" \
   alpine:latest sh -c "
@@ -33721,7 +33721,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33739,7 +33739,7 @@ pipeline {
                     agent { label 'arm64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33758,7 +33758,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33776,7 +33776,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33795,7 +33795,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33813,7 +33813,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33832,7 +33832,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33850,7 +33850,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33877,7 +33877,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33895,7 +33895,7 @@ pipeline {
                     agent { label 'arm64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33913,7 +33913,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33931,7 +33931,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33949,7 +33949,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33967,7 +33967,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -33985,7 +33985,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -34003,7 +34003,7 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         sh '''
-                            docker run --rm -it \
+                            docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -34024,7 +34024,7 @@ pipeline {
             agent { label 'amd64' }
             steps {
                 sh '''
-                    docker run --rm -it \
+                    docker run --rm \
                         --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                         -v ${WORKSPACE}:/app \
                         -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -34273,7 +34273,7 @@ When a test or debug step requires `reboot`, `systemctl`, `iptables`, `mount`, p
 | Test Need | Run It Where |
 |-----------|--------------|
 | Test systemd service install/start/stop | `incus exec test-{project_name} -- systemctl ...` |
-| Test firewall integration | `docker run --rm -it --name "{project_name}-test" --cap-add=NET_ADMIN ...` |
+| Test firewall integration | `docker run --rm --name "{project_name}-test" --cap-add=NET_ADMIN ...` |
 | Test network interface behavior | `ip netns exec {ns} ...` or inside Incus |
 | Test package install / dependency setup | Inside the build container or test container |
 | Test reboot / service restart behavior | `incus restart test-{project_name}` |
@@ -34829,12 +34829,12 @@ test:
         # coverage.out goes to the mounted workspace (/app), not /tmp — two separate docker run
         # invocations cannot share /tmp; the workspace mount is the only shared path between them.
         # The runner workspace is ephemeral so this is safe.
-        docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
+        docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
           go test -cover -coverprofile=coverage.out ./...
 
     - name: Check coverage is ≥80%
       run: |
-        COVERAGE=$(docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
+        COVERAGE=$(docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
           go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
           echo "ERROR: Coverage is $COVERAGE%, must be >= 80%"
@@ -35008,7 +35008,7 @@ make build    # → binaries/{project_name}, binaries/{project_name}-cli (all 8 
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
 GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
-docker run --rm -it --name "${PROJECT_NAME}-build" -v $PWD:/app -w /app \
+docker run --rm --name "${PROJECT_NAME}-build" -v $PWD:/app -w /app \
   -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
@@ -35027,7 +35027,7 @@ if command -v incus &>/dev/null; then
 else
   # FALLBACK: Quick test in Docker (alpine, no systemd)
   echo "Incus not available, testing with Docker..."
-  docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest \
+  docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest \
     /app/{project_name} --help
 fi
 ```
@@ -35116,7 +35116,7 @@ else
 fi
 
 echo "Testing in Docker (Alpine)..."
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v "$PWD/binaries:/app" \
   alpine:latest sh -c "
@@ -35597,7 +35597,7 @@ GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 # Common docker run for Go commands
-GO_DOCKER="docker run --rm -it \
+GO_DOCKER="docker run --rm \
   --name \"${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)\" \
   -v $PROJECT_PATH:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
@@ -35628,7 +35628,7 @@ $GO_DOCKER casjaysdev/go:latest go fmt ./...
 $GO_DOCKER casjaysdev/go:latest go vet ./...
 
 # Interactive shell (for debugging)
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v $PROJECT_PATH:/app \
   -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
@@ -35649,7 +35649,7 @@ make build    # → binaries/{project_name}-{os}-{arch} (all 8 platforms)
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
 GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-build" \
   -v $PWD:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
@@ -35658,7 +35658,7 @@ docker run --rm -it \
   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
 # Test in Docker (quick) - install tools first
-docker run --rm -it --name "${PROJECT_NAME}-test" -v $PWD/binaries:/app alpine:latest sh -c "
+docker run --rm --name "${PROJECT_NAME}-test" -v $PWD/binaries:/app alpine:latest sh -c "
   apk add --no-cache curl bash file jq >/dev/null
   /app/{project_name} --help
 "
@@ -35690,14 +35690,14 @@ TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
 # Quick test in Docker (install tools first)
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest sh -c "
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest sh -c "
   apk add --no-cache curl bash file jq >/dev/null
   /app/{project_name} --help
   /app/{project_name} --version
 "
 
 # Full test with config/data in Docker
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v $PWD/binaries:/app \
   -v $TEST_DIR:/test \
