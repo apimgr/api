@@ -13928,6 +13928,7 @@ func extractContextFromPath(path string) (*Context, error) {
 | Path | Default | Required When | Source | Content-Type | Behavior |
 |------|---------|---------------|--------|--------------|----------|
 | `/.well-known/security.txt` | Enabled | All projects | Generated from config (or operator override for the same path) | `text/plain; charset=utf-8` | RFC 9116 security contact file |
+| `/.well-known/llms.txt` | Enabled | All projects | Generated from config + routes | `text/plain; charset=utf-8` | AI agent discovery file (also served at `/llms.txt`) |
 | `/.well-known/pgp-key.asc` | Feature-gated | Project security-report PGP keypair exists | Generated from stored public key | `application/pgp-keys` or `text/plain; charset=utf-8` | Public key download for secure report submission |
 | `/.well-known/acme-challenge/{token}` | Feature-gated | Let's Encrypt `http-01` is active | Dynamic handler only | `text/plain; charset=utf-8` | ACME challenge response; no auth, no HTML |
 | `/.well-known/webfinger` | Disabled | Project publishes `acct:`-style identities or federation in `IDEA.md` | Dynamic handler | `application/jrd+json` | Resolve account/resource discovery; otherwise 404 |
@@ -13941,12 +13942,12 @@ func extractContextFromPath(path string) (*Context, error) {
 ### Well-Known Directory Support
 
 Files can be served from:
-1. Reserved dynamic handlers for protocol-owned entries (for example `acme-challenge`, `change-password`, or provider/discovery handlers when enabled)
+1. Reserved dynamic handlers for protocol-owned entries (for example `acme-challenge` or provider/discovery handlers when enabled)
 2. Files in `{data_dir}/web/.well-known/` for file-backed allowlisted entries only
 3. Embedded files in binary for file-backed allowlisted entries only
 4. Dynamically generated config-backed content (for example `security.txt`, `pgp-key.asc`, or generated JSON discovery files)
 
-**Serving-order rule:** a file in `{data_dir}/web/.well-known/` may override an embedded default for the SAME allowlisted entry, but it MUST NOT override protocol-owned dynamic handlers such as `/.well-known/acme-challenge/{token}` or `/.well-known/change-password`.
+**Serving-order rule:** a file in `{data_dir}/web/.well-known/` may override an embedded default for the SAME allowlisted entry, but it MUST NOT override protocol-owned dynamic handlers such as `/.well-known/acme-challenge/{token}`.
 
 ### Adding New Well-Known Entries
 
@@ -14012,6 +14013,71 @@ web:
 |-------|----------|-------------|
 | `Contact` | YES | Email for reporting vulnerabilities (mailto: prefix added automatically) |
 | `Expires` | YES | Expiration date (auto-renewed yearly by default) |
+
+### llms.txt (AI Discovery)
+
+**ALL projects MUST serve an llms.txt file for AI agent discovery.**
+
+llms.txt tells AI agents (Claude, GPT, etc.) what the application does, what API endpoints are available, and how to interact with it programmatically. This is the AI equivalent of robots.txt.
+
+```
+# Served at /.well-known/llms.txt and /llms.txt (both paths)
+
+# {project_name}
+> {project_description}
+
+## API
+Base URL: {app_url}/api/{api_version}
+Authentication: Bearer token (obtain via /api/{api_version}/auth/token)
+Rate limit: {rate_limit} requests/minute
+
+## Endpoints
+- GET /health - Health check (no auth)
+- GET /info - Server information (no auth)
+- POST /auth/token - Obtain API token
+- GET /users/me - Current user profile
+- ... (auto-generated from route definitions)
+
+## Capabilities
+- {capability_1}
+- {capability_2}
+- ...
+
+## Contact
+API issues: {api_contact}
+Security: {security_contact}
+```
+
+**Configuration:**
+```yaml
+web:
+  llms:
+    enabled: true                    # Serve llms.txt (default: true)
+    include_endpoints: true          # Auto-generate endpoint list from routes
+    include_schemas: false           # Include request/response schemas (verbose)
+    custom_sections: []              # Additional custom sections
+```
+
+**Auto-Generation Rules:**
+- Project name and description from `IDEA.md` or config
+- API base URL from config
+- Endpoints auto-discovered from route registrations (public + authenticated, not admin-only)
+- Capabilities derived from enabled features
+- Contact info from `web.security.contact` and `web.api_contact`
+
+**Endpoint Inclusion Rules:**
+| Route Type | Included | Reason |
+|------------|----------|--------|
+| Public API (`/api/**`) | Yes | AI agents can use these |
+| Authenticated API (`/api/**` + auth) | Yes | Note auth requirement |
+| Health/metrics (`/healthz`, `/metrics`) | Yes | Useful for monitoring agents |
+
+**Well-Known Support Matrix Update:**
+
+| Path | Default | Required When | Source | Content-Type |
+|------|---------|---------------|--------|--------------|
+| `/.well-known/llms.txt` | Enabled | All projects | Generated from config + routes | `text/plain; charset=utf-8` |
+| `/llms.txt` | Enabled | All projects | Alias to `/.well-known/llms.txt` | `text/plain; charset=utf-8` |
 
 ### Web Configuration (config file)
 
@@ -36552,7 +36618,7 @@ GraphQL playground: [/server/docs/graphql](/server/docs/graphql)
 
 - `/.well-known/security.txt`
 - `/.well-known/pgp-key.asc` (when enabled)
-- `/.well-known/change-password`
+- `/.well-known/llms.txt`
 - `/server/healthz`
 - `/api/{api_version}/server/healthz`
 
@@ -43540,7 +43606,7 @@ make docker # Build Docker image
 - [ ] `/sitemap.xml` generated (see above)
 - [ ] `/favicon.ico` served (embedded default or custom)
 - [ ] `/.well-known/security.txt` served (RFC 9116)
-- [ ] `/.well-known/change-password` behaves correctly for authenticated vs unauthenticated users
+- [ ] `/.well-known/llms.txt` served with auto-generated endpoint list
 - [ ] `/.well-known/pgp-key.asc` is served only when a security-report keypair exists; otherwise 404
 - [ ] Optional `/.well-known/*` entries only exist when their matching feature/integration is explicitly enabled
 - [ ] Unknown `/.well-known/*` entries return `404` and never expose a directory listing
