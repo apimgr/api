@@ -26938,8 +26938,10 @@ server:
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `rate_limit_hits_total` | Counter | `endpoint_class`, `ip` | Rate limit triggers |
-| `rate_limit_blocked_total` | Counter | `ip` | Requests blocked by rate limit |
+| `rate_limit_hits_total` | Counter | `endpoint_class` | Rate limit triggers |
+| `rate_limit_blocked_total` | Counter | `endpoint_class` | Requests blocked by rate limit |
+
+**Cardinality note:** Never use `ip` as a metric label — unbounded cardinality is a memory-DoS vector. Log per-IP details to structured logs instead; metrics answer "how many?" while logs answer "which IPs?"
 
 ### System Metrics (if `include_system: true`)
 
