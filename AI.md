@@ -153,7 +153,8 @@ Example:
 
     project_name:  jokes
     project_org:   casjay
-    internal_name: jokes        # FROZEN — set once at first-time setup, never edit
+    # FROZEN — set once at first-time setup, never edit
+    internal_name: jokes
     app_name:      jokes
     official_site: jokes.example.com
 
@@ -386,7 +387,8 @@ permission rules, business invariants. The HOW lives in AI.md PARTS 0-33; PART 3
 # After make dev, debug in Docker with tools
 BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-*/ 2>/dev/null | head -1)
 docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$BUILD_DIR:/app" alpine:latest sh -c "
-  apk add --no-cache curl bash file jq  # Required debug tools
+  # Required debug tools
+  apk add --no-cache curl bash file jq
   /app/{project_name} --help
   /app/{project_name} --version
   # Interactive debugging...
@@ -427,7 +429,8 @@ docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -
 **Local Development Workflow:**
 ```bash
 # 1. Active development
-make dev                # Quick build to temp dir
+# Quick build to temp dir
+make dev
 
 # 2. Debug in Docker (with tools)
 BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-*/ 2>/dev/null | head -1)
@@ -440,14 +443,18 @@ docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -
 make test
 
 # 4. Integration tests
-./tests/run_tests.sh    # Auto-detects incus/docker
+# Auto-detects incus/docker
+./tests/run_tests.sh
 
 # 5. Production test (before release)
-make local               # Build with version info
-./tests/incus.sh        # Full systemd testing (PREFERRED)
+# Build with version info
+make local
+# Full systemd testing (PREFERRED)
+./tests/incus.sh
 
 # 6. Full release build
-make build              # All 8 platforms
+# All 8 platforms
+make build
 ```
 
 **See PART 25: MAKEFILE and PART 28: TESTING & DEVELOPMENT for complete details.**
@@ -653,10 +660,14 @@ jobs:
   release:
     needs: build
     permissions:
-      contents: write      # create GitHub release + upload assets
-      packages: write      # push to ghcr.io
-      id-token: write      # OIDC token for cosign signing
-      attestations: write  # GitHub artifact attestations (SBOM, provenance)
+      # create GitHub release + upload assets
+      contents: write
+      # push to ghcr.io
+      packages: write
+      # OIDC token for cosign signing
+      id-token: write
+      # GitHub artifact attestations (SBOM, provenance)
+      attestations: write
     ...
 ```
 
@@ -717,6 +728,29 @@ Every project ships workflow files for all five CI/CD providers. Same gates, dif
 
 Go projects never have `build-toolchain.yml` — `casjaysdev/go:latest` is maintained externally and needs no per-project rebuild workflow.
 
+**Toolchain image — `casjaysdev/go:latest`.** All Go CI jobs and containerized builds use this maintained image; never create `docker/Dockerfile.build` for Go. Image defaults: `CGO_ENABLED=0`, `GOFLAGS=-buildvcs=false`, `GOTOOLCHAIN=auto`, `GOTELEMETRY=off`. Pre-installed tools:
+
+- Latest stable Go toolchain (`go`, `gofmt`, `go vet`)
+- `golangci-lint`, `staticcheck`, `gofumpt`, `goimports` — linting and formatting
+- `govulncheck` — vulnerability scanner
+- `go-licenses` — dependency license reporter
+- `cyclonedx-gomod` — CycloneDX SBOM generator
+- `goreleaser` — release automation
+- `gotestsum` — structured test runner
+- `gopls` — official Go language server
+- `dlv` (Delve) — source-level debugger
+- `ko` — build container images from Go source without a Dockerfile
+- `air` — live-reload dev server
+- `buf` — protobuf toolchain; `protoc-gen-go`, `protoc-gen-go-grpc`
+- `goose` — DB migration runner
+- `wire` — compile-time dependency injection
+- `mockgen` (uber/mock) — interface mock generator
+- `stringer` — `String()` method generator for iota types
+- `benchstat` — statistically sound benchmark comparison
+- `gops` — live Go process diagnostics
+
+CI workflows reference the image directly: `container: image: casjaysdev/go:latest`. No `apk add`, no `go install`, no `ensure-build-image` job.
+
 | Provider | Workflow location | Syntax |
 |----------|------------------|--------|
 | GitHub  | `.github/workflows/ci.yml` / `release.yml` | GitHub Actions |
@@ -768,7 +802,8 @@ The `release` job already has `contents: write` to push assets — this covers t
 ```yaml
 - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
   with:
-    fetch-depth: 0   # required: full history needed to inspect and push tags
+    # required: full history needed to inspect and push tags
+    fetch-depth: 0
 
 - name: Ensure release tag
   run: |
@@ -823,7 +858,7 @@ The `release` job already has `contents: write` to push assets — this covers t
 --status                     # Show status and health (exit 0=healthy, 1=unhealthy)
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
---maintenance {backup,restore,update,mode,setup,--help} [optional-file-or-setting]
+--maintenance {backup,restore,update,mode,setup,pgp,--help} [optional-file-or-setting-or-action]
 --update [check|yes|branch {stable|beta|daily}]
 ```
 
@@ -1927,7 +1962,7 @@ Instructions for how this agent should behave...
   - where to send vulnerabilities instead of opening a public issue
 - `.github/SECURITY.md` MUST define:
   - supported versions or supported release policy
-  - the security reporting path
+  - the security reporting path — GitHub private vulnerability reporting (`https://github.com/{project_org}/{project_name}/security/advisories/new`, the repo's Security tab → "Report a vulnerability") is the PRIMARY channel; the security email is a secondary/CC contact only, never the main reporting path. On mirrors without private vulnerability reporting, point reporters at the GitHub origin repo first
   - that vulnerabilities are NOT filed as public bug reports
   - expected disclosure/response flow
   - links to `/.well-known/security.txt` and `/server/contact?security_id=...` when those project features exist
@@ -1993,7 +2028,7 @@ Instructions for how this agent should behave...
 |-------------|-------------|---------|
 | `{project_name}` | Project name (lowercase, no spaces/hyphens) | `jokes`, `echoip`, `pastebin` |
 | `{project_org}` | Organization/owner name (lowercase) | `sneak`, `acme`, `mycompany` |
-| `{projectversion}` | Current version (semver format) | `1.0.0`, `2.3.1` |
+| `{project_version}` | Current version (semver format) | `1.0.0`, `2.3.1` |
 | `{PROJECT_NAME}` | Uppercase project name (for constants, env vars) | `JOKES`, `ECHOIP` |
 | `{official_site}` | Official project website | `https://jokes.example.com` |
 | `{fqdn}` | Fully qualified domain name | `api.example.com` |
@@ -2123,7 +2158,8 @@ This distinction exists for clarity. When referring to OS-level resources that b
 server:
   healthz:
     root:
-      enabled: false   # When true, mount /healthz to the SAME handler as /server/healthz
+      # When true, mount /healthz to the SAME handler as /server/healthz
+      enabled: false
 ```
 
 - Default is `false`
@@ -2233,8 +2269,10 @@ server:
 
 Use `grep` to find the PART you need:
 ```bash
-grep -n "^# PART" AI.md    # List all PARTs with line numbers
-grep -n "keyword" AI.md    # Find specific content
+# List all PARTs with line numbers
+grep -n "^# PART" AI.md
+# Find specific content
+grep -n "keyword" AI.md
 ```
 
 **Step 3: Read the specific PART completely**
@@ -3317,6 +3355,13 @@ db.Exec(query, id)
 
 **Rule: ALL comments go on lines ABOVE the code, NEVER inline. This prevents confusion and improves readability.**
 
+**Comment validity by language:**
+- **JSON has NO comment syntax** — never place comments in `.json` files or JSON examples; JSON must always parse valid
+- **CSS comments are `/* */` only** — `//` and `#` are invalid CSS and break the stylesheet; CSS must always parse valid
+- **JavaScript comments are `//` or `/* */`** — never `#`; JS must always parse valid
+
+**Exception:** GitHub Actions SHA-pin version annotations stay inline — `uses: owner/action@{40-char-sha}  # vX.Y.Z` — Renovate reads and rewrites the same-line comment when bumping pins; never move it above the `uses:` line.
+
 ### Formatting and Indentation
 
 **ALL code, responses, and files MUST be properly formatted.**
@@ -4186,14 +4231,20 @@ When working on this project, the following roles are assumed based on the task:
 
 ```bash
 # CORRECT - Use Makefile targets
-make dev                    # Quick build to {tempdir}/{project_org}/{internal_name}-XXXXXX/
-make local                   # Build with version info to binaries/
-make build                  # Full cross-platform build to binaries/
-make test                   # Run unit tests
+# Quick build to {tempdir}/{project_org}/{internal_name}-XXXXXX/
+make dev
+# Build with version info to binaries/
+make local
+# Full cross-platform build to binaries/
+make build
+# Run unit tests
+make test
 
 # CORRECT - Integration tests
-./tests/run_tests.sh        # Auto-detects incus/docker
-./tests/incus.sh            # Full OS test with systemd (PREFERRED)
+# Auto-detects incus/docker
+./tests/run_tests.sh
+# Full OS test with systemd (PREFERRED)
+./tests/incus.sh
 
 # WRONG - Never run go directly on local machine
 go build -o binary/{project_name} ./src
@@ -4967,7 +5018,8 @@ fetch(`${config.apiBaseUrl}/api/${apiVersion}/items`)
 router.GET("/api/"+apiVersion+"/items", handleItems)
 router.GET("/server/healthz", handleHealth)
 if cfg.Server.Healthz.Root.Enabled {
-    router.GET("/healthz", handleHealth) // same handler, no redirect
+    // same handler, no redirect
+    router.GET("/healthz", handleHealth)
 }
 ```
 
@@ -5739,8 +5791,10 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 
 # Method 2: Infer from current directory path (fallback if no git remote)
 # Works with any path structure: ~/Documents/myproject, ~/myproject, etc.
-PROJECTNAME=$(basename "$PWD")                    # myproject
-PROJECTORG=$(basename "$(dirname "$PWD")")        # Documents (or parent dir name)
+# myproject
+PROJECTNAME=$(basename "$PWD")
+# Documents (or parent dir name)
+PROJECTORG=$(basename "$(dirname "$PWD")")
 
 # Method 3: Combined approach (git first, fallback to path)
 PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|' || basename "$PWD")
@@ -6280,7 +6334,8 @@ cd /path/to/project && docker build -f docker/Dockerfile .
 ```
 module github.com/{project_org}/{internal_name}
 
-go 1.xx  // Use current latest stable version
+// Use current latest stable version
+go 1.xx
 
 require (
     // dependencies...
@@ -6363,9 +6418,11 @@ require (
 func normalizeDriver(driver string) string {
     switch strings.ToLower(driver) {
     case "sqlite", "sqlite2", "sqlite3":
-        return "sqlite"     // All map to modernc.org/sqlite
+        // All map to modernc.org/sqlite
+        return "sqlite"
     case "libsql", "turso":
-        return "libsql"     // Turso/libSQL remote database
+        // Turso/libSQL remote database
+        return "libsql"
     default:
         return driver
     }
@@ -6413,7 +6470,8 @@ require modernc.org/sqlite {version}
 ```yaml
 server:
   database:
-    driver: libsql  # or "turso" (alias)
+    # or "turso" (alias)
+    driver: libsql
 
     # Option 1: URL with embedded token
     url: libsql://your-db-name.turso.io?authToken=${TURSO_AUTH_TOKEN}
@@ -6487,32 +6545,47 @@ require github.com/tursodatabase/libsql-client-go {version}
 ```go
 module github.com/{project_org}/{internal_name}
 
-go 1.xx  // Use current latest stable version
+// Use current latest stable version
+go 1.xx
 
 require (
 	// Database drivers
-	modernc.org/sqlite {version}                    // SQLite (pure Go)
-	github.com/tursodatabase/libsql-client-go {version}  // libSQL/Turso (remote)
+	// SQLite (pure Go)
+	modernc.org/sqlite {version}
+	// libSQL/Turso (remote)
+	github.com/tursodatabase/libsql-client-go {version}
 
 	// Cache
-	github.com/redis/go-redis/v9 {version}          // Valkey/Redis
-	github.com/bradfitz/gomemcache {version}        // Memcache
+	// Valkey/Redis
+	github.com/redis/go-redis/v9 {version}
+	// Memcache
+	github.com/bradfitz/gomemcache {version}
 
 	// Core
-	gopkg.in/yaml.v3 {version}                      // YAML config
-	github.com/google/uuid {version}                // UUID generation
-	golang.org/x/crypto {version}                   // Argon2, Bcrypt
+	// YAML config
+	gopkg.in/yaml.v3 {version}
+	// UUID generation
+	github.com/google/uuid {version}
+	// Argon2, Bcrypt
+	golang.org/x/crypto {version}
 
 	// Network/HTTP
-	github.com/go-chi/chi/v5 {version}              // Router
-	github.com/cretz/bine {version}                 // Tor controller
-	github.com/gorilla/websocket {version}          // WebSocket
-	github.com/rs/cors {version}                    // CORS middleware
+	// Router
+	github.com/go-chi/chi/v5 {version}
+	// Tor controller
+	github.com/cretz/bine {version}
+	// WebSocket
+	github.com/gorilla/websocket {version}
+	// CORS middleware
+	github.com/rs/cors {version}
 
 	// Utilities
-	github.com/go-co-op/gocron/v2 {version}        // In-process job scheduler
-	golang.org/x/time {version}                     // Rate limiting
-	github.com/go-playground/validator/v10 {version} // Validation
+	// In-process job scheduler
+	github.com/go-co-op/gocron/v2 {version}
+	// Rate limiting
+	golang.org/x/time {version}
+	// Validation
+	github.com/go-playground/validator/v10 {version}
 )
 ```
 
@@ -6714,8 +6787,10 @@ Before proceeding, confirm you understand:
 **Docker volume mounts map host paths to container paths:**
 ```yaml
 volumes:
-  - './volumes/config:/config:z'   # Host ./volumes/config → Container /config
-  - './volumes/data:/data:z'       # Host ./volumes/data → Container /data
+  # Host ./volumes/config → Container /config
+  - './volumes/config:/config:z'
+  # Host ./volumes/data → Container /data
+  - './volumes/data:/data:z'
 ```
 
 ---
@@ -6752,6 +6827,8 @@ port: 8080
 ```
 
 **Reason:** Inline comments create confusion, make YAML harder to parse visually, and can cause issues with some YAML parsers. Comments above are clear and unambiguous.
+
+**Exception:** GitHub Actions SHA-pin version annotations stay inline — `uses: owner/action@{40-char-sha}  # vX.Y.Z` — Renovate reads and rewrites the same-line comment when bumping pins; never move it above the `uses:` line.
 
 **This applies to:**
 - `server.yml` configuration
@@ -6843,7 +6920,8 @@ func validatePath(p string) error {
     segments := strings.Split(strings.Trim(p, "/"), "/")
     for _, seg := range segments {
         if seg == "" {
-            continue // Skip empty (from //)
+            // Skip empty (from //)
+            continue
         }
         if err := validatePathSegment(seg); err != nil {
             return err
@@ -7013,16 +7091,26 @@ func SafeFilePath(baseDir, userPath string) (string, error) {
 func setupMiddleware(handler http.Handler) http.Handler {
     // Wrapping order: last applied = first to execute (outermost layer)
     // Execution order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
-    handler = LoggingMiddleware(handler)           // 10. Log requests (after RequestID so logs carry the request_id)
-    handler = AuthMiddleware(handler)              // 9. Check auth
-    handler = GeoIPMiddleware(handler)             // 8. Country blocking
-    handler = RateLimitMiddleware(handler)         // 7. Rate limiting
-    handler = BlocklistMiddleware(handler)         // 6. IP/domain blocklist check
-    handler = AllowlistMiddleware(handler)         // 5. Set allowlisted flag (bypasses blocklist/ratelimit/geoip, NOT auth)
-    handler = SecurityHeadersMiddleware(handler)   // 4. Add security headers
-    handler = PathSecurityMiddleware(handler)      // 3. Validate paths, block traversal
-    handler = RequestIDMiddleware(handler)         // 2. Attach request ID (must run before Logging so logs include it)
-    handler = URLNormalizeMiddleware(handler)      // 1. FIRST - normalize URLs (trailing slash, etc.)
+    // 10. Log requests (after RequestID so logs carry the request_id)
+    handler = LoggingMiddleware(handler)
+    // 9. Check auth
+    handler = AuthMiddleware(handler)
+    // 8. Country blocking
+    handler = GeoIPMiddleware(handler)
+    // 7. Rate limiting
+    handler = RateLimitMiddleware(handler)
+    // 6. IP/domain blocklist check
+    handler = BlocklistMiddleware(handler)
+    // 5. Set allowlisted flag (bypasses blocklist/ratelimit/geoip, NOT auth)
+    handler = AllowlistMiddleware(handler)
+    // 4. Add security headers
+    handler = SecurityHeadersMiddleware(handler)
+    // 3. Validate paths, block traversal
+    handler = PathSecurityMiddleware(handler)
+    // 2. Attach request ID (must run before Logging so logs include it)
+    handler = RequestIDMiddleware(handler)
+    // 1. FIRST - normalize URLs (trailing slash, etc.)
+    handler = URLNormalizeMiddleware(handler)
     return handler
 }
 ```
@@ -7307,14 +7395,19 @@ server:
     # Self-healing settings
     self_healing:
       enabled: true
-      retry_interval: 30s            # Seconds between retry attempts
-      max_attempts: 0                # 0 = unlimited (keep trying forever)
+      # Seconds between retry attempts
+      retry_interval: 30s
+      # 0 = unlimited (keep trying forever)
+      max_attempts: 0
 
     # Auto-cleanup thresholds
     cleanup:
-      disk_threshold: 90             # Start cleanup when disk > 90% full
-      log_retention_days: 7          # Delete logs older than 7 days during cleanup
-      backup_keep_count: 5           # Keep last 5 backups during cleanup
+      # Start cleanup when disk > 90% full
+      disk_threshold: 90
+      # Delete logs older than 7 days during cleanup
+      log_retention_days: 7
+      # Keep last 5 backups during cleanup
+      backup_keep_count: 5
 
     # Notifications
     notify:
@@ -7340,8 +7433,10 @@ server:
 ```yaml
 server:
   database:
-    driver: sqlite           # or "libsql" for remote Turso/libsql
-    url: "{data_dir}/db/{internal_name}.db"  # auto-created for sqlite
+    # or "libsql" for remote Turso/libsql
+    driver: sqlite
+    # auto-created for sqlite
+    url: "{data_dir}/db/{internal_name}.db"
     # For remote libsql:
     # driver: libsql
     # url: libsql://your-db-name.turso.io?authToken=${TURSO_AUTH_TOKEN}
@@ -7763,7 +7858,8 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
        // Check sudo -n (non-interactive) to see if user has sudo access
        cmd := exec.Command("sudo", "-n", "true")
        if cmd.Run() == nil {
-           return true // Has passwordless sudo
+           // Has passwordless sudo
+           return true
        }
 
        // Check if user is in sudo/wheel/admin group
@@ -7772,7 +7868,8 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
        for _, gid := range groups {
            group, _ := user.LookupGroupId(gid)
            if group != nil && (group.Name == "sudo" || group.Name == "wheel" || group.Name == "admin") {
-               return true // Can sudo with password
+               // Can sudo with password
+               return true
            }
        }
        return false
@@ -7885,7 +7982,8 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
    ```go
    func handleEscalation(action string) error {
        if isElevated() {
-           return nil // Already elevated
+           // Already elevated
+           return nil
        }
 
        if !canEscalate() {
@@ -7975,6 +8073,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 | `--maintenance update` | ⚠️ Check | Can write to binary path? | None (error) |
 | `--maintenance setup` | 🔐 Auth | Only first-run OR root | N/A |
 | `--maintenance mode` | 🔐 Auth | Requires `server.token` OR root | N/A |
+| `--maintenance pgp <action>` | 🔐 Auth | Requires `server.token` OR root | N/A |
 | (normal start) | ❌ No | Adapts paths to current user | N/A |
 
 **Key insight:** After service install, the `{project_name}` user owns all data directories. However, sensitive operations require AUTHORIZATION, not just file access.
@@ -7988,6 +8087,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 | `--maintenance setup` | Resets server configuration to defaults | First-run only OR root |
 | `--maintenance restore` | Overwrites ALL data | `server.token` OR root OR empty database |
 | `--maintenance mode` | Changes server behavior | `server.token` OR root |
+| `--maintenance pgp export private` / `import` / `delete` | Exposes, replaces, or destroys the security private key | `server.token` OR root + typed confirmation |
 
 **Setup authorization flow:**
 
@@ -8070,13 +8170,15 @@ func needsEscalationForService() bool {
 // Port binding: check if privileged
 func needsEscalationForPort(port int) bool {
     if port >= 1024 {
-        return false // Unprivileged port
+        // Unprivileged port
+        return false
     }
     // Windows: no concept of privileged ports (any user can bind any port)
     if runtime.GOOS == "windows" {
         return false
     }
-    return !isElevated() // Unix: need root for <1024
+    // Unix: need root for <1024
+    return !isElevated()
 }
 
 // Update: check if binary is writable
@@ -8086,9 +8188,11 @@ func needsEscalationForUpdate() bool {
     f, err := os.OpenFile(binaryPath, os.O_WRONLY, 0)
     if err == nil {
         f.Close()
-        return false // Can write - no escalation
+        // Can write - no escalation
+        return false
     }
-    return true // Cannot write - need escalation
+    // Cannot write - need escalation
+    return true
 }
 
 // Backup: check directory access (no auth needed)
@@ -8122,7 +8226,8 @@ func canRestore() (bool, string) {
     }
     // Service user: requires operator password (prompted)
     if isServiceUser() {
-        return false, "need-creds" // Caller must prompt for creds
+        // Caller must prompt for creds
+        return false, "need-creds"
     }
     // Random user: denied
     return false, "denied"
@@ -8134,7 +8239,8 @@ func canChangeMode() (bool, string) {
         return true, "elevated"
     }
     if isServiceUser() {
-        return false, "need-creds" // Caller must prompt for creds
+        // Caller must prompt for creds
+        return false, "need-creds"
     }
     return false, "denied"
 }
@@ -8363,15 +8469,20 @@ server:
     #   /etc/letsencrypt/live/{fqdn}/ → system manages (certbot)
     #   {config_dir}/ssl/letsencrypt/{fqdn}/ → app manages (auto-renew)
     #   {config_dir}/ssl/local/{fqdn}/ → user manages (no auto-renew)
-    cert: ""   # Manual cert path (optional)
-    key: ""    # Manual key path (optional)
-    min_version: "TLS1.2"  # TLS1.2, TLS1.3
+    # Manual cert path (optional)
+    cert: ""
+    # Manual key path (optional)
+    key: ""
+    # TLS1.2, TLS1.3
+    min_version: "TLS1.2"
 
     letsencrypt:
       enabled: false
       email: admin@{fqdn}
-      challenge: http-01  # http-01, tls-alpn-01, dns-01
-      staging: false      # Use staging server for testing
+      # http-01, tls-alpn-01, dns-01
+      challenge: http-01
+      # Use staging server for testing
+      staging: false
 
   # Scheduler - manages all background tasks
   scheduler:
@@ -8438,9 +8549,20 @@ server:
 
   rate_limit:
     enabled: true
-    # Project-specific default (define in IDEA.md based on expected usage)
-    requests: 0  # 0 = use project default
-    window: 60
+    read:
+      # per minute per IP
+      requests: 120
+      window: 60
+    write:
+      # per minute per IP
+      requests: 10
+      window: 60
+    health:
+      # per minute per IP (health/status endpoints)
+      requests: 120
+      window: 60
+    # per minute per IP (absolute ceiling across all endpoint types)
+    global_burst: 240
 
   # Database
   database:
@@ -8943,7 +9065,8 @@ go tool pprof -http=:8081 http://localhost:64580/debug/pprof/heap
 ```yaml
 server:
   # Application mode
-  mode: development  # Enables all debug features
+  # Enables all debug features
+  mode: development
 
   # Debug-specific settings (only apply in development mode)
   debug:
@@ -9260,24 +9383,37 @@ import (
 type DisplayMode int
 
 const (
-    DisplayModeHeadless DisplayMode = iota // No display, no TTY
-    DisplayModeCLI                          // Command-line only (piped or command provided)
-    DisplayModeTUI                          // Terminal UI (interactive terminal)
-    DisplayModeGUI                          // Native graphical UI
+    // No display, no TTY
+    DisplayModeHeadless DisplayMode = iota
+    // Command-line only (piped or command provided)
+    DisplayModeCLI
+    // Terminal UI (interactive terminal)
+    DisplayModeTUI
+    // Native graphical UI
+    DisplayModeGUI
 )
 
 // DisplayEnv - detected display environment
 type DisplayEnv struct {
     Mode          DisplayMode
-    HasDisplay    bool     // X11, Wayland, Windows, macOS display
-    DisplayType   string   // "x11", "wayland", "windows", "macos", "none"
-    IsTerminal    bool     // stdout is a TTY
-    IsSSH         bool     // Running over SSH
-    IsMosh        bool     // Running over mosh
-    IsScreen      bool     // Running in screen/tmux
-    TerminalType  string   // TERM value
-    Cols          int      // Terminal columns (0 if no terminal)
-    Rows          int      // Terminal rows (0 if no terminal)
+    // X11, Wayland, Windows, macOS display
+    HasDisplay    bool
+    // "x11", "wayland", "windows", "macos", "none"
+    DisplayType   string
+    // stdout is a TTY
+    IsTerminal    bool
+    // Running over SSH
+    IsSSH         bool
+    // Running over mosh
+    IsMosh        bool
+    // Running in screen/tmux
+    IsScreen      bool
+    // TERM value
+    TerminalType  string
+    // Terminal columns (0 if no terminal)
+    Cols          int
+    // Terminal rows (0 if no terminal)
+    Rows          int
 }
 
 // DetectDisplayEnv - auto-detect display environment
@@ -9370,7 +9506,8 @@ func CanUseANSI(env *DisplayEnv) bool {
         return false
     }
     if os.Getenv("NO_COLOR") != "" {
-        return false  // Plain output requested
+        // Plain output requested
+        return false
     }
     return env.IsTerminal
 }
@@ -9378,9 +9515,11 @@ func CanUseANSI(env *DisplayEnv) bool {
 // Spinner that falls back gracefully
 func NewSpinner(env *DisplayEnv, message string) Spinner {
     if env.IsDumbTerminal() {
-        return &TextSpinner{message: message}  // Just prints "Processing..."
+        // Just prints "Processing..."
+        return &TextSpinner{message: message}
     }
-    return &ANSISpinner{message: message}      // Animated spinner
+    // Animated spinner
+    return &ANSISpinner{message: message}
 }
 
 // Progress that falls back gracefully
@@ -9402,7 +9541,8 @@ TERM=dumb {project_name} --status
 TERM=dumb {project_name}-cli list
 
 # Should produce plain text output with no escape codes
-TERM=dumb {project_name} --status | cat -v   # No ^[ sequences
+# No ^[ sequences
+TERM=dumb {project_name} --status | cat -v
 ```
 
 ### Platform-Specific Display Detection
@@ -9565,7 +9705,8 @@ src/
 // go.mod
 module {project_org}/{internal_name}
 
-go 1.xx  // Use current latest stable version
+// Use current latest stable version
+go 1.xx
 
 require (
     // Terminal/TUI
@@ -9607,13 +9748,20 @@ import (
 type SizeMode int
 
 const (
-    SizeModeMicro     SizeMode = iota // <40 cols or <10 rows
-    SizeModeMinimal                    // 40-59 cols or 10-15 rows
-    SizeModeCompact                    // 60-79 cols or 16-23 rows
-    SizeModeStandard                   // 80-119 cols and 24-39 rows
-    SizeModeWide                       // 120-199 cols and 40-59 rows
-    SizeModeUltrawide                  // 200-399 cols and 60-79 rows
-    SizeModeMassive                    // 400+ cols and 80+ rows
+    // <40 cols or <10 rows
+    SizeModeMicro     SizeMode = iota
+    // 40-59 cols or 10-15 rows
+    SizeModeMinimal
+    // 60-79 cols or 16-23 rows
+    SizeModeCompact
+    // 80-119 cols and 24-39 rows
+    SizeModeStandard
+    // 120-199 cols and 40-59 rows
+    SizeModeWide
+    // 200-399 cols and 60-79 rows
+    SizeModeUltrawide
+    // 400+ cols and 80+ rows
+    SizeModeMassive
 )
 
 type TerminalSize struct {
@@ -9695,7 +9843,8 @@ import (
 type BannerConfig struct {
     AppName    string
     Version    string
-    AppMode    string   // production/development
+    // production/development
+    AppMode    string
     Debug      bool
     URLs       []string
 }
@@ -9751,7 +9900,8 @@ func PrintStartupBanner(cfg BannerConfig) {
 
 **Get actual binary name:**
 ```go
-binaryName := filepath.Base(os.Args[0])  // Use for display
+// Use for display
+binaryName := filepath.Base(os.Args[0])
 // User-Agent uses hardcoded project name, not binaryName
 ```
 
@@ -9857,7 +10007,8 @@ func EmojiEnabled() bool {
 **Config override:** To keep emojis enabled even when NO_COLOR is set:
 ```yaml
 output:
-  emoji: true  # Force emojis on (overrides NO_COLOR for emojis only)
+  # Force emojis on (overrides NO_COLOR for emojis only)
+  emoji: true
 ```
 
 **Note:** For disabling ALL ANSI escapes (not just colors), use `TERM=dumb`. See PART 7 "TERM=dumb Handling".
@@ -9877,8 +10028,10 @@ NO_COLOR=1 {project_name} --status --color=yes
 {project_name} --status --color=no
 
 # Verify no escape codes or emojis in output
-NO_COLOR=1 {project_name} --status | cat -v   # No ^[ sequences
-NO_COLOR=1 {project_name} --status | grep -E '✅|❌|⚠️|🚀'  # Should find nothing
+# No ^[ sequences
+NO_COLOR=1 {project_name} --status | cat -v
+# Should find nothing
+NO_COLOR=1 {project_name} --status | grep -E '✅|❌|⚠️|🚀'
 ```
 
 **THESE SERVER COMMANDS CANNOT BE CHANGED. This is the complete command set.**
@@ -9886,36 +10039,57 @@ NO_COLOR=1 {project_name} --status | grep -E '✅|❌|⚠️|🚀'  # Should fin
 ## Server Binary Commands
 
 ```bash
---help                       # Show help (can be run by anyone)
---version                    # Show version (can be run by anyone)
---shell completions [SHELL]  # Print shell completions (auto-detect if SHELL omitted)
---shell init [SHELL]         # Print shell init for eval (auto-detect if SHELL omitted)
---mode {production|development}  # Set application mode
---config {config_dir}         # Set config directory
---data {data_dir}             # Set data directory
---cache {cache_dir}           # Set cache directory
---log {log_dir}               # Set log directory
---backup {backup_dir}         # Set backup directory
---pid {pid_file}              # Set PID file path
---address {listen}           # Set listen address
---port {port}                # Set the port
---baseurl {path}             # Set URL path prefix (default: /)
---status                     # Show status and health (exit 0=healthy, 1=unhealthy)
+# Show help (can be run by anyone)
+--help
+# Show version (can be run by anyone)
+--version
+# Print shell completions (auto-detect if SHELL omitted)
+--shell completions [SHELL]
+# Print shell init for eval (auto-detect if SHELL omitted)
+--shell init [SHELL]
+# Set application mode
+--mode {production|development}
+# Set config directory
+--config {config_dir}
+# Set data directory
+--data {data_dir}
+# Set cache directory
+--cache {cache_dir}
+# Set log directory
+--log {log_dir}
+# Set backup directory
+--backup {backup_dir}
+# Set PID file path
+--pid {pid_file}
+# Set listen address
+--address {listen}
+# Set the port
+--port {port}
+# Set URL path prefix (default: /)
+--baseurl {path}
+# Show status and health (exit 0=healthy, 1=unhealthy)
+--status
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
---daemon                     # Daemonize (detach from terminal)
---debug                      # Enable debug mode (verbose logging, debug endpoints)
---color {auto|yes|no}        # Color output (default: auto, respects NO_COLOR)
---lang {code}                # Language for output (default: auto, from LANG env)
---maintenance {backup,restore,update,mode,setup,--help} [optional-file-or-setting]
---update [check|yes|branch {stable|beta|daily}|--help]  # Check/perform updates
---shell {completions,init,--help} [SHELL]  # Shell integration
+# Daemonize (detach from terminal)
+--daemon
+# Enable debug mode (verbose logging, debug endpoints)
+--debug
+# Color output (default: auto, respects NO_COLOR)
+--color {auto|yes|no}
+# Language for output (default: auto, from LANG env)
+--lang {code}
+--maintenance {backup,restore,update,mode,setup,pgp,--help} [optional-file-or-setting-or-action]
+# Check/perform updates
+--update [check|yes|branch {stable|beta|daily}|--help]
+# Shell integration
+--shell {completions,init,--help} [SHELL]
 ```
 
 ### Server --help Output
 
 ```bash
 $ {project_name} --help
-{project_name} {projectversion} - {project description}
+{project_name} {project_version} - {project description}
 
 Usage:
   {project_name} [flags]
@@ -10459,9 +10633,12 @@ PHASE 5: Server startup (actual server start)
 func isContainer() bool {
     // File-based detection
     containerFiles := []string{
-        "/.dockerenv",           // Docker
-        "/run/.containerenv",    // Podman
-        "/dev/lxc",              // LXC/LXD/Incus
+        // Docker
+        "/.dockerenv",
+        // Podman
+        "/run/.containerenv",
+        // LXC/LXD/Incus
+        "/dev/lxc",
     }
     for _, f := range containerFiles {
         if _, err := os.Stat(f); err == nil {
@@ -10471,10 +10648,12 @@ func isContainer() bool {
 
     // Environment variable detection
     if os.Getenv("container") != "" {
-        return true  // Generic (systemd-nspawn, lxc, etc.)
+        // Generic (systemd-nspawn, lxc, etc.)
+        return true
     }
     if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
-        return true  // Kubernetes
+        // Kubernetes
+        return true
     }
 
     // Check parent process name for container init systems
@@ -11015,7 +11194,7 @@ The app automatically watches config files and hot-reloads what it can. Settings
 
 | Setting Category | Examples |
 |------------------|----------|
-| Rate limits | `ratelimit.*` |
+| Rate limits | `rate_limit.*` |
 | CORS settings | `cors.*` |
 | Branding/SEO | `branding.*`, `seo.*` |
 | Logging level | `logging.level` |
@@ -11167,15 +11346,19 @@ database:
   # Primary: remote libsql/Turso database
   primary:
     driver: libsql
-    url: ${DATABASE_URL}  # libsql://your-db.turso.io?authToken=${TURSO_AUTH_TOKEN}
+    # libsql://your-db.turso.io?authToken=${TURSO_AUTH_TOKEN}
+    url: ${DATABASE_URL}
 
   # Local SQLite cache for fast reads and offline resilience
   cache:
     enabled: true
     path: ${DATA_DIR}/db/cache.db
-    sync_interval: 30s     # Sync from remote
-    offline_mode: true     # Continue working if remote unavailable
-    max_age: 1h            # Max cache age before forcing remote
+    # Sync from remote
+    sync_interval: 30s
+    # Continue working if remote unavailable
+    offline_mode: true
+    # Max cache age before forcing remote
+    max_age: 1h
 ```
 
 When enabled:
@@ -11217,16 +11400,21 @@ func OpenDatabase(cfg *Config) (*Database, error) {
 
 -- Config key-value storage (mirrors YAML structure as flat keys)
 CREATE TABLE IF NOT EXISTS config (
-    key         TEXT PRIMARY KEY,              -- Dot notation: "server.port", "ssl.enabled"
-    value       TEXT NOT NULL,                 -- JSON-encoded value (string, number, bool, array)
-    type        TEXT NOT NULL DEFAULT 'string', -- string, number, bool, array, object
+    -- Dot notation: "server.port", "ssl.enabled"
+    key         TEXT PRIMARY KEY,
+    -- JSON-encoded value (string, number, bool, array)
+    value       TEXT NOT NULL,
+    -- string, number, bool, array, object
+    type        TEXT NOT NULL DEFAULT 'string',
     updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
 -- Config metadata for change detection
 CREATE TABLE IF NOT EXISTS config_meta (
-    id          INTEGER PRIMARY KEY CHECK (id = 1),  -- Single row
-    version     INTEGER NOT NULL DEFAULT 1,          -- Incremented on any change
+    -- Single row
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    -- Incremented on any change
+    version     INTEGER NOT NULL DEFAULT 1,
     updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
@@ -11250,7 +11438,8 @@ CREATE INDEX IF NOT EXISTS idx_config_key_prefix ON config(key);
 -- Rate Limiting (sliding window counters)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS rate_limits (
-    key         TEXT PRIMARY KEY,              -- "ip:1.2.3.4:login" or "key:abc12345:global" (prefix, not hash)
+    -- "ip:1.2.3.4:login" or "key:abc12345:global" (prefix, not hash)
+    key         TEXT PRIMARY KEY,
     count       INTEGER NOT NULL DEFAULT 1,
     window_start INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
@@ -11267,14 +11456,21 @@ CREATE INDEX IF NOT EXISTS idx_rate_limits_window ON rate_limits(window_start);
 CREATE TABLE IF NOT EXISTS audit_log (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp   INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    level       TEXT NOT NULL DEFAULT 'info',  -- info, warning, error, security
-    category    TEXT NOT NULL,                 -- config, api, system, security
-    action      TEXT NOT NULL,                 -- config_change, rate_limit_hit, etc.
-    actor_ip    TEXT,                          -- originating IP address
-    target_type TEXT,                          -- config, endpoint, etc.
+    -- info, warning, error, security
+    level       TEXT NOT NULL DEFAULT 'info',
+    -- config, api, system, security
+    category    TEXT NOT NULL,
+    -- config_change, rate_limit_hit, etc.
+    action      TEXT NOT NULL,
+    -- originating IP address
+    actor_ip    TEXT,
+    -- config, endpoint, etc.
+    target_type TEXT,
     target_id   TEXT,
-    details     TEXT,                          -- JSON with additional context
-    success     INTEGER NOT NULL DEFAULT 1     -- 1=success, 0=failure
+    -- JSON with additional context
+    details     TEXT,
+    -- 1=success, 0=failure
+    success     INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
@@ -11286,14 +11482,21 @@ CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)
 -- Scheduler (background task tracking)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS scheduler_tasks (
-    id          TEXT PRIMARY KEY,              -- Task name: "backup_daily", "backup_hourly", "geoip_update", "cleanup"
-    name        TEXT NOT NULL,                 -- Human-readable: "Daily Backup", "Hourly Incremental"
+    -- Task name: "backup_daily", "backup_hourly", "geoip_update", "cleanup"
+    id          TEXT PRIMARY KEY,
+    -- Human-readable: "Daily Backup", "Hourly Incremental"
+    name        TEXT NOT NULL,
     enabled     INTEGER NOT NULL DEFAULT 1,
-    schedule    TEXT NOT NULL,                 -- Cron expression: "0 2 * * *"
-    last_run    INTEGER,                       -- Unix timestamp
-    next_run    INTEGER,                       -- Unix timestamp
-    last_status TEXT,                          -- success, failed, running, skipped
-    last_error  TEXT,                          -- Error message if failed
+    -- Cron expression: "0 2 * * *"
+    schedule    TEXT NOT NULL,
+    -- Unix timestamp
+    last_run    INTEGER,
+    -- Unix timestamp
+    next_run    INTEGER,
+    -- success, failed, running, skipped
+    last_status TEXT,
+    -- Error message if failed
+    last_error  TEXT,
     run_count   INTEGER NOT NULL DEFAULT 0,
     fail_count  INTEGER NOT NULL DEFAULT 0
 );
@@ -11303,7 +11506,8 @@ CREATE TABLE IF NOT EXISTS scheduler_history (
     task_id     TEXT NOT NULL,
     started_at  INTEGER NOT NULL,
     finished_at INTEGER,
-    status      TEXT NOT NULL,                 -- running, success, failed
+    -- running, success, failed
+    status      TEXT NOT NULL,
     error       TEXT,
     duration_ms INTEGER
 );
@@ -11324,12 +11528,16 @@ CREATE INDEX IF NOT EXISTS idx_scheduler_history_started ON scheduler_history(st
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS backups (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    filename    TEXT NOT NULL UNIQUE,          -- "backup-2025-01-15-103045.tar.gz"
-    filepath    TEXT NOT NULL,                 -- Full path
+    -- "backup-2025-01-15-103045.tar.gz"
+    filename    TEXT NOT NULL UNIQUE,
+    -- Full path
+    filepath    TEXT NOT NULL,
     size_bytes  INTEGER NOT NULL,
-    type        TEXT NOT NULL DEFAULT 'auto',  -- auto, manual, pre_update
+    -- auto, manual, pre_update
+    type        TEXT NOT NULL DEFAULT 'auto',
     created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    checksum    TEXT,                          -- SHA256
+    -- SHA256
+    checksum    TEXT,
     notes       TEXT
 );
 
@@ -11342,15 +11550,22 @@ CREATE INDEX IF NOT EXISTS idx_backups_created ON backups(created_at);
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS api_tokens (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    token_hash    TEXT NOT NULL UNIQUE,            -- SHA-256 of raw token; NEVER store plaintext
-    token_prefix  TEXT NOT NULL,                   -- First 12 chars for log identification (tok_xxxxxxxx)
-    resource_type TEXT NOT NULL,                   -- Project-defined type: "paste", "upload", "link", etc.
-    resource_id   TEXT NOT NULL,                   -- ID of the resource this token owns
+    -- SHA-256 of raw token; NEVER store plaintext
+    token_hash    TEXT NOT NULL UNIQUE,
+    -- First 12 chars for log identification (tok_xxxxxxxx)
+    token_prefix  TEXT NOT NULL,
+    -- Project-defined type: "paste", "upload", "link", etc.
+    resource_type TEXT NOT NULL,
+    -- ID of the resource this token owns
+    resource_id   TEXT NOT NULL,
     created_at    INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    expires_at    INTEGER,                         -- NULL = never expires
+    -- NULL = never expires
+    expires_at    INTEGER,
     last_used_at  INTEGER,
-    revoked_at    INTEGER,                         -- NULL = active
-    revoked_reason TEXT                            -- e.g., "tos_violation", "operator_action"
+    -- NULL = active
+    revoked_at    INTEGER,
+    -- e.g., "tos_violation", "operator_action"
+    revoked_reason TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_hash     ON api_tokens(token_hash);
@@ -11368,13 +11583,17 @@ INSERT INTO config (key, value, type) VALUES
     ('server.port', '8080', 'number'),
     ('server.address', '"0.0.0.0"', 'string'),
     ('ssl.enabled', 'true', 'bool'),
-    ('ssl.cert', '""', 'string'),                    -- Empty = auto-detect
-    ('ssl.key', '""', 'string'),                     -- Empty = auto-detect
+    -- Empty = auto-detect
+    ('ssl.cert', '""', 'string'),
+    -- Empty = auto-detect
+    ('ssl.key', '""', 'string'),
     ('ssl.min_version', '"TLS1.2"', 'string'),
     ('cors.allowed_origins', '["https://example.com","https://api.example.com"]', 'array'),
-    ('ratelimit.requests_per_minute', '0', 'number'),  -- 0 = use project default from IDEA.md
+    -- per minute per IP (see server.rate_limit.*)
+    ('rate_limit.read.requests', '120', 'number'),
     ('branding.site_name', '"My App"', 'string'),
-    ('server.token', '"tok_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"', 'string');  -- auto-generated if blank
+    -- auto-generated if blank
+    ('server.token', '"tok_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"', 'string');
 ```
 
 ### API Token Model
@@ -11401,7 +11620,8 @@ Declared in `server.yml` under `server.token`. Auto-generated and written back t
 
 ```yaml
 server:
-  token: tok_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # auto-generated if blank
+  # auto-generated if blank
+  token: tok_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 **Not stored in `api_tokens` DB table.** Validated by SHA-256-hashing the inbound token and comparing against `SHA-256(server.token)` with `subtle.ConstantTimeCompare`. The hash is cached in memory at startup — never written to the DB.
@@ -11580,12 +11800,14 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
         response.Status = "restart_required"
         response.PendingRestart = true
         response.RestartReason = configManager.RestartSettings()
-        w.WriteHeader(http.StatusOK) // Still healthy, just needs restart
+        // Still healthy, just needs restart
+        w.WriteHeader(http.StatusOK)
     } else {
         w.WriteHeader(http.StatusOK)
     }
 
-    respondWithFormat(w, r, response) // PART 14 content negotiation
+    // PART 14 content negotiation
+    respondWithFormat(w, r, response)
 }
 
 // buildHealthResponse collects ALL dynamic data for /server/healthz
@@ -11601,9 +11823,11 @@ func buildHealthResponse() *HealthResponse {
         },
 
         // Basic status
-        Status:    getOverallStatus(), // "healthy", "unhealthy", "degraded"
+        // "healthy", "unhealthy", "degraded"
+        Status:    getOverallStatus(),
         Version:   version.Version,
-        Mode:      cfg.Server.Mode, // "production" or "development"
+        // "production" or "development"
+        Mode:      cfg.Server.Mode,
         Uptime:    formatUptime(startTime),
         Timestamp: time.Now().UTC(),
         GoVersion: runtime.Version(),
@@ -11620,15 +11844,18 @@ func buildHealthResponse() *HealthResponse {
             Tor: TorInfo{
                 Enabled:  cfg.Features.Tor.Enabled,
                 Running:  torManager.IsRunning(),
-                Status:   torManager.Status(),   // "healthy", "error:..."
-                Hostname: torManager.Hostname(), // "abc123.onion"
+                // "healthy", "error:..."
+                Status:   torManager.Status(),
+                // "abc123.onion"
+                Hostname: torManager.Hostname(),
             },
             // NOTE: Do NOT include Metrics here - internal endpoint
         },
 
         // Component checks (ok/error only - no details)
         Checks: ChecksInfo{
-            Database:  checkDatabase(),  // "ok" or "error"
+            // "ok" or "error"
+            Database:  checkDatabase(),
             Cache:     checkCache(),
             Disk:      checkDisk(),
             Scheduler: checkScheduler(),
@@ -11671,14 +11898,21 @@ func (m *ConfigManager) ClearPendingRestart() {
 
 **Health Check Responses:**
 
+Normal operation:
+
 ```json
-// Normal operation
 {"status": "ok"}
+```
 
-// Restart required (service running but config changed)
+Restart required (service running but config changed):
+
+```json
 {"status": "restart_required", "pending_restart": true, "restart_reason": ["ssl.enabled", "server.port"]}
+```
 
-// Shutting down
+Shutting down:
+
+```json
 {"status": "shutting_down"}
 ```
 
@@ -11827,7 +12061,8 @@ func systemBackupDir() string {
         return filepath.Join(os.Getenv("ProgramData"), "Backups", projectOrg, projectName)
     case "freebsd", "openbsd", "netbsd":
         return filepath.Join("/var/backups", projectOrg, projectName)
-    default: // linux
+    // linux
+    default:
         return filepath.Join("/mnt/Backups", projectOrg, projectName)
     }
 }
@@ -11843,7 +12078,8 @@ func userBackupDir() string {
         return filepath.Join(home, "Library/Backups", projectOrg, projectName)
     case "windows":
         return filepath.Join(os.Getenv("LOCALAPPDATA"), "Backups", projectOrg, projectName)
-    default: // linux, bsd
+    // linux, bsd
+    default:
         return filepath.Join(home, ".local/share/Backups", projectOrg, projectName)
     }
 }
@@ -11882,10 +12118,14 @@ services:
       - --pid=/run/{internal_name}.pid
       - --port=8080
     volumes:
-      - config:/config:ro          # Config (read-only)
-      - data:/data                 # Data (read-write)
-      - logs:/logs                 # Logs (read-write)
-      - /var/run:/run:z            # PID file
+      # Config (read-only)
+      - config:/config:ro
+      # Data (read-write)
+      - data:/data
+      # Logs (read-write)
+      - logs:/logs
+      # PID file
+      - /var/run:/run:z
     ports:
       - "8080:8080"
 ```
@@ -12871,7 +13111,8 @@ var schemaUpdates = []string{
 // isColumnExistsError checks if error is "column already exists"
 func isColumnExistsError(err error) bool {
     msg := err.Error()
-    return strings.Contains(msg, "duplicate column") // SQLite and libsql
+    // SQLite and libsql
+    return strings.Contains(msg, "duplicate column")
 }
 ```
 
@@ -12901,12 +13142,14 @@ func (p *Paste) GetSlug() string {
     if p.Slug != "" {
         return p.Slug
     }
-    return p.Name  // Fallback to old column
+    // Fallback to old column
+    return p.Name
 }
 
 func (p *Paste) SetSlug(slug string) {
     p.Slug = slug
-    p.Name = slug  // Keep old column in sync
+    // Keep old column in sync
+    p.Name = slug
 }
 
 // Step 3: After server upgraded, old column ignored (v1.5.0+)
@@ -12942,18 +13185,24 @@ if err != nil && !isColumnExistsError(err) {
 ```yaml
 server:
   database:
-    driver: sqlite           # or "libsql" for Turso remote
-    url: "{data_dir}/db/{internal_name}.db"  # auto-created; omit for default
+    # or "libsql" for Turso remote
+    driver: sqlite
+    # auto-created; omit for default
+    url: "{data_dir}/db/{internal_name}.db"
     # For Turso remote:
     # driver: libsql
     # url: libsql://your-db-name.turso.io?authToken=${TURSO_AUTH_TOKEN}
 
     # Connection pool settings (libsql/remote only; SQLite uses single writer)
     pool:
-      max_open: 5         # SQLite: 1 writer + readers; libsql: adjust as needed
-      max_idle: 2         # Max idle connections
-      max_lifetime: 5m    # Max connection lifetime
-      max_idle_time: 1m   # Max idle time before close
+      # SQLite: 1 writer + readers; libsql: adjust as needed
+      max_open: 5
+      # Max idle connections
+      max_idle: 2
+      # Max connection lifetime
+      max_lifetime: 5m
+      # Max idle time before close
+      max_idle_time: 1m
 ```
 
 ### Pool Sizing Guidelines
@@ -13100,7 +13349,8 @@ func TransferFunds(ctx context.Context, db *sql.DB, from, to int, amount float64
 type User struct {
     ID        int
     Name      string
-    Version   int  // Optimistic lock version
+    // Optimistic lock version
+    Version   int
 }
 
 func UpdateUser(ctx context.Context, db *sql.DB, user *User) error {
@@ -13526,14 +13776,18 @@ web:
     accelerometer: "()"
     ambient-light-sensor: "()"
     battery: "()"
-    camera: "()"            # mapping/video-chat/voice projects: set to "(self)"
-    display-capture: "()"   # screen-share projects: set to "(self)"
-    geolocation: "()"       # location-aware projects: set to "(self)"
+    # mapping/video-chat/voice projects: set to "(self)"
+    camera: "()"
+    # screen-share projects: set to "(self)"
+    display-capture: "()"
+    # location-aware projects: set to "(self)"
+    geolocation: "()"
     gyroscope: "()"
     hid: "()"
     idle-detection: "()"
     magnetometer: "()"
-    microphone: "()"        # voice/video projects: set to "(self)"
+    # voice/video projects: set to "(self)"
+    microphone: "()"
     midi: "()"
     screen-wake-lock: "()"
     serial: "()"
@@ -13554,7 +13808,8 @@ web:
     fullscreen: "(self)"
     payment: "(self)"
     picture-in-picture: "(self)"
-    publickey-credentials-get: "(self)"   # WebAuthn / Passkeys
+    # WebAuthn / Passkeys
+    publickey-credentials-get: "(self)"
     storage-access: "(self)"
     web-share: "(self)"
 ```
@@ -13570,18 +13825,24 @@ web:
 ```yaml
 web:
   hsts:
-    enabled: true                      # default true. Set false only for HTTP-only deployments.
-    max_age_seconds: 63072000          # default 2 years (preload-list eligible).
-    include_subdomains: true           # default true.
-    preload: true                      # default true. See HSTS preload caveat above.
+    # default true. Set false only for HTTP-only deployments.
+    enabled: true
+    # default 2 years (preload-list eligible).
+    max_age_seconds: 63072000
+    # default true.
+    include_subdomains: true
+    # default true. See HSTS preload caveat above.
+    preload: true
 
   permissions_policy:
     # Per-feature config — see "Permissions-Policy Configuration" below.
 
   reports:
     # Public reports endpoints (PART 14 → "Public Reports Scope").
-    rate_limit_per_minute: 60          # max reports/min/IP across all report types
-    rate_limit_per_ip_burst: 10        # short-burst allowance
+    # max reports/min/IP across all report types
+    rate_limit_per_minute: 60
+    # short-burst allowance
+    rate_limit_per_ip_burst: 10
 
   csrf:
     # See "CSRF Protection" below for full schema.
@@ -13594,25 +13855,38 @@ web:
 
   headers:
     # Modern / privacy / cross-origin headers — see subsections below.
-    coop: "unsafe-none"                # Cross-Origin-Opener-Policy
-    coep: "unsafe-none"                # Cross-Origin-Embedder-Policy
-    corp: "cross-origin"               # Cross-Origin-Resource-Policy
-    origin_agent_cluster: true         # emit "Origin-Agent-Cluster: ?1"
-    cross_domain_policies: "none"      # X-Permitted-Cross-Domain-Policies
-    dns_prefetch_control: ""           # "" = omit (browser default); "off" = privacy-strict
-    honor_sec_gpc: true                # treat Sec-GPC: 1 as opt-out signal
-    honor_dnt: false                   # DNT is dead in modern browsers — off by default
-    sec_fetch_validation: true         # reject cross-site state-changers (CSRF defense layer)
-    server_timing_in_debug_only: true  # never emit Server-Timing in production
+    # Cross-Origin-Opener-Policy
+    coop: "unsafe-none"
+    # Cross-Origin-Embedder-Policy
+    coep: "unsafe-none"
+    # Cross-Origin-Resource-Policy
+    corp: "cross-origin"
+    # emit "Origin-Agent-Cluster: ?1"
+    origin_agent_cluster: true
+    # X-Permitted-Cross-Domain-Policies
+    cross_domain_policies: "none"
+    # "" = omit (browser default); "off" = privacy-strict
+    dns_prefetch_control: ""
+    # treat Sec-GPC: 1 as opt-out signal
+    honor_sec_gpc: true
+    # DNT is dead in modern browsers — off by default
+    honor_dnt: false
+    # reject cross-site state-changers (CSRF defense layer)
+    sec_fetch_validation: true
+    # never emit Server-Timing in production
+    server_timing_in_debug_only: true
     clear_site_data:
       on_token_revocation: true
       on_consent_withdrawal: true
-      execution_contexts: false        # set true to also reload SPA tabs on token revocation
+      # set true to also reload SPA tabs on token revocation
+      execution_contexts: false
     nel:
       enabled: true
-      max_age_seconds: 2592000         # 30 days
+      # 30 days
+      max_age_seconds: 2592000
       include_subdomains: true
-      sample_rate: 1.0                 # 0.0..1.0 — sample failures to control volume
+      # 0.0..1.0 — sample failures to control volume
+      sample_rate: 1.0
 ```
 
 ## Cross-Origin Isolation Headers
@@ -13766,23 +14040,34 @@ report-uri /api/{api_version}/server/reports/csp
 ```yaml
 web:
   csp:
-    enabled: true                     # default: true
-    mode: enforce                     # enforce | report-only
+    # default: true
+    enabled: true
+    # enforce | report-only
+    mode: enforce
     # Per-directive append — these strings are added to the default value.
     # Operator never has to redefine the whole policy.
-    script_src_extra: ""              # e.g. "https://js.stripe.com https://www.google.com/recaptcha/"
-    style_src_extra: ""               # e.g. "https://fonts.googleapis.com"
-    img_src_extra: ""                 # rarely needed — default already covers https:
-    font_src_extra: ""                # rarely needed — default already covers https:
-    connect_src_extra: ""             # e.g. "https://api.stripe.com wss://realtime.example.com"
-    frame_src_extra: ""               # e.g. "https://www.youtube.com https://player.vimeo.com https://js.stripe.com"
-    form_action_extra: ""             # e.g. "https://accounts.google.com" for OAuth submit
+    # e.g. "https://js.stripe.com https://www.google.com/recaptcha/"
+    script_src_extra: ""
+    # e.g. "https://fonts.googleapis.com"
+    style_src_extra: ""
+    # rarely needed — default already covers https:
+    img_src_extra: ""
+    # rarely needed — default already covers https:
+    font_src_extra: ""
+    # e.g. "https://api.stripe.com wss://realtime.example.com"
+    connect_src_extra: ""
+    # e.g. "https://www.youtube.com https://player.vimeo.com https://js.stripe.com"
+    frame_src_extra: ""
+    # e.g. "https://accounts.google.com" for OAuth submit
+    form_action_extra: ""
     # Override-style: REPLACE the directive instead of appending. Use sparingly.
     script_src_override: ""
     # ... (mirror for every directive)
     # Reporting
-    reports_enabled: true             # POST violations to /api/{api_version}/server/reports/csp
-    reports_sample_rate: 1.0          # 0.0 .. 1.0 — sample to control volume on busy sites
+    # POST violations to /api/{api_version}/server/reports/csp
+    reports_enabled: true
+    # 0.0 .. 1.0 — sample to control volume on busy sites
+    reports_sample_rate: 1.0
 ```
 
 **Auto-detection:** `connect-src`, `frame-ancestors`, and `form-action` automatically pick up DOMAIN env entries and reverse-proxy-detected hosts (same resolution order as CORS — see PART 16). Operator does NOT have to list their own domain in `connect_src_extra`.
@@ -13847,10 +14132,14 @@ The middleware substitutes `{request_nonce}` per response and adds the same nonc
 type TargetType int
 
 const (
-    TargetUnknown       TargetType = iota // Unknown/invalid target
-    TargetPublic                          // Public routes (/, /api/{api_version}/, project-specific like /jokes, /weather, /ip)
-    TargetServerPages                     // Server pages - about, help, contact, privacy (/server/*, /api/{api_version}/server/*)
-    TargetServer                          // Server administration routes (/api/{api_version}/server/*)
+    // Unknown/invalid target
+    TargetUnknown       TargetType = iota
+    // Public routes (/, /api/{api_version}/, project-specific like /jokes, /weather, /ip)
+    TargetPublic
+    // Server pages - about, help, contact, privacy (/server/*, /api/{api_version}/server/*)
+    TargetServerPages
+    // Server administration routes (/api/{api_version}/server/*)
+    TargetServer
 )
 ```
 
@@ -13863,14 +14152,16 @@ func extractContextFromPath(path string) (*Context, error) {
     // /api/{api_version}/server/* → Server info / operator-token-protected endpoints
     // /api/{api_version}/{resource}/* → Public routes (project-specific: jokes, weather, ip, etc.)
 
-    apiBase := APIBasePath() + "/" // e.g., "/api/{api_version}/"
+    // e.g., "/api/{api_version}/"
+    apiBase := APIBasePath() + "/"
     parts := strings.Split(strings.TrimPrefix(path, apiBase), "/")
     if len(parts) == 0 {
         return &Context{Type: TargetPublic}, nil
     }
 
     switch parts[0] {
-    case "": // Root /api/{api_version}/
+    // Root /api/{api_version}/
+    case "":
         return &Context{Type: TargetPublic}, nil
     case "server":
         // /api/{api_version}/server/* - server info and operator-token-protected endpoints
@@ -13983,7 +14274,10 @@ web:
 
 ```
 # Served at /.well-known/security.txt
+# Contact lines are listed in order of preference (RFC 9116)
 
+Contact: {report_url}
+Contact: https://{fqdn}/server/contact?security_id={security_id}
 Contact: mailto:{security_contact}
 Expires: {expiry_date}
 ```
@@ -13992,26 +14286,36 @@ Expires: {expiry_date}
 ```yaml
 web:
   security:
-    contact: "security@{fqdn}"    # Security contact email
-    expires: "{1year}"            # Auto-calculated 1 year from generation
+    # Primary contact — GitHub private vulnerability reporting
+    report_url: "https://github.com/{project_org}/{project_name}/security/advisories/new"
+    # Secondary/CC contact email — never the primary reporting channel
+    contact: "security@{fqdn}"
+    # Auto-calculated 1 year from generation
+    expires: "{1year}"
   well_known:
-    unsupported_behavior: 404     # Unknown entries never redirect
+    # Unknown entries never redirect
+    unsupported_behavior: 404
     webfinger:
-      enabled: false              # Enable only if project publishes acct: identities/federation
+      # Enable only if project publishes acct: identities/federation
+      enabled: false
     openid_configuration:
-      enabled: false              # Enable only if project is an OIDC provider
+      # Enable only if project is an OIDC provider
+      enabled: false
     assetlinks:
-      enabled: false              # Enable only for Android App Links/native association
+      # Enable only for Android App Links/native association
+      enabled: false
     apple_app_site_association:
-      enabled: false              # Enable only for Apple Universal Links/WebCredentials
+      # Enable only for Apple Universal Links/WebCredentials
+      enabled: false
     mta_sts:
-      enabled: false              # Enable only if this host owns inbound mail policy
+      # Enable only if this host owns inbound mail policy
+      enabled: false
 ```
 
 **Fields:**
 | Field | Required | Description |
 |-------|----------|-------------|
-| `Contact` | YES | Email for reporting vulnerabilities (mailto: prefix added automatically) |
+| `Contact` | YES | One or more lines in order of preference (RFC 9116): first the repo's GitHub private vulnerability reporting URL (`web.security.report_url`), then the instance security-report form (`/server/contact?security_id={id}`, auto-generated — see "Security Reports"), last the `mailto:` CC address (prefix added automatically) |
 | `Expires` | YES | Expiration date (auto-renewed yearly by default) |
 
 ### llms.txt (AI Discovery)
@@ -14028,14 +14332,12 @@ llms.txt tells AI agents (Claude, GPT, etc.) what the application does, what API
 
 ## API
 Base URL: {app_url}/api/{api_version}
-Authentication: Bearer token (obtain via /api/{api_version}/auth/token)
+Authentication: Bearer token (server token from server.yml, or resource owner token issued on resource creation)
 Rate limit: {rate_limit} requests/minute
 
 ## Endpoints
-- GET /health - Health check (no auth)
-- GET /info - Server information (no auth)
-- POST /auth/token - Obtain API token
-- GET /users/me - Current user profile
+- GET /server/healthz - Health check (no auth)
+- GET /server/about - Server information (no auth)
 - ... (auto-generated from route definitions)
 
 ## Capabilities
@@ -14052,10 +14354,14 @@ Security: {security_contact}
 ```yaml
 web:
   llms:
-    enabled: true                    # Serve llms.txt (default: true)
-    include_endpoints: true          # Auto-generate endpoint list from routes
-    include_schemas: false           # Include request/response schemas (verbose)
-    custom_sections: []              # Additional custom sections
+    # Serve llms.txt (default: true)
+    enabled: true
+    # Auto-generate endpoint list from routes
+    include_endpoints: true
+    # Include request/response schemas (verbose)
+    include_schemas: false
+    # Additional custom sections
+    custom_sections: []
 ```
 
 **Auto-Generation Rules:**
@@ -14070,7 +14376,8 @@ web:
 |------------|----------|--------|
 | Public API (`/api/**`) | Yes | AI agents can use these |
 | Authenticated API (`/api/**` + auth) | Yes | Note auth requirement |
-| Health/metrics (`/healthz`, `/metrics`) | Yes | Useful for monitoring agents |
+| Health (`/server/healthz`) | Yes | Useful for monitoring agents |
+| Metrics (`/metrics`) | No | Operational/internal endpoint; never advertised |
 
 **Well-Known Support Matrix Update:**
 
@@ -14103,6 +14410,8 @@ web:
 ## Security Reports — Coordinated Disclosure Pipeline
 
 **End-to-end flow for a security researcher reporting a vulnerability, integrated with the existing `/server/contact` form so researchers don't need to learn a new submission system.**
+
+Repo-level (source-code) vulnerabilities are reported primarily via GitHub private vulnerability reporting (see `.github/SECURITY.md` and `web.security.report_url`). This pipeline covers reports against a deployed instance; its email notifications are the CC path, never the primary channel.
 
 ### `{security_id}` — Rotating One-Shot Token
 
@@ -14172,19 +14481,21 @@ web:
 | **Runtime defense** — IP blocks, allow-lists, token revocation | Configured via config file; see PART 11 → "IP Block Management" |
 | **`security.txt` content** — `Expires`, languages, keyservers list | Configured via `web.security.*` config keys |
 
-### GPG Keypair Management (operator CLI / `server.token`)
+### GPG Keypair Management (`--maintenance pgp` / `server.token`)
 
 **One project-level GPG keypair. Used to encrypt incoming security reports at rest, sign outbound notifications, and seed the `Encryption:` line in security.txt.**
 
-| Action | Behavior |
-|--------|----------|
-| **Generate** | Generates an Ed25519 (signing) + Curve25519 (encryption) keypair. Identity is `{app_name} Security <{security_contact}>`. Expires 2 years from generation. Private key is encrypted with a key derived from `installation_secret` and stored in `{config_dir}/security/pgp.priv.asc.enc`. Public key stored at `{config_dir}/security/pgp.pub.asc` (also served at `/.well-known/pgp-key.asc`). |
-| **Rotate** | Generates a new keypair, signs the new pubkey with the old key, publishes the rotation to configured keyservers. Old key stays valid for 30 days for in-flight reports. |
-| **Publish to keyservers** | POST the public key to each entry in `web.security.keyservers`. Uses the keyserver's HTTP submission endpoint (`https://keys.openpgp.org/vks/v1/upload` for keys.openpgp.org, similar for ubuntu). Triggered automatically on generate/rotate; manually via "Republish" button. Failures are logged + retried with exponential backoff. |
-| **Export public key** | Use the public URL `/.well-known/pgp-key.asc` or copy `{config_dir}/security/pgp.pub.asc` directly. |
-| **Export private key** | **Full export, ASCII-armored, decrypted with the operator's confirmation password.** Triggers a sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt operator password, log to `audit.log` as `security.private_key_exported`, return the file as a single download. **The download is rate-limited to 1 per hour per operator and the audit entry includes operator IP and reason text the operator must type.** |
-| **Import private key** | Upload an existing `pgp.priv.asc` (e.g., restoring from backup, migrating from another instance). Same sensitive-operation gate. Validates the key's identity matches the project's expected identity (warns on mismatch — operator can override). |
-| **Delete** | Sensitive-operation flow. Deletes both keys, sets `web.security.publish_pgp_key: false`, removes `Encryption:` line from security.txt. In-flight encrypted reports become un-decryptable — operator warned and must type confirmation. |
+**There is no web UI and no admin API route for keypair management. All actions run through the existing `--maintenance` dispatcher (PART 5): `{project_name} --maintenance pgp <action>`, authorized like other sensitive operations (`server.token` OR root). This reuses an existing PART 8 flag — no new flag is added.**
+
+| Action | CLI | Behavior |
+|--------|-----|----------|
+| **Generate** | `--maintenance pgp generate` | Generates an Ed25519 (signing) + Curve25519 (encryption) keypair. Identity is `{app_name} Security <{security_contact}>`. Expires 2 years from generation. Private key is encrypted with a key derived from `installation_secret` and stored in `{config_dir}/security/pgp.priv.asc.enc`. Public key stored at `{config_dir}/security/pgp.pub.asc` (also served at `/.well-known/pgp-key.asc`). |
+| **Rotate** | `--maintenance pgp rotate` | Generates a new keypair, signs the new pubkey with the old key, publishes the rotation to configured keyservers. Old key stays valid for 30 days for in-flight reports. |
+| **Publish to keyservers** | `--maintenance pgp publish` | POST the public key to each entry in `web.security.keyservers`. Uses the keyserver's HTTP submission endpoint (`https://keys.openpgp.org/vks/v1/upload` for keys.openpgp.org, similar for ubuntu). Triggered automatically on generate/rotate; manually via `--maintenance pgp publish`. Failures are logged + retried with exponential backoff. |
+| **Export public key** | `--maintenance pgp export public [path]` | Use the public URL `/.well-known/pgp-key.asc`, copy `{config_dir}/security/pgp.pub.asc` directly, or write it to `[path]` (stdout if omitted) via the CLI. |
+| **Export private key** | `--maintenance pgp export private <path>` | **Full export, ASCII-armored, decrypted with the operator's confirmation password.** Triggers a sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt operator password, log to `audit.log` as `security.private_key_exported`, write the key to `<path>` with mode 0600. **The export is rate-limited to 1 per hour per operator and the audit entry includes operator IP and reason text the operator must type.** |
+| **Import private key** | `--maintenance pgp import <file>` | Import an existing `pgp.priv.asc` from a local file (e.g., restoring from backup, migrating from another instance). Same sensitive-operation gate. Validates the key's identity matches the project's expected identity (warns on mismatch — operator can override). |
+| **Delete** | `--maintenance pgp delete` | Sensitive-operation flow. Deletes both keys, sets `web.security.publish_pgp_key: false`, removes `Encryption:` line from security.txt. In-flight encrypted reports become un-decryptable — operator warned and must type confirmation. |
 
 **Keypair properties stored in DB (NOT the keys themselves — those are on disk):**
 
@@ -14566,17 +14877,24 @@ server:
       # Basic options (same as other logs)
       enabled: true
       filename: audit.log
-      format: json           # json only - must be machine-parseable
-      rotate: daily          # daily, weekly, monthly, NMB, or combined
-      keep: none             # none, N, Nd, Nw, Nm
+      # json only - must be machine-parseable
+      format: json
+      # daily, weekly, monthly, NMB, or combined
+      rotate: daily
+      # none, N, Nd, Nw, Nm
+      keep: none
       compress: false
 
       # What to log (event categories)
       events:
-        configuration: true   # Config changes
-        security: true        # Rate limit violations and security events
-        backup: true          # Backup/restore
-        server: true          # Server events (start, stop, maintenance)
+        # Config changes
+        configuration: true
+        # Rate limit violations and security events
+        security: true
+        # Backup/restore
+        backup: true
+        # Server events (start, stop, maintenance)
+        server: true
 
       # Sensitive data handling
       include_user_agent: true
@@ -14998,7 +15316,8 @@ server:
     abuse_detection:
       # Request flood: too many requests from same IP
       request_flood:
-        multiplier: 10       # 10x rate limit triggers flood detection
+        # 10x rate limit triggers flood detection
+        multiplier: 10
         block_duration: 1h
 
       # Auto-actions (all enabled by default)
@@ -15104,7 +15423,8 @@ type AllowlistEntry struct {
     // Human-readable label (required for clarity)
     Description string    `yaml:"description" json:"description"`
     AddedAt     time.Time `json:"added_at"`
-    AddedBy     string    `json:"added_by"`  // "operator" or "config" if from YAML
+    // "operator" or "config" if from YAML
+    AddedBy     string    `json:"added_by"`
 }
 ```
 
@@ -15171,7 +15491,8 @@ func IsAllowlisted(ctx context.Context) bool {
 func validateConfig(cfg *Config) {
     // Example: port must be 1-65535
     if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
-        randomPort := getRandomAvailablePort() // 64000-64999 range
+        // 64000-64999 range
+        randomPort := getRandomAvailablePort()
         log.Warnf("invalid port %d, using random port %d", cfg.Server.Port, randomPort)
         cfg.Server.Port = randomPort
     }
@@ -15195,7 +15516,8 @@ func validateConfig(cfg *Config) {
 
 ```yaml
 server:
-  baseurl: /              # Default: serve from root (auto-detects from reverse proxy)
+  # Default: serve from root (auto-detects from reverse proxy)
+  baseurl: /
   # baseurl: /myproject   # Serve from /myproject/*
   # baseurl: /api/v2      # Serve from /api/v2/*
 ```
@@ -15316,9 +15638,12 @@ server:
 server:
   trusted_proxies:
     additional:
-      - 203.0.113.10           # specific edge node
-      - 198.51.100.0/24        # CDN PoP block
-      - lb.internal.example    # DNS name, resolved every 5min
+      # specific edge node
+      - 203.0.113.10
+      # CDN PoP block
+      - 198.51.100.0/24
+      # DNS name, resolved every 5min
+      - lb.internal.example
 ```
 
 **On a public-facing direct deployment (no proxy in front)** leave `additional: []`. The X-Forwarded headers from random internet peers are then dropped, falling back to `r.Host` and `r.RemoteAddr` for URL construction — exactly the behavior we want.
@@ -15332,15 +15657,19 @@ server:
   rate_limit:
     enabled: true
     read:
-      requests: 120    # per minute per IP
+      # per minute per IP
+      requests: 120
       window: 60
     write:
-      requests: 10     # per minute per IP
+      # per minute per IP
+      requests: 10
       window: 60
     health:
-      requests: 120    # per minute per IP (health/status endpoints)
+      # per minute per IP (health/status endpoints)
+      requests: 120
       window: 60
-    global_burst: 240  # per minute per IP (absolute ceiling across all endpoint types)
+    # per minute per IP (absolute ceiling across all endpoint types)
+    global_burst: 240
 ```
 
 | Endpoint class | Default limit | Window | Notes |
@@ -15380,21 +15709,29 @@ server:
     admin:
       email: "admin@{fqdn}"
       webhooks:
-        telegram: ""        # https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT}
-        discord: ""         # https://discord.com/api/webhooks/{ID}/{TOKEN}
-        slack: ""           # https://hooks.slack.com/services/{T}/{B}/{X}
-        generic: ""         # any URL — POSTed JSON {role,event,subject,body,severity,timestamp}
+        # https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT}
+        telegram: ""
+        # https://discord.com/api/webhooks/{ID}/{TOKEN}
+        discord: ""
+        # https://hooks.slack.com/services/{T}/{B}/{X}
+        slack: ""
+        # any URL — POSTed JSON {role,event,subject,body,severity,timestamp}
+        generic: ""
 
     # ---- Security (vulnerability reports) ----
     # Recipient for incoming security reports. Public — surfaced in
     # security.txt's `Contact:` mailto and in the PGP keypair's UID.
+    # This email is the secondary/CC channel only: the primary
+    # reporting path is GitHub private vulnerability reporting
+    # (web.security.report_url), listed first in security.txt.
     # Default is "security@{fqdn}" per RFC 2142 (the canonical role
     # mailbox for security issues, also referenced by RFC 9116).
     # Operator can override to a personal address; if explicitly
     # set to "" it falls back to server.contact.admin.email
     # (and server.contact.admin.webhooks).
     security:
-      email: "security@{fqdn}"   # RFC 2142 standard role mailbox
+      # RFC 2142 standard role mailbox
+      email: "security@{fqdn}"
       webhooks:
         telegram: ""
         discord: ""
@@ -15407,7 +15744,8 @@ server:
     # exposes one.
     # If empty: falls back to server.contact.admin.email.
     general:
-      email: ""             # default: server.contact.admin.email
+      # default: server.contact.admin.email
+      email: ""
       webhooks:
         telegram: ""
         discord: ""
@@ -15481,7 +15819,7 @@ if !subtle.ConstantTimeCompare([]byte(got), []byte(want)) {
 | Field | Public exposure | Notes |
 |-------|------------------|-------|
 | `server.contact.admin.email` | NEVER public | Server-internal recipient only. |
-| `server.contact.security.email` | Public (security.txt `Contact: mailto:` line) | Researchers need to reach you. Choose carefully. Suggest a role address (`security@{fqdn}`) over a personal one. |
+| `server.contact.security.email` | Public (security.txt `Contact: mailto:` line — the secondary/CC channel; GitHub private vulnerability reporting is primary) | Researchers need to reach you. Choose carefully. Suggest a role address (`security@{fqdn}`) over a personal one. |
 | `server.contact.general.email` | Public (contact form, footer "Contact us") | Same — role address recommended. |
 | Any `webhooks.*` | NEVER public | URLs contain secrets / chat IDs / etc. |
 
@@ -15538,7 +15876,8 @@ server:
   tracking:
     type: google
     id: "G-XXXXXXXXXX"
-    url: ""  # Not used
+    # Not used
+    url: ""
 ```
 
 **Matomo (Self-hosted):**
@@ -15546,7 +15885,8 @@ server:
 server:
   tracking:
     type: matomo
-    id: "1"  # Site ID
+    # Site ID
+    id: "1"
     url: "https://analytics.example.com"
 ```
 
@@ -15583,7 +15923,8 @@ server:
   tracking:
     type: fathom
     id: "ABCDEFGH"
-    url: ""  # Uses cdn.usefathom.com
+    # Uses cdn.usefathom.com
+    url: ""
 ```
 
 **Fathom Lite (Self-hosted):**
@@ -15592,7 +15933,8 @@ server:
   tracking:
     type: fathom
     id: "ABCDEFGH"
-    url: "https://analytics.example.com"  # Your Fathom Lite instance
+    # Your Fathom Lite instance
+    url: "https://analytics.example.com"
 ```
 
 **Plausible Analytics (Cloud):**
@@ -15600,8 +15942,10 @@ server:
 server:
   tracking:
     type: plausible
-    id: "example.com"  # Your domain
-    url: ""  # Uses plausible.io
+    # Your domain
+    id: "example.com"
+    # Uses plausible.io
+    url: ""
 ```
 
 **Plausible Analytics (Self-hosted):**
@@ -15609,8 +15953,10 @@ server:
 server:
   tracking:
     type: plausible
-    id: "example.com"  # Your domain
-    url: "https://analytics.example.com"  # Your Plausible instance
+    # Your domain
+    id: "example.com"
+    # Your Plausible instance
+    url: "https://analytics.example.com"
 ```
 
 **Umami:**
@@ -15618,7 +15964,8 @@ server:
 server:
   tracking:
     type: umami
-    id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Website UUID
+    # Website UUID
+    id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
     url: "https://analytics.example.com"
 ```
 
@@ -15627,8 +15974,10 @@ server:
 server:
   tracking:
     type: simple
-    id: ""  # Not needed, uses domain automatically
-    url: ""  # Not used
+    # Not needed, uses domain automatically
+    id: ""
+    # Not used
+    url: ""
 ```
 
 **Cloudflare Web Analytics:**
@@ -15637,7 +15986,8 @@ server:
   tracking:
     type: cloudflare
     id: "your-beacon-token"
-    url: ""  # Not used
+    # Not used
+    url: ""
 ```
 
 ### Tracking Script Generation
@@ -15782,7 +16132,8 @@ Type selected: matomo, piwik, owa, umami
 // ValidateTracking validates tracking configuration
 func ValidateTracking(cfg *TrackingConfig) error {
     if cfg.Type == "" || cfg.Type == "none" {
-        return nil // Disabled is valid
+        // Disabled is valid
+        return nil
     }
 
     switch cfg.Type {
@@ -15869,7 +16220,8 @@ server:
       sold: false
 
       # Where is user data stored?
-      stored_on_server: true  # All data on this server (not third-party cloud)
+      # All data on this server (not third-party cloud)
+      stored_on_server: true
 
       # When data MAY be shared with third parties
       sharing:
@@ -15934,17 +16286,20 @@ server:
     cookies:
       # Essential cookies - ALWAYS enabled, cannot be disabled
       essential:
-        enabled: true  # Always true, not configurable
+        # Always true, not configurable
+        enabled: true
         description: "Required for the site to function. Includes security tokens (CSRF) and site preferences. These cookies are strictly necessary and cannot be disabled."
 
       # Preference cookies (theme, language, UI settings)
       preferences:
-        enabled: true  # Default on, user can disable via Decline
+        # Default on, user can disable via Decline
+        enabled: true
         description: "Remember your settings such as theme (dark/light), language, and UI preferences. Disabling will reset to defaults on each visit."
 
       # Analytics cookies (only active if server.tracking configured)
       analytics:
-        enabled: true  # Default on, user can disable via Decline
+        # Default on, user can disable via Decline
+        enabled: true
         description: "Help us understand how visitors use our site to improve the experience."
         # Dynamic suffix based on data.sold
         description_suffix_not_sold: "Analytics data is anonymized and never sold."
@@ -16052,23 +16407,30 @@ type PrivacyConfig struct {
 
 // DataPolicy controls data handling and CCPA compliance
 type DataPolicy struct {
-    Sold           bool              `yaml:"sold"`             // Default: false (MIT users can enable)
-    StoredOnServer bool              `yaml:"stored_on_server"` // Always true
+    // Default: false (MIT users can enable)
+    Sold           bool              `yaml:"sold"`
+    // Always true
+    StoredOnServer bool              `yaml:"stored_on_server"`
     Sharing        []SharingCondition `yaml:"sharing"`
 }
 
 type SharingCondition struct {
-    Condition string `yaml:"condition"` // analytics, email, user_initiated
-    When      string `yaml:"when"`      // Description of when sharing occurs
-    Data      string `yaml:"data"`      // What data is shared
+    // analytics, email, user_initiated
+    Condition string `yaml:"condition"`
+    // Description of when sharing occurs
+    When      string `yaml:"when"`
+    // What data is shared
+    Data      string `yaml:"data"`
 }
 
 // ConsentConfig for cookie consent banner
 type ConsentConfig struct {
     ShowUntilAcknowledged bool   `yaml:"show_until_acknowledged"`
     DefaultEnabled        bool   `yaml:"default_enabled"`
-    Message               string `yaml:"message"`         // Used when data.sold = false
-    MessageIfSold         string `yaml:"message_if_sold"` // Used when data.sold = true
+    // Used when data.sold = false
+    Message               string `yaml:"message"`
+    // Used when data.sold = true
+    MessageIfSold         string `yaml:"message_if_sold"`
     Policy                struct {
         Text string `yaml:"text"`
         URL  string `yaml:"url"`
@@ -16077,7 +16439,8 @@ type ConsentConfig struct {
         Decline string `yaml:"decline"`
         Accept  string `yaml:"accept"`
     } `yaml:"buttons"`
-    Position string `yaml:"position"` // top or bottom
+    // top or bottom
+    Position string `yaml:"position"`
 }
 
 // CookieCategories with dynamic description suffixes
@@ -16101,8 +16464,10 @@ type AnalyticsCookie struct {
 // PrivacyContent with sold/not-sold variants
 type PrivacyContent struct {
     DataCollection   string `yaml:"data_collection"`
-    DataUsage        string `yaml:"data_usage"`         // Used when data.sold = false
-    DataUsageIfSold  string `yaml:"data_usage_if_sold"` // Used when data.sold = true
+    // Used when data.sold = false
+    DataUsage        string `yaml:"data_usage"`
+    // Used when data.sold = true
+    DataUsageIfSold  string `yaml:"data_usage_if_sold"`
     DataSecurity     string `yaml:"data_security"`
 }
 
@@ -16148,18 +16513,24 @@ func privacyData(r *http.Request) PrivacyTemplateData {
     }
 
     return PrivacyTemplateData{
-        Privacy:      &cfg,                    // Full config for template access (.Privacy.*)
-        Tracking:     &tracking,               // For analytics type name
-        CCPAOptedOut: ccpaOptedOut,            // From cookie check
+        // Full config for template access (.Privacy.*)
+        Privacy:      &cfg,
+        // For analytics type name
+        Tracking:     &tracking,
+        // From cookie check
+        CCPAOptedOut: ccpaOptedOut,
     }
 }
 
 // PrivacyTemplateData for template rendering
 // Templates access config via .Privacy.* and .Tracking.*
 type PrivacyTemplateData struct {
-    Privacy      *PrivacyConfig   // Access via .Privacy.Data.Sold, .Privacy.GetConsentMessage(), etc.
-    Tracking     *TrackingConfig  // Access via .Tracking.Type, .Tracking.TypeName
-    CCPAOptedOut bool             // From ccpa_opt_out cookie
+    // Access via .Privacy.Data.Sold, .Privacy.GetConsentMessage(), etc.
+    Privacy      *PrivacyConfig
+    // Access via .Tracking.Type, .Tracking.TypeName
+    Tracking     *TrackingConfig
+    // From ccpa_opt_out cookie
+    CCPAOptedOut bool
 }
 ```
 
@@ -16188,10 +16559,14 @@ type PrivacyTemplateData struct {
 ```go
 // ConsentState stores user's cookie preferences
 type ConsentState struct {
-    Essential   bool `json:"essential"`   // Always true
-    Preferences bool `json:"preferences"` // User choice
-    Analytics   bool `json:"analytics"`   // User choice
-    Timestamp   int64 `json:"timestamp"`  // When consent given
+    // Always true
+    Essential   bool `json:"essential"`
+    // User choice
+    Preferences bool `json:"preferences"`
+    // User choice
+    Analytics   bool `json:"analytics"`
+    // When consent given
+    Timestamp   int64 `json:"timestamp"`
 }
 
 // Stored in localStorage as JSON:
@@ -16340,7 +16715,8 @@ rediss://...  # Redis with TLS
 server:
   cache:
     type: valkey
-    url: ${CACHE_URL}  # valkey://user:pass@valkey.example.com:6379/0
+    # valkey://user:pass@valkey.example.com:6379/0
+    url: ${CACHE_URL}
     prefix: "{project_name}:"
 ```
 
@@ -16445,19 +16821,27 @@ type HealthResponse struct {
     Project ProjectInfo `json:"project"`
 
     // 2. Overall status
-    Status         string   `json:"status"`                      // "healthy", "unhealthy", "degraded"
-    PendingRestart bool     `json:"pending_restart,omitempty"`   // true if restart needed
-    RestartReason  []string `json:"restart_reason,omitempty"`    // settings that changed
+    // "healthy", "unhealthy", "degraded"
+    Status         string   `json:"status"`
+    // true if restart needed
+    PendingRestart bool     `json:"pending_restart,omitempty"`
+    // settings that changed
+    RestartReason  []string `json:"restart_reason,omitempty"`
 
     // 3. Version & build info (PART 7: binary requirements)
-    Version   string    `json:"version"`      // SemVer "1.0.0"
-    GoVersion string    `json:"go_version"`   // runtime.Version() from the current build/runtime
+    // SemVer "1.0.0"
+    Version   string    `json:"version"`
+    // runtime.Version() from the current build/runtime
+    GoVersion string    `json:"go_version"`
     Build     BuildInfo `json:"build"`
 
     // 4. Runtime info (PART 6: application modes)
-    Uptime    string    `json:"uptime"`       // human readable "2d 5h 30m"
-    Mode      string    `json:"mode"`         // "production" or "development"
-    Timestamp time.Time `json:"timestamp"`    // current UTC time
+    // human readable "2d 5h 30m"
+    Uptime    string    `json:"uptime"`
+    // "production" or "development"
+    Mode      string    `json:"mode"`
+    // current UTC time
+    Timestamp time.Time `json:"timestamp"`
 
     // 5. Features - PUBLIC only (PARTS 20, 32)
     Features FeaturesInfo `json:"features"`
@@ -16474,15 +16858,20 @@ type HealthResponse struct {
 
 // ProjectInfo - from branding config (PART 16)
 type ProjectInfo struct {
-    Name        string `json:"name"`        // branding.title
-    Tagline     string `json:"tagline"`     // branding.tagline (short slogan)
-    Description string `json:"description"` // branding.description (longer)
+    // branding.title
+    Name        string `json:"name"`
+    // branding.tagline (short slogan)
+    Tagline     string `json:"tagline"`
+    // branding.description (longer)
+    Description string `json:"description"`
 }
 
 // BuildInfo - from build-time variables (PART 7)
 type BuildInfo struct {
-    Commit string `json:"commit"` // git short hash (7 chars)
-    Date   string `json:"date"`   // ISO 8601 build timestamp
+    // git short hash (7 chars)
+    Commit string `json:"commit"`
+    // ISO 8601 build timestamp
+    Date   string `json:"date"`
 }
 
 // FeaturesInfo - PUBLIC features only (no /metrics - PART 20 is internal)
@@ -16493,35 +16882,48 @@ type FeaturesInfo struct {
     Tor TorInfo `json:"tor"`
 
     // PART 19: GeoIP
-    GeoIP bool `json:"geoip"`  // true = enabled, false = disabled
+    // true = enabled, false = disabled
+    GeoIP bool `json:"geoip"`
 
     // APP-SPECIFIC: Add your app's features with enabled/disabled status
 }
 
 // TorInfo - from Tor manager (PART 31)
 type TorInfo struct {
-    Enabled  bool   `json:"enabled"`  // Tor binary found and running
-    Running  bool   `json:"running"`  // Hidden service active
-    Status   string `json:"status"`   // "healthy", "starting", "error"
-    Hostname string `json:"hostname"` // "abc123...xyz.onion" (56 chars, v3)
+    // Tor binary found and running
+    Enabled  bool   `json:"enabled"`
+    // Hidden service active
+    Running  bool   `json:"running"`
+    // "healthy", "starting", "error"
+    Status   string `json:"status"`
+    // "abc123...xyz.onion" (56 chars, v3)
+    Hostname string `json:"hostname"`
 }
 
 // ChecksInfo - component health (ok/error only - no details)
 type ChecksInfo struct {
-    Database  string `json:"database"`            // PART 10: "ok" or "error"
-    Cache     string `json:"cache"`               // PART 10: "ok" or "error"
-    Disk      string `json:"disk"`                // Disk space check
-    Scheduler string `json:"scheduler"`           // PART 18: "ok" or "error"
-    Tor       string `json:"tor,omitempty"`       // PART 31: "ok" or "error" (if enabled)
+    // PART 10: "ok" or "error"
+    Database  string `json:"database"`
+    // PART 10: "ok" or "error"
+    Cache     string `json:"cache"`
+    // Disk space check
+    Disk      string `json:"disk"`
+    // PART 18: "ok" or "error"
+    Scheduler string `json:"scheduler"`
+    // PART 31: "ok" or "error" (if enabled)
+    Tor       string `json:"tor,omitempty"`
     // APP-SPECIFIC: Add your checks here
     // Example: Storage string `json:"storage"`
 }
 
 // StatsInfo - public-safe aggregate statistics
 type StatsInfo struct {
-    RequestsTotal int64 `json:"requests_total"`      // Total HTTP requests (lifetime)
-    Requests24h   int64 `json:"requests_24h"`        // Requests in last 24 hours
-    ActiveConns   int   `json:"active_connections"`  // Current active connections
+    // Total HTTP requests (lifetime)
+    RequestsTotal int64 `json:"requests_total"`
+    // Requests in last 24 hours
+    Requests24h   int64 `json:"requests_24h"`
+    // Current active connections
+    ActiveConns   int   `json:"active_connections"`
     // APP-SPECIFIC: Add your stats here
     // Example: PastesTotal int64 `json:"pastes_total"`
 }
@@ -16680,7 +17082,7 @@ type StatsInfo struct {
           <div class="code-block">
             <code class="code-content">abc123xyz456abcdef789xyz456abcdef789xyz456abcdef789xyz.onion</code>
             <button class="copy-btn" data-copy="abc123xyz456abcdef789xyz456abcdef789xyz456abcdef789xyz.onion">
-              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+              <span class="copy-icon">📋</span><span class="copy-text" aria-live="polite">Copy</span>
             </button>
           </div>
         </li>
@@ -16973,7 +17375,7 @@ Same underlying health response as `/server/healthz`, but formatted using the st
 ### --version Output
 
 ```
-{project_name} {projectversion}
+{project_name} {project_version}
 Built: {build_date}
 Go: {go_version}
 OS/Arch: {GOOS}/{GOARCH}
@@ -17661,14 +18063,22 @@ func isTextBrowser(r *http.Request) bool {
     // Text browsers - INTERACTIVE, NO JavaScript support
     // Format: "browser/" or "browser " (links uses space)
     textBrowsers := []string{
-        "lynx/",      // Lynx - classic text browser
-        "w3m/",       // w3m - text browser with table support
-        "links ",     // Links - text browser (note: space after)
-        "links/",     // Links alternative format
-        "elinks/",    // ELinks - enhanced links
-        "browsh/",    // Browsh - modern text browser
-        "carbonyl/",  // Carbonyl - Chromium in terminal
-        "netsurf",    // NetSurf - lightweight browser (limited JS)
+        // Lynx - classic text browser
+        "lynx/",
+        // w3m - text browser with table support
+        "w3m/",
+        // Links - text browser (note: space after)
+        "links ",
+        // Links alternative format
+        "links/",
+        // ELinks - enhanced links
+        "elinks/",
+        // Browsh - modern text browser
+        "browsh/",
+        // Carbonyl - Chromium in terminal
+        "carbonyl/",
+        // NetSurf - lightweight browser (limited JS)
+        "netsurf",
     }
     for _, browser := range textBrowsers {
         if strings.Contains(ua, browser) {
@@ -17752,7 +18162,8 @@ func HTML2TextConverter(html string, width int) string {
     // Parse HTML into node tree
     doc, err := html.Parse(strings.NewReader(html))
     if err != nil {
-        return stripTags(html) // Fallback to basic strip
+        // Fallback to basic strip
+        return stripTags(html)
     }
 
     var buf strings.Builder
@@ -17895,7 +18306,8 @@ func handleFrontendRequest(w http.ResponseWriter, r *http.Request) {
     //    Receive server-rendered HTML that works without JS
     if isTextBrowser(r) {
         w.Header().Set("Content-Type", "text/html; charset=utf-8")
-        renderNoJSHTML(w, data) // No-JS alternative HTML
+        // No-JS alternative HTML
+        renderNoJSHTML(w, data)
         return
     }
 
@@ -17903,7 +18315,8 @@ func handleFrontendRequest(w http.ResponseWriter, r *http.Request) {
     //    Receive pre-formatted text via HTML2TextConverter
     if isHttpTool(r) {
         html := renderHTML(data)
-        text := HTML2TextConverter(html, 80) // 80 column width
+        // 80 column width
+        text := HTML2TextConverter(html, 80)
         w.Header().Set("Content-Type", "text/plain; charset=utf-8")
         w.Write([]byte(text))
         return
@@ -19034,7 +19447,8 @@ import (
 func PrintServerStartupBanner(appName, version, appMode string, urls []string, forceColor *bool) {
     width, _, _ := term.GetSize(int(os.Stdout.Fd()))
     if width == 0 {
-        width = 80 // Default
+        // Default
+        width = 80
     }
 
     // Use shared color/emoji detection (respects --color flag, config, NO_COLOR, TERM)
@@ -19297,7 +19711,7 @@ formatURL(host, 8443, true)
 - HTTPS adds overhead without additional security benefit
 - Only use HTTPS on overlays when HTTPS-only mode is required (port 443)
 
-**Footer timestamp format:** `%B %-d, %Y at %H:%M:%S` → `December 4, 2025 at 13:05:13`
+**Footer timestamp format:** `%B %-d, %Y at %H:%M:%S %Z` → `December 4, 2025 at 13:05:13 EST` — anything user-facing MUST use this format; use `%Y-%m-%dT%H:%M:%S%:z` (RFC 3339) only where machine-readability matters (API responses, logs, health endpoints)
 
 **"Last update" MUST use build date, NEVER hardcoded.** Use `{build_datetime}` template variable which comes from `BUILD_DATE` at compile time. This ensures the footer always shows when the binary was built, not a static date in the source code.
 
@@ -19306,7 +19720,7 @@ formatURL(host, 8443, true)
 **Example (Production with SSL + Tor on 443):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                           │
 ├───────────────────────────────────────────────────────────┤
@@ -19321,7 +19735,7 @@ formatURL(host, 8443, true)
 **Example (Full Banner with Tor + I2P + SMTP):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: {app_mode}                           │
 ├───────────────────────────────────────────────────────────┤
@@ -19340,7 +19754,7 @@ formatURL(host, 8443, true)
 **Example (Production on port 8080):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                           │
 ├───────────────────────────────────────────────────────────┤
@@ -19354,7 +19768,7 @@ formatURL(host, 8443, true)
 **Example (Development on port 8080):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                          │
 ├───────────────────────────────────────────────────────────┤
@@ -19368,7 +19782,7 @@ formatURL(host, 8443, true)
 **Example (Development IPv6 on port 8080):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                          │
 ├───────────────────────────────────────────────────────────┤
@@ -19382,7 +19796,7 @@ formatURL(host, 8443, true)
 **Example (Production on port 80):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                           │
 ├───────────────────────────────────────────────────────────┤
@@ -19396,7 +19810,7 @@ formatURL(host, 8443, true)
 **Example (Production with debugging enabled):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: {app_mode} [debugging]               │
 ├───────────────────────────────────────────────────────────┤
@@ -19410,7 +19824,7 @@ formatURL(host, 8443, true)
 **Example (First Run - Setup Required):**
 ```
 ╭───────────────────────────────────────────────────────────╮
-│  🚀 {PROJECT_NAME} · 📦 {projectversion}                   │
+│  🚀 {PROJECT_NAME} · 📦 {project_version}                  │
 ├───────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: {app_mode}                           │
 ├───────────────────────────────────────────────────────────┤
@@ -19432,7 +19846,7 @@ formatURL(host, 8443, true)
 
 **60-79 cols (Compact - no ASCII art, icons + text):**
 ```
-🚀 {PROJECT_NAME} v{projectversion}
+🚀 {PROJECT_NAME} v{project_version}
 🔒 Mode: {app_mode}
 🌐 {proto}://{fqdn}
 📡 Listening: {proto}://{address}:{port}
@@ -19441,7 +19855,7 @@ formatURL(host, 8443, true)
 
 **60-79 cols (Compact - First Run):**
 ```
-🚀 {PROJECT_NAME} v{projectversion}
+🚀 {PROJECT_NAME} v{project_version}
 🔧 Mode: {app_mode}
 🌐 {proto}://{address}:{port}
 📡 Listening: {proto}://{address}:{port}
@@ -19450,14 +19864,14 @@ formatURL(host, 8443, true)
 
 **40-59 cols (Minimal - abbreviated, no icons):**
 ```
-{PROJECT_NAME} {projectversion}
+{PROJECT_NAME} {project_version}
 {app_mode}
 {fqdn}:{port}
 ```
 
 **40-59 cols (Minimal - First Run):**
 ```
-{PROJECT_NAME} {projectversion}
+{PROJECT_NAME} {project_version}
 {app_mode}
 {address}:{port}
 ```
@@ -19474,7 +19888,7 @@ formatURL(host, 8443, true)
 
 **NO_COLOR / TERM=dumb (Plain text - no emojis, no box drawing, no colors):**
 ```
-{PROJECT_NAME} v{projectversion}
+{PROJECT_NAME} v{project_version}
 Mode: {app_mode}
 URL: {proto}://{fqdn}
 Listening: {proto}://{address}:{port}
@@ -19483,7 +19897,7 @@ Started: {startup_datetime}
 
 **NO_COLOR / TERM=dumb (Plain - First Run):**
 ```
-{PROJECT_NAME} v{projectversion}
+{PROJECT_NAME} v{project_version}
 Mode: {app_mode}
 URL: {proto}://{address}:{port}
 Listening: {proto}://{address}:{port}
@@ -19893,8 +20307,10 @@ func detectClientType(r *http.Request) string {
 
 3. **Frontend Direct** (CLI/scripting):
    ```bash
-   curl -q -LSsf -X POST /items -d 'name=test'  # Form-encoded
-   curl -q -LSsf /items/123                      # Returns text (auto-detected)
+   # Form-encoded
+   curl -q -LSsf -X POST /items -d 'name=test'
+   # Returns text (auto-detected)
+   curl -q -LSsf /items/123
    ```
 
 **Rule:** CRUD must work for browsers (HTML forms), APIs (JSON), and CLI (text/form-encoded).
@@ -19905,11 +20321,14 @@ func detectClientType(r *http.Request) string {
 
 ```bash
 # Easy: Test text output (no HTML parsing needed)
-curl -q -LSsf /items/123                  # Auto-detects CLI, returns text
-curl -q -LSsf -H "Accept: text/plain" /items/123  # Explicitly request text
+# Auto-detects CLI, returns text
+curl -q -LSsf /items/123
+# Explicitly request text
+curl -q -LSsf -H "Accept: text/plain" /items/123
 
 # Hard: Testing HTML requires parsing
-curl -q -LSsf -H "Accept: text/html" /items/123 | grep "<title>"  # Fragile
+# Fragile
+curl -q -LSsf -H "Accept: text/html" /items/123 | grep "<title>"
 ```
 
 **Recommended testing approach:**
@@ -20080,6 +20499,11 @@ footer {
   font-size: 0.875rem;
 }
 
+/* Tight row spacing - rows are consecutive <p> elements, never <br /> spacers */
+footer p {
+  margin: 0.25rem 0;
+}
+
 @media (min-width: 768px) {
   footer {
     padding: 1.5rem;
@@ -20142,9 +20566,9 @@ code {
 ```html
 <div class="code-block">
   <code class="code-content">abc123xyz789.onion</code>
-  <button type="button" class="copy-btn" data-copy="abc123xyz789.onion" aria-label="Copy to clipboard">
+  <button type="button" class="copy-btn" data-copy="abc123xyz789.onion" data-copied-label="Copied!" aria-label="Copy to clipboard">
     <span class="copy-icon">📋</span>
-    <span class="copy-text">Copy</span>
+    <span class="copy-text" aria-live="polite">Copy</span>
   </button>
 </div>
 ```
@@ -20205,6 +20629,11 @@ code {
   display: none;
 }
 
+/* The "Copied!" feedback is always visible, even on mobile */
+.copy-btn.copied .copy-text {
+  display: inline;
+}
+
 @media (min-width: 768px) {
   .copy-text {
     display: inline;
@@ -20215,7 +20644,7 @@ code {
 **JavaScript:**
 
 ```javascript
-// Copy button handler
+// Copy button handler - every copy button MUST show visible "Copied!" feedback
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('.copy-btn');
   if (!btn) return;
@@ -20224,19 +20653,36 @@ document.addEventListener('click', function(e) {
   if (!text) return;
 
   navigator.clipboard.writeText(text).then(() => {
-    // Visual feedback
+    // Swap to checkmark + translated "Copied!" label, revert after 2s
     const icon = btn.querySelector('.copy-icon');
-    const originalIcon = icon.textContent;
-    icon.textContent = '✓';
+    const label = btn.querySelector('.copy-text');
+    const copied = btn.dataset.copiedLabel || 'Copied!';
+    const restore = [];
+    if (icon) {
+      restore.push([icon, icon.textContent]);
+      icon.textContent = '✓';
+    }
+    if (label) {
+      restore.push([label, label.textContent]);
+      label.textContent = copied;
+    }
+    if (!icon && !label) {
+      restore.push([btn, btn.textContent]);
+      btn.textContent = '✓ ' + copied;
+    }
     btn.classList.add('copied');
 
     setTimeout(() => {
-      icon.textContent = originalIcon;
+      restore.forEach(([el, t]) => {
+        el.textContent = t;
+      });
       btn.classList.remove('copied');
     }, 2000);
   });
 });
 ```
+
+**Copy feedback is mandatory:** every copy button MUST show a visible "Copied!" confirmation on success — checkmark icon plus the translated label (i18n key `copied`, rendered server-side into `data-copied-label`), `.copied` class for the success colors (CSS custom properties only), reverting after 2 seconds. The `aria-live="polite"` region announces the change to screen readers. Icon-only buttons (e.g. the footer 📋) swap their own content and carry `aria-live="polite"` on the button itself.
 
 #### When to Use Copy Buttons
 
@@ -20862,9 +21308,11 @@ Does user need to make a decision or provide input?
 async function saveSettings(data) {
     // server config is file-only (server.yml); no API endpoint
     if (result.ok) {
-        showToast('Settings saved', 'success');  // Non-blocking, auto-dismiss
+        // Non-blocking, auto-dismiss
+        showToast('Settings saved', 'success');
     } else {
-        showToast('Failed to save settings', 'error');  // Non-blocking error
+        // Non-blocking error
+        showToast('Failed to save settings', 'error');
     }
 }
 
@@ -20877,20 +21325,8 @@ function deleteItem(itemId) {
         confirmStyle: 'danger',
         onConfirm: async () => {
             await api.delete(`/items/${itemId}`);
-            showToast('Item deleted', 'success');  // Confirmation after action
-        }
-    });
-}
-
-// MODAL - User input required
-function changePassword() {
-    showModal({
-        title: 'Change Password',
-        form: true,
-        fields: ['current_password', 'new_password', 'confirm_password'],
-        onSubmit: async (data) => {
-            await api.post('/users/security/password', data);
-            showToast('Password changed', 'success');  // Confirmation after action
+            // Confirmation after action
+            showToast('Item deleted', 'success');
         }
     });
 }
@@ -20982,10 +21418,14 @@ function changePassword() {
 **JavaScript Toast API:**
 ```javascript
 // Show toast - returns toast ID for programmatic control
-const toastId = showToast("Settings saved", "success");        // 3s auto-dismiss
-const toastId = showToast("Save failed", "error");             // No auto-dismiss
-const toastId = showToast("Check your input", "warning", 5000); // 5s auto-dismiss
-const toastId = showToast("Tip: Use shortcuts", "info");       // 3s auto-dismiss
+// 3s auto-dismiss
+const toastId = showToast("Settings saved", "success");
+// No auto-dismiss
+const toastId = showToast("Save failed", "error");
+// 5s auto-dismiss
+const toastId = showToast("Check your input", "warning", 5000);
+// 3s auto-dismiss
+const toastId = showToast("Tip: Use shortcuts", "info");
 
 // Dismiss programmatically
 dismissToast(toastId);
@@ -21368,7 +21808,8 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting()) // Activate immediately
+      // Activate immediately
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -21381,7 +21822,8 @@ self.addEventListener('activate', event => {
           .filter(key => key.startsWith('{app_name}-cache-') && key !== CACHE_NAME)
           .map(key => caches.delete(key))
       ))
-      .then(() => self.clients.claim()) // Take control immediately
+      // Take control immediately
+      .then(() => self.clients.claim())
   );
 });
 
@@ -21395,7 +21837,8 @@ self.addEventListener('fetch', event => {
 
   // Skip API calls (network-only)
   if (url.pathname.startsWith('/api/')) {
-    return; // Let browser handle normally
+    // Let browser handle normally
+    return;
   }
 
   // Static assets: cache-first
@@ -21516,9 +21959,11 @@ let deferredPrompt;
 
 // Capture the install prompt
 window.addEventListener('beforeinstallprompt', event => {
-  event.preventDefault(); // Don't show automatically
+  // Don't show automatically
+  event.preventDefault();
   deferredPrompt = event;
-  showInstallButton(); // Show custom install UI
+  // Show custom install UI
+  showInstallButton();
 });
 
 // Custom install button handler
@@ -21545,7 +21990,8 @@ window.addEventListener('appinstalled', () => {
 // Check if running as installed PWA
 function isInstalledPWA() {
   return window.matchMedia('(display-mode: standalone)').matches
-    || window.navigator.standalone === true; // iOS
+    // iOS
+    || window.navigator.standalone === true;
 }
 ```
 
@@ -21743,9 +22189,12 @@ async function getCurrentLocation() {
       }),
       error => reject(handleGeolocationError(error)),
       {
-        enableHighAccuracy: true,  // Use GPS if available
-        timeout: 10000,            // 10 second timeout
-        maximumAge: 60000          // Accept cached position up to 1 minute old
+        // Use GPS if available
+        enableHighAccuracy: true,
+        // 10 second timeout
+        timeout: 10000,
+        // Accept cached position up to 1 minute old
+        maximumAge: 60000
       }
     );
   });
@@ -21772,7 +22221,8 @@ function watchLocation(callback, errorCallback) {
     {
       enableHighAccuracy: true,
       timeout: 10000,
-      maximumAge: 0  // Always get fresh position
+      // Always get fresh position
+      maximumAge: 0
     }
   );
 }
@@ -21824,7 +22274,8 @@ async function checkLocationPermission() {
   if (!navigator.permissions) return 'unknown';
 
   const result = await navigator.permissions.query({ name: 'geolocation' });
-  return result.state; // 'granted', 'denied', or 'prompt'
+  // 'granted', 'denied', or 'prompt'
+  return result.state;
 }
 ```
 
@@ -22548,7 +22999,8 @@ func WriteJSON(w http.ResponseWriter, data any) {
     w.Header().Set("Content-Type", "application/json")
     enc := json.NewEncoder(w)
     enc.SetIndent("", "  ")
-    enc.Encode(data)  // Encode() adds trailing newline
+    // Encode() adds trailing newline
+    enc.Encode(data)
 }
 
 func WriteText(w http.ResponseWriter, text string) {
@@ -22792,7 +23244,7 @@ src/server/template/
 │                                                                 │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│        About · Privacy · Contact · GitHub · {projectversion}    │  ← Footer (centered)
+│        About · Privacy · Contact · GitHub · {project_version}   │  ← Footer (centered)
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -22986,7 +23438,7 @@ src/server/static/
 function copyToClipboard(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
     const original = btn.textContent;
-    btn.textContent = 'Copied!';
+    btn.textContent = btn.dataset.copiedLabel || 'Copied!';
     btn.classList.add('copied');
     setTimeout(() => {
       btn.textContent = original;
@@ -23743,13 +24195,20 @@ server:
   seo:
     verification:
       # Format: { "provider": "verification_code" }
-      google: ""           # Google Search Console
-      bing: ""             # Bing Webmaster Tools
-      yandex: ""           # Yandex Webmaster
-      baidu: ""            # Baidu Webmaster
-      pinterest: ""        # Pinterest verification
-      facebook: ""         # Facebook domain verification
-      custom: []           # Custom meta tags (see below)
+      # Google Search Console
+      google: ""
+      # Bing Webmaster Tools
+      bing: ""
+      # Yandex Webmaster
+      yandex: ""
+      # Baidu Webmaster
+      baidu: ""
+      # Pinterest verification
+      pinterest: ""
+      # Facebook domain verification
+      facebook: ""
+      # Custom meta tags (see below)
+      custom: []
 ```
 
 **Generated Meta Tags:**
@@ -23871,9 +24330,12 @@ server:
 server:
   seo:
     sitemap:
-      enabled: true          # Default: true
-      max_urls: 50000        # Sitemap protocol limit
-      include_images: false  # Include image URLs
+      # Default: true
+      enabled: true
+      # Sitemap protocol limit
+      max_urls: 50000
+      # Include image URLs
+      include_images: false
 ```
 
 **Large Sites (>50,000 URLs):**
@@ -23943,19 +24405,25 @@ import (
 
 // FetchRemoteImageConfig configures remote image fetching
 type FetchRemoteImageConfig struct {
-    MaxSize       int64         // Max file size in bytes (default: 10MB)
-    Timeout       time.Duration // Request timeout (default: 30s)
-    AllowedTypes  []string      // Allowed MIME types
-    AllowedSchemes []string     // Allowed URL schemes (default: https only)
+    // Max file size in bytes (default: 10MB)
+    MaxSize       int64
+    // Request timeout (default: 30s)
+    Timeout       time.Duration
+    // Allowed MIME types
+    AllowedTypes  []string
+    // Allowed URL schemes (default: https only)
+    AllowedSchemes []string
 }
 
 // DefaultFetchRemoteImageConfig returns safe defaults
 func DefaultFetchRemoteImageConfig() FetchRemoteImageConfig {
     return FetchRemoteImageConfig{
-        MaxSize:       10 * 1024 * 1024, // 10MB
+        // 10MB
+        MaxSize:       10 * 1024 * 1024,
         Timeout:       30 * time.Second,
         AllowedTypes:  []string{"image/png", "image/jpeg", "image/gif", "image/webp", "image/x-icon"},
-        AllowedSchemes: []string{"https"}, // NEVER allow http in production
+        // NEVER allow http in production
+        AllowedSchemes: []string{"https"},
     }
 }
 
@@ -24254,11 +24722,14 @@ web:
 ```yaml
 web:
   csrf:
-    enabled: true                # default: true. Set false ONLY for API-only deployments (no browser forms at all).
-    token_length: 32             # bytes
+    # default: true. Set false ONLY for API-only deployments (no browser forms at all).
+    enabled: true
+    # bytes
+    token_length: 32
     cookie_name: csrf_token
     header_name: X-CSRF-Token
-    secure: auto                 # auto | true | false. "auto" sets Secure when proto is https.
+    # auto | true | false. "auto" sets Secure when proto is https.
+    secure: auto
     # Endpoints exempt from CSRF (operator-declared). Glob patterns supported.
     # Common exemptions: webhook receivers, external callbacks.
     exempt_paths:
@@ -24316,7 +24787,8 @@ import "github.com/microcosm-cc/bluemonday"
 // ONLY allows safe formatting tags - NO scripts, NO event handlers
 func SanitizeFooterHTML(html string) string {
     if html == "" || html == " " {
-        return html // Empty or space (disable) passes through
+        // Empty or space (disable) passes through
+        return html
     }
 
     // Strict policy - only basic formatting allowed
@@ -24436,14 +24908,24 @@ When the operator sets `custom_html` in `server.yml`, the server logs at startup
 | `{current_year}` | Current year (e.g., 2025) |
 | `{project_name}` | Project name |
 | `{project_org}` | Organization name |
-| `{projectversion}` | Application version |
-| `{build_datetime}` | Build date/time |
+| `{project_version}` | Application version |
+| `{build_datetime}` | Build date/time (`%B %-d, %Y at %H:%M:%S %Z`) |
+| `{onion_address}` | Tor `.onion` address (only when Tor enabled and running) |
 
 ### Default Application Footer (Always Shown)
 
 ```html
 <footer class="footer">
-  <!-- Standard page links (always first) -->
+  <!-- Onion address (only shown if Tor is enabled and running) -->
+  {{ if and .TorEnabled .TorRunning }}
+  <p class="footer-onion">
+    <a href="/server/help#tor-access" aria-label="Tor Support">🧅</a>
+    <code class="onion-address">{onion_address}</code>
+    <button type="button" class="copy-btn" data-copy="{onion_address}" aria-live="polite" aria-label="Copy onion address">📋</button>
+  </p>
+  {{ end }}
+
+  <!-- Standard page links -->
   <p>
     <a href="/server/about">About</a>
     <span>•</span>
@@ -24454,27 +24936,21 @@ When the operator sets `custom_html` in `server.yml`, the server logs at startup
     <a href="/server/help">Help</a>
   </p>
 
-  <!-- Tor Support (only shown if Tor is enabled and running) -->
-  {{ if and .TorEnabled .TorRunning }}
-  <p>
-    <a href="/server/help#tor-access">Tor Support</a>
-  </p>
-  {{ end }}
-
-  <br />
-
   <!-- Application branding -->
   <p>
     <a href="{PLATFORM_REPO_URL}" target="_blank">Made with</a> ❤️
     <span>•</span>
-    <span>{projectversion}</span>
+    <span>{project_version}</span>
   </p>
 
-  <br />
-
-  <a href="/server/healthz">Last update: {build_datetime}</a>
+  <!-- Build stamp -->
+  <p>
+    <a href="/server/healthz">Last update: {build_datetime}</a>
+  </p>
 </footer>
 ```
+
+**No `<br />` spacers between rows** — rows are consecutive `<p>` elements; vertical rhythm comes from CSS (`footer p { margin: 0.25rem 0; }`), kept tight. Row order is fixed: onion address (Tor only) → page links → branding → last update. A disabled feature drops its row entirely without leaving a gap.
 
 ### Footer Configuration (config file)
 
@@ -24562,7 +25038,8 @@ When the operator sets `custom_html` in `server.yml`, the server logs at startup
 **Dynamic Message Selection:**
 ```go
 // Template rendering uses GetConsentMessage() for {message}
-message := cfg.Privacy.GetConsentMessage()  // Returns appropriate message based on data.sold
+// Returns appropriate message based on data.sold
+message := cfg.Privacy.GetConsentMessage()
 ```
 
 ```html
@@ -24583,9 +25060,12 @@ message := cfg.Privacy.GetConsentMessage()  // Returns appropriate message based
 <script>
 // Granular consent state (matches server.privacy.cookies structure)
 const defaultConsent = {
-  essential: true,    // Always true, cannot be disabled
-  preferences: true,  // Default from server.privacy.cookies.preferences.enabled
-  analytics: true,    // Default from server.privacy.cookies.analytics.enabled
+  // Always true, cannot be disabled
+  essential: true,
+  // Default from server.privacy.cookies.preferences.enabled
+  preferences: true,
+  // Default from server.privacy.cookies.analytics.enabled
+  analytics: true,
   timestamp: 0
 };
 
@@ -24642,7 +25122,8 @@ function showCookiePreferences() {
 function savePreferences() {
   // Called from preferences modal
   const consent = {
-    essential: true,  // Always true
+    // Always true
+    essential: true,
     preferences: document.getElementById('pref-preferences').checked,
     analytics: document.getElementById('pref-analytics').checked,
     timestamp: Date.now()
@@ -24869,7 +25350,8 @@ initCCPA();
 func CheckTrackingAllowed(r *http.Request) bool {
     consent := getConsentFromRequest(r)
     if consent == nil || !consent.Analytics {
-        return false  // No consent or declined
+        // No consent or declined
+        return false
     }
     return config.Get().Server.Tracking.Type != ""
 }
@@ -24877,7 +25359,8 @@ func CheckTrackingAllowed(r *http.Request) bool {
 // Template function - only inject tracking if allowed
 func trackingScript(r *http.Request) template.HTML {
     if !CheckTrackingAllowed(r) {
-        return ""  // Return nothing - no tracking
+        // Return nothing - no tracking
+        return ""
     }
     return generateTrackingScript()
 }
@@ -25198,7 +25681,7 @@ func trackingScript(r *http.Request) template.HTML {
 {
   "summary": {
     "data_stored_on_server": true,
-    "data_sold": false,              // Dynamic: from server.privacy.data.sold
+    "data_sold": false,
     "user_control": true
   },
   "cookies": {
@@ -25213,13 +25696,12 @@ func trackingScript(r *http.Request) template.HTML {
     "analytics": {
       "enabled": true,
       "description": "Help us understand how visitors use our site. Analytics data is anonymized and never sold."
-      // Dynamic: GetAnalyticsDescription() returns description + suffix based on data.sold
     }
   },
   "data": {
-    "sold": false,                   // server.privacy.data.sold
-    "stored_on_server": true,        // server.privacy.data.stored_on_server
-    "sharing": [                     // server.privacy.data.sharing
+    "sold": false,
+    "stored_on_server": true,
+    "sharing": [
       {
         "condition": "analytics",
         "when": "Tracking configured AND user consents",
@@ -25250,14 +25732,14 @@ func trackingScript(r *http.Request) template.HTML {
   "third_party": {
     "services": []
   },
-  "ccpa": {                          // Only included when data.sold = true
-    "applicable": false,             // Set to true when data.sold = true
+  "ccpa": {
+    "applicable": false,
     "opt_out_url": "/server/privacy#ccpa-opt-out",
-    "user_opted_out": false          // From localStorage/cookie check
+    "user_opted_out": false
   },
   "content": {
-    "consent_message": "...",        // Dynamic: GetConsentMessage()
-    "data_usage": "..."              // Dynamic: GetDataUsageContent()
+    "consent_message": "...",
+    "data_usage": "..."
   }
 }
 ```
@@ -25267,7 +25749,8 @@ func trackingScript(r *http.Request) template.HTML {
 - `cookies.analytics.description`: From `GetAnalyticsDescription()` (includes suffix)
 - `content.consent_message`: From `GetConsentMessage()` (returns sold/not-sold message)
 - `content.data_usage`: From `GetDataUsageContent()` (returns sold/not-sold content)
-- `ccpa.applicable`: `true` only when `data.sold = true`
+- `ccpa.applicable`: `true` only when `data.sold = true` (the `ccpa` object is only included when `data.sold = true`)
+- `ccpa.user_opted_out`: From the localStorage/cookie opt-out check
 
 **Note:** The `tracking` and `third_party.services` fields are populated based on `server.tracking` config. If no tracking is configured, they remain empty.
 
@@ -25414,7 +25897,7 @@ curl -H "Accept: application/xml" https://jokes.example.com/api/v1/joke</code></
     <code class="code-content">{{ .TorAddress }}</code>
     <button type="button" class="copy-btn" data-copy="{{ .TorAddress }}" aria-label="Copy to clipboard">
       <span class="copy-icon">📋</span>
-      <span class="copy-text">Copy</span>
+      <span class="copy-text" aria-live="polite">Copy</span>
     </button>
   </div>
 
@@ -26301,10 +26784,14 @@ server:
         # Creates: {project_name}_backup_YYYY-MM-DD.tar.gz[.enc] (full)
         #          {project_name}-daily.tar.gz[.enc] (incremental)
         retention:
-          max_backups: 1     # 1-365: daily full backups to keep
-          keep_weekly: 0     # 0-52: Sunday backups (0 = disabled)
-          keep_monthly: 0    # 0-12: 1st of month backups (0 = disabled)
-          keep_yearly: 0     # 0-10: January 1st backups (0 = disabled)
+          # 1-365: daily full backups to keep
+          max_backups: 1
+          # 0-52: Sunday backups (0 = disabled)
+          keep_weekly: 0
+          # 0-12: 1st of month backups (0 = disabled)
+          keep_monthly: 0
+          # 0-10: January 1st backups (0 = disabled)
+          keep_yearly: 0
 
       # Hourly incremental backup (disabled by default)
       backup_hourly:
@@ -26934,15 +27421,6 @@ server:
 |--------|---------|
 | `scheduler_task_duration_seconds` | 0.1, 0.5, 1, 5, 10, 30, 60, 300, 600 |
 
-### Rate Limit Metrics (REQUIRED)
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `rate_limit_hits_total` | Counter | `endpoint_class` | Rate limit triggers |
-| `rate_limit_blocked_total` | Counter | `endpoint_class` | Requests blocked by rate limit |
-
-**Cardinality note:** Never use `ip` as a metric label — unbounded cardinality is a memory-DoS vector. Log per-IP details to structured logs instead; metrics answer "how many?" while logs answer "which IPs?"
-
 ### System Metrics (if `include_system: true`)
 
 | Metric | Type | Labels | Description |
@@ -26987,6 +27465,8 @@ server:
 |-------|--------|-------|
 | `limit` | `global`, `per_ip`, `per_user`, `per_endpoint` | Rate limit type |
 | `status` | `allowed`, `limited` | Request outcome |
+
+**Cardinality note:** `per_ip` is a `limit` label *value*, never a per-address label. Never use a raw client IP as a metric label — per-IP labels are unbounded-cardinality and a memory-DoS vector. The rate limiter must cap the set of tracked IPs (e.g., a fixed-size LRU) or aggregate; never emit one label value per unique client IP. Log per-IP details to structured logs instead; metrics answer "how many?" while logs answer "which IPs?"
 
 ## Metrics Output Example
 
@@ -28156,10 +28636,12 @@ groups:
 server:
   backup:
     encryption:
-      enabled: true       # true if password was set
+      # true if password was set
+      enabled: true
       # Password is NEVER stored - prompted on-demand
   compliance:
-    enabled: false        # HIPAA, SOC2, etc.
+    # HIPAA, SOC2, etc.
+    enabled: false
     # If true, backup.encryption.enabled MUST be true
 ```
 
@@ -28250,10 +28732,14 @@ Shown on:
 server:
   backup:
     retention:
-      max_backups: 1     # 1-365: daily full backups
-      keep_weekly: 0     # 0-52: Sunday backups (0 = disabled)
-      keep_monthly: 0    # 0-12: 1st of month (0 = disabled)
-      keep_yearly: 0     # 0-10: January 1st (0 = disabled)
+      # 1-365: daily full backups
+      max_backups: 1
+      # 0-52: Sunday backups (0 = disabled)
+      keep_weekly: 0
+      # 0-12: 1st of month (0 = disabled)
+      keep_monthly: 0
+      # 0-10: January 1st (0 = disabled)
+      keep_yearly: 0
 ```
 
 **Default: 2 files total** (yesterday's full + today's incremental)
@@ -28765,7 +29251,8 @@ func restartSelf() error {
 
     // Exit current process
     os.Exit(0)
-    return nil // unreachable
+    // unreachable
+    return nil
 }
 ```
 
@@ -28825,7 +29312,8 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string) (*Releas
     defer resp.Body.Close()
 
     if resp.StatusCode == 404 {
-        return nil, nil // No updates available
+        // No updates available
+        return nil, nil
     }
     if resp.StatusCode != 200 {
         return nil, fmt.Errorf("GitHub API error: %d", resp.StatusCode)
@@ -28837,7 +29325,8 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string) (*Releas
             return nil, err
         }
         if release.TagName == currentVersion {
-            return nil, nil // Already up to date
+            // Already up to date
+            return nil, nil
         }
         return &release, nil
     }
@@ -28877,7 +29366,8 @@ func DoUpdate(ctx context.Context, release *Release) error {
         return fmt.Errorf("failed to create temp file: %w", err)
     }
     tmpPath := tmpFile.Name()
-    defer os.Remove(tmpPath) // Clean up on error
+    // Clean up on error
+    defer os.Remove(tmpPath)
 
     req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
     if err != nil {
@@ -29005,7 +29495,8 @@ func restartDarwinService() error {
 func restartWindowsService() error {
     // Stop service
     stopCmd := exec.Command("sc", "stop", "{project_name}")
-    stopCmd.Run() // Ignore error if not running
+    // Ignore error if not running
+    stopCmd.Run()
 
     // Wait for stop
     time.Sleep(2 * time.Second)
@@ -29238,9 +29729,12 @@ Shell integration commands:
 
 Usage:
   # Add to shell profile for persistent completions
-  {project_name} --shell init >> ~/.bashrc      # bash
-  {project_name} --shell init >> ~/.zshrc       # zsh
-  {project_name} --shell init >> ~/.config/fish/config.fish  # fish
+  # bash
+  {project_name} --shell init >> ~/.bashrc
+  # zsh
+  {project_name} --shell init >> ~/.zshrc
+  # fish
+  {project_name} --shell init >> ~/.config/fish/config.fish
 
   # Or eval directly for current session
   eval "$({project_name} --shell init)"
@@ -29272,7 +29766,7 @@ Examples:
   {project_name} --update branch beta
 
 Current:
-  Version:  {projectversion}
+  Version:  {project_version}
   Branch:   stable
   Latest:   {latest_version} (if different)
 ```
@@ -29343,11 +29837,16 @@ Current:
 // Reserved UIDs/GIDs used by well-known services across distros
 // NEVER use these even if they appear available on current system
 var reservedIDs = map[int]bool{
-    65534: true, // nobody
-    999: true, 998: true, 997: true, 996: true, 995: true, // systemd-*, docker
-    994: true, 993: true, 992: true, 991: true, 990: true, // systemd-*, kvm
-    989: true, 988: true, 987: true, 986: true, 985: true, // sgx, pipewire, colord
-    984: true, 983: true, 982: true, 981: true, 980: true, // avahi, rtkit, saned
+    // nobody
+    65534: true,
+    // systemd-*, docker
+    999: true, 998: true, 997: true, 996: true, 995: true,
+    // systemd-*, kvm
+    994: true, 993: true, 992: true, 991: true, 990: true,
+    // sgx, pipewire, colord
+    989: true, 988: true, 987: true, 986: true, 985: true,
+    // avahi, rtkit, saned
+    984: true, 983: true, 982: true, 981: true, 980: true,
     // Database and common services (101-110, 170-179)
     101: true, 102: true, 103: true, 104: true, 105: true,
     106: true, 107: true, 108: true, 109: true, 110: true,
@@ -29366,12 +29865,14 @@ func findAvailableSystemID() (int, error) {
 
         // Check if UID is available
         if _, err := user.LookupId(strconv.Itoa(id)); err == nil {
-            continue // UID exists, try next
+            // UID exists, try next
+            continue
         }
 
         // Check if GID is available
         if _, err := user.LookupGroupId(strconv.Itoa(id)); err == nil {
-            continue // GID exists, try next
+            // GID exists, try next
+            continue
         }
 
         // Both available and not reserved
@@ -29732,7 +30233,8 @@ WantedBy=multi-user.target
 
 name="{internal_name}"
 description="{app_name}"
-command="/usr/local/bin/{project_name}"   # actual binary (may differ from {internal_name} after rename)
+# actual binary (may differ from {internal_name} after rename)
+command="/usr/local/bin/{project_name}"
 command_args=""
 command_user="{internal_name}:{internal_name}"
 pidfile="/var/run/{project_org}/{internal_name}.pid"
@@ -30074,9 +30576,11 @@ format_version_tag() {
     # Matches: 0.2.0, 1.2.3, 10.5.2-rc1
     # Does NOT match: dev, beta, daily, 20251218
     if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-        echo "v$tag"        # 0.2.0 → v0.2.0
+        # 0.2.0 → v0.2.0
+        echo "v$tag"
     else
-        echo "$tag"         # dev → dev (no v)
+        # dev → dev (no v)
+        echo "$tag"
     fi
 }
 
@@ -30416,7 +30920,8 @@ var (
     Version      = "devel"
     CommitID     = "N/A"
     BuildDate    = "N/A"
-    OfficialSite = ""  // Empty = users must use --server flag
+    // Empty = users must use --server flag
+    OfficialSite = ""
 )
 ```
 
@@ -30547,16 +31052,22 @@ docker run --rm \
 **Typical workflow:**
 ```bash
 # Active development
-make dev                # Quick build to temp dir
-make test               # Unit tests
+# Quick build to temp dir
+make dev
+# Unit tests
+make test
 
 # Before commit
-./tests/run_tests.sh    # Integration tests (auto-detects incus/docker)
+# Integration tests (auto-detects incus/docker)
+./tests/run_tests.sh
 
 # Before release
-make local               # Production build locally
-./tests/incus.sh        # Full systemd testing (PREFERRED)
-make build              # Full cross-platform build
+# Production build locally
+make local
+# Full systemd testing (PREFERRED)
+./tests/incus.sh
+# Full cross-platform build
+make build
 ```
 
 ## Directory Rules
@@ -31276,9 +31787,12 @@ networks:
 ```yaml
 x-logging: &default-logging
   options:
-    max-size: '5m'    # Max 5MB per log file
-    max-file: '1'     # Keep only 1 log file
-  driver: json-file   # JSON format for parsing
+    # Max 5MB per log file
+    max-size: '5m'
+    # Keep only 1 log file
+    max-file: '1'
+  # JSON format for parsing
+  driver: json-file
 ```
 
 **Every service MUST use the anchor:**
@@ -31449,7 +31963,8 @@ $TEMP_DIR/
 ```bash
 # Setup (uses OS temp dir: {ostempdir}/{project_org}/{internal_name}-XXXXXX/)
 # Set PROJECT_ROOT to your actual project location
-PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # Use git top-level
+# Use git top-level
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 # Or use absolute path: PROJECT_ROOT="/path/to/your/project"
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
@@ -31675,7 +32190,8 @@ TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{project_org}/{internal_name}-XXXXXX")
 mkdir -p "$TEMP_DIR/volumes/config" "$TEMP_DIR/volumes/data"
 cp docker/docker-compose.test.yml "$TEMP_DIR/docker-compose.yml"
 cd "$TEMP_DIR" && docker compose up --abort-on-container-exit
-rm -rf "$TEMP_DIR"  # Cleanup after tests
+# Cleanup after tests
+rm -rf "$TEMP_DIR"
 ```
 
 ### Docker Compose with Cache Example
@@ -32271,7 +32787,8 @@ name: Daily Build
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 3am UTC daily
+    # 3am UTC daily
+    - cron: '0 3 * * *'
   push:
     branches:
       - main
@@ -32442,7 +32959,8 @@ name: Docker Build
 
 on:
   push:
-    branches: ['**']  # ALL branches
+    # ALL branches
+    branches: ['**']
     tags:
       - 'v*'
       - '*.*.*'
@@ -32902,7 +33420,8 @@ name: Daily Build
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 3am UTC daily
+    # 3am UTC daily
+    - cron: '0 3 * * *'
   push:
     branches:
       - main
@@ -33053,7 +33572,8 @@ name: Docker Build
 
 on:
   push:
-    branches: ['**']  # ALL branches
+    # ALL branches
+    branches: ['**']
     tags:
       - 'v*'
       - '*.*.*'
@@ -33107,7 +33627,8 @@ jobs:
           echo "YYMM=$(date +"%y%m")" >> $GITEA_ENV
           if [[ "${{ gitea.ref }}" == refs/tags/* ]]; then
             VERSION="${GITEA_REF_NAME}"
-            echo "VERSION=${VERSION#v}" >> $GITEA_ENV  # Strip 'v' prefix
+            # Strip 'v' prefix
+            echo "VERSION=${VERSION#v}" >> $GITEA_ENV
             echo "IS_TAG=true" >> $GITEA_ENV
           else
             echo "VERSION=$(git rev-parse --short HEAD)" >> $GITEA_ENV
@@ -33725,7 +34246,8 @@ pipeline {
 
         // ----- GITHUB (default) -----
         GIT_FQDN = 'github.com'
-        GIT_TOKEN = credentials('github-token')  // Jenkins credentials ID
+        // Jenkins credentials ID
+        GIT_TOKEN = credentials('github-token')
         REGISTRY = "ghcr.io/${PROJECT_ORG}/${PROJECT_NAME}"
 
         // ----- GITEA / FORGEJO (self-hosted) -----
@@ -34663,35 +35185,48 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 **Frontend Route Testing (ALL routes):**
 ```bash
 # Every frontend route MUST be tested with BOTH:
-curl -q -LSsf -H "Accept: text/html" /route          # Returns HTML
-curl -q -LSsf -H "Accept: text/plain" /route         # Returns plain text
+# Returns HTML
+curl -q -LSsf -H "Accept: text/html" /route
+# Returns plain text
+curl -q -LSsf -H "Accept: text/plain" /route
 
 # Example: Test user profile page
-curl -q -LSsf -H "Accept: text/html" /users/john     # HTML page
-curl -q -LSsf -H "Accept: text/plain" /users/john    # Plain text output
+# HTML page
+curl -q -LSsf -H "Accept: text/html" /users/john
+# Plain text output
+curl -q -LSsf -H "Accept: text/plain" /users/john
 ```
 
 **Backend/API Route Testing (ALL routes):**
 ```bash
 # Every API route MUST be tested with BOTH:
-curl -q -LSsf -H "Accept: application/json" /api/v1/resource    # Returns JSON
-curl -q -LSsf -H "Accept: text/plain" /api/v1/resource          # Returns plain text
+# Returns JSON
+curl -q -LSsf -H "Accept: application/json" /api/v1/resource
+# Returns plain text
+curl -q -LSsf -H "Accept: text/plain" /api/v1/resource
 
 # Example: Test jokes API
-curl -q -LSsf -H "Accept: application/json" /api/v1/jokes/random   # JSON response
-curl -q -LSsf -H "Accept: text/plain" /api/v1/jokes/random         # Plain text response
+# JSON response
+curl -q -LSsf -H "Accept: application/json" /api/v1/jokes/random
+# Plain text response
+curl -q -LSsf -H "Accept: text/plain" /api/v1/jokes/random
 ```
 
 **Backend .txt Endpoint Testing (ALL endpoints):**
 ```bash
 # Every *.txt endpoint MUST be tested:
-curl -q -LSsf /robots.txt                            # Robots file
-curl -q -LSsf /.well-known/security.txt              # Security policy (well-known)
-curl -q -LSsf /api/v1/jokes/random.txt               # API .txt extension
+# Robots file
+curl -q -LSsf /robots.txt
+# Security policy (well-known)
+curl -q -LSsf /.well-known/security.txt
+# API .txt extension
+curl -q -LSsf /api/v1/jokes/random.txt
 
 # ALL API endpoints that support .txt MUST be tested with .txt
-curl -q -LSsf /api/v1/users/john.txt                 # User profile as text
-curl -q -LSsf /api/v1/weather/Chicago.txt            # Weather as text
+# User profile as text
+curl -q -LSsf /api/v1/users/john.txt
+# Weather as text
+curl -q -LSsf /api/v1/weather/Chicago.txt
 ```
 
 **Test Matrix Template:**
@@ -34754,64 +35289,95 @@ done
 **Example: Open data API project MUST test:**
 ```bash
 # API endpoints (no auth required)
-GET    /api/{api_version}/items           # List items (JSON)
-GET    /api/{api_version}/items/{id}      # Get item (JSON)
-GET    /api/{api_version}/items/{id}.txt  # Get item (plain text)
-POST   /api/{api_version}/items           # Create item (JSON, rate-limited)
+# List items (JSON)
+GET    /api/{api_version}/items
+# Get item (JSON)
+GET    /api/{api_version}/items/{id}
+# Get item (plain text)
+GET    /api/{api_version}/items/{id}.txt
+# Create item (JSON, rate-limited)
+POST   /api/{api_version}/items
 
 # Frontend routes (smart detection) - CLI gets formatted text via HTML2TextConverter
-curl -q -LSsf /items                              # CLI → formatted text
-browser /items                                    # Browser → HTML page
-curl -q -LSsf -H "Accept: text/plain" /items/{id} # Formatted text (Accept header)
-curl -q -LSsf -H "Accept: text/html" /items/{id}  # HTML (Accept header)
+# CLI → formatted text
+curl -q -LSsf /items
+# Browser → HTML page
+browser /items
+# Formatted text (Accept header)
+curl -q -LSsf -H "Accept: text/plain" /items/{id}
+# HTML (Accept header)
+curl -q -LSsf -H "Accept: text/html" /items/{id}
 ```
 
 **Example: Jokes API (read-only) MUST test:**
 ```bash
 # API endpoints
-GET /api/{api_version}/jokes/random             # Random joke (JSON)
-GET /api/{api_version}/jokes/random.txt         # Random joke (text)
-GET /api/{api_version}/jokes/programming        # Category filter (JSON)
-GET /api/{api_version}/jokes/search?q=bug       # Search (JSON)
+# Random joke (JSON)
+GET /api/{api_version}/jokes/random
+# Random joke (text)
+GET /api/{api_version}/jokes/random.txt
+# Category filter (JSON)
+GET /api/{api_version}/jokes/programming
+# Search (JSON)
+GET /api/{api_version}/jokes/search?q=bug
 
 # Frontend endpoints (smart detection) - CLI gets formatted text
-curl -q -LSsf /jokes/random                   # CLI → formatted text
-curl -q -LSsf /jokes                          # CLI → formatted text list
-curl -q -LSsf -H "Accept: text/html" /jokes   # Browser → HTML
+# CLI → formatted text
+curl -q -LSsf /jokes/random
+# CLI → formatted text list
+curl -q -LSsf /jokes
+# Browser → HTML
+curl -q -LSsf -H "Accept: text/html" /jokes
 ```
 
 **Example: Weather API (external integration) MUST test:**
 ```bash
 # API endpoints with location params
-GET /api/{api_version}/weather/current/New%20York        # Current weather (JSON)
-GET /api/{api_version}/weather/current/New%20York.txt    # Current weather (text)
-GET /api/{api_version}/weather/forecast/10001            # ZIP code forecast (JSON)
-GET /api/{api_version}/weather/alerts/40.7128,-74.0060   # Lat/long alerts (JSON)
+# Current weather (JSON)
+GET /api/{api_version}/weather/current/New%20York
+# Current weather (text)
+GET /api/{api_version}/weather/current/New%20York.txt
+# ZIP code forecast (JSON)
+GET /api/{api_version}/weather/forecast/10001
+# Lat/long alerts (JSON)
+GET /api/{api_version}/weather/alerts/40.7128,-74.0060
 
 # Test caching behavior
-GET /api/{api_version}/weather/current/Chicago           # First call (cache miss)
-GET /api/{api_version}/weather/current/Chicago           # Second call (cache hit, faster)
+# First call (cache miss)
+GET /api/{api_version}/weather/current/Chicago
+# Second call (cache hit, faster)
+GET /api/{api_version}/weather/current/Chicago
 
 # Frontend (smart detection) - CLI gets formatted text
-curl -q -LSsf /weather/Chicago                # CLI → formatted text
-curl -q -LSsf /weather/forecast/90210         # CLI → formatted text forecast
+# CLI → formatted text
+curl -q -LSsf /weather/Chicago
+# CLI → formatted text forecast
+curl -q -LSsf /weather/forecast/90210
 ```
 
 **Example: Link Shortener (URL mapping) MUST test:**
 ```bash
 # API CRUD for short links
-POST   /api/{api_version}/links -d '{"url":"https://example.com/long/url"}'  # Create
-GET    /api/{api_version}/links/abc123         # Get link details (JSON)
-PUT    /api/{api_version}/links/abc123 -d '{"url":"https://new.com"}'        # Update
-DELETE /api/{api_version}/links/abc123         # Delete
+# Create
+POST   /api/{api_version}/links -d '{"url":"https://example.com/long/url"}'
+# Get link details (JSON)
+GET    /api/{api_version}/links/abc123
+# Update
+PUT    /api/{api_version}/links/abc123 -d '{"url":"https://new.com"}'
+# Delete
+DELETE /api/{api_version}/links/abc123
 
 # Redirect resolution
-GET /abc123                          # Should redirect to destination
-GET /abc123/stats                    # Link statistics (JSON or HTML)
+# Should redirect to destination
+GET /abc123
+# Link statistics (JSON or HTML)
+GET /abc123/stats
 
 # Frontend (smart detection)
-curl -q -LSsf /links                          # User's links list (text)
-curl -q -LSsf /links/abc123                   # Link details (text)
+# User's links list (text)
+curl -q -LSsf /links
+# Link details (text)
+curl -q -LSsf /links/abc123
 ```
 
 ### Go Unit Test Requirements
@@ -34918,15 +35484,19 @@ test:
 // Function with multiple paths
 func ValidateInput(input string) error {
     if input == "" {
-        return ErrEmpty  // Test this path
+        // Test this path
+        return ErrEmpty
     }
     if len(input) > 100 {
-        return ErrTooLong  // Test this path
+        // Test this path
+        return ErrTooLong
     }
     if !isValid(input) {
-        return ErrInvalid  // Test this path
+        // Test this path
+        return ErrInvalid
     }
-    return nil  // Test this path
+    // Test this path
+    return nil
 }
 
 // Tests must cover ALL paths
@@ -35037,8 +35607,10 @@ verify_all_endpoints_tested
 
 **Test Execution Order:**
 ```bash
-1. make test                    # Go unit tests (fast)
-2. ./tests/run_tests.sh         # Integration tests (slower, full coverage)
+# Go unit tests (fast)
+1. make test
+# Integration tests (slower, full coverage)
+2. ./tests/run_tests.sh
 ```
 
 ### Integration Testing Strategy
@@ -35070,7 +35642,8 @@ verify_all_endpoints_tested
 ```bash
 # 1. Build (Makefile-first — always use make when a Makefile exists)
 # If Makefile exists (standard for all bootstrapped projects)
-make build    # → binaries/{project_name}, binaries/{project_name}-cli (all 8 platforms)
+# → binaries/{project_name}, binaries/{project_name}-cli (all 8 platforms)
+make build
 
 # If no Makefile exists yet (bootstrap or manual equivalent)
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
@@ -35400,12 +35973,15 @@ incus exec "$CONTAINER_NAME" -- bash -c "
     ${PROJECT_NAME} --service --install
 
     echo '=== Service Status ==='
-    systemctl status ${PROJECT_NAME} || true  # inside VM — not a host-service mutation
+    # inside VM — not a host-service mutation
+    systemctl status ${PROJECT_NAME} || true
 
     echo '=== Service Start Test ==='
-    systemctl start ${PROJECT_NAME}  # inside VM — not a host-service mutation
+    # inside VM — not a host-service mutation
+    systemctl start ${PROJECT_NAME}
     sleep 2
-    systemctl status ${PROJECT_NAME}  # inside VM — not a host-service mutation
+    # inside VM — not a host-service mutation
+    systemctl status ${PROJECT_NAME}
 
     echo '=== API Endpoint Tests ==='
     # Test JSON response (default)
@@ -35493,7 +36069,8 @@ incus exec "$CONTAINER_NAME" -- bash -c "
     echo '=== Agent Tests (if exists) ==='
 
     echo '=== Service Stop Test ==='
-    systemctl stop ${PROJECT_NAME}  # inside VM — not a host-service mutation
+    # inside VM — not a host-service mutation
+    systemctl stop ${PROJECT_NAME}
 
     echo '=== All tests passed ==='
 "
@@ -35641,10 +36218,14 @@ echo '=== All open API smoke tests passed ==='
 **When a Makefile exists (standard for all bootstrapped projects), always use make targets:**
 
 ```bash
-make build    # compile for all 8 platforms → binaries/
-make test     # run unit tests with coverage inside Docker
-make dev      # quick dev build → ${TMPDIR}/{project_org}/{project_name}-XXXXXX/
-make release  # tag + cross-platform release binaries
+# compile for all 8 platforms → binaries/
+make build
+# run unit tests with coverage inside Docker
+make test
+# quick dev build → ${TMPDIR}/{project_org}/{project_name}-XXXXXX/
+make dev
+# tag + cross-platform release binaries
+make release
 ```
 
 **No Makefile yet? Use raw docker commands directly (bootstrap / manual equivalent):**
@@ -35653,7 +36234,8 @@ make release  # tag + cross-platform release binaries
 # Set project path to YOUR actual project location (examples shown below)
 # Use git top-level if in a git repo: PROJECT_PATH="$(git rev-parse --show-toplevel)"
 # Or use absolute path to your project directory
-PROJECT_PATH="/root/Projects/github/apimgr/{project_name}"  # Example 1
+# Example 1
+PROJECT_PATH="/root/Projects/github/apimgr/{project_name}"
 # PROJECT_PATH="~/Documents/myproject"                     # Example 2
 # PROJECT_PATH="~/myproject"                               # Example 3
 # PROJECT_PATH="/workspace/dev/myproject"                  # Example 4
@@ -35711,7 +36293,8 @@ docker run --rm \
 
 ```bash
 # If Makefile exists (standard for all bootstrapped projects)
-make build    # → binaries/{project_name}-{os}-{arch} (all 8 platforms)
+# → binaries/{project_name}-{os}-{arch} (all 8 platforms)
+make build
 
 # If no Makefile exists yet (bootstrap or manual equivalent)
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
@@ -35744,11 +36327,12 @@ incus delete test-{project_name} --force
 ```bash
 # Build (Makefile-first)
 # If Makefile exists (standard for all bootstrapped projects)
-make build    # → binaries/{project_name}
+# → binaries/{project_name}
+make build
 # If no Makefile exists yet (bootstrap or manual equivalent)
 # GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"; GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
 # mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
-# docker run --rm -v $PWD:/app -v $GO_CACHE:/usr/local/share/go/pkg/mod \
+# docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -v $GO_CACHE:/usr/local/share/go/pkg/mod \
 #   -v $GO_BUILD:/usr/local/share/go/cache -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
 #   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
@@ -35790,9 +36374,10 @@ mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build (Makefile-first)
 # If Makefile exists (standard for all bootstrapped projects)
-make build    # → binaries/{project_name}
+# → binaries/{project_name}
+make build
 # If no Makefile exists yet:
-# docker run --rm -v $PWD:/app -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+# docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
 #   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
 # Launch Incus container (use latest Debian stable)
@@ -36025,7 +36610,8 @@ site_author: {project_org}
 
 repo_name: {project_org}/{internal_name}
 repo_url: {PLATFORM_REPO_URL}
-edit_uri: edit/main/docs/  # Adjust path format for GitLab/Gitea if needed
+# Adjust path format for GitLab/Gitea if needed
+edit_uri: edit/main/docs/
 
 theme:
   name: material
@@ -36124,7 +36710,8 @@ nav:
     - Configuration: configuration.md
   - Usage:
     - API Reference: api.md
-    - CLI Reference: cli.md         # Remove if project has no CLI surface
+    # Remove if project has no CLI surface
+    - CLI Reference: cli.md
     - Security: security.md
     - Integrations: integrations.md
   - Development:
@@ -36132,7 +36719,8 @@ nav:
 
 extra:
   social:
-    - icon: fontawesome/brands/git-alt  # Or github/gitlab/gitea as appropriate
+    # Or github/gitlab/gitea as appropriate
+    - icon: fontawesome/brands/git-alt
       link: {PLATFORM_REPO_URL}
   generator: false
 ```
@@ -36147,9 +36735,11 @@ extra:
 version: 2
 
 build:
-  os: ubuntu-24.04          # Use latest Ubuntu LTS
+  # Use latest Ubuntu LTS
+  os: ubuntu-24.04
   tools:
-    python: "3.12"          # Use latest stable Python
+    # Use latest stable Python
+    python: "3.12"
 
 mkdocs:
   configuration: mkdocs.yml
@@ -36457,7 +37047,7 @@ pymdown-extensions>=10.0
 
 ```bash
 # Docker
-docker run -p 172.17.0.1:64580:80 {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
+docker run --name "{project_name}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -p 172.17.0.1:64580:80 {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
 
 # Binary
 ./{project_name}-linux-amd64 --config server.yml
@@ -36520,8 +37110,10 @@ chmod +x {project_name}-linux-amd64
 
 ```bash
 sudo ./{project_name} --service install
-sudo systemctl start {project_name}   # operator action on target host — not an AI-executed command during development
-sudo systemctl enable {project_name}  # operator action on target host — not an AI-executed command during development
+# operator action on target host — not an AI-executed command during development
+sudo systemctl start {project_name}
+# operator action on target host — not an AI-executed command during development
+sudo systemctl enable {project_name}
 ```
 
 ## Configuration
@@ -36819,7 +37411,8 @@ func LanguageMiddleware(next http.Handler) http.Handler {
                 Name:     "lang",
                 Value:    lang,
                 Path:     "/",
-                MaxAge:   365 * 24 * 60 * 60, // 1 year
+                // 1 year
+                MaxAge:   365 * 24 * 60 * 60,
                 SameSite: http.SameSiteLaxMode,
                 Secure:   r.TLS != nil,
                 HttpOnly: true,
@@ -37349,7 +37942,7 @@ var localeFS embed.FS
   },
 
   "cli": {
-    "description": "{project_name} {projectversion} - {project_description}",
+    "description": "{project_name} {project_version} - {project_description}",
     "usage": "Uso:",
     "information": "Información:",
     "shell_integration": "Integración de shell:",
@@ -37391,7 +37984,7 @@ var localeFS embed.FS
   },
 
   "version": {
-    "name_version": "{project_name} {projectversion}",
+    "name_version": "{project_name} {project_version}",
     "built": "Compilado: {build_date}",
     "go": "Go: {go_version}",
     "os_arch": "SO/Arq: {goos}/{goarch}"
@@ -37457,8 +38050,10 @@ funcMap := template.FuncMap{
 // Extracts language from request context (set by language detection middleware)
 // If language is unsupported, silently falls back to "en"
 func t(r *http.Request, key string) string {
-    lang := i18n.LangFromRequest(r) // ?lang= → cookie → Accept-Language → "en"
-    return i18n.Translate(lang, key) // unsupported lang → falls back to "en"
+    // ?lang= → cookie → Accept-Language → "en"
+    lang := i18n.LangFromRequest(r)
+    // unsupported lang → falls back to "en"
+    return i18n.Translate(lang, key)
 }
 
 func tf(r *http.Request, key string, args ...interface{}) string {
@@ -37475,7 +38070,8 @@ func LangFromRequest(r *http.Request) string {
         if IsSupported(lang) {
             return lang
         }
-        return "en" // unsupported → English, don't error
+        // unsupported → English, don't error
+        return "en"
     }
     // 2. Cookie
     if cookie, err := r.Cookie("lang"); err == nil && cookie.Value != "" {
@@ -37486,7 +38082,8 @@ func LangFromRequest(r *http.Request) string {
     }
     // 3. Accept-Language header (parse best match)
     if accept := r.Header.Get("Accept-Language"); accept != "" {
-        lang := parseBestMatch(accept) // returns best supported match or ""
+        // returns best supported match or ""
+        lang := parseBestMatch(accept)
         if lang != "" {
             return lang
         }
@@ -37508,7 +38105,8 @@ func Translate(lang, key string) string {
     if val, ok := translations["en"][key]; ok {
         return val
     }
-    return key // last resort: return the key itself
+    // last resort: return the key itself
+    return key
 }
 ```
 
@@ -37562,9 +38160,9 @@ func handleError(w http.ResponseWriter, r *http.Request, code string) {
 }
 ```
 
+Response to `GET /api/v1/items/999?lang=es`:
+
 ```json
-// GET /api/v1/items/999?lang=es
-// Response:
 {
   "ok": false,
   "error": "NOT_FOUND",
@@ -37579,7 +38177,8 @@ func handleError(w http.ResponseWriter, r *http.Request, code string) {
 ```go
 func SwaggerHandler(w http.ResponseWriter, r *http.Request) {
     lang := r.Context().Value(langKey).(string)
-    spec := generateSwaggerSpec(lang) // Translates descriptions
+    // Translates descriptions
+    spec := generateSwaggerSpec(lang)
     writeJSON(w, spec)
 }
 ```
@@ -37693,7 +38292,8 @@ func (c *Client) newRequest(method, path string, body io.Reader) (*http.Request,
         return nil, err
     }
     req.Header.Set("User-Agent", c.userAgent)
-    req.Header.Set("Accept-Language", c.lang)  // from --lang / config / env
+    // from --lang / config / env
+    req.Header.Set("Accept-Language", c.lang)
     if c.token != "" {
         req.Header.Set("Authorization", "Bearer "+c.token)
     }
@@ -37853,7 +38453,8 @@ server:
       - ja
     fallback_language: en
     cookie_name: lang
-    cookie_max_age: 365d  # 1 year
+    # 1 year
+    cookie_max_age: 365d
 ```
 
 ---
@@ -38494,10 +39095,14 @@ import (
 // Server binary fully owns and controls the Tor process lifecycle.
 type TorService struct {
     tor        *tor.Tor
-    serviceID  string              // .onion address (without .onion suffix)
-    key        crypto.PrivateKey   // ED25519 private key for persistent address
-    serverPort int                 // Server's HTTP port that hidden service forwards to
-    dialer     *tor.Dialer         // For outbound Tor connections (nil if disabled)
+    // .onion address (without .onion suffix)
+    serviceID  string
+    // ED25519 private key for persistent address
+    key        crypto.PrivateKey
+    // Server's HTTP port that hidden service forwards to
+    serverPort int
+    // For outbound Tor connections (nil if disabled)
+    dialer     *tor.Dialer
 }
 
 // TorConfig holds Tor-related configuration from server config
@@ -38509,29 +39114,40 @@ type TorConfig struct {
     UseNetwork bool `yaml:"use_network" json:"use_network"`
 
     // Performance settings
-    MaxCircuits      int `yaml:"max_circuits" json:"max_circuits"`           // 1-128, default 32
-    CircuitTimeout   int `yaml:"circuit_timeout" json:"circuit_timeout"`     // 10-300s, default 60
-    BootstrapTimeout int `yaml:"bootstrap_timeout" json:"bootstrap_timeout"` // 30-600s, default 180
+    // 1-128, default 32
+    MaxCircuits      int `yaml:"max_circuits" json:"max_circuits"`
+    // 10-300s, default 60
+    CircuitTimeout   int `yaml:"circuit_timeout" json:"circuit_timeout"`
+    // 30-600s, default 180
+    BootstrapTimeout int `yaml:"bootstrap_timeout" json:"bootstrap_timeout"`
 
     // Security settings
     SafeLogging               bool `yaml:"safe_logging" json:"safe_logging"`
-    MaxStreamsPerCircuit      int  `yaml:"max_streams_per_circuit" json:"max_streams_per_circuit"`             // 10-500, default 100
-    CloseCircuitOnStreamLimit bool `yaml:"close_circuit_on_stream_limit" json:"close_circuit_on_stream_limit"` // default true
+    // 10-500, default 100
+    MaxStreamsPerCircuit      int  `yaml:"max_streams_per_circuit" json:"max_streams_per_circuit"`
+    // default true
+    CloseCircuitOnStreamLimit bool `yaml:"close_circuit_on_stream_limit" json:"close_circuit_on_stream_limit"`
 
     // Bandwidth settings
-    BandwidthRate        string `yaml:"bandwidth_rate" json:"bandwidth_rate"`                 // e.g., "1 MB" per second
-    BandwidthBurst       string `yaml:"bandwidth_burst" json:"bandwidth_burst"`               // e.g., "2 MB" per second
-    MaxMonthlyBandwidth  string `yaml:"max_monthly_bandwidth" json:"max_monthly_bandwidth"`   // e.g., "100 GB", "unlimited"
+    // e.g., "1 MB" per second
+    BandwidthRate        string `yaml:"bandwidth_rate" json:"bandwidth_rate"`
+    // e.g., "2 MB" per second
+    BandwidthBurst       string `yaml:"bandwidth_burst" json:"bandwidth_burst"`
+    // e.g., "100 GB", "unlimited"
+    MaxMonthlyBandwidth  string `yaml:"max_monthly_bandwidth" json:"max_monthly_bandwidth"`
 
     // Hidden service settings
-    NumIntroPoints int `yaml:"num_intro_points" json:"num_intro_points"` // 3-10, default 3
-    VirtualPort    int `yaml:"virtual_port" json:"virtual_port"`         // 1-65535, default 80
+    // 3-10, default 3
+    NumIntroPoints int `yaml:"num_intro_points" json:"num_intro_points"`
+    // 1-65535, default 80
+    VirtualPort    int `yaml:"virtual_port" json:"virtual_port"`
 }
 
 // DefaultTorConfig returns the default Tor configuration
 func DefaultTorConfig() TorConfig {
     return TorConfig{
-        Binary:                    "",       // auto-detect
+        // auto-detect
+        Binary:                    "",
         UseNetwork:                false,
         AllowUserPreference:       true,
         MaxCircuits:               32,
@@ -38542,7 +39158,8 @@ func DefaultTorConfig() TorConfig {
         CloseCircuitOnStreamLimit: true,
         BandwidthRate:             "1 MB",
         BandwidthBurst:            "2 MB",
-        MaxMonthlyBandwidth:       "100 GB", // default 100GB per month
+        // default 100GB per month
+        MaxMonthlyBandwidth:       "100 GB",
         NumIntroPoints:            3,
         VirtualPort:               80,
     }
@@ -38710,7 +39327,8 @@ func (s *TorService) GetHTTPClient(useTor bool) *http.Client {
 
     // Route through Tor network
     return &http.Client{
-        Timeout: 60 * time.Second,  // Tor is slower
+        // Tor is slower
+        Timeout: 60 * time.Second,
         Transport: &http.Transport{
             DialContext: s.dialer.DialContext,
         },
@@ -38815,7 +39433,8 @@ func getTorConfig(cfg *TorConfig) string {
         // Enable SOCKS for outbound - "auto" picks high port at runtime
         socksConfig = "SocksPort auto"
     } else {
-        socksConfig = "SocksPort 0"  // Disabled
+        // Disabled
+        socksConfig = "SocksPort 0"
     }
 
     // SafeLogging
@@ -38911,9 +39530,12 @@ The hidden service is created using bine's `control.AddOnion()` method, which se
 
 **Required bine imports:**
 ```go
-"github.com/cretz/bine/control"        // AddOnion, KeyVal, GenKey
-"github.com/cretz/bine/tor"            // Start, Tor, StartConf
-"github.com/cretz/bine/torutil/ed25519" // ED25519 key handling
+// AddOnion, KeyVal, GenKey
+"github.com/cretz/bine/control"
+// Start, Tor, StartConf
+"github.com/cretz/bine/tor"
+// ED25519 key handling
+"github.com/cretz/bine/torutil/ed25519"
 ```
 
 ### Tor Process Lifecycle
@@ -38952,10 +39574,13 @@ The hidden service is created using bine's `control.AddOnion()` method, which se
 // NOTE: Hidden service is ALWAYS enabled if Tor binary is found - no enable/disable toggle
 type TorManager struct {
     mu         sync.Mutex
-    service    *TorService  // Our TorService wrapper
-    config     *TorConfig   // Tor configuration settings
+    // Our TorService wrapper
+    service    *TorService
+    // Tor configuration settings
+    config     *TorConfig
     dataDir    string
-    serverPort int          // Server's HTTP port to forward to
+    // Server's HTTP port to forward to
+    serverPort int
     ctx        context.Context
     cancel     context.CancelFunc
 }
@@ -39132,7 +39757,8 @@ func main() {
     serverPort := 8080
 
     // Get Tor configuration (from config file)
-    torConfig := config.Tor  // Uses TorConfig struct with all settings
+    // Uses TorConfig struct with all settings
+    torConfig := config.Tor
 
     // Start Tor - forwards .onion:{virtual_port} → 127.0.0.1:serverPort
     // TorConfig contains all settings including outbound network options
@@ -39242,9 +39868,12 @@ func ensureTorDirs() error {
 
     // Tor directories (all under app's dirs, binary owns Tor)
     dirs := []string{
-        filepath.Join(configDir, "tor"),           // torrc location
-        filepath.Join(dataDir, "tor"),             // Tor data
-        filepath.Join(dataDir, "tor", "site"),     // Hidden service keys
+        // torrc location
+        filepath.Join(configDir, "tor"),
+        // Tor data
+        filepath.Join(dataDir, "tor"),
+        // Hidden service keys
+        filepath.Join(dataDir, "tor", "site"),
     }
 
     for _, dir := range dirs {
@@ -39284,7 +39913,8 @@ func ensureTorrc(path string, content []byte) (bool, error) {
         if err := os.Chmod(path, 0600); err != nil {
             return false, fmt.Errorf("chmod file: %w", err)
         }
-        return false, nil  // Not created, already existed
+        // Not created, already existed
+        return false, nil
     }
 
     // File doesn't exist - create it
@@ -39301,7 +39931,8 @@ func ensureTorrc(path string, content []byte) (bool, error) {
         }
     }
 
-    return true, nil  // Created new file
+    // Created new file
+    return true, nil
 }
 
 // updateTorrc overwrites torrc with new content (for config changes)
@@ -39533,8 +40164,10 @@ userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 
 ```yaml
 update:
-  auto: false                # default false for CLI (interactive prompt unless explicitly opted in). Server default true.
-  check_interval: per_invocation   # CLI is short-lived; checks once per command. No background poll.
+  # default false for CLI (interactive prompt unless explicitly opted in). Server default true.
+  auto: false
+  # CLI is short-lived; checks once per command. No background poll.
+  check_interval: per_invocation
   channel: stable
 ```
 
@@ -39579,16 +40212,19 @@ func SaveIfEmptyOrInvalid(current, flagValue string, validate func(string) bool)
 
     // Current is empty - save new value
     if current == "" {
-        return flagValue  // Save to config
+        // Save to config
+        return flagValue
     }
 
     // Current is invalid - replace with valid flag value
     if !validate(current) {
-        return flagValue  // Save to config
+        // Save to config
+        return flagValue
     }
 
     // Current is valid - use flag for session only, don't save
-    return flagValue  // Use but don't persist
+    // Use but don't persist
+    return flagValue
 }
 ```
 
@@ -39667,25 +40303,36 @@ display:
 
 **Exit-immediately flags (NEVER launch TUI):**
 ```bash
-{project_name}-cli -h                    # Print help, exit
-{project_name}-cli --help                # Print help, exit
-{project_name}-cli -v                    # Print version, exit
-{project_name}-cli --version             # Print version, exit
+# Print help, exit
+{project_name}-cli -h
+# Print help, exit
+{project_name}-cli --help
+# Print version, exit
+{project_name}-cli -v
+# Print version, exit
+{project_name}-cli --version
 ```
 
 **Config flags (still launch TUI):**
 ```bash
-{project_name}-cli                                    # TUI mode
-{project_name}-cli --config dev                       # TUI mode (with dev.yml)
-{project_name}-cli --server https://example.com       # TUI mode (with server)
-{project_name}-cli --token abc123                     # TUI mode (with token)
+# TUI mode
+{project_name}-cli
+# TUI mode (with dev.yml)
+{project_name}-cli --config dev
+# TUI mode (with server)
+{project_name}-cli --server https://example.com
+# TUI mode (with token)
+{project_name}-cli --token abc123
 ```
 
 **Command/args (CLI mode):**
 ```bash
-{project_name}-cli list                               # CLI mode
-{project_name}-cli golang tutorials                   # CLI mode (search)
-{project_name}-cli notes.txt                          # CLI mode (paste file)
+# CLI mode
+{project_name}-cli list
+# CLI mode (search)
+{project_name}-cli golang tutorials
+# CLI mode (paste file)
+{project_name}-cli notes.txt
 ```
 
 ```go
@@ -39694,7 +40341,8 @@ func detectMode(args []string) string {
     for _, arg := range args[1:] {
         switch arg {
         case "-h", "--help", "-v", "--version":
-            return "cli"  // Handle and exit
+            // Handle and exit
+            return "cli"
         }
     }
 
@@ -39710,15 +40358,18 @@ func detectMode(args []string) string {
 
     for _, arg := range args[1:] {
         if !strings.HasPrefix(arg, "-") {
-            return "cli"  // Command/arg provided
+            // Command/arg provided
+            return "cli"
         }
         flag := strings.Split(arg, "=")[0]
         if !configFlags[flag] {
-            return "cli"  // Action flag
+            // Action flag
+            return "cli"
         }
     }
 
-    return "tui"  // No args or config-only = TUI
+    // No args or config-only = TUI
+    return "tui"
 }
 ```
 
@@ -40242,7 +40893,8 @@ func launchWin32Gui(config *Config) error {
         uintptr(unsafe.Pointer(className)),
         uintptr(unsafe.Pointer(windowName)),
         WS_OVERLAPPEDWINDOW|WS_VISIBLE,
-        100, 100, 800, 600, // x, y, width, height
+        // x, y, width, height
+        100, 100, 800, 600,
         0, 0, 0, 0,
     )
 
@@ -40352,7 +41004,8 @@ func IsRemoteSession() bool {
 ```yaml
 # cli.yml - theme section (same format as server.yml)
 theme:
-  mode: auto          # dark (default), light, auto
+  # dark (default), light, auto
+  mode: auto
 ```
 
 ### TUI Styles from Palette
@@ -40448,7 +41101,8 @@ func (o *Output) PrintError(msg string) {
 // GUI window scaling for high-DPI and large displays
 func calculateGUILayout(width, height int, dpi float64) Layout {
     // Scale based on DPI
-    scale := dpi / 96.0 // 96 DPI is baseline
+    // 96 DPI is baseline
+    scale := dpi / 96.0
 
     // Base sizes (at 96 DPI)
     baseMinWidth := 800
@@ -40460,7 +41114,8 @@ func calculateGUILayout(width, height int, dpi float64) Layout {
 
     // Determine layout mode
     switch {
-    case width >= 3840: // 4K+
+    // 4K+
+    case width >= 3840:
         return Layout{
             Mode:       "dashboard",
             Columns:    4,
@@ -40468,7 +41123,8 @@ func calculateGUILayout(width, height int, dpi float64) Layout {
             SidebarW:   int(300 * scale),
             FontScale:  scale,
         }
-    case width >= 2560: // 1440p/QHD
+    // 1440p/QHD
+    case width >= 2560:
         return Layout{
             Mode:       "wide",
             Columns:    3,
@@ -40476,7 +41132,8 @@ func calculateGUILayout(width, height int, dpi float64) Layout {
             SidebarW:   int(280 * scale),
             FontScale:  scale,
         }
-    case width >= 1920: // 1080p
+    // 1080p
+    case width >= 1920:
         return Layout{
             Mode:       "standard",
             Columns:    2,
@@ -40484,7 +41141,8 @@ func calculateGUILayout(width, height int, dpi float64) Layout {
             SidebarW:   int(250 * scale),
             FontScale:  scale,
         }
-    case width >= 1280: // 720p
+    // 720p
+    case width >= 1280:
         return Layout{
             Mode:       "compact",
             Columns:    1,
@@ -40591,7 +41249,8 @@ func GetLayoutConfig(mode terminal.SizeMode) LayoutConfig {
             MaxColumns:     12,
             TruncateAt:     200,
             UseAbbrev:      false,
-            VerticalScroll: false, // Full content visible
+            // Full content visible
+            VerticalScroll: false,
             MultiPane:      true,
         },
         terminal.SizeModeMassive: {
@@ -40601,7 +41260,8 @@ func GetLayoutConfig(mode terminal.SizeMode) LayoutConfig {
             ShowSidebar:    true,
             SidebarWidth:   50,
             MaxColumns:     20,
-            TruncateAt:     0, // No truncation
+            // No truncation
+            TruncateAt:     0,
             UseAbbrev:      false,
             VerticalScroll: false,
             MultiPane:      true,
@@ -40711,11 +41371,16 @@ func watchWindowSize(ctx context.Context, callback func(w, h int)) {
 ```go
 // Consistent spacing units (TUI)
 const (
-    SpaceXS = 1  // Micro spacing
-    SpaceS  = 2  // Small spacing
-    SpaceM  = 4  // Medium spacing
-    SpaceL  = 6  // Large spacing
-    SpaceXL = 8  // Extra large spacing
+    // Micro spacing
+    SpaceXS = 1
+    // Small spacing
+    SpaceS  = 2
+    // Medium spacing
+    SpaceM  = 4
+    // Large spacing
+    SpaceL  = 6
+    // Extra large spacing
+    SpaceXL = 8
 )
 
 // Apply spacing based on terminal size mode
@@ -40729,7 +41394,8 @@ func GetSpacingForMode(m terminal.SizeMode) int {
         return SpaceM
     case terminal.SizeModeWide:
         return SpaceL
-    default: // Ultrawide, Massive
+    // Ultrawide, Massive
+    default:
         return SpaceXL
     }
 }
@@ -40810,7 +41476,8 @@ When launched with no arguments in an interactive terminal:
 
 ```bash
 # Launch TUI (no arguments needed)
-{project_name}-cli              # Opens TUI automatically
+# Opens TUI automatically
+{project_name}-cli
 
 # TUI provides:
 # - Interactive menus
@@ -41071,7 +41738,8 @@ func LogFile() string {
 // resolveConfigPath resolves --config flag to absolute path
 func resolveConfigPath(configFlag string) (string, error) {
     if configFlag == "" {
-        return ConfigFile(), nil  // Default: cli.yml
+        // Default: cli.yml
+        return ConfigFile(), nil
     }
 
     // Expand ~ to home directory
@@ -41124,9 +41792,12 @@ func resolveYamlExtension(path string) string {
 **Example usage:**
 ```bash
 # Use different configs for different environments
-{project_name}-cli --config dev list              # Uses ~/.config/.../dev.yml
-{project_name}-cli --config staging list          # Uses ~/.config/.../staging.yml
-{project_name}-cli --config ~/work/prod.yml list  # Uses absolute path
+# Uses ~/.config/.../dev.yml
+{project_name}-cli --config dev list
+# Uses ~/.config/.../staging.yml
+{project_name}-cli --config staging list
+# Uses absolute path
+{project_name}-cli --config ~/work/prod.yml list
 
 # Config profiles allow different servers/tokens without flags
 # dev.yml:   server: https://dev.example.com, token: dev-token
@@ -41143,47 +41814,71 @@ func resolveYamlExtension(path string) string {
 
 # Server connection
 server:
-  primary: ""                      # Server URL (empty = use {official_site} or prompt)
-  api_version: v1                  # API version prefix (default: v1, must match server)
-  timeout: 30s                     # Request timeout (match server default)
-  retry: 3                         # Retry attempts on failure
-  retry_delay: 1s                  # Delay between retries
+  # Server URL (empty = use {official_site} or prompt)
+  primary: ""
+  # API version prefix (default: v1, must match server)
+  api_version: v1
+  # Request timeout (match server default)
+  timeout: 30s
+  # Retry attempts on failure
+  retry: 3
+  # Delay between retries
+  retry_delay: 1s
 
 # Authentication
 auth:
-  token: ""                        # API token (see PART 11)
-  token_file: ""                   # Read token from file instead
+  # API token (see PART 11)
+  token: ""
+  # Read token from file instead
+  token_file: ""
 
 # Output preferences
 output:
-  format: table                    # Default: table, json, yaml, plain, csv
-  color: auto                      # auto, yes, no (match terminal detection)
-  pager: auto                      # auto, always, never (use less/more for long output)
-  quiet: false                     # Suppress non-essential output
-  verbose: false                   # Extra output (same as --verbose)
+  # Default: table, json, yaml, plain, csv
+  format: table
+  # auto, yes, no (match terminal detection)
+  color: auto
+  # auto, always, never (use less/more for long output)
+  pager: auto
+  # Suppress non-essential output
+  quiet: false
+  # Extra output (same as --verbose)
+  verbose: false
 
 # TUI preferences (if TUI supported)
 tui:
-  enabled: true                    # Allow TUI mode (false = CLI-only)
-  theme: dark                      # dark, light, system (match server theme options)
-  mouse: true                      # Enable mouse support
-  unicode: true                    # Use unicode characters (false = ASCII only)
+  # Allow TUI mode (false = CLI-only)
+  enabled: true
+  # dark, light, system (match server theme options)
+  theme: dark
+  # Enable mouse support
+  mouse: true
+  # Use unicode characters (false = ASCII only)
+  unicode: true
 
 # Logging
 logging:
-  level: warn                      # debug, info, warn, error (match server default)
-  file: ""                         # Log file path (empty = {log_dir}/cli.log)
-  max_size: 10MB                   # Max log file size (match server default)
-  max_files: 5                     # Max log files to keep (match server default)
+  # debug, info, warn, error (match server default)
+  level: warn
+  # Log file path (empty = {log_dir}/cli.log)
+  file: ""
+  # Max log file size (match server default)
+  max_size: 10MB
+  # Max log files to keep (match server default)
+  max_files: 5
 
 # Cache
 cache:
-  enabled: true                    # Enable response caching
-  ttl: 5m                          # Cache TTL (5 minutes)
-  max_size: 100MB                  # Max cache size
+  # Enable response caching
+  enabled: true
+  # Cache TTL (5 minutes)
+  ttl: 5m
+  # Max cache size
+  max_size: 100MB
 
 # Debug
-debug: false                       # Enable debug mode (same as --debug)
+# Enable debug mode (same as --debug)
+debug: false
 
 # Project-specific defaults (flag defaults)
 defaults:
@@ -41243,9 +41938,11 @@ func saveIfEmpty(current, newValue string, validate func(string) bool) (string, 
         return "", fmt.Errorf("invalid value: %s", newValue)
     }
     if current == "" {
-        return newValue, nil  // Save to config
+        // Save to config
+        return newValue, nil
     }
-    return newValue, nil  // Use for session, don't save (current preserved)
+    // Use for session, don't save (current preserved)
+    return newValue, nil
 }
 ```
 
@@ -41339,19 +42036,27 @@ See PART 5: Boolean Handling for the complete implementation.
 
 **Usage in flags:**
 ```bash
-{project_name}-cli --public                    # Boolean flag (true)
-{project_name}-cli --public=yes                # Explicit truthy
-{project_name}-cli --public=no                 # Explicit falsey
-{project_name}-cli --expire=0                  # Falsey = no expiration
-{project_name}-cli --expire=disabled           # Falsey = no expiration
+# Boolean flag (true)
+{project_name}-cli --public
+# Explicit truthy
+{project_name}-cli --public=yes
+# Explicit falsey
+{project_name}-cli --public=no
+# Falsey = no expiration
+{project_name}-cli --expire=0
+# Falsey = no expiration
+{project_name}-cli --expire=disabled
 ```
 
 **Config file (cli.yml):**
 ```yaml
 server:
-  verify_ssl: yes        # Truthy
-  auto_update: false     # Falsey
-  notifications: enabled # Truthy
+  # Truthy
+  verify_ssl: yes
+  # Falsey
+  auto_update: false
+  # Truthy
+  notifications: enabled
 ```
 
 **ALL boolean inputs MUST use `config.ParseBool()` or `config.IsTruthy()` - NEVER `strconv.ParseBool()`.**
@@ -41388,29 +42093,42 @@ server:
 **Search/Query CLI (minimal flags):**
 ```bash
 # Args ARE the search - no flags needed for basic use
-{project_name}-cli golang tutorials           # Search
-{project_name}-cli --limit 10 golang          # With limit
-{project_name}-cli --output json golang       # JSON output
+# Search
+{project_name}-cli golang tutorials
+# With limit
+{project_name}-cli --limit 10 golang
+# JSON output
+{project_name}-cli --output json golang
 ```
 
 **Pastebin/Content CLI:**
 ```bash
 # Smart detection handles input, flags for metadata
-{project_name}-cli notes.txt                          # File (detected), uses defaults
-{project_name}-cli notes.txt --public yes             # Public paste
-{project_name}-cli notes.txt --public no              # Private (requires auth)
-{project_name}-cli notes.txt --public unlisted        # Unlisted (default)
-{project_name}-cli notes.txt --expire 24h             # Expiration
-{project_name}-cli notes.txt --syntax python          # Syntax highlight
-{project_name}-cli notes.txt --author "John"          # Author name
+# File (detected), uses defaults
+{project_name}-cli notes.txt
+# Public paste
+{project_name}-cli notes.txt --public yes
+# Private (requires auth)
+{project_name}-cli notes.txt --public no
+# Unlisted (default)
+{project_name}-cli notes.txt --public unlisted
+# Expiration
+{project_name}-cli notes.txt --expire 24h
+# Syntax highlight
+{project_name}-cli notes.txt --syntax python
+# Author name
+{project_name}-cli notes.txt --author "John"
 ```
 
 **API/Data CLI:**
 ```bash
 # Resource-specific flags
-{project_name}-cli get abc123                         # Get by ID
-{project_name}-cli list --limit 20 --offset 0         # Pagination
-{project_name}-cli delete abc123 --force              # Dangerous ops need confirm
+# Get by ID
+{project_name}-cli get abc123
+# Pagination
+{project_name}-cli list --limit 20 --offset 0
+# Dangerous ops need confirm
+{project_name}-cli delete abc123 --force
 ```
 
 ### Flag Defaults from Config
@@ -41420,12 +42138,18 @@ server:
 ```yaml
 # cli.yml - defaults for flags
 defaults:
-  lang: auto            # --lang default (auto = detect from env, or "en", "es", etc.)
-  public: unlisted      # --public default (yes, no, unlisted)
-  expire: 24h           # --expire default
-  syntax: auto          # --syntax default
-  output: table         # --output default (json, table, plain)
-  limit: 20             # --limit default
+  # --lang default (auto = detect from env, or "en", "es", etc.)
+  lang: auto
+  # --public default (yes, no, unlisted)
+  public: unlisted
+  # --expire default
+  expire: 24h
+  # --syntax default
+  syntax: auto
+  # --output default (json, table, plain)
+  output: table
+  # --limit default
+  limit: 20
 ```
 
 **Precedence (highest to lowest):**
@@ -41459,11 +42183,14 @@ defaults:
 ```bash
 # These are equivalent:
 eval "$({project_name} --shell init)"
-eval "$({project_name} --shell init bash)"      # if $SHELL=/bin/bash
+# if $SHELL=/bin/bash
+eval "$({project_name} --shell init bash)"
 
 # init outputs the eval command, completions outputs the script:
-{project_name} --shell init        # → source <({project_name} --shell completions bash)
-{project_name} --shell completions # → (actual completion script)
+# → source <({project_name} --shell completions bash)
+{project_name} --shell init
+# → (actual completion script)
+{project_name} --shell completions
 ```
 
 **Supported shells:**
@@ -41493,8 +42220,10 @@ eval "$({project_name} --shell init bash)"      # if $SHELL=/bin/bash
 
 # Auto-detect shell (omit SHELL argument)
 {project_name} --shell completions > ~/completions/{project_name}
-{project_name}-cli --shell init                    # auto-detect, print init
-eval "$({project_name} --shell init)"              # auto-detect in eval
+# auto-detect, print init
+{project_name}-cli --shell init
+# auto-detect in eval
+eval "$({project_name} --shell init)"
 
 # Specific shell init
 eval "$({project_name}-cli --shell init bash)"
@@ -41504,8 +42233,10 @@ eval "$({project_name}-cli --shell init bash)"
 **Add to shell rc file:**
 ```bash
 # ~/.bashrc, ~/.zshrc, ~/.config/fish/config.fish, etc.
-eval "$({project_name} --shell init)"        # server (auto-detect)
-eval "$({project_name}-cli --shell init)"    # client (auto-detect)
+# server (auto-detect)
+eval "$({project_name} --shell init)"
+# client (auto-detect)
+eval "$({project_name}-cli --shell init)"
 ```
 
 **Why built-in (not separate files):**
@@ -41530,7 +42261,8 @@ func handleShellCommand(args []string) {
     if len(args) > 1 {
         shell = args[1]
     } else {
-        shell = detectShell()  // auto-detect from $SHELL
+        // auto-detect from $SHELL
+        shell = detectShell()
     }
 
     binaryName := filepath.Base(os.Args[0])
@@ -41546,9 +42278,11 @@ func handleShellCommand(args []string) {
 func detectShell() string {
     shellPath := os.Getenv("SHELL")
     if shellPath == "" {
-        return "bash"  // default fallback
+        // default fallback
+        return "bash"
     }
-    return filepath.Base(shellPath)  // /bin/zsh → zsh
+    // /bin/zsh → zsh
+    return filepath.Base(shellPath)
 }
 
 func printCompletions(shell, binaryName string) {
@@ -41592,11 +42326,12 @@ func printInit(shell, binaryName string) {
 
 ```bash
 $ {project_name}-cli --help
-{project_name}-cli {projectversion} - CLI for {project_name}
+{project_name}-cli {project_version} - CLI for {project_name}
 
 Usage:
   {project_name}-cli [args] [flags]
-  {project_name}-cli                    # TUI mode (no args)
+  # TUI mode (no args)
+  {project_name}-cli
 
 Flags:
 -h, --help                             - Show help
@@ -41624,10 +42359,12 @@ Run '{project_name}-cli <command> help' for detailed help on any command.
 **If user renames binary:**
 ```bash
 $ mypaste --help
-mypaste {projectversion} - client for {project_name} API   # Shows actual binary name
+# Shows actual binary name
+mypaste {project_version} - client for {project_name} API
 
 Usage:
-  mypaste [command] [flags]                     # Shows actual binary name
+  # Shows actual binary name
+  mypaste [command] [flags]
 ...
 ```
 
@@ -41637,17 +42374,18 @@ Usage:
 
 ```bash
 $ {project_name}-cli --version
-{project_name}-cli {projectversion} ({commit_sha}) built {build_date}
+{project_name}-cli {project_version} ({commit_sha}) built {build_date}
 
 # If renamed:
 $ mypaste --version
-mypaste {projectversion} ({commit_sha}) built {build_date}   # Shows actual name
+# Shows actual name
+mypaste {project_version} ({commit_sha}) built {build_date}
 ```
 
 Same format as server:
 ```bash
 $ pastebin --version
-pastebin {projectversion} ({commit_sha}) built {build_date}
+pastebin {project_version} ({commit_sha}) built {build_date}
 ```
 
 ## Commands
@@ -41802,7 +42540,8 @@ func BuildAPIURL(baseURL, path string, pathParams map[string]string, queryParams
     if len(queryParams) > 0 {
         q := u.Query()
         for key, value := range queryParams {
-            q.Set(key, value)  // url.Values.Set() auto-encodes
+            // url.Values.Set() auto-encodes
+            q.Set(key, value)
         }
         u.RawQuery = q.Encode()
     }
@@ -42005,18 +42744,25 @@ Each project defines its own commands based on its API.
 **Search/Query Services:**
 ```bash
 # Bare args = search term (no --query flag needed)
-{project_name}-cli golang tutorials        # Search for "golang tutorials"
-{project_name}-cli "exact phrase"          # Quoted = exact match
-{project_name}-cli --limit 5 golang        # Flags before search term OK
+# Search for "golang tutorials"
+{project_name}-cli golang tutorials
+# Quoted = exact match
+{project_name}-cli "exact phrase"
+# Flags before search term OK
+{project_name}-cli --limit 5 golang
 ```
 
 **Content/Paste Services:**
 ```bash
 # Detection order: stdin → file → directory → text
-echo "hello" | {project_name}-cli          # stdin detected → paste stdin
-{project_name}-cli notes.txt               # File exists → paste file content
-{project_name}-cli /path/to/dir            # Directory → error or list
-{project_name}-cli "some text here"        # Not file → paste as text
+# stdin detected → paste stdin
+echo "hello" | {project_name}-cli
+# File exists → paste file content
+{project_name}-cli notes.txt
+# Directory → error or list
+{project_name}-cli /path/to/dir
+# Not file → paste as text
+{project_name}-cli "some text here"
 ```
 
 **Detection Logic:**
@@ -42035,7 +42781,8 @@ func detectInput(args []string) (content string, source string) {
         // Is it a file?
         if info, err := os.Stat(arg); err == nil {
             if info.IsDir() {
-                return "", "error:directory"  // or list files
+                // or list files
+                return "", "error:directory"
             }
             data, _ := os.ReadFile(arg)
             return string(data), "file:" + arg
@@ -42060,8 +42807,10 @@ func detectInput(args []string) (content string, source string) {
 
 **Explicit flags still work (override detection):**
 ```bash
-{project_name}-cli --file notes.txt        # Force file mode
-{project_name}-cli --text "notes.txt"      # Force text mode (not file)
+# Force file mode
+{project_name}-cli --file notes.txt
+# Force text mode (not file)
+{project_name}-cli --text "notes.txt"
 ```
 
 ## Build Integration
@@ -42183,7 +42932,8 @@ func (m SizeMode) MaxTableColumns() int {
         return 4
     case terminal.SizeModeStandard:
         return 6
-    default: // Wide, Ultrawide, Massive
+    // Wide, Ultrawide, Massive
+    default:
         return 10
     }
 }
@@ -42313,7 +43063,8 @@ var CurrentTUITheme = TUIThemeDark
 **Theme is set in cli.yml:**
 ```yaml
 tui:
-  theme: dark    # dark (default) or light
+  # dark (default) or light
+  theme: dark
 ```
 
 ### TUI Implementation Guidance
@@ -42330,7 +43081,8 @@ func (m Model) calculateLayout() {
     borderHeight := 0
 
     if m.sizeMode >= terminal.SizeModeCompact {
-        borderHeight = 2 // top + bottom
+        // top + bottom
+        borderHeight = 2
     }
 
     m.viewportHeight = m.height - headerHeight - footerHeight - borderHeight
@@ -42402,27 +43154,35 @@ func (m Model) pageSize() int {
 ```go
 // Single-key bindings work better on mobile keyboards
 var keyBindings = map[string]string{
-    "up":     "k",    // vim-style, single key
+    // vim-style, single key
+    "up":     "k",
     "down":   "j",
     "left":   "h",
     "right":  "l",
     "select": "enter",
-    "back":   "escape",  // Also 'b' as alternative
+    // Also 'b' as alternative
+    "back":   "escape",
     "quit":   "q",
     "help":   "?",
     "search": "/",
-    "top":    "g",       // Go to top
-    "bottom": "G",       // Go to bottom
+    // Go to top
+    "top":    "g",
+    // Go to bottom
+    "bottom": "G",
 }
 ```
 
 **Testing Small Terminals:**
 ```bash
 # Test with different terminal sizes
-resize -s 10 40   # Phone portrait (micro)
-resize -s 16 60   # Phone landscape (minimal)
-resize -s 24 80   # Standard terminal
-resize -s 40 120  # Large monitor
+# Phone portrait (micro)
+resize -s 10 40
+# Phone landscape (minimal)
+resize -s 16 60
+# Standard terminal
+resize -s 24 80
+# Large monitor
+resize -s 40 120
 
 # Or use stty
 stty rows 10 cols 40
@@ -42468,10 +43228,10 @@ When server is reachable, `--version` can show extended info:
 
 ```bash
 $ {project_name}-cli --version
-{project_name}-cli {projectversion} ({commit_sha}) built {build_date}
+{project_name}-cli {project_version} ({commit_sha}) built {build_date}
 
 Server: https://{project_name}.example.com
-Server Version: {projectversion} (compatible)
+Server Version: {project_version} (compatible)
 
 Build Info:
   Go: {go_version}
@@ -42613,7 +43373,8 @@ Free-form prose, 1–3 paragraphs.}
 
 project_name:    {project_name}
 project_org:     {project_org}
-internal_name:   {project_name}        # FROZEN — equals project_name on first install, never changes
+# FROZEN — equals project_name on first install, never changes
+internal_name:   {project_name}
 app_name:        {project_name}
 official_site:   {fqdn}
 maintainer_name: {maintainer_name}
@@ -42963,10 +43724,14 @@ cd "$TEMP_DIR" && docker compose up -d
 
 **Makefile Targets:**
 ```bash
-make dev    # Quick build → temp dir (no version info)
-make build  # Full build → binaries/ (with ldflags)
-make test   # Run tests in container
-make docker # Build Docker image
+# Quick build → temp dir (no version info)
+make dev
+# Full build → binaries/ (with ldflags)
+make build
+# Run tests in container
+make test
+# Build Docker image
+make docker
 ```
 
 **Cryptography:**
@@ -43831,7 +44596,7 @@ make docker # Build Docker image
 - [ ] `{smtp_port}` - SMTP server port
 - [ ] `{startup_datetime}` - Server start timestamp
 - [ ] `{PROJECT_NAME}` - Project name (uppercase for display)
-- [ ] `{projectversion}` - Current version
+- [ ] `{project_version}` - Current version
 
 ### Client TUI/GUI Dynamic Sizing
 
