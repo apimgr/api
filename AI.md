@@ -1965,7 +1965,7 @@ Instructions for how this agent should behave...
   - the security reporting path — GitHub private vulnerability reporting (`https://github.com/{project_org}/{project_name}/security/advisories/new`, the repo's Security tab → "Report a vulnerability") is the PRIMARY channel; the security email is a secondary/CC contact only, never the main reporting path. On mirrors without private vulnerability reporting, point reporters at the GitHub origin repo first
   - that vulnerabilities are NOT filed as public bug reports
   - expected disclosure/response flow
-  - links to `/.well-known/security.txt` and `/server/contact?security_id=...` when those project features exist
+  - links to `/server/security`, `/.well-known/security.txt`, and `/server/contact?security_id=...` when those project features exist
 - `.github/CODEOWNERS` MUST define:
   - a catch-all owner for the repo
   - explicit owners for security-sensitive areas such as workflows, Docker/release files, and auth/crypto/update code paths
@@ -12405,6 +12405,8 @@ func GetWildcardDomain() string
 | GraphQL | `BuildURL(r, "/api/{api_version}/server/graphql")` (or `/api/graphql` alias for the latest version) |
 | Email links | `BuildURL(r, "/server/security/report/{id}")` |
 | CORS origins | Auto-include `GetWildcardDomain()` if detected |
+| Generated well-known files (`/.well-known/security.txt`, `/.well-known/llms.txt`) | `BuildURL(r, "/path")` for every embedded URL — resolved per request, never frozen at startup |
+| `/server/security` page | `BuildURL(r, "/path")` for every rendered URL — must match the `security.txt` the same client fetches |
 
 ### FQDN Validation Rules
 
@@ -14279,6 +14281,7 @@ web:
 Contact: {report_url}
 Contact: https://{fqdn}/server/contact?security_id={security_id}
 Contact: mailto:{security_contact}
+Policy: https://{fqdn}/server/security
 Expires: {expiry_date}
 ```
 
@@ -14317,6 +14320,9 @@ web:
 |-------|----------|-------------|
 | `Contact` | YES | One or more lines in order of preference (RFC 9116): first the repo's GitHub private vulnerability reporting URL (`web.security.report_url`), then the instance security-report form (`/server/contact?security_id={id}`, auto-generated — see "Security Reports"), last the `mailto:` CC address (prefix added automatically) |
 | `Expires` | YES | Expiration date (auto-renewed yearly by default) |
+| `Policy` | YES | Human-readable security page at `/server/security` — renders the same information as this file plus plain-language reporting instructions. See "Security Reports" → "Public Pages". |
+
+**URL resolution:** every `{proto}`/`{fqdn}` in this file — and in the generated `llms.txt` and the `/server/security` page — is resolved **per request** via `BuildURL(r, ...)` (PART 12 → "Resolution Order": reverse-proxy headers first, gated by `trusted_proxies`). Never build these URLs from values cached at startup: the URLs a client sees MUST match the Host/proto that client actually used, so `security.txt`, `/server/security`, and every other rendered URL can never disagree behind a reverse proxy.
 
 ### llms.txt (AI Discovery)
 
@@ -14465,6 +14471,7 @@ Repo-level (source-code) vulnerabilities are reported primarily via GitHub priva
 |----------|--------|------|---------|
 | `/.well-known/security.txt` | GET | None | RFC 9116 file — see above |
 | `/.well-known/pgp-key.asc` | GET | None | Project's PGP public key (ASCII-armored). 404 if no keypair generated yet. |
+| `/server/security` | GET | None | Security overview page (HTML). Human-readable rendering of everything in `/.well-known/security.txt` — contact channels in RFC 9116 preference order (GitHub private vulnerability reporting, `/server/contact?security_id={id}`, `mailto:` CC address), `Expires`, and the `Encryption` key when a keypair exists — plus plain-language instructions for reporting a vulnerability. Links to `/server/security/policy`, `/server/security/thanks`, `/.well-known/pgp-key.asc`, and the machine-readable `/.well-known/security.txt`. Rendered from live config — nothing to edit. |
 | `/server/security/policy` | GET | None | Disclosure policy page (HTML). Default content provided; editable via API. Lists the coordinated-disclosure window, in-scope domains, out-of-scope behaviors, safe-harbor language. |
 | `/server/security/thanks` | GET | None | Acknowledgments page. Lists researchers who opted in (real name, handle, or anonymized "Anonymous Researcher #n") with the year and short credit. |
 | `/server/security/report/{tracking_id}` | GET | One-shot token in URL | Researcher status page — shows triage state (Received / Triaged / Confirmed / Patching / Disclosed / Won't Fix), maintainer comments visible to researcher, expected disclosure date. Token is single-use-per-day; expires after the report is closed for 30 days. |
@@ -15694,7 +15701,7 @@ server:
 
 ## Contact Configuration (Server Notification Recipients)
 
-**One unified config tree for every "where do messages go" decision the server makes — admin notifications, security reports, contact-form submissions. Each role supports email AND any number of webhook transports (Telegram, Discord, Slack, generic). Empty role-specific email falls back to the admin address. There is one knob to set (`server.contact.admin.email`); everything else is optional.**
+**One unified config tree for every "where do messages go" decision the server makes — admin notifications, security reports, abuse reports, contact-form submissions. Each role supports email AND any number of webhook transports (Telegram, Discord, Slack, generic). Empty role-specific email falls back to the admin address. There is one knob to set (`server.contact.admin.email`); everything else is optional.**
 
 ### Schema
 
@@ -15738,6 +15745,26 @@ server:
         slack: ""
         generic: ""
 
+    # ---- Abuse (abusive content / policy violations) ----
+    # Recipient for abuse reports: spam, harassment, illegal or abusive
+    # content, terms-of-service violations. Public surface — shown in the
+    # contact page's "Abuse Reports" section when set. RFC 2142 defines
+    # abuse@ as the standard role mailbox; operators SHOULD set this to
+    # "abuse@{fqdn}". Default is "" (unlike security@, the server never
+    # auto-advertises abuse@{fqdn} — an unprovisioned mailbox would
+    # bounce reports). If empty: delivery falls back to
+    # server.contact.general.email, then server.contact.admin.email
+    # (same chain for webhooks); the contact page then shows
+    # general.email if set, otherwise the form alone.
+    abuse:
+      # RFC 2142 standard role mailbox is abuse@{fqdn} — opt in explicitly
+      email: ""
+      webhooks:
+        telegram: ""
+        discord: ""
+        slack: ""
+        generic: ""
+
     # ---- General (public contact form) ----
     # Recipient for /server/contact submissions (non-security). Public
     # surface — appears as the "Contact us" email if the contact page
@@ -15759,6 +15786,7 @@ server:
 |------|------------|
 | `admin` | Required. Empty → startup warning. Auto-populated from the operator's email on first install if unset. |
 | `security` | `server.contact.security.email` (default `security@{fqdn}` per RFC 2142). If explicitly set to `""`, falls back to `server.contact.admin.email`. Same fallback for each webhook transport (security.webhooks.telegram → admin.webhooks.telegram). |
+| `abuse` | `server.contact.abuse.email` if set → else `server.contact.general.email` if set → else `server.contact.admin.email`. Same fallback chain for webhooks. Never defaults to `abuse@{fqdn}` automatically — RFC 2142 recommends that address, but the operator must opt in (an unprovisioned mailbox would bounce reports). |
 | `general` | `server.contact.general.email` if set → else `server.contact.admin.email`. Same fallback for webhooks. |
 
 **Effective recipient is computed once per dispatch, not cached across requests** — operator can change `general.email` and the next contact-form submission picks it up without restart.
@@ -15812,6 +15840,7 @@ if !subtle.ConstantTimeCompare([]byte(got), []byte(want)) {
 |------|----------------|--------------|
 | `admin` | Server-internal events: error rate spike, panic, backup failure, cert renewal, security report received (summary only) | Subject + body + severity. NEVER includes user content. |
 | `security` | Incoming security report (full content, encrypted), researcher status update, CVE assignment milestone | PGP-encrypted body if a researcher pubkey or admin pubkey is configured (PART 11 → "GPG Keypair Management"). |
+| `abuse` | Application-defined abuse events (user-flagged content, DMCA/takedown requests) and any `/server/contact` submission the application routes as an abuse report | Sender name, sender email, subject, message body, and the reported resource URL when the application provides one. Spam-filtered before dispatch. |
 | `general` | `/server/contact` form submission (non-security) | Sender name, sender email, subject, message body. Spam-filtered before dispatch. |
 
 ### Privacy & Public Exposure
@@ -15820,6 +15849,7 @@ if !subtle.ConstantTimeCompare([]byte(got), []byte(want)) {
 |-------|------------------|-------|
 | `server.contact.admin.email` | NEVER public | Server-internal recipient only. |
 | `server.contact.security.email` | Public (security.txt `Contact: mailto:` line — the secondary/CC channel; GitHub private vulnerability reporting is primary) | Researchers need to reach you. Choose carefully. Suggest a role address (`security@{fqdn}`) over a personal one. |
+| `server.contact.abuse.email` | Public (contact page "Abuse Reports" section) when set | RFC 2142 role address (`abuse@{fqdn}`) recommended over a personal one. |
 | `server.contact.general.email` | Public (contact form, footer "Contact us") | Same — role address recommended. |
 | Any `webhooks.*` | NEVER public | URLs contain secrets / chat IDs / etc. |
 
@@ -15829,6 +15859,7 @@ Use only the canonical contact keys in all new config, examples, docs, UI, and c
 
 - `server.contact.admin.email`
 - `server.contact.security.email`
+- `server.contact.abuse.email`
 - `server.contact.general.email`
 
 Do NOT introduce flat aliases, duplicate names, or migration shims for contact recipients unless the user explicitly requests a migration feature.
@@ -25782,6 +25813,13 @@ func trackingScript(r *http.Request) template.HTML {
 | Captcha | Captcha | Yes | Spam prevention |
 
 **Submission sends to `server.contact.general.email` (or falls back to `server.contact.admin.email` if general is empty).**
+
+**Below the form, the page MUST render exactly two informational sections — the content is spec'd here; never improvise it:**
+
+| Section | Content |
+|---------|---------|
+| Security Issues | "To report a security vulnerability, consult our security policy at `/server/security`." — rendered as a link to `/server/security`. Never point users at the raw `/.well-known/security.txt` file from this page. |
+| Abuse Reports | "To report abusive content or policy violations, use this contact form." — append " or email {abuse_email}" where `{abuse_email}` resolves to `server.contact.abuse.email` if set, else `server.contact.general.email` if set; omit the email clause entirely when neither is set. NEVER render `server.contact.admin.email` here (it is never public). |
 
 ### /server/help
 
@@ -37213,6 +37251,7 @@ GraphQL playground: [/server/docs/graphql](/server/docs/graphql)
 - `/.well-known/security.txt`
 - `/.well-known/pgp-key.asc` (when enabled)
 - `/.well-known/llms.txt`
+- `/server/security`
 - `/server/healthz`
 - `/api/{api_version}/server/healthz`
 
@@ -37220,6 +37259,7 @@ GraphQL playground: [/server/docs/graphql](/server/docs/graphql)
 
 - Explain how researchers use `/.well-known/security.txt`
 - Explain `/server/contact?security_id=...`
+- Link to `/server/security` (human-readable overview of security.txt + how to report)
 - Link to `/server/security/policy`
 
 ## Well-Known Namespace
