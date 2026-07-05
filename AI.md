@@ -7312,7 +7312,7 @@ Self-Healing Successful?                        │
 ```json
 {
   "ok": false,
-  "error": "MAINTENANCE_MODE",
+  "error": "MAINTENANCE",
   "message": "Server is in maintenance mode due to: Database connection failed",
   "details": {
     "reason": "database_connection",
@@ -13928,7 +13928,7 @@ web:
 | Header | Validated on | Reject if |
 |--------|--------------|-----------|
 | `Sec-Fetch-Site` | POST/PUT/PATCH/DELETE | `cross-site` AND no Bearer token AND path is not in CSRF `exempt_paths` |
-| `Sec-Fetch-Mode` | all | `navigate` on JSON API endpoints (`/api/*`) — indicates unintended top-level navigation |
+| `Sec-Fetch-Mode` | POST/PUT/PATCH/DELETE | `navigate` on JSON API endpoints (`/api/*`) — blocks form-based navigation CSRF. GET/HEAD navigation is ALLOWED: opening an API URL in a browser returns the JSON normally (GETs are side-effect-free and responses carry `nosniff`; matches the standard Fetch Metadata resource-isolation policy, which permits top-level GET navigations) |
 | `Sec-Fetch-Dest` | media/document endpoints | `iframe` for endpoints not in `frame-ancestors` allow-list |
 | `Sec-Fetch-User` | authenticated state-changers | absent on a navigation that should be user-initiated (sensitive operator-token flows only) |
 
@@ -30726,9 +30726,10 @@ BINDIR := binaries
 RELDIR := releases
 
 # Go directories (persistent across builds)
-# GO_CACHE maps host module cache to GOPATH/pkg/mod; GO_BUILD maps to GOCACHE inside the image
+# GO_CACHE: module download cache — safe to share across concurrent builds (Go file-locks writes)
+# GO_BUILD: compile cache — scoped per project to prevent corruption when multiple projects build concurrently
 GO_CACHE  ?= $(HOME)/go/pkg/mod
-GO_BUILD  ?= $(HOME)/.cache/go-build
+GO_BUILD  ?= $(HOME)/.cache/go-build/$(PROJECTNAME)
 
 # Build targets
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -30974,7 +30975,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 | Cache | Local Path (`?=` default) | Container Path |
 |-------|--------------------------|----------------|
 | Module cache (`GO_CACHE`) | `~/go/pkg/mod` | `/usr/local/share/go/pkg/mod` |
-| Build cache (`GO_BUILD`) | `~/.cache/go-build` | `/usr/local/share/go/cache` |
+| Build cache (`GO_BUILD`) | `~/.cache/go-build/{project_name}` | `/usr/local/share/go/cache` |
 
 **Benefits:**
 - First build downloads modules once
@@ -34353,7 +34354,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34371,7 +34372,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34390,7 +34391,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34408,7 +34409,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34427,7 +34428,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34445,7 +34446,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34464,7 +34465,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34482,7 +34483,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34509,7 +34510,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34527,7 +34528,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -34545,7 +34546,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34563,7 +34564,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -34581,7 +34582,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34599,7 +34600,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -34617,7 +34618,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34635,7 +34636,7 @@ pipeline {
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -34656,7 +34657,7 @@ pipeline {
                         --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                         -v ${WORKSPACE}:/app \
                         -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                        -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                        -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
                         -w /app \
                         casjaysdev/go:latest \
                         go test -v -cover ./...
@@ -35685,7 +35686,7 @@ make build
 
 # If no Makefile exists yet (bootstrap or manual equivalent)
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
 docker run --rm --name "${PROJECT_NAME}-build" -v $PWD:/app -w /app \
   -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
@@ -35774,7 +35775,7 @@ else
     # No Makefile yet — fallback to direct docker run
     echo "Building in Docker (no Makefile)..."
     GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-    GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+    GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
     mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
     docker run --rm \
       --name "${PROJECT_NAME}-build" \
@@ -35951,7 +35952,7 @@ else
     # No Makefile yet — fallback to direct docker run
     echo "Building in Docker (no Makefile)..."
     GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-    GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+    GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
     mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
     docker run --rm \
       --name "${PROJECT_NAME}-build" \
@@ -36281,7 +36282,7 @@ PROJECT_PATH="/root/Projects/github/apimgr/{project_name}"
 # Go cache directories (same as Makefile - speeds up builds significantly)
 # Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 # Common docker run for Go commands
@@ -36320,7 +36321,7 @@ docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v $PROJECT_PATH:/app \
   -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-  -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+  -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
   -w /app \
   casjaysdev/go:latest sh
 ```
@@ -36336,7 +36337,7 @@ make build
 
 # If no Makefile exists yet (bootstrap or manual equivalent)
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
-GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
 docker run --rm \
   --name "${PROJECT_NAME}-build" \
@@ -36368,7 +36369,7 @@ incus delete test-{project_name} --force
 # → binaries/{project_name}
 make build
 # If no Makefile exists yet (bootstrap or manual equivalent)
-# GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"; GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build}"
+# GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"; GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 # mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
 # docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -v $GO_CACHE:/usr/local/share/go/pkg/mod \
 #   -v $GO_BUILD:/usr/local/share/go/cache -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
@@ -43720,7 +43721,7 @@ maintainer_email: jane@example.com
 **Go Cache (Host Bind-Mounts):**
 ```bash
 # Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
-# Defaults: GO_CACHE=$HOME/go/pkg/mod  GO_BUILD=$HOME/.cache/go-build
+# Defaults: GO_CACHE=$HOME/go/pkg/mod  GO_BUILD=$HOME/.cache/go-build/${PROJECT_NAME}
 # Mount in Docker: -v $GO_CACHE:/usr/local/share/go/pkg/mod -v $GO_BUILD:/usr/local/share/go/cache
 ```
 
