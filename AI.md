@@ -14810,6 +14810,8 @@ server:
 | `backup.deleted` | Backup deleted | Filename |
 | `backup.failed` | Backup failed | Error message |
 | `server.started` | Application started | Version, mode |
+
+> **Suppression:** `scheduler.task_failed` is not emitted when `backup.failed` fires for the same execution — both would describe the same event. `scheduler.task_failed` fires only for tasks that produce no subsystem-specific audit event.
 | `server.stopped` | Application stopped | Reason, uptime |
 | `server.maintenance_entered` | Maintenance mode enabled | Reason |
 | `server.maintenance_exited` | Maintenance mode disabled | Duration |
@@ -26199,6 +26201,7 @@ server:
 | `backup_failed` | Backup error | ✗ |
 | `ssl_expiring` | Certificate expiration warning | ✗ |
 | `ssl_renewed` | Certificate renewed successfully | ✗ |
+| `ssl_renewal_failed` | Certificate renewal failure | ✗ |
 | `scheduler_error` | Scheduled task failed | ✗ |
 | `test` | Test email | ✗ |
 
@@ -26213,6 +26216,7 @@ server:
 | `backup_failed` | `Backup Failed - {app_name}` | Includes error message |
 | `ssl_expiring` | `SSL Certificate Expiring - {app_name}` | Sent 30, 14, 7, 3, 1 days before expiry |
 | `ssl_renewed` | `SSL Certificate Renewed - {app_name}` | Confirmation of renewal |
+| `ssl_renewal_failed` | `SSL Renewal Failed - {app_name}` | Includes domain, error, days until expiry, next retry |
 | `scheduler_error` | `Scheduled Task Failed - {app_name}` | Includes task name and error |
 | `test` | `Test Email - {app_name}` | Simple test message |
 
@@ -26364,6 +26368,8 @@ Next run: {next_run}
 | `{size}` | Backup file size |
 | `{error}` | Error message (failed only) |
 
+**Suppression:** When `backup_failed` fires from a scheduled run, it suppresses the `scheduler_error` notification for the same execution. One notification, not two.
+
 ### ssl_expiring / ssl_renewed
 | Variable | Description |
 |----------|-------------|
@@ -26372,12 +26378,25 @@ Next run: {next_run}
 | `{expiry_date}` | Expiration date |
 | `{valid_until}` | New validity date (renewed only) |
 
+### ssl_renewal_failed
+| Variable | Description |
+|----------|-------------|
+| `{fqdn}` | Domain whose cert failed to renew |
+| `{error}` | Error message from the renewal attempt |
+| `{expires_in}` | Days until the current cert expires (urgency signal) |
+| `{expiry_date}` | Absolute expiry date of the current cert |
+| `{next_retry}` | When renewal will be retried automatically |
+
+**Suppression:** When `ssl_renewal_failed` fires from a scheduled run, it suppresses the `scheduler_error` notification for the same execution. One notification, not two.
+
 ### scheduler_error
 | Variable | Description |
 |----------|-------------|
 | `{task_name}` | Failed task name |
 | `{error}` | Error message |
 | `{next_run}` | Next scheduled run |
+
+**Suppression:** `scheduler_error` fires only for tasks that have no dedicated failure event of their own. It is suppressed when a subsystem emits a more specific failure notification for the same execution: `backup_failed` suppresses it for backup tasks; `ssl_renewal_failed` suppresses it for SSL renewal tasks. Tasks with no dedicated failure event (`session_cleanup`, `token_cleanup`, `log_rotation`, `update_check`) still fire `scheduler_error` normally.
 
 ## Email Template Configuration
 
@@ -26498,7 +26517,7 @@ Templates are stored as files on disk. Override any built-in template by placing
 | SSL renewal failed | ERROR | ✓ | Critical - needs attention |
 | Update available | WARN | Optional | New version available (`update_check` task) |
 | Update installed | INFO | ✓ | Important change record |
-| Scheduler task failed | ERROR | ✓ | Needs attention when away |
+| Scheduler task failed | ERROR | ✓ | Needs attention when away (suppressed when `Backup failed` or `SSL renewal failed` fires for the same execution) |
 | Scheduler task success | — | ✗ | No notification needed (task log only) |
 | Rate limit exceeded | WARN | ✗ | Abuse detection notice |
 | IP blocked | WARN | Optional | Abuse detection |
@@ -26600,6 +26619,7 @@ server:
         backup_failed: true
         ssl_expiring: true
         ssl_renewed: false
+        ssl_renewal_failed: true
         security_alert: true
         scheduler_error: true
         update_available: false
@@ -37833,6 +37853,7 @@ var localeFS embed.FS
     "mark_all_read": "Marcar todo como leído",
     "clear_all": "Limpiar todo",
     "ssl_expiring": "El certificado SSL expira en {count} días",
+    "ssl_renewal_failed": "Error al renovar el certificado SSL",
     "backup_completed": "Respaldo completado",
     "backup_failed": "Respaldo fallido",
     "update_available": "Actualización disponible",
@@ -37865,6 +37886,7 @@ var localeFS embed.FS
       "backup_failed": "Respaldo fallido - {app_name}",
       "ssl_expiring": "Certificado SSL por expirar - {app_name}",
       "ssl_renewed": "Certificado SSL renovado - {app_name}",
+      "ssl_renewal_failed": "Error al renovar SSL - {app_name}",
       "task_failed": "Tarea programada fallida - {app_name}",
       "test_email": "Correo de prueba - {app_name}"
     },
