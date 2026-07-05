@@ -1685,31 +1685,30 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
       "Read(**)",
       "Write(**)",
       "Edit(**)",
-      "Bash(go:*)",
-      "Bash(make:*)",
-      "Bash(docker:*)",
-      "Bash(docker-compose:*)",
-      "Bash(git:*)",
-      "Bash(curl:*)",
-      "Bash(tree:*)",
-      "Bash(find:*)",
-      "Bash(grep:*)",
-      "Bash(rm:*)",
-      "Bash(mv:*)",
-      "Bash(cp:*)",
-      "Bash(mkdir:*)",
-      "Bash(chmod:*)",
-      "Bash(ln:*)",
-      "Bash(cat:*)",
-      "Bash(head:*)",
-      "Bash(tail:*)",
-      "Bash(ls:*)",
-      "Bash(pwd:*)",
-      "Bash(timeout:*)",
-      "Bash(sort:*)",
-      "Bash(wc:*)",
-      "Bash(diff:*)",
-      "Bash(:*::*)",
+      "Bash(go *)",
+      "Bash(make *)",
+      "Bash(docker *)",
+      "Bash(docker-compose *)",
+      "Bash(git *)",
+      "Bash(curl *)",
+      "Bash(tree *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(rm *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(mkdir *)",
+      "Bash(chmod *)",
+      "Bash(ln *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(ls *)",
+      "Bash(pwd *)",
+      "Bash(timeout *)",
+      "Bash(sort *)",
+      "Bash(wc *)",
+      "Bash(diff *)",
       "WebSearch",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:pkg.go.dev)",
@@ -1717,16 +1716,15 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
       "WebFetch(domain:golang.org)"
     ],
     "deny": [
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(git push:+)",
-      "Bash(rm -rf /*:*)",
-      "Bash(sudo:*)"
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)"
     ],
     "ask": [
-      "Bash(git rebase:*)",
-      "Bash(git reset:*)",
-      "Bash(git checkout -- :*)"
+      "Bash(git rebase *)",
+      "Bash(git reset *)",
+      "Bash(git checkout -- *)"
     ]
   },
   "preferences": {
@@ -1767,10 +1765,8 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
 | `Read(**)` | Read any file | All files recursively |
 | `Write(**)` | Write any file | All files recursively |
 | `Edit(**)` | Edit any file | All files recursively |
-| `Bash(cmd:*)` | Command with zero or more args | `Bash(go:*)` → `go`, `go build`, `go test ./...` |
-| `Bash(cmd:+)` | Command with one or more args | `Bash(git push:+)` → `git push origin`, NOT bare `git push` |
-| `Bash(cmd arg:*)` | Command with specific prefix | `Bash(git commit:*)` → `git commit -m "msg"` |
-| `Bash(:*::*)` | Piped/chained commands | `cmd1 | cmd2`, `cmd1 && cmd2` |
+| `Bash(cmd *)` | Command with zero or more args | `Bash(go *)` → `go`, `go build`, `go test ./...` |
+| `Bash(cmd arg *)` | Command with specific prefix | `Bash(git commit *)` → `git commit -m "msg"` |
 | `WebFetch(domain:x)` | Fetch from specific domain | `WebFetch(domain:github.com)` |
 | `WebSearch` | Allow web searches | N/A |
 
@@ -1779,7 +1775,6 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
 | Wildcard | Meaning | Notes |
 |----------|---------|-------|
 | `*` | Zero or more of anything | Matches empty string too |
-| `+` | One or more of anything | Requires at least one character/arg |
 | `**` | Recursive glob | For file paths (all subdirectories) |
 
 **Permission Sections:**
@@ -1808,15 +1803,15 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
 
 | Project Type | Additional Allows | Additional Denies |
 |--------------|-------------------|-------------------|
-| Go project | `Bash(go:*)`, `Bash(golangci-lint:*)` | - |
-| Docker project | `Bash(docker:*)`, `Bash(docker-compose:*)` | `Bash(docker system prune:*)` |
-| Node project | `Bash(npm:*)`, `Bash(node:*)` | `Bash(npm publish:*)` |
-| Python project | `Bash(python:*)`, `Bash(pip:*)`, `Bash(uv:*)` | `Bash(pip install --user:*)` |
+| Go project | `Bash(go *)`, `Bash(golangci-lint *)` | - |
+| Docker project | `Bash(docker *)`, `Bash(docker-compose *)` | `Bash(docker system prune *)` |
+| Node project | `Bash(npm *)`, `Bash(node *)` | `Bash(npm publish *)` |
+| Python project | `Bash(python *)`, `Bash(pip *)`, `Bash(uv *)` | `Bash(pip install --user *)` |
 
 **CRITICAL Rules:**
-- NEVER allow `Bash(sudo:*)` - privilege escalation should be explicit and manual
-- NEVER allow `Bash(rm -rf /*:*)` or similar destructive patterns
-- ALWAYS deny `Bash(git commit:*)` and `Bash(git push:*)` - plain git commit/push are blocked because they bypass the signed-commit wrapper. AI commits via `gitcommit <command>` instead (see "gitcommit Script" rules)
+- NEVER allow `Bash(sudo *)` - privilege escalation should be explicit and manual
+- NEVER allow `Bash(rm -rf *)` or similar destructive patterns
+- ALWAYS deny `Bash(git commit *)` and `Bash(git push *)` - plain git commit/push are blocked because they bypass the signed-commit wrapper. AI commits via `gitcommit <command>` instead (see "gitcommit Script" rules)
 - Use `PreToolUse` hooks to enforce project standards (formatting, no vendor names)
 - The `env` section sets environment variables for ALL Bash commands in the session
 - Settings are merged: project settings extend/override global `~/.claude/settings.json`
@@ -4979,14 +4974,14 @@ For code that runs in the application, NEVER use bare `/path`. Always use `{fqdn
 // ❌ WRONG - Bare path
 link := "/api/" + apiVersion + "/items/" + itemID
 
-// ✅ CORRECT - Using FQDN
+// ❌ WRONG — hardcodes https; ignores reverse proxy headers; breaks behind a proxy
 link := fmt.Sprintf("https://%s/api/%s/items/%s", cfg.FQDN, apiVersion, itemID)
 
-// ✅ CORRECT - Helper function
-func BuildURL(path string) string {
-    return fmt.Sprintf("https://%s%s", cfg.FQDN, path)
-}
-link := BuildURL("/api/" + apiVersion + "/items/" + itemID)
+// ❌ WRONG — proxy-blind helper; physically cannot read X-Forwarded-* headers
+// See PART 12 → BuildURL / URL Variable Resolution for the full request-aware implementation.
+
+// ✅ CORRECT — request-aware; reverse-proxy headers first (PART 12 → "BuildURL")
+link := BuildURL(r, "/api/"+apiVersion+"/items/"+itemID)
 ```
 
 **JavaScript examples:**
@@ -5008,8 +5003,11 @@ fetch(`${config.apiBaseUrl}/api/${apiVersion}/items`)
 <!-- ❌ WRONG - Bare path (breaks in emails, notifications) -->
 <a href="/server/security/report/{{.Token}}">View Report</a>
 
-<!-- ✅ CORRECT - Full URL using FQDN -->
+<!-- ❌ WRONG — hardcodes https; ignores proxy headers; breaks behind a proxy -->
 <a href="https://{{.FQDN}}/server/security/report/{{.Token}}">View Report</a>
+
+<!-- ✅ CORRECT — handler computes full URL via BuildURL(r, ...) and passes it to the template -->
+<a href="{{.ReportURL}}">View Report</a>
 ```
 
 **Exception - Internal routing only:**
@@ -7654,7 +7652,7 @@ func (req *CreateResourceRequest) Parse() (*Resource, error) {
 
 **URL Variable Resolution (Reverse Proxy Preferred):**
 - `{fqdn}`: Reverse Proxy Headers → `DOMAIN` → `os.Hostname()` → `$HOSTNAME` → Global IP → `localhost`
-- `{proto}`: `X-Forwarded-Proto` → `X-Forwarded-Ssl` → TLS detection → `http`
+- `{proto}`: `X-Forwarded-Proto` → `X-Forwarded-Ssl` → `X-Url-Scheme` → TLS detection → `http`
 - `{port}`: `X-Forwarded-Port` → Host header → Server port → Proto default
 - `{baseurl}`: `X-Forwarded-Prefix` → `X-Forwarded-Path` → `X-Script-Name` → `server.baseurl` → `/`
 
@@ -15629,7 +15627,17 @@ server:
     additional: []
 ```
 
-**Used by `X-Forwarded-*` trust gate.** Every header-based detection chain in the spec — `BuildURL(r, ...)` (PART 12 → "Resolution Order"), CORS allow-list resolution (PART 16), CSP `connect-src` learning, domain-learning algorithm — only honors `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`, `X-Real-IP`, `X-Original-Host` when the **immediate peer's IP** is in `trusted_proxies` (private ranges + the `additional` allow-list). Headers from non-trusted peers are dropped before resolution runs, so an attacker reaching the binary directly cannot inject a forged Host into the learned-origins list.
+**Used by `X-Forwarded-*` trust gate.** Every header-based detection chain in the spec — `BuildURL(r, ...)` (PART 12 → "Resolution Order"), CORS allow-list resolution (PART 16), CSP `connect-src` learning, domain-learning algorithm — only honors the following proxy headers when the **immediate peer's IP** is in `trusted_proxies` (private ranges + the `additional` allow-list):
+
+| Category | Trusted headers |
+|----------|----------------|
+| **FQDN** | `X-Forwarded-Host`, `X-Real-Host`, `X-Original-Host` |
+| **Proto** | `X-Forwarded-Proto`, `X-Forwarded-Ssl`, `X-Url-Scheme` |
+| **Port** | `X-Forwarded-Port` |
+| **Base path** | `X-Forwarded-Prefix`, `X-Forwarded-Path`, `X-Script-Name` |
+| **Client IP** | `X-Real-IP`, `X-Forwarded-For`, `CF-Connecting-IP`, `True-Client-IP`, `X-Client-IP` |
+
+All of these headers are supported regardless of proxy vendor (Nginx, Caddy, HAProxy, Traefik, Apache, Cloudflare Tunnels, AWS ALB, etc.). Headers from non-trusted peers are dropped before resolution runs, so an attacker reaching the binary directly cannot inject a forged Host into the learned-origins list.
 
 | Always trusted (no config required) | Reason |
 |--------------------------------------|--------|
