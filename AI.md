@@ -9238,10 +9238,9 @@ func FromEnv() {
 
 | Data Type | Location | Source | Update Frequency |
 |-----------|----------|--------|------------------|
-| GeoIP (ASN) | `{data_dir}/security/geoip/` | ip-location-db | Daily |
-| GeoIP (Country) | `{data_dir}/security/geoip/` | ip-location-db | Daily |
-| GeoIP (City) | `{data_dir}/security/geoip/` | ip-location-db | Daily |
-| GeoIP (WHOIS) | `{data_dir}/security/geoip/` | ip-location-db | Daily |
+| GeoIP (Country) | `{data_dir}/security/geoip/` | ip-location-db | Daily / Monthly / Twice weekly |
+| GeoIP (City) | `{data_dir}/security/geoip/` | ip-location-db | Monthly / Twice weekly |
+| GeoIP (ASN) | `{data_dir}/security/geoip/` | ip-location-db | Daily / Monthly / Twice weekly |
 | IP Blocklists | `{data_dir}/security/blocklists/` | Configurable sources | Daily |
 | Domain Blocklists | `{data_dir}/security/blocklists/` | Configurable sources | Daily |
 | CVE databases | `{data_dir}/security/cve/` | NVD/NIST feeds | Daily |
@@ -9269,25 +9268,72 @@ data:
 
   geoip:
     # ip-location-db (https://github.com/sapics/ip-location-db)
-    # Free, no API key required, daily updates, CC0/PDDL licensed
+    # All files from GitHub Releases — no API key or account required.
+    # Tiers: PDDL (daily), CC BY 4.0 (monthly), GeoLite2/CC BY-SA 4.0 (twice weekly).
     provider: "ip-location-db"
     databases:
-      asn:
+      # Country — PDDL (daily, no attribution required)
+      user_country:
         enabled: true
-        url: "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
-        file: "asn.mmdb"
-      country:
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/user-country.mmdb"
+        file: "user-country.mmdb"
+      server_country:
         enabled: true
-        url: "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
-        file: "country.mmdb"
-      city:
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/server-country.mmdb"
+        file: "server-country.mmdb"
+      iptoasn_country:
         enabled: true
-        url: "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
-        file: "city.mmdb"
-      whois:
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-country.mmdb"
+        file: "iptoasn-country.mmdb"
+      # Country — CC BY 4.0 (monthly; credit: DB-IP.com)
+      dbip_country:
         enabled: true
-        url: "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
-        file: "whois.mmdb"
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-country.mmdb"
+        file: "dbip-country.mmdb"
+      # Country — GeoLite2/CC BY-SA 4.0 (twice weekly; free redistribution, no MaxMind account needed)
+      geolite2_country:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/geolite2-country.mmdb"
+        file: "geolite2-country.mmdb"
+
+      # City — CC BY 4.0 (monthly; credit: DB-IP.com; IPv4 and IPv6 separate — no combined MMDB)
+      dbip_city_ipv4:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv4.mmdb"
+        file: "dbip-city-ipv4.mmdb"
+      dbip_city_ipv6:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv6.mmdb"
+        file: "dbip-city-ipv6.mmdb"
+      # City — GeoLite2/CC BY-SA 4.0 (twice weekly; free redistribution, no MaxMind account needed)
+      geolite2_city_ipv4:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/geolite2-city-ipv4.mmdb"
+        file: "geolite2-city-ipv4.mmdb"
+      geolite2_city_ipv6:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/geolite2-city-ipv6.mmdb"
+        file: "geolite2-city-ipv6.mmdb"
+
+      # ASN — PDDL (daily, no attribution required)
+      origin_asn:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/origin-asn.mmdb"
+        file: "origin-asn.mmdb"
+      iptoasn_asn:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-asn.mmdb"
+        file: "iptoasn-asn.mmdb"
+      # ASN — CC BY 4.0 (monthly; credit: DB-IP.com)
+      dbip_asn:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-asn.mmdb"
+        file: "dbip-asn.mmdb"
+      # ASN — GeoLite2/CC BY-SA 4.0 (twice weekly; free redistribution, no MaxMind account needed)
+      geolite2_asn:
+        enabled: true
+        url: "https://github.com/sapics/ip-location-db/releases/download/latest/geolite2-asn.mmdb"
+        file: "geolite2-asn.mmdb"
 
   # Blocklists: stored in {data_dir}/security/blocklists/
   # Config is under server.security.blocklists (see Blocklists Section)
@@ -9309,10 +9355,19 @@ data:
 ```
 {data_dir}/security/
 ├── geoip/
-│   ├── asn.mmdb                 # ASN lookups (AS number, organization)
-│   ├── country.mmdb             # Country code lookups
-│   ├── city.mmdb                # City, country, state, postcode, coordinates, timezone
-│   ├── whois.mmdb               # WHOIS data (registrant, org)
+│   ├── user-country.mmdb        # Country — community-aggregated (PDDL, daily)
+│   ├── server-country.mmdb      # Country for server IPs (PDDL, daily)
+│   ├── iptoasn-country.mmdb     # Country via IPtoASN (PDDL, daily)
+│   ├── dbip-country.mmdb        # Country — DB-IP Lite (CC BY 4.0, monthly)
+│   ├── geolite2-country.mmdb    # Country — GeoLite2 (CC BY-SA 4.0, twice weekly)
+│   ├── dbip-city-ipv4.mmdb      # City IPv4 — DB-IP Lite (CC BY 4.0, monthly)
+│   ├── dbip-city-ipv6.mmdb      # City IPv6 — DB-IP Lite (CC BY 4.0, monthly)
+│   ├── geolite2-city-ipv4.mmdb  # City IPv4 — GeoLite2 (CC BY-SA 4.0, twice weekly)
+│   ├── geolite2-city-ipv6.mmdb  # City IPv6 — GeoLite2 (CC BY-SA 4.0, twice weekly)
+│   ├── origin-asn.mmdb          # ASN via BGP routing (PDDL, daily)
+│   ├── iptoasn-asn.mmdb         # ASN via IPtoASN (PDDL, daily)
+│   ├── dbip-asn.mmdb            # ASN — DB-IP Lite (CC BY 4.0, monthly)
+│   ├── geolite2-asn.mmdb        # ASN — GeoLite2 (CC BY-SA 4.0, twice weekly)
 │   └── .last_updated            # Timestamp file
 ├── blocklists/
 │   ├── firehol_level1.txt
@@ -9328,19 +9383,28 @@ data:
 
 ### GeoIP Database Details (ip-location-db)
 
-| Database | File | Contains | Use Case |
-|----------|------|----------|----------|
-| ASN | `asn.mmdb` | AS number, AS organization | Network provider identification |
-| Country | `country.mmdb` | Country code (ISO 3166-1) | Geo-blocking, compliance |
-| City | `city.mmdb` | City, country, state1/state2, postcode, lat/lon, timezone | Location-based features |
-| WHOIS | `whois.mmdb` | Registrant info, combined with ASN | Abuse detection, attribution |
+| Database | File(s) | License | Updated | Contains |
+|----------|---------|---------|---------|----------|
+| Country (community) | `user-country.mmdb` | PDDL | Daily | ISO 3166-1 country code |
+| Country (server IPs) | `server-country.mmdb` | PDDL | Daily | ISO 3166-1 country code |
+| Country (IPtoASN) | `iptoasn-country.mmdb` | PDDL | Daily | ISO 3166-1 country code |
+| Country (DB-IP Lite) | `dbip-country.mmdb` | CC BY 4.0 | Monthly | ISO 3166-1 country code |
+| Country (GeoLite2) | `geolite2-country.mmdb` | CC BY-SA 4.0 | Twice weekly | ISO 3166-1 country code |
+| City IPv4 (DB-IP Lite) | `dbip-city-ipv4.mmdb` | CC BY 4.0 | Monthly | City, state, postcode, lat/lon, timezone |
+| City IPv6 (DB-IP Lite) | `dbip-city-ipv6.mmdb` | CC BY 4.0 | Monthly | City, state, postcode, lat/lon, timezone |
+| City IPv4 (GeoLite2) | `geolite2-city-ipv4.mmdb` | CC BY-SA 4.0 | Twice weekly | City, state, postcode, lat/lon, timezone |
+| City IPv6 (GeoLite2) | `geolite2-city-ipv6.mmdb` | CC BY-SA 4.0 | Twice weekly | City, state, postcode, lat/lon, timezone |
+| ASN (BGP routing) | `origin-asn.mmdb` | PDDL | Daily | AS number, AS organization |
+| ASN (IPtoASN) | `iptoasn-asn.mmdb` | PDDL | Daily | AS number, AS organization |
+| ASN (DB-IP Lite) | `dbip-asn.mmdb` | CC BY 4.0 | Monthly | AS number, AS organization |
+| ASN (GeoLite2) | `geolite2-asn.mmdb` | CC BY-SA 4.0 | Twice weekly | AS number, AS organization |
 
 **Benefits of ip-location-db:**
-- No API key or account required (unlike MaxMind)
-- Daily updates via jsDelivr CDN
-- CC0/PDDL licensed (no restrictions)
-- MMDB format (same as MaxMind, compatible with existing Go libraries)
-- IPv4 and IPv6 support
+- No API key or account required — files downloaded directly from GitHub Releases
+- GeoLite2 databases freely redistributed by ip-location-db — no MaxMind account needed
+- Three tiers: PDDL (daily), CC BY 4.0 (monthly), GeoLite2/CC BY-SA 4.0 (twice weekly)
+- MMDB format compatible with oschwald/maxminddb-golang
+- Full IPv4 and IPv6 coverage
 
 ## Display Environment Detection
 
