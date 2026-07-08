@@ -369,13 +369,14 @@ permission rules, business invariants. The HOW lives in AI.md PARTS 0-33; PART 3
 | `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX/` | Active coding, quick tests |
 | `make local` | **Production Testing** | `binaries/` (with version) | Test prod builds locally |
 | `make build` | **Full Release** | `binaries/` (all 8 platforms) | Before release |
-| `make test` | **Unit Tests** | Coverage report | After code changes |
+| `make test` | **Phase 1 — Toolchain Gate** | Coverage report | Before commits; after code changes |
 
 | NEVER (locally) | ALWAYS (Makefile targets) |
 |-----------------|---------------------------|
 | `go build ...` | `make dev` or `make local` or `make build` |
 | `go test ...` | `make test` |
 | `go run ...` | `make dev` then run binary in Docker |
+| Run binary on host directly | `docker run --rm -v "$BUILD_DIR:/app" alpine:latest /app/{project_name}` or Phase 2 scripts |
 
 **Makefile targets use Docker internally (`casjaysdev/go:latest`) with host cache dirs (`GO_CACHE`/`GO_BUILD`) — local machine stays clean.**
 
@@ -439,10 +440,10 @@ docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -
   /app/{project_name} --help
 "
 
-# 3. Unit tests
+# Phase 1: Toolchain gate — unit tests inside Docker
 make test
 
-# 4. Integration tests
+# Phase 2: Binary validation — shell scripts run against the compiled binary
 # Auto-detects incus/docker
 ./tests/run_tests.sh
 
@@ -31196,7 +31197,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 | `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX/` | Active coding, quick tests, debugging |
 | `make local` | **Production Testing** | `binaries/` (with version) | Test production builds locally before release |
 | `make build` | **Full Release Build** | `binaries/` (all 8 platforms) | Before tagging release, cross-platform verification |
-| `make test` | **Unit Tests** | Coverage report | After code changes, before commits |
+| `make test` | **Phase 1 — Toolchain Gate** | Coverage report | Before commits; after code changes |
 
 **Local Development Workflow:**
 
@@ -31204,8 +31205,8 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 |-------|---------|---------|
 | **1. Coding** | `make dev` | Rapid iteration - builds to temp dir, no version info |
 | **2. Quick Test** | Run binary in Docker | Debug with curl, file, bash tools |
-| **3. Unit Tests** | `make test` | Verify logic, coverage |
-| **4. Integration** | `./tests/run_tests.sh` | Full server + CLI tests |
+| **3. Phase 1 — Toolchain Gate** | `make test` | Unit tests in Docker; pre-commit requirement |
+| **4. Phase 2 — Binary Validation** | `./tests/run_tests.sh` | Shell scripts run against compiled binary |
 | **5. Production Test** | `make local` | Build with version info to `binaries/` |
 | **6. Release** | `make build` | Full cross-platform build (8 platforms) |
 
@@ -31225,12 +31226,12 @@ docker run --rm \
   "
 ```
 
-**Integration Tests:**
+**Phase 2 — Binary Validation:**
 
 | Script | Container | Best For |
 |--------|-----------|----------|
 | `./tests/run_tests.sh` | Auto-detect | General testing (picks best available) |
-| `./tests/docker.sh` | Docker `alpine:latest` | Quick integration tests |
+| `./tests/docker.sh` | Docker `alpine:latest` | Quick binary validation |
 | `./tests/incus.sh` | Incus `debian:latest` | **PREFERRED** - Full OS, systemd, realistic |
 
 **Typical workflow:**
@@ -35046,6 +35047,7 @@ When a test or debug step requires `reboot`, `systemctl`, `iptables`, `mount`, p
 
 | Test Need | Run It Where |
 |-----------|--------------|
+| Run or test the compiled binary | `docker run --rm -v "$BUILD_DIR:/app" alpine:latest /app/{project_name}` or `./tests/docker.sh` / `./tests/incus.sh` |
 | Test systemd service install/start/stop | `incus exec test-{project_name} -- systemctl ...` |
 | Test firewall integration | `docker run --rm --name "{project_name}-test" --cap-add=NET_ADMIN ...` |
 | Test network interface behavior | `ip netns exec {ns} ...` or inside Incus |
@@ -35300,30 +35302,30 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 
 ### Testing Strategy
 
-**Two types of tests are REQUIRED:**
+**Two test phases are REQUIRED:**
 
-| Test Type | Files | Run With | Tests |
-|-----------|-------|----------|-------|
-| **Go Unit Tests** | `*_test.go` | `go test` | Function/package logic, no server |
-| **Integration Tests** | `./tests/*.sh` | Executable shell scripts | Full server, API endpoints, auth |
+| Phase | Files | Run With | Tests |
+|-------|-------|----------|-------|
+| **Phase 1 — Toolchain Gate** | `*_test.go` | `make test` | Source-code logic via `go test`; pre-commit gate |
+| **Phase 2 — Binary Validation** | `./tests/*.sh` | `./tests/run_tests.sh` | Compiled binary behavior — routes, auth, debugging — **manual, developer-initiated** |
 
-**Go Unit Tests (`*_test.go`):**
-- Test individual functions and packages
+**Phase 1 — Toolchain Gate (`*_test.go`):**
+- Tests individual functions and packages via `go test` inside Docker
 - No server running required
 - Fast, run frequently during development
 - Create or update the matching `*_test.go` immediately when you add or change package logic
 - Run with `make test`
 
-**Integration Tests (`./tests/*.sh`):**
-- Test complete running server
-- Test API endpoints, .txt extension, Accept headers
-- Test authentication, API token validation
-- Test project-specific functionality (from IDEA.md)
+**Phase 2 — Binary Validation (`./tests/*.sh`) — manual, developer-initiated:**
+- Tests the complete running server binary
+- Tests API endpoints, .txt extension, Accept headers
+- Tests authentication, API token validation
+- Tests project-specific functionality (from IDEA.md)
 - Run with `./tests/run_tests.sh`
 - `./tests/*` means executable shell scripts in the repository-root `tests/` directory
 - Minimum required scripts: `./tests/run_tests.sh`, `./tests/docker.sh`, `./tests/incus.sh`
 - Additional helper scripts are allowed (for example `./tests/test_content_negotiation.sh`)
-- These scripts complement integration coverage; they do **NOT** replace required Go unit tests in `*_test.go`
+- These scripts complement binary coverage; they do **NOT** replace required Go unit tests in `*_test.go`
 
 ### What Goes in `*_test.go` vs `./tests/*.sh` — and Why
 
@@ -35343,10 +35345,10 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 
 ### Testing Requirements Summary
 
-**BOTH types of tests are REQUIRED for all projects:**
+**Both test phases are REQUIRED for all projects:**
 
-1. **Go Unit Tests** (`*_test.go`) - Test package logic
-2. **Integration Tests** (`./tests/*.sh`) - Test full running application
+1. **Phase 1 — Toolchain Gate** (`make test`) — source-code logic via `go test`, pre-commit gate
+2. **Phase 2 — Binary Validation** (`./tests/*.sh`) — compiled binary behavior, debugging — **manual, developer-initiated**
 
 **Integration tests MUST be comprehensive:**
 - ✓ Test ALL project-specific endpoints (IDEA.md)
@@ -35608,20 +35610,20 @@ make test
 
 | Coverage Type | Requirement | Verification |
 |--------------|-------------|--------------|
-| **Go Unit Tests** | ≥80% code coverage | `go test -cover` must report ≥80% |
-| **Integration Tests** | 100% endpoint coverage | Every endpoint tested |
+| **Phase 1 — Toolchain Gate** | ≥80% code coverage | `go test -cover` must report ≥80% |
+| **Phase 2 — Binary Validation** | 100% endpoint coverage | Every endpoint tested |
 | **API Routes** | 100% route coverage | Every API route tested |
 | **Error Paths** | All critical error paths | Auth, DB, and validation errors tested |
 
 ### What 80% Coverage Means
 
-**Go Code (Unit Tests):**
+**Phase 1 — Toolchain Gate — ≥80% code coverage:**
 ```bash
 # Run tests with coverage enforcement (fails if below 80%)
 make test
 ```
 
-**Endpoints (Integration Tests):**
+**Phase 2 — Binary Validation — endpoint coverage:**
 
 | Endpoint Type | Must Test |
 |--------------|-----------|
@@ -35784,10 +35786,10 @@ verify_all_endpoints_tested
 
 | When | Run This | Purpose |
 |------|----------|---------|
-| **During development** | `make test` (Go unit tests) | Fast feedback, verify logic |
-| **Before committing** | `make test` + `./tests/run_tests.sh` | Verify all tests pass |
-| **Before release** | `make test` + `./tests/incus.sh` | Full systemd testing |
-| **In CI/CD** | Both Go tests and integration tests | Automated verification |
+| **During development** | `make test` (Phase 1 — toolchain gate) | Fast feedback, verify source logic |
+| **Before committing** | `make test` (Phase 1 required) | Toolchain gate must pass before every commit |
+| **Before release** | `make test` + `./tests/incus.sh` | Phase 1 + Phase 2 binary validation |
+| **In CI/CD** | Phase 1 + Phase 2 | Toolchain gate + binary verification |
 
 **Test Execution Order:**
 ```bash
