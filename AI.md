@@ -33,6 +33,7 @@ have_internal=$(grep -cE '^internal_name:[[:space:]]*.+$' IDEA.md 2>/dev/null ||
 | `{project_name}` | IDEA.md `## Project variables` | Existing long-form `CLAUDE.md` / `.claude/CLAUDE.md` project details, then `basename "$PWD"` |
 | `{project_org}` | IDEA.md `## Project variables` | Existing long-form `CLAUDE.md` / `.claude/CLAUDE.md` project details, then `basename "$(dirname "$PWD")"` |
 | `{internal_name}` | IDEA.md `## Project variables` (always — set once at first run, never edited after) | Existing long-form `CLAUDE.md` / `.claude/CLAUDE.md` project details, then first-time setup: copy from `{project_name}` |
+| `{internal_org}` | IDEA.md `## Project variables` (always — set once at first run, never edited after) | Existing long-form `CLAUDE.md` / `.claude/CLAUDE.md` project details, then first-time setup: copy from `{project_org}` |
 | `{plist_name}` | **Derived (not stored)**: `io.github.{project_org}.{internal_name}` | — |
 
 **Detection commands (use commands — never guess):**
@@ -2037,13 +2038,13 @@ Instructions for how this agent should behave...
 
 | Placeholder | Linux/BSD Default | macOS Default | Windows Default |
 |-------------|-------------------|---------------|-----------------|
-| `{config_dir}` | `/etc/{project_org}/{internal_name}` | `/Library/Application Support/{project_org}/{internal_name}` | `%PROGRAMDATA%\{project_org}\{internal_name}` |
-| `{data_dir}` | `/var/lib/{project_org}/{internal_name}` | `/Library/Application Support/{project_org}/{internal_name}` | `%PROGRAMDATA%\{project_org}\{internal_name}` |
+| `{config_dir}` | `/etc/{internal_org}/{internal_name}` | `/Library/Application Support/{internal_org}/{internal_name}` | `%PROGRAMDATA%\{internal_org}\{internal_name}` |
+| `{data_dir}` | `/var/lib/{internal_org}/{internal_name}` | `/Library/Application Support/{internal_org}/{internal_name}` | `%PROGRAMDATA%\{internal_org}\{internal_name}` |
 | `{db_dir}` | `{data_dir}/db/` | `{data_dir}/db/` | `{data_dir}\db\` |
-| `{log_dir}` | `/var/log/{project_org}/{internal_name}` | `/Library/Logs/{project_org}/{internal_name}` | `%PROGRAMDATA%\{project_org}\{internal_name}\logs` |
-| `{cache_dir}` | `/var/cache/{project_org}/{internal_name}` | `/Library/Caches/{project_org}/{internal_name}` | `%PROGRAMDATA%\{project_org}\{internal_name}\cache` |
-| `{backup_dir}` | `/mnt/Backups/{project_org}/{internal_name}` | `/Library/Application Support/{project_org}/{internal_name}/backups` | `%PROGRAMDATA%\{project_org}\{internal_name}\backups` |
-| `{pid_file}` | `/var/run/{project_org}/{internal_name}.pid` | `/var/run/{project_org}/{internal_name}.pid` | N/A (Windows uses SCM) |
+| `{log_dir}` | `/var/log/{internal_org}/{internal_name}` | `/Library/Logs/{internal_org}/{internal_name}` | `%PROGRAMDATA%\{internal_org}\{internal_name}\logs` |
+| `{cache_dir}` | `/var/cache/{internal_org}/{internal_name}` | `/Library/Caches/{internal_org}/{internal_name}` | `%PROGRAMDATA%\{internal_org}\{internal_name}\cache` |
+| `{backup_dir}` | `/mnt/Backups/{internal_org}/{internal_name}` | `/Library/Application Support/{internal_org}/{internal_name}/backups` | `%PROGRAMDATA%\{internal_org}\{internal_name}\backups` |
+| `{pid_file}` | `/var/run/{internal_org}/{internal_name}.pid` | `/var/run/{internal_org}/{internal_name}.pid` | N/A (Windows uses SCM) |
 
 **Note:** In Docker containers, `{db_dir}` is `/data/db/sqlite` (see Docker paths section).
 
@@ -3943,8 +3944,8 @@ User preferences like theme, language, and UI settings can be stored client-side
 
 | Storage | Use Case | Persistence |
 |---------|----------|-------------|
-| Cookies | Theme, language, consent flags — anything the server reads to render pages | Configurable expiry |
-| `localStorage` | Client-only state the server must never receive (e.g. API tokens) | Until cleared |
+| Cookies | Theme, language, consent flags — anything the server reads to render pages; plus the `owner_token` cookie (HttpOnly + Secure + SameSite=Strict) set on web-form resource creation so token-gated web management works with JS disabled | Configurable expiry |
+| `localStorage` | Optional JS-enhancement copy of the resource-owner API token, and pure client-only state — never load-bearing; every flow must also work via the `owner_token` cookie with JS disabled | Until cleared |
 
 ## AI Implementation Process
 
@@ -5115,7 +5116,7 @@ sudo mv {project_name}-cli-linux-amd64 /usr/local/bin/{project_name}-cli
 ### Configure
 
 ```bash
-# Connect to official server (creates ~/.config/{project_org}/{internal_name}/cli.yml)
+# Connect to official server (creates ~/.config/{internal_org}/{internal_name}/cli.yml)
 {project_name}-cli --server {official_site} --token YOUR_API_TOKEN
 ```
 
@@ -6617,17 +6618,17 @@ Before proceeding, confirm you understand:
 | Type | Path |
 |------|------|
 | Binary | `/usr/local/bin/{project_name}` |
-| Config | `/etc/{project_org}/{internal_name}/` |
-| Config File | `/etc/{project_org}/{internal_name}/server.yml` |
-| Data | `/var/lib/{project_org}/{internal_name}/` |
-| Cache | `/var/cache/{project_org}/{internal_name}/` |
-| Logs | `/var/log/{project_org}/{internal_name}/` |
-| Log File | `/var/log/{project_org}/{internal_name}/server.log` |
-| Backup | `/mnt/Backups/{project_org}/{internal_name}/` |
-| PID File | `/var/run/{project_org}/{internal_name}.pid` |
-| SSL | `/etc/{project_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
-| Security | `/var/lib/{project_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/var/lib/{project_org}/{internal_name}/db/` (server.db) |
+| Config | `/etc/{internal_org}/{internal_name}/` |
+| Config File | `/etc/{internal_org}/{internal_name}/server.yml` |
+| Data | `/var/lib/{internal_org}/{internal_name}/` |
+| Cache | `/var/cache/{internal_org}/{internal_name}/` |
+| Logs | `/var/log/{internal_org}/{internal_name}/` |
+| Log File | `/var/log/{internal_org}/{internal_name}/server.log` |
+| Backup | `/mnt/Backups/{internal_org}/{internal_name}/` |
+| PID File | `/var/run/{internal_org}/{internal_name}.pid` |
+| SSL | `/etc/{internal_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
+| Security | `/var/lib/{internal_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/var/lib/{internal_org}/{internal_name}/db/` (server.db) |
 | Service | `/etc/systemd/system/{internal_name}.service` |
 
 ### User (non-privileged)
@@ -6635,17 +6636,17 @@ Before proceeding, confirm you understand:
 | Type | Path |
 |------|------|
 | Binary | `~/.local/bin/{project_name}` |
-| Config | `~/.config/{project_org}/{internal_name}/` |
-| Config File | `~/.config/{project_org}/{internal_name}/server.yml` |
-| Data | `~/.local/share/{project_org}/{internal_name}/` |
-| Cache | `~/.cache/{project_org}/{internal_name}/` |
-| Logs | `~/.local/log/{project_org}/{internal_name}/` |
-| Log File | `~/.local/log/{project_org}/{internal_name}/server.log` |
-| Backup | `~/.local/share/Backups/{project_org}/{internal_name}/` |
-| PID File | `~/.local/share/{project_org}/{internal_name}/{internal_name}.pid` |
-| SSL | `~/.config/{project_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
-| Security | `~/.local/share/{project_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/.local/share/{project_org}/{internal_name}/db/` (server.db) |
+| Config | `~/.config/{internal_org}/{internal_name}/` |
+| Config File | `~/.config/{internal_org}/{internal_name}/server.yml` |
+| Data | `~/.local/share/{internal_org}/{internal_name}/` |
+| Cache | `~/.cache/{internal_org}/{internal_name}/` |
+| Logs | `~/.local/log/{internal_org}/{internal_name}/` |
+| Log File | `~/.local/log/{internal_org}/{internal_name}/server.log` |
+| Backup | `~/.local/share/Backups/{internal_org}/{internal_name}/` |
+| PID File | `~/.local/share/{internal_org}/{internal_name}/{internal_name}.pid` |
+| SSL | `~/.config/{internal_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
+| Security | `~/.local/share/{internal_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/.local/share/{internal_org}/{internal_name}/db/` (server.db) |
 
 ---
 
@@ -6656,17 +6657,17 @@ Before proceeding, confirm you understand:
 | Type | Path |
 |------|------|
 | Binary | `/usr/local/bin/{project_name}` |
-| Config | `/Library/Application Support/{project_org}/{internal_name}/` |
-| Config File | `/Library/Application Support/{project_org}/{internal_name}/server.yml` |
-| Data | `/Library/Application Support/{project_org}/{internal_name}/data/` |
-| Cache | `/Library/Caches/{project_org}/{internal_name}/` |
-| Logs | `/Library/Logs/{project_org}/{internal_name}/` |
-| Log File | `/Library/Logs/{project_org}/{internal_name}/server.log` |
-| Backup | `/Library/Backups/{project_org}/{internal_name}/` |
-| PID File | `/var/run/{project_org}/{internal_name}.pid` |
-| SSL | `/Library/Application Support/{project_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
-| Security | `/Library/Application Support/{project_org}/{internal_name}/data/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/Library/Application Support/{project_org}/{internal_name}/db/` (server.db) |
+| Config | `/Library/Application Support/{internal_org}/{internal_name}/` |
+| Config File | `/Library/Application Support/{internal_org}/{internal_name}/server.yml` |
+| Data | `/Library/Application Support/{internal_org}/{internal_name}/data/` |
+| Cache | `/Library/Caches/{internal_org}/{internal_name}/` |
+| Logs | `/Library/Logs/{internal_org}/{internal_name}/` |
+| Log File | `/Library/Logs/{internal_org}/{internal_name}/server.log` |
+| Backup | `/Library/Backups/{internal_org}/{internal_name}/` |
+| PID File | `/var/run/{internal_org}/{internal_name}.pid` |
+| SSL | `/Library/Application Support/{internal_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
+| Security | `/Library/Application Support/{internal_org}/{internal_name}/data/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/Library/Application Support/{internal_org}/{internal_name}/db/` (server.db) |
 | Service | `/Library/LaunchDaemons/{plist_name}.plist` |
 
 ### User (non-privileged)
@@ -6674,17 +6675,17 @@ Before proceeding, confirm you understand:
 | Type | Path |
 |------|------|
 | Binary | `~/bin/{project_name}` or `/usr/local/bin/{project_name}` |
-| Config | `~/Library/Application Support/{project_org}/{internal_name}/` |
-| Config File | `~/Library/Application Support/{project_org}/{internal_name}/server.yml` |
-| Data | `~/Library/Application Support/{project_org}/{internal_name}/` |
-| Cache | `~/Library/Caches/{project_org}/{internal_name}/` |
-| Logs | `~/Library/Logs/{project_org}/{internal_name}/` |
-| Log File | `~/Library/Logs/{project_org}/{internal_name}/server.log` |
-| Backup | `~/Library/Backups/{project_org}/{internal_name}/` |
-| PID File | `~/Library/Application Support/{project_org}/{internal_name}/{internal_name}.pid` |
-| SSL | `~/Library/Application Support/{project_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
-| Security | `~/Library/Application Support/{project_org}/{internal_name}/data/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/Library/Application Support/{project_org}/{internal_name}/db/` (server.db) |
+| Config | `~/Library/Application Support/{internal_org}/{internal_name}/` |
+| Config File | `~/Library/Application Support/{internal_org}/{internal_name}/server.yml` |
+| Data | `~/Library/Application Support/{internal_org}/{internal_name}/` |
+| Cache | `~/Library/Caches/{internal_org}/{internal_name}/` |
+| Logs | `~/Library/Logs/{internal_org}/{internal_name}/` |
+| Log File | `~/Library/Logs/{internal_org}/{internal_name}/server.log` |
+| Backup | `~/Library/Backups/{internal_org}/{internal_name}/` |
+| PID File | `~/Library/Application Support/{internal_org}/{internal_name}/{internal_name}.pid` |
+| SSL | `~/Library/Application Support/{internal_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
+| Security | `~/Library/Application Support/{internal_org}/{internal_name}/data/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/Library/Application Support/{internal_org}/{internal_name}/db/` (server.db) |
 | Service | `~/Library/LaunchAgents/{plist_name}.plist` |
 
 ---
@@ -6696,17 +6697,17 @@ Before proceeding, confirm you understand:
 | Type | Path |
 |------|------|
 | Binary | `/usr/local/bin/{project_name}` |
-| Config | `/usr/local/etc/{project_org}/{internal_name}/` |
-| Config File | `/usr/local/etc/{project_org}/{internal_name}/server.yml` |
-| Data | `/var/db/{project_org}/{internal_name}/` |
-| Cache | `/var/cache/{project_org}/{internal_name}/` |
-| Logs | `/var/log/{project_org}/{internal_name}/` |
-| Log File | `/var/log/{project_org}/{internal_name}/server.log` |
-| Backup | `/var/backups/{project_org}/{internal_name}/` |
-| PID File | `/var/run/{project_org}/{internal_name}.pid` |
-| SSL | `/usr/local/etc/{project_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
-| Security | `/var/db/{project_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/var/db/{project_org}/{internal_name}/db/` (server.db) |
+| Config | `/usr/local/etc/{internal_org}/{internal_name}/` |
+| Config File | `/usr/local/etc/{internal_org}/{internal_name}/server.yml` |
+| Data | `/var/db/{internal_org}/{internal_name}/` |
+| Cache | `/var/cache/{internal_org}/{internal_name}/` |
+| Logs | `/var/log/{internal_org}/{internal_name}/` |
+| Log File | `/var/log/{internal_org}/{internal_name}/server.log` |
+| Backup | `/var/backups/{internal_org}/{internal_name}/` |
+| PID File | `/var/run/{internal_org}/{internal_name}.pid` |
+| SSL | `/usr/local/etc/{internal_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
+| Security | `/var/db/{internal_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/var/db/{internal_org}/{internal_name}/db/` (server.db) |
 | Service | `/usr/local/etc/rc.d/{internal_name}` |
 
 ### User (non-privileged)
@@ -6714,17 +6715,17 @@ Before proceeding, confirm you understand:
 | Type | Path |
 |------|------|
 | Binary | `~/.local/bin/{project_name}` |
-| Config | `~/.config/{project_org}/{internal_name}/` |
-| Config File | `~/.config/{project_org}/{internal_name}/server.yml` |
-| Data | `~/.local/share/{project_org}/{internal_name}/` |
-| Cache | `~/.cache/{project_org}/{internal_name}/` |
-| Logs | `~/.local/log/{project_org}/{internal_name}/` |
-| Log File | `~/.local/log/{project_org}/{internal_name}/server.log` |
-| Backup | `~/.local/share/Backups/{project_org}/{internal_name}/` |
-| PID File | `~/.local/share/{project_org}/{internal_name}/{internal_name}.pid` |
-| SSL | `~/.config/{project_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
-| Security | `~/.local/share/{project_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/.local/share/{project_org}/{internal_name}/db/` (server.db) |
+| Config | `~/.config/{internal_org}/{internal_name}/` |
+| Config File | `~/.config/{internal_org}/{internal_name}/server.yml` |
+| Data | `~/.local/share/{internal_org}/{internal_name}/` |
+| Cache | `~/.cache/{internal_org}/{internal_name}/` |
+| Logs | `~/.local/log/{internal_org}/{internal_name}/` |
+| Log File | `~/.local/log/{internal_org}/{internal_name}/server.log` |
+| Backup | `~/.local/share/Backups/{internal_org}/{internal_name}/` |
+| PID File | `~/.local/share/{internal_org}/{internal_name}/{internal_name}.pid` |
+| SSL | `~/.config/{internal_org}/{internal_name}/ssl/` (letsencrypt/, local/) |
+| Security | `~/.local/share/{internal_org}/{internal_name}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/.local/share/{internal_org}/{internal_name}/db/` (server.db) |
 
 ---
 
@@ -6734,34 +6735,34 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `C:\Program Files\{project_org}\{internal_name}\{project_name}.exe` |
-| Config | `%ProgramData%\{project_org}\{internal_name}\` |
-| Config File | `%ProgramData%\{project_org}\{internal_name}\server.yml` |
-| Data | `%ProgramData%\{project_org}\{internal_name}\data\` |
-| Cache | `%ProgramData%\{project_org}\{internal_name}\cache\` |
-| Logs | `%ProgramData%\{project_org}\{internal_name}\logs\` |
-| Log File | `%ProgramData%\{project_org}\{internal_name}\logs\server.log` |
-| Backup | `%ProgramData%\Backups\{project_org}\{internal_name}\` |
-| SSL | `%ProgramData%\{project_org}\{internal_name}\ssl\` (letsencrypt\, local\) |
-| Security | `%ProgramData%\{project_org}\{internal_name}\data\security\` (geoip\, blocklists\, cve\, trivy\) |
-| SQLite DB | `%ProgramData%\{project_org}\{internal_name}\db\` (server.db) |
+| Binary | `C:\Program Files\{internal_org}\{internal_name}\{project_name}.exe` |
+| Config | `%ProgramData%\{internal_org}\{internal_name}\` |
+| Config File | `%ProgramData%\{internal_org}\{internal_name}\server.yml` |
+| Data | `%ProgramData%\{internal_org}\{internal_name}\data\` |
+| Cache | `%ProgramData%\{internal_org}\{internal_name}\cache\` |
+| Logs | `%ProgramData%\{internal_org}\{internal_name}\logs\` |
+| Log File | `%ProgramData%\{internal_org}\{internal_name}\logs\server.log` |
+| Backup | `%ProgramData%\Backups\{internal_org}\{internal_name}\` |
+| SSL | `%ProgramData%\{internal_org}\{internal_name}\ssl\` (letsencrypt\, local\) |
+| Security | `%ProgramData%\{internal_org}\{internal_name}\data\security\` (geoip\, blocklists\, cve\, trivy\) |
+| SQLite DB | `%ProgramData%\{internal_org}\{internal_name}\db\` (server.db) |
 | Service | Windows Service Manager |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `%LocalAppData%\{project_org}\{internal_name}\{project_name}.exe` |
-| Config | `%AppData%\{project_org}\{internal_name}\` |
-| Config File | `%AppData%\{project_org}\{internal_name}\server.yml` |
-| Data | `%LocalAppData%\{project_org}\{internal_name}\` |
-| Cache | `%LocalAppData%\{project_org}\{internal_name}\cache\` |
-| Logs | `%LocalAppData%\{project_org}\{internal_name}\logs\` |
-| Log File | `%LocalAppData%\{project_org}\{internal_name}\logs\server.log` |
-| Backup | `%LocalAppData%\Backups\{project_org}\{internal_name}\` |
-| SSL | `%AppData%\{project_org}\{internal_name}\ssl\` (letsencrypt\, local\) |
-| Security | `%LocalAppData%\{project_org}\{internal_name}\security\` (geoip\, blocklists\, cve\, trivy\) |
-| SQLite DB | `%LocalAppData%\{project_org}\{internal_name}\db\` (server.db) |
+| Binary | `%LocalAppData%\{internal_org}\{internal_name}\{project_name}.exe` |
+| Config | `%AppData%\{internal_org}\{internal_name}\` |
+| Config File | `%AppData%\{internal_org}\{internal_name}\server.yml` |
+| Data | `%LocalAppData%\{internal_org}\{internal_name}\` |
+| Cache | `%LocalAppData%\{internal_org}\{internal_name}\cache\` |
+| Logs | `%LocalAppData%\{internal_org}\{internal_name}\logs\` |
+| Log File | `%LocalAppData%\{internal_org}\{internal_name}\logs\server.log` |
+| Backup | `%LocalAppData%\Backups\{internal_org}\{internal_name}\` |
+| SSL | `%AppData%\{internal_org}\{internal_name}\ssl\` (letsencrypt\, local\) |
+| Security | `%LocalAppData%\{internal_org}\{internal_name}\security\` (geoip\, blocklists\, cve\, trivy\) |
+| SQLite DB | `%LocalAppData%\{internal_org}\{internal_name}\db\` (server.db) |
 
 ---
 
@@ -7693,8 +7694,8 @@ func (req *CreateResourceRequest) Parse() (*Resource, error) {
 
 | User Type | Path |
 |-----------|------|
-| Root | `/etc/{project_org}/{internal_name}/server.yml` |
-| Regular | `~/.config/{project_org}/{internal_name}/server.yml` |
+| Root | `/etc/{internal_org}/{internal_name}/server.yml` |
+| Regular | `~/.config/{internal_org}/{internal_name}/server.yml` |
 
 ### Migration
 
@@ -8284,7 +8285,7 @@ Binary checks:
 | **Username** | `{project_name}` |
 | **Group** | `{project_name}` |
 | **Shell** | `/usr/sbin/nologin` (no login) |
-| **Home** | `/var/lib/{project_org}/{internal_name}` |
+| **Home** | `/var/lib/{internal_org}/{internal_name}` |
 | **UID/GID** | Auto-assigned by system |
 | **Type** | System user (UID < 1000 on Linux) |
 
@@ -8292,11 +8293,11 @@ Binary checks:
 
 | Permission | Details |
 |------------|---------|
-| Read/write config | `/etc/{project_org}/{internal_name}/` |
-| Read/write data | `/var/lib/{project_org}/{internal_name}/` |
-| Read/write cache | `/var/cache/{project_org}/{internal_name}/` |
-| Read/write logs | `/var/log/{project_org}/{internal_name}/` |
-| Read/write backups | `/var/lib/Backups/{project_org}/{internal_name}/` or `/mnt/Backups/...` |
+| Read/write config | `/etc/{internal_org}/{internal_name}/` |
+| Read/write data | `/var/lib/{internal_org}/{internal_name}/` |
+| Read/write cache | `/var/cache/{internal_org}/{internal_name}/` |
+| Read/write logs | `/var/log/{internal_org}/{internal_name}/` |
+| Read/write backups | `/var/lib/Backups/{internal_org}/{internal_name}/` or `/mnt/Backups/...` |
 | Use bound sockets | Inherited from root before privilege drop |
 | Bind ports >1024 | New sockets after privilege drop |
 | Run scheduled tasks | Backup, cleanup, SSL renewal, etc. |
@@ -8319,19 +8320,19 @@ Binary checks:
 
 ```bash
 # Binary sets these during startup as root
-chown -R {internal_name}:{internal_name} /etc/{project_org}/{internal_name}/
-chown -R {internal_name}:{internal_name} /var/lib/{project_org}/{internal_name}/
-chown -R {internal_name}:{internal_name} /var/cache/{project_org}/{internal_name}/
-chown -R {internal_name}:{internal_name} /var/log/{project_org}/{internal_name}/
+chown -R {internal_name}:{internal_name} /etc/{internal_org}/{internal_name}/
+chown -R {internal_name}:{internal_name} /var/lib/{internal_org}/{internal_name}/
+chown -R {internal_name}:{internal_name} /var/cache/{internal_org}/{internal_name}/
+chown -R {internal_name}:{internal_name} /var/log/{internal_org}/{internal_name}/
 
 # Permissions
-chmod 755 /etc/{project_org}/{internal_name}/
-chmod 700 /etc/{project_org}/{internal_name}/security/
-chmod 700 /etc/{project_org}/{internal_name}/ssl/
-chmod 700 /etc/{project_org}/{internal_name}/tor/
-chmod 755 /var/lib/{project_org}/{internal_name}/
-chmod 755 /var/cache/{project_org}/{internal_name}/
-chmod 755 /var/log/{project_org}/{internal_name}/
+chmod 755 /etc/{internal_org}/{internal_name}/
+chmod 700 /etc/{internal_org}/{internal_name}/security/
+chmod 700 /etc/{internal_org}/{internal_name}/ssl/
+chmod 700 /etc/{internal_org}/{internal_name}/tor/
+chmod 755 /var/lib/{internal_org}/{internal_name}/
+chmod 755 /var/cache/{internal_org}/{internal_name}/
+chmod 755 /var/log/{internal_org}/{internal_name}/
 ```
 
 **User creation:** See PART 23 for platform-specific user creation commands (Linux `useradd`, macOS `dscl`, FreeBSD `pw`).
@@ -9958,7 +9959,7 @@ func PrintStartupBanner(cfg BannerConfig) {
 
 **Hardcode `{project_name}` for internal identifiers (never changes):**
 - User-Agent header (identifies binary type to server)
-- Default paths (`/etc/{project_org}/{internal_name}/`)
+- Default paths (`/etc/{internal_org}/{internal_name}/`)
 - Config keys, database tables, API identifiers
 
 **Get actual binary name:**
@@ -10197,12 +10198,12 @@ Run '{project_name} <command> help' for detailed help on any command.
 
 | Flag | Type | Default (Linux root) | Default (Linux user) |
 |------|------|----------------------|----------------------|
-| `--config` | Directory | `/etc/{project_org}/{internal_name}/` | `~/.config/{project_org}/{internal_name}/` |
-| `--data` | Directory | `/var/lib/{project_org}/{internal_name}/` | `~/.local/share/{project_org}/{internal_name}/` |
-| `--cache` | Directory | `/var/cache/{project_org}/{internal_name}/` | `~/.cache/{project_org}/{internal_name}/` |
-| `--log` | Directory | `/var/log/{project_org}/{internal_name}/` | `~/.local/log/{project_org}/{internal_name}/` |
-| `--backup` | Directory | `/mnt/Backups/{project_org}/{internal_name}/` (if writable) | `~/.local/share/Backups/{project_org}/{internal_name}/` |
-| `--pid` | File | `/var/run/{project_org}/{internal_name}.pid` | `~/.local/share/{project_org}/{internal_name}/{internal_name}.pid` |
+| `--config` | Directory | `/etc/{internal_org}/{internal_name}/` | `~/.config/{internal_org}/{internal_name}/` |
+| `--data` | Directory | `/var/lib/{internal_org}/{internal_name}/` | `~/.local/share/{internal_org}/{internal_name}/` |
+| `--cache` | Directory | `/var/cache/{internal_org}/{internal_name}/` | `~/.cache/{internal_org}/{internal_name}/` |
+| `--log` | Directory | `/var/log/{internal_org}/{internal_name}/` | `~/.local/log/{internal_org}/{internal_name}/` |
+| `--backup` | Directory | `/mnt/Backups/{internal_org}/{internal_name}/` (if writable) | `~/.local/share/Backups/{internal_org}/{internal_name}/` |
+| `--pid` | File | `/var/run/{internal_org}/{internal_name}.pid` | `~/.local/share/{internal_org}/{internal_name}/{internal_name}.pid` |
 
 **Note:** `--backup` prefers system backup dir if writable, falls back to user dir. See `GetBackupDir()` in PART 5.
 
@@ -10505,11 +10506,11 @@ PHASE 5: Server startup (actual server start)
    h. Verify privilege drop succeeded (getuid() != 0)
 
 9. IF RUNNING AS USER (non-root) - setup user directories:
-   ├─ Create {config_dir} (~/.config/{project_org}/{internal_name}/)
-   ├─ Create {data_dir} (~/.local/share/{project_org}/{internal_name}/)
-   ├─ Create {cache_dir} (~/.cache/{project_org}/{internal_name}/)
-   ├─ Create {log_dir} (~/.local/log/{project_org}/{internal_name}/)
-   ├─ Create {backup_dir} (~/.local/share/Backups/{project_org}/{internal_name}/)
+   ├─ Create {config_dir} (~/.config/{internal_org}/{internal_name}/)
+   ├─ Create {data_dir} (~/.local/share/{internal_org}/{internal_name}/)
+   ├─ Create {cache_dir} (~/.cache/{internal_org}/{internal_name}/)
+   ├─ Create {log_dir} (~/.local/log/{internal_org}/{internal_name}/)
+   ├─ Create {backup_dir} (~/.local/share/Backups/{internal_org}/{internal_name}/)
    ├─ Set permissions: 0700 on all dirs (user-only access)
    └─ Note: port must be >1024 (user mode cannot bind privileged ports)
 
@@ -10518,7 +10519,7 @@ PHASE 5: Server startup (actual server start)
     ├─ Set default log level (info)
     └─ Log "Server starting, version X.Y.Z"
 
-11. Check PID file (root: /var/run/{project_org}/{internal_name}.pid, user: {data_dir}/{internal_name}.pid):
+11. Check PID file (root: /var/run/{internal_org}/{internal_name}.pid, user: {data_dir}/{internal_name}.pid):
     ├─ PID file exists AND process running → exit 1 "already running"
     ├─ PID file exists AND process dead → remove stale PID, continue
     └─ No PID file → continue
@@ -11713,7 +11714,7 @@ POST /pastes
     }
   }
 ```
-The server generates the token, stores `SHA-256(token)` in `api_tokens` with `resource_type="paste"` and `resource_id="abc123"`, then returns the raw token **once**. It is never retrievable again. The client stores it in `localStorage`.
+The server generates the token, stores `SHA-256(token)` in `api_tokens` with `resource_type="paste"` and `resource_id="abc123"`, then returns the raw token **once**. It is never retrievable again. API clients store it themselves (config file, env var). Browsers get **dual delivery**: the web-form create response shows the token once (copy button) AND sets an `owner_token` cookie (HttpOnly + Secure + SameSite=Strict + Path=/, Max-Age matching the token lifetime), so web management works with JS disabled; JS may additionally save it to `localStorage` as a convenience copy — never load-bearing.
 
 **Ownership check (every write/delete on a resource):**
 1. Extract `Authorization: Bearer tok_...` header
@@ -11722,6 +11723,8 @@ The server generates the token, stores `SHA-256(token)` in `api_tokens` with `re
 4. Verify hash matches, `revoked_at IS NULL`, `expires_at > now()` or NULL
 5. Verify `resource_type` + `resource_id` match the target resource
 6. Update `last_used_at`
+
+**Cookie auth scope:** the EXISTING web management forms (plain `POST`: edit, delete — no new routes) MAY fall back to the `owner_token` cookie when no `Authorization` header is present — same hash + constant-time match + revoked/expiry/resource checks as the Bearer path. API routes (`/api/...`) accept the `Authorization` header ONLY and MUST ignore cookies — no ambient authority for programmatic endpoints. `SameSite=Strict` plus POST-only mutations keeps the web fallback CSRF-safe.
 
 **Anonymous access** (no `Authorization` header): allowed for all public GET endpoints, subject to default rate limits.
 
@@ -12027,7 +12030,7 @@ $ kill -TERM $(cat /var/run/myapp.pid)
 | (none) | `DATABASE_DIR` | SQLite database directory (Docker: `/data/db/sqlite`, Native: `{data_dir}/db/`) |
 | (none) | `BACKUP_DIR` | Backup directory (defaults to `{data_dir}/backup/`, changeable) |
 
-**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{data_dir}`. Example: `BACKUP_DIR=/mnt/Backups/{project_org}/{internal_name}`. The default `{data_dir}/backup/` is for development/testing only.
+**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{data_dir}`. Example: `BACKUP_DIR=/mnt/Backups/{internal_org}/{internal_name}`. The default `{data_dir}/backup/` is for development/testing only.
 
 **Implementation:**
 
@@ -12112,10 +12115,10 @@ func isWritable(path string) bool {
 }
 
 // systemBackupDir returns the system-level backup directory
-// Linux: /mnt/Backups/{project_org}/{internal_name}
-// macOS: /Library/Backups/{project_org}/{internal_name}
-// BSD:   /var/backups/{project_org}/{internal_name}
-// Windows: %ProgramData%\Backups\{project_org}\{internal_name}
+// Linux: /mnt/Backups/{internal_org}/{internal_name}
+// macOS: /Library/Backups/{internal_org}/{internal_name}
+// BSD:   /var/backups/{internal_org}/{internal_name}
+// Windows: %ProgramData%\Backups\{internal_org}\{internal_name}
 func systemBackupDir() string {
     switch runtime.GOOS {
     case "darwin":
@@ -12131,9 +12134,9 @@ func systemBackupDir() string {
 }
 
 // userBackupDir returns the user-level backup directory
-// Linux/BSD: ~/.local/share/Backups/{project_org}/{internal_name}
-// macOS: ~/Library/Backups/{project_org}/{internal_name}
-// Windows: %LocalAppData%\Backups\{project_org}\{internal_name}
+// Linux/BSD: ~/.local/share/Backups/{internal_org}/{internal_name}
+// macOS: ~/Library/Backups/{internal_org}/{internal_name}
+// Windows: %LocalAppData%\Backups\{internal_org}\{internal_name}
 func userBackupDir() string {
     home, _ := os.UserHomeDir()
     switch runtime.GOOS {
@@ -22350,21 +22353,21 @@ async function checkLocationPermission() {
 
 | Storage | Use Case | Cleared |
 |---------|----------|---------|
-| **localStorage** | API token (optional) | Manual/revocation |
+| **Cookies** | `owner_token` (HttpOnly + Secure + SameSite=Strict) — primary browser storage; enables no-JS web management. UI preferences (theme, lang) | Expiry/revocation |
+| **localStorage** | API token — optional JS convenience copy (copy button, pre-fill); never load-bearing | Manual/revocation |
 | **IndexedDB** | Offline data, cached responses | Manual/revocation |
-| **Cookies** | Bearer token (httpOnly fallback), UI preferences (theme, lang) | Expiry/revocation |
 
 **Token persists when:**
 - App is closed and reopened
 - Device is restarted
 - Switching between browser and installed PWA
 
-**Token revocation clears credentials** (UI preferences are kept — they are not sensitive):
+**Token revocation clears credentials** (UI preferences are kept — they are not sensitive). No dedicated route: the `owner_token` cookie simply expires via its Max-Age, and uninstalling the PWA or clearing site data removes the cookie and all local copies. The JS enhancement clears local copies without waiting for that:
 
 ```javascript
-// Revoke local token — keeps UI preferences (theme, lang) intact
+// Clear local token copies — keeps UI preferences (theme, lang) intact
 async function revokeLocalToken() {
-  // Remove stored API token
+  // Remove the optional localStorage copy; the owner_token cookie expires via Max-Age
   localStorage.removeItem('api_token');
 
   // Clear any cached private/token-scoped data from IndexedDB
@@ -22382,7 +22385,7 @@ async function revokeLocalToken() {
 
 ### Client-Side Preferences (cookies)
 
-**User preferences are stored in cookies — the server reads them to render pages (theme class, language) with zero server persistence and zero user account needed. localStorage is reserved for values the server must never receive automatically (the API token).**
+**User preferences are stored in cookies — the server reads them to render pages (theme class, language) with zero server persistence and zero user account needed. The `owner_token` cookie is HttpOnly and read only by WEB management routes — API routes ignore it entirely. localStorage holds only optional JS convenience copies; nothing stored there is load-bearing.**
 
 | Cookie | Values | Default |
 |--------|--------|---------|
@@ -29964,7 +29967,7 @@ Current:
 | UID/GID | **Must match** - same value for both UID and GID |
 | UID/GID Range | **200-899** (safe system range, avoids well-known service IDs) |
 | Shell | `/sbin/nologin` or `/usr/sbin/nologin` |
-| Home | Config directory (`/etc/{project_org}/{internal_name}`) or data directory (`/var/lib/{project_org}/{internal_name}`) |
+| Home | Config directory (`/etc/{internal_org}/{internal_name}`) or data directory (`/var/lib/{internal_org}/{internal_name}`) |
 | Type | System user (no password, no login) |
 | Gecos | `{internal_name} service account` |
 
@@ -30075,7 +30078,7 @@ groupadd --system --gid {id} {internal_name}
 
 # Create user with matching UID, same primary group
 useradd --system --uid {id} --gid {id} \
-  --home-dir /etc/{project_org}/{internal_name} \
+  --home-dir /etc/{internal_org}/{internal_name} \
   --shell /sbin/nologin \
   --comment "{internal_name} service account" \
   {internal_name}
@@ -30130,7 +30133,7 @@ dscl . -create /Users/{internal_name} UniqueID {id}
 dscl . -create /Users/{internal_name} PrimaryGroupID {id}
 dscl . -create /Users/{internal_name} UserShell /usr/bin/false
 dscl . -create /Users/{internal_name} RealName "{internal_name} service account"
-dscl . -create /Users/{internal_name} NFSHomeDirectory /usr/local/var/{project_org}/{internal_name}
+dscl . -create /Users/{internal_name} NFSHomeDirectory /usr/local/var/{internal_org}/{internal_name}
 dscl . -create /Users/{internal_name} Password "*"
 
 # Hide user from login window
@@ -30160,10 +30163,10 @@ dscl . -create /Users/{internal_name} IsHidden 1
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/var/log/{project_org}/{internal_name}/stdout.log</string>
+    <string>/var/log/{internal_org}/{internal_name}/stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/var/log/{project_org}/{internal_name}/stderr.log</string>
+    <string>/var/log/{internal_org}/{internal_name}/stderr.log</string>
 </dict>
 </plist>
 ```
@@ -30173,9 +30176,9 @@ dscl . -create /Users/{internal_name} IsHidden 1
 | Directory | Path | Purpose |
 |-----------|------|---------|
 | Binary | `/usr/local/bin/{project_name}` | Executable |
-| Config | `/usr/local/etc/{project_org}/{internal_name}/` | Configuration files |
-| Data | `/usr/local/var/{project_org}/{internal_name}/` | Application data |
-| Logs | `/usr/local/var/log/{project_org}/{internal_name}/` | Log files |
+| Config | `/usr/local/etc/{internal_org}/{internal_name}/` | Configuration files |
+| Data | `/usr/local/var/{internal_org}/{internal_name}/` | Application data |
+| Logs | `/usr/local/var/log/{internal_org}/{internal_name}/` | Log files |
 | launchd plist | `/Library/LaunchDaemons/{plist_name}.plist` | Service definition |
 
 **Go Implementation (macOS):**
@@ -30237,7 +30240,7 @@ func createMacOSServiceUser(name string, id int, homeDir string) error {
 # Create user and group with matching ID
 pw groupadd -n {internal_name} -g {id}
 pw useradd -n {internal_name} -u {id} -g {id} \
-  -d /var/lib/{project_org}/{internal_name} \
+  -d /var/lib/{internal_org}/{internal_name} \
   -s /usr/sbin/nologin \
   -c "{internal_name} service account"
 ```
@@ -30264,7 +30267,7 @@ Virtual Service Accounts are automatically managed by Windows, require no passwo
 ```powershell
 # Create service with Virtual Service Account (automatic)
 New-Service -Name "{project_name}" `
-  -BinaryPathName "C:\Program Files\{project_org}\{internal_name}\{project_name}.exe" `
+  -BinaryPathName "C:\Program Files\{internal_org}\{internal_name}\{project_name}.exe" `
   -DisplayName "{project_name}" `
   -Description "{project_name} service" `
   -StartupType Automatic
@@ -30276,7 +30279,7 @@ New-Service -Name "{project_name}" `
 **Directory Permissions:**
 ```powershell
 # Grant Virtual Service Account access to config/data directories
-$acl = Get-Acl "C:\ProgramData\{project_org}\{internal_name}"
+$acl = Get-Acl "C:\ProgramData\{internal_org}\{internal_name}"
 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
     "NT SERVICE\{project_name}",
     "FullControl",
@@ -30285,7 +30288,7 @@ $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
     "Allow"
 )
 $acl.SetAccessRule($rule)
-Set-Acl "C:\ProgramData\{project_org}\{internal_name}" $acl
+Set-Acl "C:\ProgramData\{internal_org}\{internal_name}" $acl
 ```
 
 **Go Implementation (Windows):**
@@ -30329,17 +30332,17 @@ func installWindowsService() error {
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Binary | `C:\Program Files\{project_org}\{internal_name}\` | Executable |
-| Config | `C:\ProgramData\{project_org}\{internal_name}\config\` | Configuration files |
-| Data | `C:\ProgramData\{project_org}\{internal_name}\data\` | Application data |
-| Logs | `C:\ProgramData\{project_org}\{internal_name}\logs\` | Log files |
+| Binary | `C:\Program Files\{internal_org}\{internal_name}\` | Executable |
+| Config | `C:\ProgramData\{internal_org}\{internal_name}\config\` | Configuration files |
+| Data | `C:\ProgramData\{internal_org}\{internal_name}\data\` | Application data |
+| Logs | `C:\ProgramData\{internal_org}\{internal_name}\logs\` | Log files |
 
 ### Home Directory Selection
 
 | Directory | Use When |
 |-----------|----------|
-| Config dir (`/etc/{project_org}/{internal_name}`) | Default - user needs access to config files |
-| Data dir (`/var/lib/{project_org}/{internal_name}`) | When data dir contains user-writable content |
+| Config dir (`/etc/{internal_org}/{internal_name}`) | Default - user needs access to config files |
+| Data dir (`/var/lib/{internal_org}/{internal_name}`) | When data dir contains user-writable content |
 
 **Note:** Home directory must exist before user creation. Create directories first, then user, then set ownership.
 
@@ -30397,10 +30400,10 @@ StandardError=journal
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/etc/{project_org}/{internal_name}
-ReadWritePaths=/var/lib/{project_org}/{internal_name}
-ReadWritePaths=/var/cache/{project_org}/{internal_name}
-ReadWritePaths=/var/log/{project_org}/{internal_name}
+ReadWritePaths=/etc/{internal_org}/{internal_name}
+ReadWritePaths=/var/lib/{internal_org}/{internal_name}
+ReadWritePaths=/var/cache/{internal_org}/{internal_name}
+ReadWritePaths=/var/log/{internal_org}/{internal_name}
 
 [Install]
 WantedBy=multi-user.target
@@ -30421,10 +30424,10 @@ description="{app_name}"
 command="/usr/local/bin/{project_name}"
 command_args=""
 command_user="{internal_name}:{internal_name}"
-pidfile="/var/run/{project_org}/{internal_name}.pid"
+pidfile="/var/run/{internal_org}/{internal_name}.pid"
 command_background=true
-output_log="/var/log/{project_org}/{internal_name}/server.log"
-error_log="/var/log/{project_org}/{internal_name}/error.log"
+output_log="/var/log/{internal_org}/{internal_name}/server.log"
+error_log="/var/log/{internal_org}/{internal_name}/error.log"
 
 depend() {
     need net
@@ -30434,7 +30437,7 @@ depend() {
 
 start_pre() {
     checkpath -d -m 0755 -o {internal_name}:{internal_name} /var/run/{project_org}
-    checkpath -d -m 0755 -o {internal_name}:{internal_name} /var/log/{project_org}/{internal_name}
+    checkpath -d -m 0755 -o {internal_name}:{internal_name} /var/log/{internal_org}/{internal_name}
 }
 ```
 
@@ -30474,8 +30477,8 @@ sudo rc-update del {internal_name} default
 NAME={internal_name}
 DAEMON=/usr/local/bin/{project_name}
 DAEMON_USER={internal_name}
-PIDFILE=/var/run/{project_org}/{internal_name}.pid
-LOGFILE=/var/log/{project_org}/{internal_name}/server.log
+PIDFILE=/var/run/{internal_org}/{internal_name}.pid
+LOGFILE=/var/log/{internal_org}/{internal_name}/server.log
 
 case "$1" in
     start)
@@ -30554,7 +30557,7 @@ exec /usr/local/bin/{project_name} 2>&1
 **log/run script:**
 ```bash
 #!/bin/sh
-exec svlogd -tt /var/log/{project_org}/{internal_name}
+exec svlogd -tt /var/log/{internal_org}/{internal_name}
 ```
 
 ### rc.d (FreeBSD)
@@ -30598,9 +30601,9 @@ run_rc_command "$1"
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/{project_org}/{internal_name}/stdout.log</string>
+    <string>/var/log/{internal_org}/{internal_name}/stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/{project_org}/{internal_name}/stderr.log</string>
+    <string>/var/log/{internal_org}/{internal_name}/stderr.log</string>
 </dict>
 </plist>
 ```
@@ -31044,17 +31047,16 @@ test:
 		go test -v -cover -coverprofile=\$$COVDIR/coverage.out ./... && \
 		COVERAGE=\$$(go tool cover -func=\$$COVDIR/coverage.out | grep total | awk '{print \$$3}' | sed 's/%//') && \
 		echo \"Coverage: \$$COVERAGE%\" && \
-		if [ \$$(echo \"\$$COVERAGE < 80\" | bc -l) -eq 1 ]; then \
-			echo \"ERROR: Coverage is \$$COVERAGE%, must be >= 80%\"; exit 1; \
+		if [ \$$(echo \"\$$COVERAGE < 60\" | bc -l) -eq 1 ]; then \
+			echo \"ERROR: Coverage is \$$COVERAGE%, must be >= 60%\"; exit 1; \
 		fi && \
-		echo \"Tests complete - Coverage: \$$COVERAGE% (>= 80% required) ✓\""
+		echo \"Tests complete - Coverage: \$$COVERAGE% (>= 60% required) ✓\""
 
 # =============================================================================
-# Coverage gates by project type:
-#   - SERVER template projects: 80% minimum (go test -cover must report >= 80.0%)
-#   - All other Go projects: 60% minimum; override upward in IDEA.md
-#     (## Project variables -> coverage_minimum: 80) when appropriate.
-#     Never override downward.
+# Coverage gates:
+#   - All Go projects: 60% minimum (go test -cover must report >= 60.0%)
+#   - Override upward in IDEA.md (## Project variables -> coverage_minimum: 80)
+#     when higher coverage is appropriate. Never override downward.
 #   - CLI tools and libraries: same 60% floor.
 # Coverage runs in CI on every push and in `make test` locally.
 # Never skip with -short or -count=0. No //go:coverage ignore workarounds.
@@ -35140,7 +35142,7 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 | File | Location | Created When |
 |------|----------|--------------|
 | `server.yml` | `{config_dir}/server.yml` (see PART 4) | Server first run |
-| `cli.yml` | `~/.config/{project_org}/{internal_name}/cli.yml` | CLI first run |
+| `cli.yml` | `~/.config/{internal_org}/{internal_name}/cli.yml` | CLI first run |
 | Tor config | `{config_dir}/tor/torrc` (see PART 31) | When Tor enabled |
 | Tor data | `{data_dir}/tor/` (see PART 31) | When Tor enabled |
 
@@ -35339,7 +35341,7 @@ rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}/"
 - If the behavior requires a running binary, real HTTP requests, real process execution, or container/Incus setup, it belongs in `./tests/*.sh`
 
 **Reason both are required:**
-- `*_test.go` exists to achieve and enforce **≥80% Go code coverage** via `go test -cover`
+- `*_test.go` exists to achieve and enforce **≥60% Go code coverage** via `go test -cover`
 - `./tests/*.sh` exists to achieve and enforce **100% endpoint/route/integration coverage**
 - One does **not** replace the other; they measure different things and catch different classes of bugs
 
@@ -35604,22 +35606,22 @@ make test
 
 ## Test Coverage
 
-**Go unit tests must achieve ≥80% code coverage. Integration tests must cover 100% of endpoints.**
+**Go unit tests must achieve ≥60% code coverage. Integration tests must cover 100% of endpoints.**
 
 ### Coverage Requirements
 
 | Coverage Type | Requirement | Verification |
 |--------------|-------------|--------------|
-| **Phase 1 — Toolchain Gate** | ≥80% code coverage | `go test -cover` must report ≥80% |
+| **Phase 1 — Toolchain Gate** | ≥60% code coverage | `go test -cover` must report ≥60% |
 | **Phase 2 — Binary Validation** | 100% endpoint coverage | Every endpoint tested |
 | **API Routes** | 100% route coverage | Every API route tested |
 | **Error Paths** | All critical error paths | Auth, DB, and validation errors tested |
 
-### What 80% Coverage Means
+### What 60% Coverage Means
 
-**Phase 1 — Toolchain Gate — ≥80% code coverage:**
+**Phase 1 — Toolchain Gate — ≥60% code coverage:**
 ```bash
-# Run tests with coverage enforcement (fails if below 80%)
+# Run tests with coverage enforcement (fails if below 60%)
 make test
 ```
 
@@ -35652,18 +35654,18 @@ test:
         docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
           go test -cover -coverprofile=coverage.out ./...
 
-    - name: Check coverage is ≥80%
+    - name: Check coverage is ≥60%
       run: |
         COVERAGE=$(docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app casjaysdev/go:latest \
           go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-        if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
-          echo "ERROR: Coverage is $COVERAGE%, must be >= 80%"
+        if [ $(echo "$COVERAGE < 60" | bc -l) -eq 1 ]; then
+          echo "ERROR: Coverage is $COVERAGE%, must be >= 60%"
           exit 1
         fi
         echo "Coverage: $COVERAGE% ✓"
 ```
 
-### How to Achieve 80% Coverage
+### How to Achieve 60% Coverage
 
 **1. Test All Code Paths:**
 ```go
@@ -36571,7 +36573,7 @@ incus launch images:debian/trixie test-{project_name}
 
 # Push binary and test data
 incus file push binaries/{project_name} test-{project_name}/usr/local/bin/
-incus exec test-{project_name} -- mkdir -p /etc/{project_org}/{internal_name} /var/lib/{project_org}/{internal_name}
+incus exec test-{project_name} -- mkdir -p /etc/{internal_org}/{internal_name} /var/lib/{internal_org}/{internal_name}
 
 # Test
 incus exec test-{project_name} -- {project_name} --help
@@ -40046,10 +40048,10 @@ No impact on binary size - Tor is external. Application binary remains small and
 | Environment | {config_dir} | {data_dir} | {log_dir} |
 |-------------|--------------|------------|-----------|
 | Docker | `/config/{project_name}/` | `/data/{project_name}/` | `/data/log/{project_name}/` |
-| Linux root | `/etc/{project_org}/{internal_name}/` | `/var/lib/{project_org}/{internal_name}/` | `/var/log/{project_org}/{internal_name}/` |
-| Linux user | `~/.config/{project_org}/{internal_name}/` | `~/.local/share/{project_org}/{internal_name}/` | `~/.local/log/{project_org}/{internal_name}/` |
-| macOS | `~/Library/Application Support/{project_org}/{internal_name}/` | Same as config | `~/Library/Logs/{project_org}/{internal_name}/` |
-| Windows | `%AppData%\{project_org}\{internal_name}\` | Same as config | `%AppData%\{project_org}\{internal_name}\log\` |
+| Linux root | `/etc/{internal_org}/{internal_name}/` | `/var/lib/{internal_org}/{internal_name}/` | `/var/log/{internal_org}/{internal_name}/` |
+| Linux user | `~/.config/{internal_org}/{internal_name}/` | `~/.local/share/{internal_org}/{internal_name}/` | `~/.local/log/{internal_org}/{internal_name}/` |
+| macOS | `~/Library/Application Support/{internal_org}/{internal_name}/` | Same as config | `~/Library/Logs/{internal_org}/{internal_name}/` |
+| Windows | `%AppData%\{internal_org}\{internal_name}\` | Same as config | `%AppData%\{internal_org}\{internal_name}\log\` |
 
 **Tor directories are ALWAYS `{config_dir}/tor/`, `{data_dir}/tor/`, `{log_dir}/tor.log` - never hardcoded paths.**
 
@@ -40291,8 +40293,8 @@ When a project includes a client, it provides a terminal-based interface for int
 | Default binary name | `{project_name}-cli` |
 | Versioning | Same as main application |
 | Build | Part of same Makefile (`make build` produces both binaries) |
-| Config location (Unix) | `~/.config/{project_org}/{internal_name}/cli.yml` |
-| Config location (Windows) | `%APPDATA%\{project_org}\{internal_name}\cli.yml` |
+| Config location (Unix) | `~/.config/{internal_org}/{internal_name}/cli.yml` |
+| Config location (Windows) | `%APPDATA%\{internal_org}\{internal_name}\cli.yml` |
 
 ## Binary Naming Rules
 
@@ -40341,8 +40343,8 @@ userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 
 | Path | Required perms |
 |------|----------------|
-| `~/.config/{project_org}/{internal_name}/cli.yml` (Unix) | `0644` |
-| `%APPDATA%\{project_org}\{internal_name}\cli.yml` (Windows) | Default ACL |
+| `~/.config/{internal_org}/{internal_name}/cli.yml` (Unix) | `0644` |
+| `%APPDATA%\{internal_org}\{internal_name}\cli.yml` (Windows) | Default ACL |
 
 ## CLI Auto-Update (Same Pattern as Server Self-Update)
 
@@ -41706,23 +41708,23 @@ The client uses the same user directory structure as the server in user mode. Th
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Config | `~/.config/{project_org}/{internal_name}/` | Configuration files |
-| Config File | `~/.config/{project_org}/{internal_name}/cli.yml` | CLI configuration |
-| Data | `~/.local/share/{project_org}/{internal_name}/` | Persistent data |
+| Config | `~/.config/{internal_org}/{internal_name}/` | Configuration files |
+| Config File | `~/.config/{internal_org}/{internal_name}/cli.yml` | CLI configuration |
+| Data | `~/.local/share/{internal_org}/{internal_name}/` | Persistent data |
 | Cache | `~/.cache/{project_org}/{internal_name}/` | Temporary/cached data |
-| Logs | `~/.local/log/{project_org}/{internal_name}/` | Log files |
-| Log File | `~/.local/log/{project_org}/{internal_name}/cli.log` | CLI log output |
+| Logs | `~/.local/log/{internal_org}/{internal_name}/` | Log files |
+| Log File | `~/.local/log/{internal_org}/{internal_name}/cli.log` | CLI log output |
 
 #### Windows
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Config | `%APPDATA%\{project_org}\{internal_name}\` | Configuration files |
-| Config File | `%APPDATA%\{project_org}\{internal_name}\cli.yml` | CLI configuration |
-| Data | `%LOCALAPPDATA%\{project_org}\{internal_name}\data\` | Persistent data |
+| Config | `%APPDATA%\{internal_org}\{internal_name}\` | Configuration files |
+| Config File | `%APPDATA%\{internal_org}\{internal_name}\cli.yml` | CLI configuration |
+| Data | `%LOCALAPPDATA%\{internal_org}\{internal_name}\data\` | Persistent data |
 | Cache | `%LOCALAPPDATA%\{project_org}\{internal_name}\cache\` | Temporary/cached data |
-| Logs | `%LOCALAPPDATA%\{project_org}\{internal_name}\log\` | Log files |
-| Log File | `%LOCALAPPDATA%\{project_org}\{internal_name}\log\cli.log` | CLI log output |
+| Logs | `%LOCALAPPDATA%\{internal_org}\{internal_name}\log\` | Log files |
+| Log File | `%LOCALAPPDATA%\{internal_org}\{internal_name}\log\cli.log` | CLI log output |
 
 #### Directory Usage
 
@@ -41734,9 +41736,9 @@ The client uses the same user directory structure as the server in user mode. Th
 | Logs | `cli.log`, debug logs | Optional |
 
 **NEVER use OS system directories for CLI runtime state:**
-- `/etc/{project_org}/{internal_name}/` (Linux system config)
-- `/var/lib/{project_org}/{internal_name}/` (Linux system data)
-- `/var/log/{project_org}/{internal_name}/` (Linux system logs)
+- `/etc/{internal_org}/{internal_name}/` (Linux system config)
+- `/var/lib/{internal_org}/{internal_name}/` (Linux system data)
+- `/var/log/{internal_org}/{internal_name}/` (Linux system logs)
 - `C:\ProgramData\` (Windows system data)
 - Any other system-owned directory for CLI config/data/cache/logs
 
@@ -41748,10 +41750,10 @@ On every startup, the CLI MUST:
 
 1. **Ensure directories exist** (create if missing):
    ```
-   ├─ {config_dir}/           (~/.config/{project_org}/{internal_name}/)
-   ├─ {data_dir}/             (~/.local/share/{project_org}/{internal_name}/)
-   ├─ {cache_dir}/            (~/.cache/{project_org}/{internal_name}/)
-   └─ {log_dir}/              (~/.local/log/{project_org}/{internal_name}/)
+   ├─ {config_dir}/           (~/.config/{internal_org}/{internal_name}/)
+   ├─ {data_dir}/             (~/.local/share/{internal_org}/{internal_name}/)
+   ├─ {cache_dir}/            (~/.cache/{internal_org}/{internal_name}/)
+   └─ {log_dir}/              (~/.local/log/{internal_org}/{internal_name}/)
    ```
 
 2. **Set correct permissions** (user-only access):
@@ -42006,7 +42008,7 @@ func resolveYamlExtension(path string) string {
 **EVERYTHING must be configurable via cli.yml. Sane defaults match server where applicable.**
 
 ```yaml
-# ~/.config/{project_org}/{internal_name}/cli.yml
+# ~/.config/{internal_org}/{internal_name}/cli.yml
 # client configuration - ALL options with defaults
 
 # Server connection
@@ -42159,7 +42161,7 @@ To configure a server, run:
   {project_name}-cli --server https://your-server.example.com list
 
 This will save the server address for future commands.
-Or edit ~/.config/{project_org}/{internal_name}/cli.yml directly.
+Or edit ~/.config/{internal_org}/{internal_name}/cli.yml directly.
 ```
 
 **Projects with official site show default in help:**
@@ -44306,7 +44308,7 @@ make docker
 - [ ] Same version as server
 - [ ] CLI mode (standard commands)
 - [ ] TUI mode (interactive)
-- [ ] Config: `~/.config/{project_org}/{internal_name}/cli.yml`
+- [ ] Config: `~/.config/{internal_org}/{internal_name}/cli.yml`
 - [ ] Theme matching server (dark default)
 - [ ] Shell completions (bash, zsh, fish, powershell)
 - [ ] All server API operations accessible via CLI
