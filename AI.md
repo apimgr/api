@@ -7407,6 +7407,9 @@ server:
       # Delete logs older than 7 days during cleanup
       log_retention_days: 7
       # Keep last 5 backups during cleanup
+      # Retention and disk-pressure cleanup scan the backup directory
+      # resolved and cached at startup step 7 — the same directory
+      # backups are written to. Never re-resolve the path at cleanup time.
       backup_keep_count: 5
 
     # Notifications
@@ -10569,6 +10572,8 @@ PHASE 5: Server startup (actual server start)
     │   ├─ geoip_update (03:00 Sunday)
     │   ├─ public_ip_refresh (startup + every 12h, hardcoded)
     │   └─ ... and others (see PART 18)
+    ├─ Run one full retention sweep of backup dir (cached from step 7) before
+    │   starting scheduler — clears accumulation from crashed/failed prior runs
     └─ Start scheduler goroutine
 
 17. Start Tor (if tor binary available) - see PART 31:
@@ -14899,6 +14904,7 @@ server:
 | `backup.restored` | Backup restored | Filename |
 | `backup.deleted` | Backup deleted | Filename |
 | `backup.failed` | Backup failed | Error message |
+| `backup.skipped_disk_full` | Backup skipped — insufficient free space or disk above threshold | Free space, disk usage %, threshold |
 | `server.started` | Application started | Version, mode |
 
 > **Suppression:** `scheduler.task_failed` is not emitted when `backup.failed` fires for the same execution — both would describe the same event. `scheduler.task_failed` fires only for tasks that produce no subsystem-specific audit event.
@@ -26931,6 +26937,7 @@ server:
         # Verify after creation (all checks must pass)
         verify: true
         # Creates: {project_name}_backup_YYYY-MM-DD.tar.gz[.enc] (full)
+        #          {project_name}_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc] (manual)
         #          {project_name}-daily.tar.gz[.enc] (incremental)
         retention:
           # 1-365: daily full backups to keep
@@ -26941,6 +26948,10 @@ server:
           keep_monthly: 0
           # 0-10: January 1st backups (0 = disabled)
           keep_yearly: 0
+          # Hard size cap: percent of backup volume (e.g. "10%") or absolute
+          # (e.g. "50G"). 0 = disabled. Size cap overrides all count limits —
+          # oldest files deleted first until total is under the cap.
+          max_total_size: "10%"
 
       # Hourly incremental backup (disabled by default)
       backup_hourly:
@@ -28872,6 +28883,7 @@ Shown on:
 | `keep_weekly` | 0 | ≥0 | Weekly backups (Sunday) - 0 = disabled |
 | `keep_monthly` | 0 | ≥0 | Monthly backups (1st) - 0 = disabled |
 | `keep_yearly` | 0 | ≥0 | Yearly backups (Jan 1st) - 0 = disabled |
+| `max_total_size` | `"10%"` | % or bytes | Hard size cap (e.g. `"10%"`, `"50G"`); `0` = disabled; overrides count limits |
 
 **Falsey Values (all disabled):** `0`, `false`, `no`, `none`, `disable`, `disabled`, `off`
 
@@ -28889,6 +28901,8 @@ server:
       keep_monthly: 0
       # 0-10: January 1st (0 = disabled)
       keep_yearly: 0
+      # Hard size cap: percent of backup volume or absolute size; 0 = disabled
+      max_total_size: "10%"
 ```
 
 **Default: 2 files total** (yesterday's full + today's incremental)
@@ -28900,13 +28914,17 @@ server:
 **Backup Creation Flow (backup_daily task at 02:00):**
 
 ```
-1. Create full backup: {project_name}_backup_YYYY-MM-DD.tar.gz[.enc]
-2. Verify full backup (all checks must pass)
-3. Create daily incremental: {project_name}-daily.tar.gz[.enc]
-4. Verify daily incremental (all checks must pass)
-5. If ALL verifications pass:
+1. Run retention sweep on backup dir (resolved and cached at startup step 7)
+2. Check free space: if free < 2× size of most recent backup, OR disk usage
+   > disk_threshold (default 90%), log backup.skipped_disk_full (level=error)
+   and abort — do NOT create the backup
+3. Create full backup: {project_name}_backup_YYYY-MM-DD.tar.gz[.enc]
+4. Verify full backup (all checks must pass)
+5. Create daily incremental: {project_name}-daily.tar.gz[.enc]
+6. Verify daily incremental (all checks must pass)
+7. If ALL verifications pass:
    - Apply retention policy (delete old backups per retention settings)
-6. If ANY verification fails:
+8. If ANY verification fails:
    - Delete failed backup file
    - Keep existing valid backups
    - Alert operator (via `server.contact.admin` notification channel)
@@ -28946,6 +28964,7 @@ Every backup is verified **immediately after creation** - backups must be 100% w
 │  Weekly backups (keep_weekly):        [0    ] ← 0 = disabled        │
 │  Monthly backups (keep_monthly):      [0    ] ← 0 = disabled        │
 │  Yearly backups (keep_yearly):        [0    ] ← 0 = disabled        │
+│  Hard size cap (max_total_size):      [10%  ] ← % or abs; 0=off     │
 │                                                                      │
 │  [✓] Auto-delete old backups after successful backup                │
 │                                                                      │
@@ -28965,6 +28984,7 @@ Every backup is verified **immediately after creation** - backups must be 100% w
 | `backup.retention_cleanup` | Old backups deleted | Deleted files, reason, remaining count |
 | `backup.verification_failed` | Backup verification failed | Filename, check that failed |
 | `backup.daily_updated` | Daily incremental updated | Filename, changes since last |
+| `backup.skipped_disk_full` | Backup skipped — insufficient free space or disk above threshold | Free space, disk usage %, threshold |
 
 ### Backup Files Created (Single Task at 02:00)
 
@@ -28990,6 +29010,8 @@ server:
       keep_monthly: 0
       # Optional: keep yearly backup (e.g., Jan 1st)
       keep_yearly: 0
+      # Hard size cap: percent of backup volume or absolute size; 0 = disabled
+      max_total_size: "10%"
 ```
 
 **Retention Settings:**
@@ -29000,6 +29022,7 @@ server:
 | `keep_weekly` | 0 | ≥0 | Weekly backups (Sunday) - 0 = disabled |
 | `keep_monthly` | 0 | ≥0 | Monthly backups (1st) - 0 = disabled |
 | `keep_yearly` | 0 | ≥0 | Yearly backups (Jan 1st) - 0 = disabled |
+| `max_total_size` | `"10%"` | % or bytes | Hard size cap (e.g. `"10%"`, `"50G"`); `0` = disabled; overrides count limits |
 
 **Falsey Values (all mean disabled):**
 - `0`, `false`, `no`, `none`, `disable`, `disabled`, `off`
@@ -29103,17 +29126,41 @@ Backups on disk (January 15, 2026):
 Total: 6 files (1 daily + 1 weekly + 2 monthly + 1 yearly + incremental)
 ```
 
-**Backup Cleanup Logic (runs after successful backup):**
+**Backup Cleanup Logic (runs at startup and after every backup):**
+
+Retention and disk-pressure cleanup scan the backup directory resolved and
+cached at startup step 7 — the same directory backups are written to.
+Never re-resolve the path at cleanup time.
+
+The algorithm matches EVERY backup file the app creates:
+- `{project_name}_backup_YYYY-MM-DD.tar.gz[.enc]` — daily full
+- `{project_name}_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc]` — manual/timestamped
+- `{project_name}-daily.tar.gz[.enc]` — daily incremental
+- `{project_name}-hourly.tar.gz[.enc]` — hourly incremental
+
+Timestamped manual backups count toward `max_backups` alongside daily fulls
+(sorted by date, oldest deleted first). Any file matching the
+`{project_name}_backup_*` or `{project_name}-*.tar.gz*` prefix that is not
+otherwise classified is treated as a daily backup for retention purposes —
+nothing in the backup dir matching the app's naming is ever exempt from pruning.
+
 ```
-1. Mark all backups from January 1st as "yearly" (keep up to keep_yearly)
-2. Mark all backups from 1st of month as "monthly" (keep up to keep_monthly)
-3. Mark all backups from Sunday as "weekly" (keep up to keep_weekly)
-4. Mark remaining backups as "daily" (keep up to max_backups)
-5. Delete unmarked backups, oldest first
-6. Daily incremental is always replaced (only 1 exists)
+1. Collect all backup files in the cached backup dir matching the app's
+   naming patterns above; sort by date (oldest first)
+2. Mark all backups from January 1st as "yearly" (keep up to keep_yearly)
+3. Mark all backups from 1st of month as "monthly" (keep up to keep_monthly)
+4. Mark all backups from Sunday as "weekly" (keep up to keep_weekly)
+5. Mark remaining backups (daily full + manual/timestamped) as "daily"
+   (keep up to max_backups, oldest deleted first)
+6. Delete unmarked backups, oldest first
+7. Daily incremental ({project_name}-daily.tar.gz[.enc]) is always replaced
+   (only 1 exists); hourly incremental likewise
+8. If max_total_size > 0: after all count-based pruning, if total size of
+   all backup files still exceeds the cap, delete oldest files first until
+   total is under the cap (size cap overrides all count limits)
 
 Note: A single backup can satisfy multiple retention types (e.g., Jan 1st 2025
-on a Sunday counts as daily + weekly + monthly + yearly - uses highest priority)
+on a Sunday counts as daily + weekly + monthly + yearly — uses highest priority)
 ```
 
 **Daily incremental is NOT counted** in retention - it's always exactly 1 file that gets replaced.
