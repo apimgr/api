@@ -31893,8 +31893,8 @@ exec $APP_BIN $FLAGS "$@"
 App + Valkey for persistent session/rate-limit cache. Use `MODE=production`.
 
 ```yaml
-# {project_name} - {brief description}
 # nginx proxy address - http://172.17.0.1:{port}
+# {project_name} - {brief description}
 
 name: {project_name}
 
@@ -32002,8 +32002,8 @@ services:
 Single-service, in-process memory cache, debug mode enabled. Uses the `:devel` image.
 
 ```yaml
-# {project_name} - development
 # nginx proxy address - http://172.17.0.1:{port}
+# {project_name} - development
 
 name: {project_name}
 
@@ -32233,8 +32233,8 @@ rm -rf "$TEMP_DIR"
 Development mode with in-process memory cache and debug enabled. Uses the `:devel` image.
 
 ```yaml
-# {project_name} - development
 # nginx proxy address - http://172.17.0.1:{port}
+# {project_name} - development
 
 name: {project_name}
 
