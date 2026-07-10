@@ -8196,8 +8196,9 @@ func needsEscalationForUpdate() bool {
 }
 
 // Backup: check directory access (no auth needed)
-func canBackup() bool {
-    return isWritable(getBackupDir())
+// Uses the backup dir resolved and cached at startup step 7
+func canBackup(backupDir string) bool {
+    return isWritable(backupDir)
 }
 
 // Setup: check authorization (not just access)
@@ -10201,10 +10202,12 @@ Run '{project_name} <command> help' for detailed help on any command.
 | `--data` | Directory | `/var/lib/{internal_org}/{internal_name}/` | `~/.local/share/{internal_org}/{internal_name}/` |
 | `--cache` | Directory | `/var/cache/{internal_org}/{internal_name}/` | `~/.cache/{internal_org}/{internal_name}/` |
 | `--log` | Directory | `/var/log/{internal_org}/{internal_name}/` | `~/.local/log/{internal_org}/{internal_name}/` |
-| `--backup` | Directory | `/mnt/Backups/{internal_org}/{internal_name}/` (if writable) | `~/.local/share/Backups/{internal_org}/{internal_name}/` |
+| `--backup` | Directory | `/mnt/Backups/{internal_org}/{internal_name}/` (if writable, else `{data_dir}/backup/`) | `~/.local/share/Backups/{internal_org}/{internal_name}/` |
 | `--pid` | File | `/var/run/{internal_org}/{internal_name}.pid` | `~/.local/share/{internal_org}/{internal_name}/{internal_name}.pid` |
 
-**Note:** `--backup` prefers system backup dir if writable, falls back to user dir. See `GetBackupDir()` in PART 5.
+**Note:** `--backup` prefers the system backup dir if writable. Fallback is mode-aware: system mode (started as root) falls back to `{data_dir}/backup/` — never a `$HOME`-derived path; user mode falls back to the user dir. See `GetBackupDir()` in PART 5.
+
+**Directory mode is locked at process start.** System vs user paths are decided ONCE from the EUID at startup, before any privilege drop, and cached for the process lifetime. Never resolve `~` or `$HOME` after the privilege drop — the service account's HOME points at `{data_dir}` (e.g. `/var/lib/{internal_org}/{internal_name}`), so a late `$HOME` lookup nests user-style paths like `.local/share/Backups/` inside the system data dir.
 
 ### Directory Validation Rules
 
@@ -10467,12 +10470,14 @@ PHASE 5: Server startup (actual server start)
    ├─ Container vs local (/.dockerenv exists? container env var?)
    └─ Detect service manager (systemd, launchd, runit, etc.)
 
-7. Resolve all paths (CLI flags → env vars → context-based defaults):
+7. Resolve ALL paths ONCE and cache them (CLI flags → env vars → context-based defaults):
+   ├─ Mode (system vs user) = EUID at start; locked for process lifetime
    ├─ {config_dir}  (/etc/... or ~/.config/...)
    ├─ {data_dir}    (/var/lib/... or ~/.local/share/...)
    ├─ {cache_dir}   (/var/cache/... or ~/.cache/...)
    ├─ {log_dir}     (/var/log/... or ~/.local/log/...)
-   └─ {backup_dir}  (see PART 5 GetBackupDir - /mnt/Backups/... if writable)
+   ├─ {backup_dir}  (see PART 5 GetBackupDir - /mnt/Backups/... if writable, else {data_dir}/backup/ in system mode)
+   └─ Never resolve ~/$HOME again after step 8g — the service account's HOME is {data_dir}
 
 8. IF RUNNING AS ROOT - setup system resources BEFORE dropping privileges:
    a. Check/create system user:
@@ -10606,7 +10611,7 @@ PHASE 5: Server startup (actual server start)
 | Step | Runs As | Why |
 |------|---------|-----|
 | 6. Determine context | any | First thing - detect if root, container, etc. |
-| 7. Resolve paths | any | Path resolution based on context |
+| 7. Resolve paths | any | Resolved ONCE and cached — mode locked from start EUID; never re-derived after 8g |
 | **IF ROOT (step 8):** | | |
 | 8a. Create system user | **root** | Only root can create system users |
 | 8b. Create directories | **root** | Only root can create /etc/, /var/lib/, etc. |
@@ -12075,9 +12080,18 @@ func GetCacheDir(flagValue string) string {
     return defaultCacheDir()
 }
 
-// GetBackupDir returns backup directory from env or default
-// Prefers system backup dir if writable, falls back to user dir
-func GetBackupDir(flagValue string) string {
+// startedElevated is captured ONCE at process start, BEFORE any privilege
+// drop, and never re-evaluated. After startup step 8g drops privileges,
+// geteuid() changes but the directory mode (system vs user) must not.
+var startedElevated = isElevated()
+
+// GetBackupDir returns backup directory from flag, env, or default
+// System mode (startedElevated): system backup dir if writable, else
+// {data_dir}/backup/ — NEVER a $HOME-derived path. Service accounts have
+// HOME set to {data_dir}, so a $HOME fallback would nest user-style dirs
+// inside /var/lib/{internal_org}/{internal_name}/.
+// User mode: system backup dir if writable, else user backup dir.
+func GetBackupDir(flagValue string, dataDir string) string {
     if flagValue != "" {
         return flagValue
     }
@@ -12089,7 +12103,11 @@ func GetBackupDir(flagValue string) string {
     if isWritable(sysBackup) {
         return sysBackup
     }
-    // Fall back to user backup dir
+    // System mode: fall back inside the data dir, never $HOME
+    if startedElevated {
+        return filepath.Join(dataDir, "backup")
+    }
+    // User mode only: fall back to user backup dir
     return userBackupDir()
 }
 
@@ -12135,6 +12153,8 @@ func systemBackupDir() string {
 }
 
 // userBackupDir returns the user-level backup directory
+// USER MODE ONLY — never call when startedElevated is true: $HOME belongs
+// to the service account after a privilege drop and points at {data_dir}.
 // Linux/BSD: ~/.local/share/Backups/{internal_org}/{internal_name}
 // macOS: ~/Library/Backups/{internal_org}/{internal_name}
 // Windows: %LocalAppData%\Backups\{internal_org}\{internal_name}
