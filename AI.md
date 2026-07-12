@@ -2306,14 +2306,14 @@ server:
 
 ## How to Read This Large File
 
-**AI.md is ~2.4MB and ~62,260 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~2.4MB and ~62,270 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~2.4MB |
-| Line count | ~62,260 lines |
+| Line count | ~62,270 lines |
 | Read limit | ~500 lines per read |
 | Full reads needed | ~125 reads (impractical) |
 
@@ -2342,28 +2342,28 @@ server:
 | 14 | ~20204 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
 | 15 | ~21943 | SSL/TLS & Let's Encrypt | SSL certificates |
 | 16 | ~22915 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~29272 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API**, **Blocklists**, **Allowlist**, **GeoIP** |
-| 18 | ~31752 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~33095 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~33593 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
-| 21 | ~33692 | Metrics | Prometheus metrics, **INTERNAL only** |
-| 22 | ~35139 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~35910 | Update Command | Update feature |
-| 24 | ~36450 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~37359 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~37672 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 27 | ~38470 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~39977 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~43093 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 30 | ~45031 | ReadTheDocs Documentation | Documentation |
-| 31 | ~45861 | I18N & A11Y | Internationalization, **Translation parity (all binaries)**, **--lang flag** |
-| 32 | ~47845 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~49629 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~54397 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~58445 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~59130 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~60178 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~60410 | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist**, **I18N Checklist**, **Host Safety Checklist** |
+| 17 | ~29287 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API**, **Blocklists**, **Allowlist**, **GeoIP** |
+| 18 | ~31767 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~33110 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~33608 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
+| 21 | ~33707 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 22 | ~35154 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~35925 | Update Command | Update feature |
+| 24 | ~36465 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~37374 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~37687 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~38485 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~39992 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~43108 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 30 | ~45046 | ReadTheDocs Documentation | Documentation |
+| 31 | ~45876 | I18N & A11Y | Internationalization, **Translation parity (all binaries)**, **--lang flag** |
+| 32 | ~47860 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~49644 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~54412 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~58460 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~59145 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~60193 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~60425 | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist**, **I18N Checklist**, **Host Safety Checklist** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -14485,14 +14485,14 @@ if err != nil && !isColumnExistsError(err) {
 - All nodes share same database and cache
 - Config changes propagate automatically
 
-**Cluster join + secret distribution:** new nodes join via the flow defined in **PART 33 → "Join Cluster Flow (Technical)"**. The bootstrap response from the existing node carries every `app_secrets` row (PART 11 → "Cryptographic Keys") inside the encrypted payload — `installation_secret`, `cookie_signing_key`, `csrf_token_secret` are NOT regenerated per node. The pre-existing `server.security.encryption_key` (`server.yml`) is also distributed in the same encrypted payload. All replicas share one set.
+**Cluster join + secret distribution:** new nodes join via the flow defined in **PART 34 → "Join Cluster Flow (Technical)"**. The bootstrap response from the existing node carries every `app_secrets` row (PART 11 → "Cryptographic Keys") inside the encrypted payload — `installation_secret`, `cookie_signing_key`, `csrf_token_secret` are NOT regenerated per node. The pre-existing `server.security.encryption_key` (`server.yml`) is also distributed in the same encrypted payload. All replicas share one set.
 
 **Cluster nodes vs agents (do NOT confuse):**
 
 | Term | What it is | Where it runs | Auth |
 |------|-----------|----------------|------|
 | **Cluster node** | Another instance of THIS server binary, sharing the same DB and cache, behind the same admin namespace | Anywhere reachable from the primary node | Internal — joins via the cluster join token; subsequent traffic uses the shared DB |
-| **Agent** (PART 33) | A separate, purpose-built `{project_name}-agent` binary on a remote machine reporting INTO the server | Customer / operator machines (web hosts, build runners, monitored machines) | Bearer token (`adm_agt_` / `usr_agt_` / `org_agt_`) — see PART 33 → Token Types |
+| **Agent** (PART 33) | A separate, purpose-built `{project_name}-agent` binary on a remote machine reporting INTO the server | Customer / operator machines (web hosts, build runners, monitored machines) | Bearer token (`adm_agt_` / `usr_agt_` / `org_agt_`) — see PART 34 → Token Types |
 
 Agents are NEVER cluster nodes; they don't share the DB; they don't get `app_secrets` distributed to them. Cluster nodes are NEVER agents; they don't register via `/agents/register`.
 
@@ -15028,7 +15028,7 @@ When `DEBUG=true` is active and an error occurs, the canonical error body (PART 
 | Timing oracles | n/a | `subtle.ConstantTimeCompare` for all secret comparisons | Identical response time for success/fail by adding artificial sleep when faster than threshold | n/a |
 | Credential stuffing | Rate limit per IP + per username + global | Argon2id on every login attempt (no "fast path" for unknown users) | Generic "invalid credentials" message | Account lockout after N failures |
 | Path traversal | Validate paths, reject `..` / null bytes | `filepath.Clean()` + base-dir confinement | n/a | OS-level read perms restrict reachable files |
-| Token / credential leakage | n/a | Never `slog.Info("token=", t)` — log token ID hash only | Sanitization layer strips known sensitive query params from URL fields in reports / logs / error contexts (see PART 14 → "Public Reports Scope") | TLS in transit (PART 15) |
+| Token / credential leakage | n/a | Never `slog.Info("token=", t)` — log token ID hash only | Sanitization layer strips known sensitive query params from URL fields in reports / logs / error contexts (see PART 34 → "Public Reports Scope") | TLS in transit (PART 15) |
 | CSRF | Validate Origin + same-origin check | n/a | CSRF token on cookie-authenticated state-changing requests (PART 16 → CSRF) | `SameSite=Strict` cookies (browser-level enforcement) |
 
 **Rule:** when implementing a feature, walk every layer. Don't assume "the input validator caught it" or "the output template will escape it" — write the code as if every other layer is broken.
@@ -15135,7 +15135,7 @@ The root secret all other derived material hangs off. Without it, in-flight HMAC
 |----------|--------|
 | Length | 32 bytes (256 bits) of `crypto/rand` |
 | Generated | First start, before the setup token is shown. Stored in `server.db` row `app_secrets.installation_secret`, base64-encoded. |
-| Scope | Cluster-wide. The first node generates it; subsequent nodes joining the cluster receive it via the secure cluster join protocol (PART 33 → "Join Cluster Flow (Technical)" — the join token is HMAC-derived and the `installation_secret` is delivered as part of the same handshake payload). NEVER appears in a request, response, log, or admin UI. |
+| Scope | Cluster-wide. The first node generates it; subsequent nodes joining the cluster receive it via the secure cluster join protocol (PART 34 → "Join Cluster Flow (Technical)" — the join token is HMAC-derived and the `installation_secret` is delivered as part of the same handshake payload). NEVER appears in a request, response, log, or admin UI. |
 | Used by | `{security_id}` HMAC (PART 11 → "Security Reports"); PGP private-key KDF (PART 11 → "GPG Keypair Management"); future derived material (cluster-internal request signing, cookie signing salts). |
 | Rotation | Manual via admin panel (`/server/{admin_path}/config/security/keypair` → "Rotate Installation Secret"). Sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt admin password, log to `audit.log` as `security.installation_secret_rotated`. Rotation re-encrypts the PGP private key and re-bases all live HMACs. The previous secret is kept for 7 days to validate any in-flight `{security_id}` URLs that referenced it. |
 | Backup | Always — see PART 22 → "Backup Contents". Required for any restore: without it, the PGP private key in the backup is undecryptable. |
@@ -15283,7 +15283,7 @@ web:
     # Per-feature config — see "Permissions-Policy Configuration" below.
 
   reports:
-    # Public reports endpoints (PART 14 → "Public Reports Scope").
+    # Public reports endpoints (PART 34 → "Public Reports Scope").
     # max reports/min/IP across all report types
     rate_limit_per_minute: 60
     # short-burst allowance
@@ -15392,7 +15392,7 @@ NEL: {"report_to":"default","max_age":2592000,"include_subdomains":true}
 
 **Network Error Logging (NEL — RFC draft, Chrome/Edge):** browser POSTs `application/reports+json` to `/api/{api_version}/server/reports/nel` for TLS handshake failures, DNS failures, TCP resets, HTTP errors. Sample rate `1.0` by default — drop to `0.1` on busy sites via `web.headers.nel.sample_rate`.
 
-**All report endpoints share the same Public Reports Scope** (PART 14) — same rate limits, same Output Sanitization Pipeline (PART 11), same Tier 2 visibility (no PII echoed back).
+**All report endpoints share the same Public Reports Scope** (PART 34) — same rate limits, same Output Sanitization Pipeline (PART 11), same Tier 2 visibility (no PII echoed back).
 
 ## Server-Timing (Debug Mode Only)
 
@@ -15421,7 +15421,7 @@ Server-Timing: db;dur=12.4, render;dur=3.1, total;dur=18.7
 
 **No declarations** = "everyone" defaults stay loose. The spec never tightens silently — every auto-tighten is logged to the setup audit so operators know what changed and why.
 
-**Strictest-wins:** when multiple compliances apply (e.g., `gdpr + hipaa + pci-dss`), the per-header strictest value wins, mirroring PART 12 → "Strictest-Wins Resolution".
+**Strictest-wins:** when multiple compliances apply (e.g., `gdpr + hipaa + pci-dss`), the per-header strictest value wins, mirroring PART 11 → "Compliance Requirements Matrix".
 
 ## Deprecated / Legacy Headers
 
@@ -15533,7 +15533,7 @@ Sends `Content-Security-Policy-Report-Only` instead of the enforcing header. Vio
 
 ### Reports Endpoint
 
-**See PART 14 → "Public Reports Scope" for the canonical reports endpoint pattern (`/api/{api_version}/server/reports/{name}`). All browser-emitted reports — CSP, NEL, deprecation, intervention, crash, default — share the same scope and shape.**
+**See PART 34 → "Public Reports Scope" for the canonical reports endpoint pattern (`/api/{api_version}/server/reports/{name}`). All browser-emitted reports — CSP, NEL, deprecation, intervention, crash, default — share the same scope and shape.**
 
 Server-side handling:
 - Accept `application/csp-report` (legacy) and `application/reports+json` (Reporting API)
@@ -27818,9 +27818,13 @@ web:
 |--------|-------|
 | `Access-Control-Allow-Origin` | Configured origin(s) or `*` |
 | `Access-Control-Allow-Methods` | `GET, POST, PUT, PATCH, DELETE, OPTIONS` |
-| `Access-Control-Allow-Headers` | `*` |
+| `Access-Control-Allow-Headers` | `Content-Type, Accept, X-Requested-With, Authorization, X-API-Key, X-Api-Key, API-Key, ApiKey, X-Auth-Token, X-Access-Token, X-Token, Token, X-CSRF-Token, X-XSRF-Token, X-Session-ID, X-Service-Token, X-Internal-Token` |
 | `Access-Control-Allow-Credentials` | `true` (only when specific origin, not `*`) |
 | `Access-Control-Max-Age` | `86400` (24 hours) |
+
+**Never `*` here:** the Fetch spec's `Access-Control-Allow-Headers: *` wildcard does NOT cover `Authorization`, and wildcards are invalid when credentials are allowed. Every supported auth header is listed by name — keep in sync with PART 8 → "Auth Token Headers (All Headers Supported)".
+
+**Query param bypass:** `?token=` auth (last in the PART 8 priority order) travels in the URL, not a header — it never triggers a CORS preflight and works from any origin regardless of the Allow-Headers list.
 
 ### Behavior
 
@@ -27831,6 +27835,17 @@ web:
 | `cors: "https://a.com,https://b.com"` | Allow listed origins, credentials allowed |
 | `cors: ""` | No CORS headers (same-origin only) |
 | Preflight (OPTIONS) | Return CORS headers, 204 No Content |
+
+### CORS Allow-list Resolution Order
+
+The effective CORS allow-list is resolved from these sources in order; the request `Origin` is matched against the combined list:
+
+1. **Explicit config** — origins listed in `web.cors` (comma-separated). `""` disables CORS entirely and stops resolution.
+2. **DOMAIN env entries** — every hostname from the `DOMAIN` environment variable is added as an `https://` origin.
+3. **Reverse-proxy-learned hosts** — hostnames observed via `X-Forwarded-Host` from trusted proxies only (gated on `trusted_proxies` — see PART 12 → "Trusted Proxies") are appended at runtime.
+4. **Default** — if no source produced a list, fall back to `*` (credentials NOT allowed).
+
+Credentials (`Access-Control-Allow-Credentials: true`) are sent only when the resolved list is explicit — never with `*`. CSP `connect-src` `{learned_origins}` (PART 11 → "Content Security Policy") uses this same resolved list.
 
 ### Mode-Specific Behavior
 
@@ -56558,7 +56573,7 @@ PATCH /api/{api_version}/users/settings
 | `/api/graphql`, `/api/{api_version}/server/graphql` | POST | None for introspection; per-operation otherwise | GraphQL — see PART 14 GraphQL section for resolver-level auth |
 | `/api/autodiscover` | GET | None | Public client/agent auto-config |
 | `/api/{api_version}/server/healthz` | GET | None | Public JSON health |
-| `/api/{api_version}/server/reports/*` | POST | None | Public reports sink (CSP, NEL, deprecation, intervention, crash, error, default). See PART 14 → "Public Reports Scope". Browsers cannot present credentials when emitting these reports. Rate-limited per-IP. |
+| `/api/{api_version}/server/reports/*` | POST | None | Public reports sink (CSP, NEL, deprecation, intervention, crash, error, default). See PART 34 → "Public Reports Scope". Browsers cannot present credentials when emitting these reports. Rate-limited per-IP. |
 | `/server/security` | GET | None | Security overview page (HTML) — human-readable security.txt + reporting instructions. See PART 11 → "Security Reports". |
 | `/server/security/policy` | GET | None | Disclosure policy page (HTML). See PART 11 → "Security Reports". |
 | `/server/security/thanks` | GET | None | Acknowledgments / hall-of-fame (HTML). See PART 11. |
