@@ -2235,25 +2235,25 @@ server:
 | 12 | ~15592 | Server Configuration | Server settings, **Allowlist**, **Blocklists**, **GeoIP** |
 | 13 | ~16966 | Health & Versioning | Health endpoints |
 | 14 | ~17592 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~19281 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~20228 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~26245 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 18 | ~26811 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 19 | ~27236 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
-| 20 | ~27345 | Metrics | Prometheus metrics, **INTERNAL only** |
-| 21 | ~28734 | Backup & Restore | Backup features, **Compliance encryption** |
-| 22 | ~29284 | Update Command | Update feature |
-| 23 | ~29823 | Privilege Escalation & Service | Service/privilege work |
-| 24 | ~30439 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 25 | ~30752 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 26 | ~31534 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 27 | ~32625 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 28 | ~35135 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 29 | ~36814 | ReadTheDocs Documentation | Documentation |
-| 30 | ~37608 | I18N & A11Y | Internationalization, **Translation parity (both binaries)**, **--lang flag** |
-| 31 | ~39011 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 32 | ~40370 | Client | Client **REQUIRED** — CLI/TUI/GUI, **Resource Owner Tokens**, **Smart Context**, **First-Run Wizard** |
-| 33 | ~43636 | IDEA.md Reference | **Examples only** - NEVER modify |
+| 15 | ~19286 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~20233 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~26250 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 18 | ~26816 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 19 | ~27241 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
+| 20 | ~27350 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 21 | ~28739 | Backup & Restore | Backup features, **Compliance encryption** |
+| 22 | ~29289 | Update Command | Update feature |
+| 23 | ~29828 | Privilege Escalation & Service | Service/privilege work |
+| 24 | ~30444 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 25 | ~30757 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 26 | ~31539 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 27 | ~32630 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 28 | ~35140 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 29 | ~36819 | ReadTheDocs Documentation | Documentation |
+| 30 | ~37613 | I18N & A11Y | Internationalization, **Translation parity (both binaries)**, **--lang flag** |
+| 31 | ~39016 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 32 | ~40375 | Client | Client **REQUIRED** — CLI/TUI/GUI, **Resource Owner Tokens**, **Smart Context**, **First-Run Wizard** |
+| 33 | ~43641 | IDEA.md Reference | **Examples only** - NEVER modify |
 | FINAL | — | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist**, **I18N Checklist**, **Host Safety Checklist** |
 
 ### How to Read This File
@@ -17594,6 +17594,11 @@ OS/Arch: {GOOS}/{GOARCH}
 **Note:** This section covers API structure and requirements. For specific route listings, see:
 - Operator-token-protected Routes: PART 11 (Security & Logging → `server.token` routes)
 - Project-specific Routes: IDEA.md
+
+## Authentication & CORS (Cross-References)
+
+- **Auth token extraction:** every auth-protected API endpoint MUST accept a valid token from ANY header in PART 8 → "Auth Token Headers (All Headers Supported)", plus the `?token=` query param, following the PART 8 priority order (first found wins). A valid token grants access regardless of which header carried it.
+- **CORS policy:** browser cross-origin rules for these endpoints — headers table, allow-list resolution order, and preflight caveats — are defined in PART 16 → "CORS".
 
 ## Legacy vs Compatibility Endpoints
 
