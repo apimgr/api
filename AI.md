@@ -2221,39 +2221,39 @@ server:
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
 | 0 | ~2349 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules**, **Host System Safety Rule**, **Translation Rule** |
-| 1 | ~4155 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | ~5418 | License & Attribution | License requirements |
-| 3 | ~5746 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~6612 | OS-Specific Paths | Path handling |
-| 5 | ~6808 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~8598 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~9207 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
-| 8 | ~9938 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color/--lang flags** |
-| 9 | ~12805 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~13160 | Database | Database work |
-| 11 | ~13566 | Security & Logging | Security features, **Resource Owner Tokens**, **Context Detection** |
-| 12 | ~15592 | Server Configuration | Server settings, **Allowlist**, **Blocklists**, **GeoIP** |
-| 13 | ~16966 | Health & Versioning | Health endpoints |
-| 14 | ~17592 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~19286 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~20233 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~26250 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 18 | ~26816 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 19 | ~27241 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
-| 20 | ~27350 | Metrics | Prometheus metrics, **INTERNAL only** |
-| 21 | ~28739 | Backup & Restore | Backup features, **Compliance encryption** |
-| 22 | ~29289 | Update Command | Update feature |
-| 23 | ~29828 | Privilege Escalation & Service | Service/privilege work |
-| 24 | ~30444 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 25 | ~30757 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 26 | ~31539 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 27 | ~32630 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 28 | ~35140 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 29 | ~36819 | ReadTheDocs Documentation | Documentation |
-| 30 | ~37613 | I18N & A11Y | Internationalization, **Translation parity (both binaries)**, **--lang flag** |
-| 31 | ~39016 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 32 | ~40375 | Client | Client **REQUIRED** — CLI/TUI/GUI, **Resource Owner Tokens**, **Smart Context**, **First-Run Wizard** |
-| 33 | ~43641 | IDEA.md Reference | **Examples only** - NEVER modify |
+| 1 | ~4157 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | ~5420 | License & Attribution | License requirements |
+| 3 | ~5748 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | ~6614 | OS-Specific Paths | Path handling |
+| 5 | ~6810 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~8600 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~9209 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
+| 8 | ~9940 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color/--lang flags** |
+| 9 | ~12807 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~13162 | Database | Database work |
+| 11 | ~13568 | Security & Logging | Security features, **Resource Owner Tokens**, **Context Detection** |
+| 12 | ~15594 | Server Configuration | Server settings, **Allowlist**, **Blocklists**, **GeoIP** |
+| 13 | ~16968 | Health & Versioning | Health endpoints |
+| 14 | ~17594 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~19288 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~20235 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~26252 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 18 | ~26818 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 19 | ~27243 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
+| 20 | ~27352 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 21 | ~28741 | Backup & Restore | Backup features, **Compliance encryption** |
+| 22 | ~29291 | Update Command | Update feature |
+| 23 | ~29830 | Privilege Escalation & Service | Service/privilege work |
+| 24 | ~30446 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 25 | ~30759 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 26 | ~31541 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 27 | ~32632 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 28 | ~35142 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 29 | ~36821 | ReadTheDocs Documentation | Documentation |
+| 30 | ~37615 | I18N & A11Y | Internationalization, **Translation parity (both binaries)**, **--lang flag** |
+| 31 | ~39018 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 32 | ~40377 | Client | Client **REQUIRED** — CLI/TUI/GUI, **Resource Owner Tokens**, **Smart Context**, **First-Run Wizard** |
+| 33 | ~43643 | IDEA.md Reference | **Examples only** - NEVER modify |
 | FINAL | — | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist**, **I18N Checklist**, **Host Safety Checklist** |
 
 ### How to Read This File
@@ -3371,12 +3371,14 @@ db.Exec(query, id)
 | **YAML** | 2 spaces | 120 | Single `\n` | Manual |
 | **CSS** | 2 spaces | 120 | Single `\n` | Manual or prettier |
 | **JavaScript** | 2 spaces | 120 | Single `\n` | Manual or prettier |
-| **Makefile** | Tabs (required) | Single `\n` | Manual |
+| **Makefile** | Tabs (required) | 180 | Single `\n` | Manual |
 | **Shell scripts** (bash/sh/zsh/fish) | 2 spaces | 180 | Single `\n` | shellcheck/shfmt |
-| **Text responses** | N/A | Single `\n` | `fmt.Fprintf(w, "%s\n", text)` |
+| **Text responses** | N/A | N/A | Single `\n` | `fmt.Fprintf(w, "%s\n", text)` |
 
 **Universal Rules:**
-- **Every file** ends with exactly ONE newline character
+- **Any filetype not listed above:** 2 spaces (4 if the ecosystem standard says so); tabs only where the format requires them — filetype requirement wins over preference
+- **Every file** ends with exactly ONE newline character — never blank lines at EOF
+- **Trailing-newline exceptions (no `\n`):** raw-value secret/token files (the newline becomes part of the credential), files interpolated verbatim into strings by strict tooling, fragment files spliced mid-line into another file, and binary/generated artifacts
 - **Every response** (JSON, TXT, HTML, XML) ends with exactly ONE newline
 - **No trailing whitespace** on any line
 - **Consistent indentation** throughout each file
