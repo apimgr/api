@@ -730,7 +730,7 @@ Every project ships workflow files for all five CI/CD providers. Same gates, dif
 
 Go projects never have `build-toolchain.yml` — `casjaysdev/go:latest` is maintained externally and needs no per-project rebuild workflow.
 
-**Toolchain image — `casjaysdev/go:latest`.** All Go CI jobs and containerized builds use this maintained image; never create `docker/Dockerfile.build` for Go. Image defaults: `CGO_ENABLED=0`, `GOFLAGS=-buildvcs=false`, `GOTOOLCHAIN=auto`, `GOTELEMETRY=off`. Pre-installed tools:
+**Toolchain image — `casjaysdev/go:latest`.** All Go CI jobs and containerized builds use this maintained image by default; a build image declared in IDEA.md/AI.md overrides it, and a `docker/Dockerfile.build` is created only for a genuine custom need the image cannot satisfy — then it MUST be `FROM casjaysdev/go:latest` (extend, never replace). This picks the toolchain image only; the runtime image (final stage of `docker/Dockerfile`) is a separate decision. Image defaults: `CGO_ENABLED=0`, `GOFLAGS=-buildvcs=false`, `GOTOOLCHAIN=auto`, `GOTELEMETRY=off`. Pre-installed tools:
 
 - Latest stable Go toolchain (`go`, `gofmt`, `go vet`)
 - `golangci-lint`, `staticcheck`, `gofumpt`, `goimports` — linting and formatting
@@ -8682,6 +8682,7 @@ Before proceeding, confirm you understand:
 | Shortcut | Mode |
 |----------|------|
 | `--mode dev` | development |
+| `--mode devel` | development |
 | `--mode development` | development |
 | `--mode prod` | production |
 | `--mode production` | production |
@@ -9137,7 +9138,7 @@ func (m AppMode) String() string {
 // SetAppMode sets the application mode
 func SetAppMode(m string) {
     switch strings.ToLower(m) {
-    case "dev", "development":
+    case "dev", "devel", "development":
         currentMode = Development
     default:
         currentMode = Production
@@ -34075,7 +34076,7 @@ variables:
   CGO_ENABLED: "0"
   GOOS: linux
   GOARCH: amd64
-  # Go CI always uses casjaysdev/go:latest — never create docker/Dockerfile.build or build-toolchain.yml for Go.
+  # Go CI defaults to casjaysdev/go:latest — a docker/Dockerfile.build only for a genuine custom need, and then FROM casjaysdev/go:latest.
   BUILD_IMAGE: "casjaysdev/go:latest"
 
 stages:
