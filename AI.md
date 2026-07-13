@@ -157,7 +157,7 @@ Example:
     # FROZEN — set once at first-time setup, never edit
     internal_name: jokes
     app_name:      jokes
-    official_site: jokes.example.com
+    official_site: https://jokes.example.com
 
 **`{plist_name}` is NOT stored** — it is derived at substitution time as
 `io.github.{project_org}.{internal_name}`.
@@ -618,6 +618,41 @@ if cacheSize > 1024*1024*1024 {
 | **Local (dev)** | `0.0.0.0` | Random `64xxx` | `--address 0.0.0.0 --port 64580` |
 | **Local (prod)** | Specific IP | Random `64xxx` | `--address 192.168.1.100 --port 64580` |
 
+### Raw Protocol Ports (Non-HTTP Listeners)
+
+**The HTTP port rules above (internal 80, random `64xxx` external, reverse proxy in front) apply ONLY to HTTP(S) listeners. Raw TCP/UDP protocol listeners are exempt — remapping or HTTP-proxying them breaks the protocol.**
+
+| Rule | Description |
+|------|-------------|
+| **Standard port, 1:1 mapping** | Protocol listeners bind their IANA well-known port and Docker maps it 1:1 (`-p 25:25`) — NEVER a random `64xxx` remap |
+| **No HTTP reverse proxy** | Never route raw protocols through nginx/Caddy HTTP vhosts; the only acceptable middle layer is a transparent TCP/stream proxy (nginx `stream`, HAProxy `mode tcp`) |
+| **No HTTP middleware** | Raw listeners bypass the HTTP middleware chain entirely (no HTTP logging/security-header/rate-limit middleware); each protocol implements its own logging and abuse protection |
+| **TLS variants on their own ports** | Implicit-TLS listeners use their standard port (SMTPS 465, POP3S 995, IMAPS 993, NNTPS 563); STARTTLS stays on the plain port where the RFC defines it; certificates come from the same TLS config as HTTPS |
+| **Per-protocol config** | Each listener gets its own `{proto}.address`/`{proto}.port` config keys + `{PROTO}_PORT` env override, defaulting to the standard port |
+| **Independent enable/disable** | Every raw listener is individually toggleable in config, disabled by default unless it IS the project's core function; the HTTP admin/API listener keeps following the HTTP rules above |
+| **Custom raw services** | Projects exposing a non-IANA raw port (termbin-style netcat paste service, etc.) document the port in IDEA.md; once shipped that port is the published interface — treat it as frozen like `{internal_name}` |
+| **Privileged ports** | Binding <1024 inside the container is fine (container has the capability); bare-host deploys follow Privileged Port Binding (<1024) in PART 5 — service-install escalation with bind-then-drop |
+
+**Why remapping breaks raw protocols:**
+- SMTP: MX delivery always connects to port 25 — remap = no inbound mail
+- POP3/IMAP/NNTP: client autoconfig assumes 110/995, 143/993, 119/563
+- DNS: resolvers only query 53 — a random port is unreachable
+- termbin-type services: users pipe `nc host 9999` — the port IS the documented interface
+
+**Standard ports:**
+
+| Protocol | Plain | Implicit TLS | STARTTLS |
+|----------|-------|--------------|----------|
+| SMTP (MX) | 25 | — | 25 |
+| SMTP (submission) | 587 | 465 (SMTPS) | 587 |
+| POP3 | 110 | 995 (POP3S) | 110 |
+| IMAP | 143 | 993 (IMAPS) | 143 |
+| NNTP | 119 | 563 (NNTPS) | 119 |
+| DNS | 53 (tcp+udp) | 853 (DoT) | — |
+| FTP | 21 (+ passive range) | 990 (FTPS) | 21 |
+
+**Protocol behavior itself must be fully RFC-compliant — see RFC-Based Applications (CRITICAL - NON-NEGOTIABLE).**
+
 ## CI/CD Rules
 
 | Rule | Description |
@@ -860,7 +895,7 @@ The `release` job already has `contents: write` to push assets — this covers t
 --status                     # Show status and health (exit 0=healthy, 1=unhealthy)
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
---maintenance {backup,restore,update,mode,setup,pgp,--help} [optional-file-or-setting-or-action]
+--maintenance {backup,restore,update,mode,setup,pgp,token,data,compliance,--help} [optional-file-or-setting-or-action]
 --update [check|yes|branch {stable|beta|daily}]
 ```
 
@@ -1141,30 +1176,32 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 ### Allowed Root Files (Exhaustive List)
 
-| File | Required | Purpose |
-|------|:--------:|---------|
-| `AI.md` | ✓ | Project specification (HOW - implementation patterns) |
-| `IDEA.md` | ✓ | Project idea (WHAT - business logic, features) |
-| `CLAUDE.md` | ✓ | Claude Code quick loader - critical rules + references into `AI.md` |
-| `PLAN.md` | Optional | Project plan — human edits/owns. AI reads, interprets, executes, and marks items done in place. Never rewrite or restructure |
-| `PLAN.AI.md` | Optional | Project plan — AI creates/updates. If it exists, this is THE plan |
-| `TODO.md` | Optional | Task list — human edits/owns. AI reads, interprets, executes, and marks items done in place. Never delete, empty, or restructure |
-| `TODO.AI.md` | Optional | Task list — AI creates/updates (3+ tasks only) |
+| File | Required | Purpose | Gitignored |
+|------|:--------:|---------|:----------:|
+| `AI.md` | ✓ | Project specification (HOW - implementation patterns) | No |
+| `IDEA.md` | ✓ | Project idea (WHAT - business logic, features) | No |
+| `CLAUDE.md` | ✓ | Claude Code quick loader - critical rules + references into `AI.md` | No |
+| `CLAUDE.local.md` | Optional | Personal Claude Code preferences | **Yes** |
+| `PLAN.md` | Optional | Project plan — human edits/owns. AI reads, interprets, executes, and marks items done in place. Never rewrite or restructure | No |
+| `PLAN.AI.md` | Optional | Project plan — AI creates/updates. If it exists, this is THE plan | No |
+| `TODO.md` | Optional | Task list — human edits/owns. AI reads, interprets, executes, and marks items done in place. Never delete, empty, or restructure | No |
+| `TODO.AI.md` | Optional | Task list — AI creates/updates (3+ tasks only) | No |
+| `README.md` | ✓ | Public documentation | No |
+| `LICENSE.md` | ✓ | License file | No |
+| `Makefile` | ✓ | Build targets | No |
+| `go.mod` | ✓ | Go module | No |
+| `go.sum` | ✓ | Go dependencies | No |
+| `release.txt` | ✓ | Version source of truth | No |
+| `site.txt` | Optional | Official site URL (single line, never guess) | No |
+| `.gitignore` | ✓ | Git ignore rules | No |
+| `.dockerignore` | ✓ | Docker ignore rules | No |
+| `.gitattributes` | Optional | Git attributes | No |
+| `.editorconfig` | Optional | Editor configuration | No |
+| `Jenkinsfile` | ✓ | Jenkins pipeline — required on every project per `cicd_conventions.md` | No |
+| `mkdocs.yml` | ✓ | MkDocs configuration | No |
+| `.readthedocs.yaml` | ✓ | ReadTheDocs configuration | No |
 
 **Why two variants of PLAN/TODO exist:** humans and AI write tasks at different levels of detail. A human might write `[ ] fix bugs`; AI would write a structured task with reproduction steps, acceptance criteria, and file paths. The split lets each party use their natural style. **AI's job with human files:** read terse items, figure out what they mean (investigate, propose, ask if genuinely unclear — don't refuse for being short), do the work, then check the box. AI must NOT "improve" the wording into AI-style verbose form. The completion ritual (`TODO.AI.md` ✅ items removed individually when done) applies only to the AI-owned variant.
-| `README.md` | ✓ | Public documentation |
-| `LICENSE.md` | ✓ | License file |
-| `Makefile` | ✓ | Build targets |
-| `go.mod` | ✓ | Go module |
-| `go.sum` | ✓ | Go dependencies |
-| `release.txt` | ✓ | Version source of truth |
-| `site.txt` | Optional | Official site URL (single line, never guess) |
-| `.gitignore` | ✓ | Git ignore rules |
-| `.dockerignore` | ✓ | Docker ignore rules |
-| `.gitattributes` | Optional | Git attributes |
-| `Jenkinsfile` | ✓ | Jenkins pipeline — required on every project per `cicd_conventions.md` |
-| `mkdocs.yml` | ✓ | MkDocs configuration |
-| `.readthedocs.yaml` | ✓ | ReadTheDocs configuration |
 
 ### AI-Specific Files and Directories
 
@@ -1193,8 +1230,8 @@ Claude Code creates `.claude/rules/` on first session (see PART 0: Session Initi
 | `ai-rules.md` | 0, 1 | AI Assistant Rules, Critical Rules |
 | `project-rules.md` | 2, 3, 4 | License & Attribution, Project Structure, OS-Specific Paths |
 | `config-rules.md` | 5, 6, 12 | Configuration, Application Modes, Server Configuration |
-| `binary-rules.md` | 7, 8, 33 | Binary Requirements, Server Binary CLI, Client |
-| `backend-rules.md` | 9, 10, 11, 32 | Error Handling & Caching, Database, Security & Logging, Tor Hidden Service |
+| `binary-rules.md` | 7, 8, 32 | Binary Requirements, Server Binary CLI, Client |
+| `backend-rules.md` | 9, 10, 11, 31 | Error Handling & Caching, Database, Security & Logging, Tor Hidden Service |
 | `api-rules.md` | 13, 14, 15 | Health & Versioning, API Structure, SSL/TLS & Let's Encrypt |
 | `frontend-rules.md` | 16 | Web Frontend |
 | `features-rules.md` | 17-22 | Email & Notifications, Scheduler, GeoIP, Metrics, Backup & Restore, Update Command |
@@ -1204,7 +1241,7 @@ Claude Code creates `.claude/rules/` on first session (see PART 0: Session Initi
 | `cicd-rules.md` | 27 | CI/CD Workflows |
 | `testing-rules.md` | 28, 29, 30 | Testing & Development, ReadTheDocs Documentation, I18N & A11Y |
 
-**Note:** PART 33 (IDEA.md Reference) and FINAL (Compliance Checklist) are reference-only, not rule files. PART 30 (Tor Hidden Service) is REQUIRED - auto-enabled when Tor binary is found.
+**Note:** PART 33 (IDEA.md Reference) and FINAL (Compliance Checklist) are reference-only, not rule files. PART 31 (Tor Hidden Service) is REQUIRED - auto-enabled when Tor binary is found.
 
 **Rules File Features:**
 - All `.md` files in `rules/` are automatically discovered recursively
@@ -1297,7 +1334,7 @@ For complete details, see AI.md PART 0, 1
 **Example Rules File Content (frontend-rules.md):**
 
 ```markdown
-# Frontend Rules (PART 16, 17)
+# Frontend Rules (PART 16)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
@@ -1367,7 +1404,7 @@ Apply to: IPv6, Tor .onion, API tokens, hashes, UUIDs, Base64
 | Desktop+ | `@media (min-width: 1024px)` |
 
 ---
-For complete details, see AI.md PART 16, 17
+For complete details, see AI.md PART 16
 ```
 
 **Cursor Rules (.cursor/rules/):**
@@ -1379,8 +1416,8 @@ Cursor uses `.mdc` files. Create the same logical groupings:
 | `ai-rules.mdc` | 0, 1 | AI Assistant Rules, Critical Rules |
 | `project-rules.mdc` | 2, 3, 4 | License & Attribution, Project Structure, OS-Specific Paths |
 | `config-rules.mdc` | 5, 6, 12 | Configuration, Application Modes, Server Configuration |
-| `binary-rules.mdc` | 7, 8, 33 | Binary Requirements, Server Binary CLI, Client |
-| `backend-rules.mdc` | 9, 10, 11, 32 | Error Handling & Caching, Database, Security & Logging, Tor Hidden Service |
+| `binary-rules.mdc` | 7, 8, 32 | Binary Requirements, Server Binary CLI, Client |
+| `backend-rules.mdc` | 9, 10, 11, 31 | Error Handling & Caching, Database, Security & Logging, Tor Hidden Service |
 | `api-rules.mdc` | 13, 14, 15 | Health & Versioning, API Structure, SSL/TLS & Let's Encrypt |
 | `frontend-rules.mdc` | 16 | Web Frontend |
 | `features-rules.mdc` | 17-22 | Email & Notifications, Scheduler, GeoIP, Metrics, Backup & Restore, Update Command |
@@ -1513,7 +1550,7 @@ Purpose:
 7. Create premium tiers → All features free, no paywalls
 8. Use Makefile in CI/CD → Explicit commands only
 9. Guess or assume values that a command can produce → Run the command (`date`, `basename "$PWD"`, `git config user.email`, `git rev-parse --short HEAD`, `uname -m`, etc.) — when no command applies, read spec or ask user
-10. Skip platforms → Build all 8 (linux/darwin/windows × amd64/arm64)
+10. Skip platforms → Build all 8 (linux/darwin/windows/freebsd × amd64/arm64)
 11. Client-side rendering (React/Vue) → Server-side Go templates
 12. Require JavaScript for core features → Progressive enhancement only
 13. Let long strings break mobile → Use word-break CSS
@@ -1882,39 +1919,22 @@ Instructions for how this agent should behave...
 | `tests/` | ✓ | Repository-root executable integration test scripts (`run_tests.sh`, `docker.sh`, `incus.sh`, optional helpers). Go unit tests live alongside code as `*_test.go` | No |
 | `.github/` | If GitHub / public repo | GitHub Actions, community files, templates | No |
 | `.gitea/` | If Gitea | Gitea Actions, templates | No |
-| `.claude/` | Auto | Claude Code config (regenerated) | **Yes** |
-| `.cursor/` | Auto | Cursor AI config (regenerated) | **Yes** |
+| `.claude/` | Auto | Claude Code config — team config (settings.json, CLAUDE.md, rules/, agents/, hooks/, commands/, plans/) is **committed**; personal/runtime files (settings.local.json, *.lock, backups/, cache/, history.jsonl) are gitignored | Partial |
+| `.cursor/` | Auto | Cursor AI config — team config (rules/, mcp.json) is **committed**; personal settings.json is gitignored | Partial |
 | `.aider/` | Auto | Aider AI config (regenerated) | **Yes** |
 | `.ai/` | Auto | Generic AI config (regenerated) | **Yes** |
-| `.windsurf/` | Auto | Windsurf AI config (regenerated) | **Yes** |
+| `.windsurf/` | Auto | Windsurf AI config — team config (rules/) is **committed**; personal settings.json is gitignored | Partial |
 | `binaries/` | Auto | Build output | **Yes** |
 | `releases/` | Auto | Release artifacts | **Yes** |
 | `volumes/` | Auto | Runtime volume data (if created locally) | **Yes** |
 
 **RULE: If a directory doesn't appear in this list, it MUST NOT exist - ask before creating.**
 
-### Allowed Root Files (Exhaustive List)
+### Allowed Root Files
 
-| File | Required | Purpose | Gitignored |
-|------|:--------:|---------|:----------:|
-| `AI.md` | ✓ | Project specification (source of truth) | No |
-| `IDEA.md` | ✓ | Project plan and features | No |
-| `CLAUDE.md` | ✓ | Claude Code project memory (primary location) | No |
-| `CLAUDE.local.md` | - | Personal Claude Code preferences | **Yes** |
-| `README.md` | ✓ | Project documentation | No |
-| `LICENSE.md` | ✓ | MIT license + embedded third-party licenses | No |
-| `go.mod` | ✓ | Go module definition | No |
-| `go.sum` | ✓ | Go module checksums | No |
-| `Makefile` | ✓ | Local development only | No |
-| `mkdocs.yml` | ✓ | MkDocs configuration | No |
-| `.gitignore` | ✓ | Git ignore patterns | No |
-| `.dockerignore` | ✓ | Docker ignore patterns | No |
-| `.gitattributes` | ✓ | Git attributes | No |
-| `.editorconfig` | - | Editor configuration | No |
-| `release.txt` | ✓ | Version source of truth | No |
-| `site.txt` | - | Official site URL (optional, never guess) | No |
+The single canonical table is "Allowed Root Files (Exhaustive List)" earlier in this document — it is the only authority on which root files may exist.
 
-**RULE: If a root file doesn't appear in this list, it MUST NOT exist - ask before creating.**
+**RULE: If a root file doesn't appear in that list, it MUST NOT exist - ask before creating.**
 
 ### GitHub-Specific Files (`.github/` directory)
 
@@ -2172,7 +2192,7 @@ server:
 |--------|-------------------------|------------------------------|
 | **Endpoints** | `/server/healthz`, optional `/healthz`, `/api/{api_version}/server/healthz` | `/metrics` |
 | **Visibility** | Public internet | Internal network only |
-| **Authentication** | None | None (restrict by IP/network) |
+| **Authentication** | None | Optional bearer token |
 | **Data** | Public-safe status/info only | Everything (all telemetry) |
 | **Format** | HTML, JSON, text | Prometheus text exposition |
 | **Use case** | "Is the server running? What version?" | "How is it performing? Alert on this." |
@@ -2221,40 +2241,40 @@ server:
 
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
-| 0 | ~2350 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules**, **Host System Safety Rule**, **Translation Rule** |
-| 1 | ~4158 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | ~5421 | License & Attribution | License requirements |
-| 3 | ~5749 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~6615 | OS-Specific Paths | Path handling |
-| 5 | ~6811 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~8601 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~9210 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
-| 8 | ~9941 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color/--lang flags** |
-| 9 | ~12825 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~13180 | Database | Database work |
-| 11 | ~13586 | Security & Logging | Security features, **Resource Owner Tokens**, **Context Detection** |
-| 12 | ~15612 | Server Configuration | Server settings, **Allowlist**, **Blocklists**, **GeoIP** |
-| 13 | ~16986 | Health & Versioning | Health endpoints |
-| 14 | ~17612 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~19306 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~20253 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~26270 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 18 | ~26836 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 19 | ~27261 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
-| 20 | ~27370 | Metrics | Prometheus metrics, **INTERNAL only** |
-| 21 | ~28759 | Backup & Restore | Backup features, **Compliance encryption** |
-| 22 | ~29309 | Update Command | Update feature |
-| 23 | ~29848 | Privilege Escalation & Service | Service/privilege work |
-| 24 | ~30464 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 25 | ~30777 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 26 | ~31559 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 27 | ~32650 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 28 | ~35160 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 29 | ~36839 | ReadTheDocs Documentation | Documentation |
-| 30 | ~37633 | I18N & A11Y | Internationalization, **Translation parity (both binaries)**, **--lang flag** |
-| 31 | ~39036 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 32 | ~40395 | Client | Client **REQUIRED** — CLI/TUI/GUI, **Resource Owner Tokens**, **Smart Context**, **First-Run Wizard** |
-| 33 | ~43661 | IDEA.md Reference | **Examples only** - NEVER modify |
+| 0 | ~2370 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules**, **Host System Safety Rule**, **Translation Rule** |
+| 1 | ~4170 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | ~5433 | License & Attribution | License requirements |
+| 3 | ~5761 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | ~6627 | OS-Specific Paths | Path handling |
+| 5 | ~6823 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~8618 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~9242 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
+| 8 | ~9973 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color/--lang flags** |
+| 9 | ~12862 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~13217 | Database | Database work |
+| 11 | ~13623 | Security & Logging | Security features, **Resource Owner Tokens**, **Context Detection** |
+| 12 | ~15659 | Server Configuration | Server settings, **Allowlist**, **Blocklists**, **GeoIP** |
+| 13 | ~17033 | Health & Versioning | Health endpoints |
+| 14 | ~17659 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~19355 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~20305 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~26362 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 18 | ~26927 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 19 | ~27351 | GeoIP | GeoIP features, **Country blocking (deny/allow)** |
+| 20 | ~27461 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 21 | ~28871 | Backup & Restore | Backup features, **Compliance encryption** |
+| 22 | ~29421 | Update Command | Update feature |
+| 23 | ~30021 | Privilege Escalation & Service | Service/privilege work |
+| 24 | ~30637 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 25 | ~30950 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 26 | ~31736 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 27 | ~32832 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 28 | ~35358 | Testing & Development | Testing/dev workflow, **Host Safety in tests**, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 29 | ~37035 | ReadTheDocs Documentation | Documentation |
+| 30 | ~37829 | I18N & A11Y | Internationalization, **Translation parity (both binaries)**, **--lang flag** |
+| 31 | ~39230 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 32 | ~40588 | Client | Client **REQUIRED** — CLI/TUI/GUI, **Resource Owner Tokens**, **Smart Context**, **First-Run Wizard** |
+| 33 | ~43872 | IDEA.md Reference | **Examples only** - NEVER modify |
 | FINAL | — | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist**, **I18N Checklist**, **Host Safety Checklist** |
 
 ### How to Read This File
@@ -2293,18 +2313,18 @@ Example: If you're partway through PART 5 and it says "See PART 10", read PART 1
 | Task | Read These PARTs |
 |------|------------------|
 | **Migrating existing app** | 0, Migration sections, 1, 2, 6, 30 |
-| **New project/app setup** | 0, New Project Rules, 1, 2, 7, 30, 34 |
+| **New project/app setup** | 0, New Project Rules, 1, 2, 7, 30, 33 |
 | **CLI implementation** | 0, 1, 6, 8, 24 |
-| **API development** | 0, 1, 14, 18, 16 |
-| **Frontend/UI work** | 0, 1, 13, 17, 18 |
+| **API development** | 0, 1, 13, 14 |
+| **Frontend/UI work** | 0, 1, 16, 30 |
 | **Database work** | 0, 1, 4, 10 |
-| **User/auth system** | 0, 1, 15, 11 |
-| **Docker/deployment** | 0, 1, 7, 30, 28 |
-| **Documentation** | 0, 1, 31 |
+| **User/auth system** | 0, 1, 11, 15 |
+| **Docker/deployment** | 0, 1, 7, 26, 27 |
+| **Documentation** | 0, 1, 29 |
 | **Security features** | 0, 1, 11, 16 |
-| **Background tasks** | 0, 1, 20 |
-| **Email features** | 0, 1, 19 |
-| **Backup features** | 0, 1, 23 |
+| **Background tasks** | 0, 1, 18 |
+| **Email features** | 0, 1, 17 |
+| **Backup features** | 0, 1, 21 |
 | **Debugging/profiling** | 0, 1, 5 |
 
 ### Search Before Reading
@@ -2558,16 +2578,16 @@ Before I proceed, can you confirm [specific question]?
 | `.claude/rules/ai-rules.md` | 0, 1 | AI Assistant Rules, Critical Rules |
 | `.claude/rules/project-rules.md` | 2, 3, 4 | License & Attribution, Project Structure, OS-Specific Paths |
 | `.claude/rules/config-rules.md` | 5, 6, 12 | Configuration, Application Modes, Server Configuration |
-| `.claude/rules/binary-rules.md` | 7, 8, 33 | Binary Requirements, Server Binary CLI, Client |
-| `.claude/rules/backend-rules.md` | 9, 10, 11, 32 | Error Handling & Caching, Database, Security & Logging, Tor Hidden Service |
+| `.claude/rules/binary-rules.md` | 7, 8, 32 | Binary Requirements, Server Binary CLI, Client |
+| `.claude/rules/backend-rules.md` | 9, 10, 11, 31 | Error Handling & Caching, Database, Security & Logging, Tor Hidden Service |
 | `.claude/rules/api-rules.md` | 13, 14, 15 | Health & Versioning, API Structure, SSL/TLS & Let's Encrypt |
 | `.claude/rules/frontend-rules.md` | 16 | Web Frontend |
 | `.claude/rules/features-rules.md` | 17-22 | Email & Notifications, Scheduler, GeoIP, Metrics, Backup & Restore, Update Command |
 | `.claude/rules/service-rules.md` | 23, 24 | Privilege Escalation & Service, Service Support |
-| `.claude/rules/makefile-rules.md` | 26 | Makefile (local dev only, NOT CI/CD) |
-| `.claude/rules/docker-rules.md` | 27 | Docker |
-| `.claude/rules/cicd-rules.md` | 28 | CI/CD Workflows |
-| `.claude/rules/testing-rules.md` | 29, 30, 31 | Testing & Development, ReadTheDocs Documentation, I18N & A11Y |
+| `.claude/rules/makefile-rules.md` | 25 | Makefile (local dev only, NOT CI/CD) |
+| `.claude/rules/docker-rules.md` | 26 | Docker |
+| `.claude/rules/cicd-rules.md` | 27 | CI/CD Workflows |
+| `.claude/rules/testing-rules.md` | 28, 29, 30 | Testing & Development, ReadTheDocs Documentation, I18N & A11Y |
 
 **Each rule file MUST contain:**
 1. Header with PART numbers: `# {Topic} Rules (PART X, Y, Z)`
@@ -3082,7 +3102,7 @@ Implemented core server functionality and API.
 - no unsafe `pull_request_target` build/test/publish path
 - third-party actions pinned to full SHA
 - no secrets/write tokens exposed to fork PRs
-- security workflow exists and blocks on secret/dependency/workflow-policy failures
+- ci.yml security jobs (secret-scan, vuln-scan, workflow-policy) exist and block on failures
 
 ### Step 4: AI Tool Configuration (Rule Files)
 **Do AI rule files exist and follow the required format?**
@@ -3306,9 +3326,7 @@ type Config struct {
 }
 ```
 
-**YAML comments - same rule:**
-```yaml
-```
+**YAML comments - same rule** (see the YAML example under "Comment Style" below).
 
 ### Code Quality Rules
 
@@ -3933,13 +3951,7 @@ ls -la docker/
 
 ### PART 32: Client (REQUIRED)
 
-**PART 32: Client**
-
-| Include | Skip | Reason |
-|---------|------|--------|
-| API with complex queries | Simple web-only app | Power users need CLI access |
-| DevOps/admin tools | Consumer mobile app | Automation requires CLI |
-| Database management | Static content site | Bulk operations via CLI |
+**PART 32: Client — REQUIRED for ALL projects.** Every project ships the CLI client; there is no skip case.
 
 **Client-Side Preferences:**
 
@@ -3963,8 +3975,8 @@ User preferences like theme, language, and UI settings can be stored client-side
 │            │                                                     │
 │            ▼                                                     │
 │   ┌──────────────────┐                                          │
-│   │ 2. Determine     │ ◄─── Decide client, Custom domains   │
-│   │    optional      │                                          │
+│   │ 2. Determine     │ ◄─── Decide Custom domains (client is    │
+│   │    optional      │      always REQUIRED)                    │
 │   └────────┬─────────┘                                          │
 │            │                                                     │
 │            ▼                                                     │
@@ -4343,7 +4355,7 @@ db.Query("SELECT * FROM users WHERE email = '" + email + "'")
 
 | Endpoint Type | Default Limit | Default Window | Response |
 |---------------|---------------|----------------|----------|
-| **Login attempts** | 5 | 15 minutes | 429 + lockout |
+| **Failed auth attempts (invalid token)** | 5 | 15 minutes | 429 + lockout |
 | **API (authenticated)** | Configurable | 1 minute | 429 + Retry-After header |
 | **API (unauthenticated)** | Configurable | 1 minute | 429 + Retry-After header |
 | **File upload** | 10 | 1 hour | 429 |
@@ -4368,13 +4380,13 @@ db.Query("SELECT * FROM users WHERE email = '" + email + "'")
 |------------|-----------|--------------|
 | **Invalid input format** | "Please enter a valid value" | `validation_error: field format invalid, input=[redacted]` |
 | **Rate limited** | "Too many requests. Try again in a moment" | `rate_limit: endpoint=/api/{api_version}/..., ip=1.2.3.4, limit=10/min` |
-| **Database error** | "An error occurred. Please try again" | `db_error: open failed, path=/var/lib/claudemgr/db.sqlite, err=[full error]` |
+| **Database error** | "An error occurred. Please try again" | `db_error: open failed, path=/var/lib/{internal_org}/{internal_name}/db/server.db, err=[full error]` |
 | **Internal panic** | "An unexpected error occurred" | `panic: [full stack trace], request_id=abc123` |
 
 **Console Output (Development):**
 ```
 [ERROR] 2025-01-15 10:30:45 database open failed
-        path: /var/lib/claudemgr/db.sqlite
+        path: /var/lib/{internal_org}/{internal_name}/db/server.db
         error: unable to open database file
         stack: main.go:123 → db.go:45 → connect.go:12
 ```
@@ -4387,7 +4399,7 @@ db.Query("SELECT * FROM users WHERE email = '" + email + "'")
   "request_id": "abc123",
   "component": "database",
   "message": "open failed",
-  "path": "/var/lib/claudemgr/db.sqlite",
+  "path": "/var/lib/{internal_org}/{internal_name}/db/server.db",
   "error": "unable to open database file",
   "stack": "..."
 }
@@ -4407,13 +4419,13 @@ Content-Type: application/json
 }
 ```
 
-**Never reveal to users:**
-- Whether a username/email exists (use "If account exists, email sent")
+**Never reveal to clients:**
+- Whether a resource or token exists (identical response for "not found" vs "no access")
 - Database structure, table names, or query details
 - Internal IP addresses, hostnames, or ports
 - Stack traces or file paths
 - Dependency versions or internal service names
-- Specific reason for auth failures (user not found vs wrong password)
+- Specific reason for auth failures (unknown token vs revoked token vs expired token)
 
 ### Security vs Usability Balance
 
@@ -4983,9 +4995,9 @@ link := "/api/" + apiVersion + "/items/" + itemID
 link := fmt.Sprintf("https://%s/api/%s/items/%s", cfg.FQDN, apiVersion, itemID)
 
 // ❌ WRONG — proxy-blind helper; physically cannot read X-Forwarded-* headers
-// See PART 12 → BuildURL / URL Variable Resolution for the full request-aware implementation.
+// See PART 8 → BuildURL / URL Variable Resolution for the full request-aware implementation.
 
-// ✅ CORRECT — request-aware; reverse-proxy headers first (PART 12 → "BuildURL")
+// ✅ CORRECT — request-aware; reverse-proxy headers first (PART 8 → "BuildURL")
 link := BuildURL(r, "/api/"+apiVersion+"/items/"+itemID)
 ```
 
@@ -5788,23 +5800,23 @@ package main
 
 ```bash
 # Method 1: Infer from git remote (PREFERRED - works regardless of directory location)
-# github.com/cloudops/echoip.git → PROJECTORG=cloudops, PROJECTNAME=echoip
-PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|')
-PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|')
+# github.com/cloudops/echoip.git → PROJECT_ORG=cloudops, PROJECT_NAME=echoip
+PROJECT_NAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|')
+PROJECT_ORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|')
 
 # Method 2: Infer from current directory path (fallback if no git remote)
 # Works with any path structure: ~/Documents/myproject, ~/myproject, etc.
 # myproject
-PROJECTNAME=$(basename "$PWD")
+PROJECT_NAME=$(basename "$PWD")
 # Documents (or parent dir name)
-PROJECTORG=$(basename "$(dirname "$PWD")")
+PROJECT_ORG=$(basename "$(dirname "$PWD")")
 
 # Method 3: Combined approach (git first, fallback to path)
-PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|' || basename "$PWD")
-PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|' || basename "$(dirname "$PWD")")
+PROJECT_NAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|' || basename "$PWD")
+PROJECT_ORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|' || basename "$(dirname "$PWD")")
 ```
 
-**Note:** When using path-based inference, `PROJECTORG` will be the parent directory name, which may not match the git organization unless you follow the recommended `~/Projects/{gitprovider}/{project_org}/{internal_name}` structure. Git remote inference is always more reliable.
+**Note:** When using path-based inference, `PROJECT_ORG` will be the parent directory name, which may not match the git organization unless you follow the recommended `~/Projects/{gitprovider}/{project_org}/{internal_name}` structure. Git remote inference is always more reliable.
 
 ### Variable Capitalization
 
@@ -6523,7 +6535,7 @@ require github.com/tursodatabase/libsql-client-go {version}
 
 | Use Case | Driver |
 |----------|--------|
-| Default (no config needed) | `sqlite` (file auto-created at `{data_dir}/db/{internal_name}.db`) |
+| Default (no config needed) | `sqlite` (file auto-created at `{data_dir}/db/server.db`) |
 | Single server, local data | `sqlite` (modernc.org/sqlite) |
 | Edge/distributed, Turso cloud | `libsql` |
 | Self-hosted libSQL server | `libsql` |
@@ -6804,7 +6816,7 @@ Before proceeding, confirm you understand:
 - [ ] Each OS has specific paths for privileged and non-privileged users
 - [ ] Config file is ALWAYS `server.yml` (not .yaml)
 - [ ] Docker uses simplified paths (/config, /data)
-- [ ] All paths follow the {project_org}/{internal_name} pattern
+- [ ] All paths follow the {internal_org}/{internal_name} pattern
 
 ---
 
@@ -6996,7 +7008,7 @@ func handleFileRequest(w http.ResponseWriter, r *http.Request) {
 
 ### HTTP Request Path Middleware
 
-**This middleware MUST be first in the chain - before auth, before routing.**
+**This middleware MUST run early in the chain — immediately after URL normalization and request-ID attachment (execution position #3, see Middleware Order below), and always before auth and routing.**
 
 ```go
 // PathSecurityMiddleware normalizes paths and blocks traversal attempts
@@ -7247,7 +7259,7 @@ Self-Healing Successful?                        │
 │                                                             │
 │  Error: Database Open Failed                                │
 │  ─────────────────────────────────────────                  │
-│  Path: /var/lib/{project_name}/db.sqlite                    │
+│  Path: /var/lib/{internal_org}/{internal_name}/db/server.db │
 │  Error: unable to open database file                        │
 │  Last successful access: 5 minutes ago                      │
 │                                                             │
@@ -7283,7 +7295,7 @@ Self-Healing Successful?                        │
 | DB status | `{project_name} db status` | Connected |
 | Network (libsql) | `ping your-db.turso.io` | Response |
 | Credentials | Check server.yml / TURSO_AUTH_TOKEN | Correct token |
-| SQLite file | Check `{data_dir}/db/{internal_name}.db` | File exists and readable |
+| SQLite file | Check `{data_dir}/db/server.db` | File exists and readable |
 
 **Disk Full:**
 
@@ -7442,7 +7454,7 @@ server:
     # or "libsql" for remote Turso/libsql
     driver: sqlite
     # auto-created for sqlite
-    url: "{data_dir}/db/{internal_name}.db"
+    url: "{data_dir}/db/server.db"
     # For remote libsql:
     # driver: libsql
     # url: libsql://your-db-name.turso.io?authToken=${TURSO_AUTH_TOKEN}
@@ -7647,7 +7659,7 @@ func (req *CreateResourceRequest) Parse() (*Resource, error) {
 | `NO_COLOR` | Disable ANSI color output when set and non-empty (see PART 8) |
 | `TERM` | Terminal type; `TERM=dumb` disables ALL ANSI escapes and forces CLI mode (see PART 7) |
 | `DOMAIN` | FQDN override (highest priority for hostname resolution) |
-| `MODE` | `production` (default) or `development` |
+| `MODE` | `production` (default) or `development`; shortcuts `prod`, `dev`, `devel` accepted; `debug` = development + debug on unless `DEBUG` is explicitly set (see PART 6) |
 | `DATABASE_DRIVER` | `sqlite` (+ `sqlite2`, `sqlite3`), `libsql` (+ `turso`) |
 | `DATABASE_URL` | Database connection string |
 | `SMTP_HOST` | SMTP server hostname (if set, skips autodetect) |
@@ -7664,7 +7676,7 @@ func (req *CreateResourceRequest) Parse() (*Resource, error) {
 - `{port}`: `X-Forwarded-Port` → Host header → Server port → Proto default
 - `{baseurl}`: `X-Forwarded-Prefix` → `X-Forwarded-Path` → `X-Script-Name` → `server.baseurl` → `/`
 
-**Note:** Loopback addresses avoided; global IPs preferred. See PART 5 for full details.
+**Note:** Loopback addresses avoided; global IPs preferred. See PART 8 (BuildURL / URL Variable Resolution) for full details.
 
 ### Init-Only Variables (First Run Only)
 
@@ -7748,7 +7760,7 @@ func (req *CreateResourceRequest) Parse() (*Resource, error) {
 
 | Mode | How Started | Port Restriction | Privilege Handling |
 |------|-------------|------------------|-------------------|
-| **Service (escalated)** | `sudo {project_name} --service install` | Any port | Runs as root/admin, binary drops after binding |
+| **Service (escalated)** | `sudo {project_name} --service --install` | Any port | Runs as root/admin, binary drops after binding |
 | **User ($USER)** | `{project_name}` | >1024 only | Runs as calling user, no escalation |
 
 #### Service Installation (One-Time Escalation)
@@ -7761,13 +7773,13 @@ func (req *CreateResourceRequest) Parse() (*Resource, error) {
 
 ```bash
 # Unix-like (Linux, macOS, FreeBSD)
-sudo {project_name} --service install
+sudo {project_name} --service --install
 # Binary creates service file for privileged startup + runtime privilege drop
 # Runtime stays on dedicated service account unless the project explicitly requires permanent root
 
 # Windows (run as Administrator)
-{project_name}.exe --service install
-# Binary creates Windows service with Virtual Service Account (NT SERVICE\{project_name})
+{project_name}.exe --service --install
+# Binary creates Windows service with Virtual Service Account (NT SERVICE\{internal_name})
 ```
 
 #### Unix-Like Platforms (Linux, macOS, FreeBSD)
@@ -8014,7 +8026,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 
 4. **Auto-escalate for service operations:**
    ```go
-   // --service install/uninstall/start/stop require escalation
+   // --service --install/--uninstall/start/stop require escalation
    if serviceCmd != "" && !isElevated() {
        if err := handleEscalation("Service management"); err != nil {
            return err
@@ -8049,7 +8061,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
    Error: Cannot bind to port 80
 
    Port 80 requires elevated privileges. Options:
-     1. Install as service (requires admin): sudo {project_name} --service install
+     1. Install as service (requires admin): sudo {project_name} --service --install
      2. Use high port (no admin needed): {project_name} --port 8080
    ```
 
@@ -8122,13 +8134,13 @@ Binary checks:
 ├─ Is user root?
 │   └─ YES → Allow restore (with confirmation prompt)
 ├─ Is user the service user ({project_name})?
-│   └─ YES → Require operator password:
-│            "This will OVERWRITE all data. Enter operator password to confirm."
-│            └─ Valid password → Allow restore
+│   └─ YES → Require operator token (`server.token`):
+│            "This will OVERWRITE all data. Enter operator token to confirm."
+│            └─ Valid token → Allow restore
 │            └─ Invalid → Reject
 └─ Random user → Reject with:
    "Restore requires administrator authorization.
-    Run as root or provide operator password."
+    Run as root or provide the operator token."
 ```
 
 **Mode change authorization flow:**
@@ -8140,7 +8152,7 @@ Binary checks:
 ├─ Is user root?
 │   └─ YES → Allow (with warning about security implications)
 ├─ Is user the service user ({project_name})?
-│   └─ YES → Require operator password
+│   └─ YES → Require operator token (`server.token`)
 └─ Random user → Reject
 ```
 
@@ -8150,7 +8162,7 @@ Binary checks:
 |--------|-------------|-----------|
 | Malicious user runs setup | Corrupts server configuration | ❌ Blocked (setup already done) |
 | Malicious user restores bad backup | Overwrites database, takes over | ❌ Blocked (needs `server.token` or root) |
-| Malicious user enables dev mode | Exposes debug endpoints | ❌ Blocked (needs `server.token` or root) |
+| Malicious user enables dev mode | Relaxes host validation (dev TLDs, localhost) — debug endpoints stay off (only `--debug` enables them) | ❌ Blocked (needs `server.token` or root) |
 
 #### How Binary Determines Escalation Need
 
@@ -8231,7 +8243,7 @@ func canRestore() (bool, string) {
     if isElevated() {
         return true, "elevated"
     }
-    // Service user: requires operator password (prompted)
+    // Service user: requires operator token (prompted)
     if isServiceUser() {
         // Caller must prompt for creds
         return false, "need-creds"
@@ -8304,7 +8316,7 @@ Binary checks:
 | Read/write data | `/var/lib/{internal_org}/{internal_name}/` |
 | Read/write cache | `/var/cache/{internal_org}/{internal_name}/` |
 | Read/write logs | `/var/log/{internal_org}/{internal_name}/` |
-| Read/write backups | `/var/lib/Backups/{internal_org}/{internal_name}/` or `/mnt/Backups/...` |
+| Read/write backups | `/mnt/Backups/{internal_org}/{internal_name}/` (if writable, else `{data_dir}/backup/`) |
 | Use bound sockets | Inherited from root before privilege drop |
 | Bind ports >1024 | New sockets after privilege drop |
 | Run scheduled tasks | Backup, cleanup, SSL renewal, etc. |
@@ -8530,8 +8542,9 @@ server:
         enabled: true
         # Daily: 2:00 AM
         schedule: "0 2 * * *"
-        # Keep max 4 backups (storage management)
-        retention: 4
+        # Keep max 5 backups (storage management, matches
+        # maintenance backup_keep_count)
+        retention: 5
 
       # SSL certificate management (only when app manages certs)
       ssl_renewal:
@@ -8572,7 +8585,12 @@ server:
 
   # Database
   database:
-    driver: file
+    driver: sqlite
+
+  # CORS
+  cors:
+    allowed_origins:
+      - "*"
 
 # =============================================================================
 # FRONTEND CONFIGURATION
@@ -8581,7 +8599,6 @@ server:
 web:
   ui:
     theme: dark
-  cors: "*"
 ```
 
 ---
@@ -8610,9 +8627,12 @@ Before proceeding, confirm you understand:
 **Debug:**
 1. `--debug` CLI flag (highest priority)
 2. `DEBUG` environment variable (truthy values)
-3. Default: `false`
+3. `--mode debug` / `MODE=debug` alias
+4. Default: `false`
 
-## Three Operational States
+**`debug` mode alias:** `--mode debug` / `MODE=debug` expands to mode `development` + debug `on`. An explicit `--debug` flag or `DEBUG` env var still wins — `MODE=debug DEBUG=false` runs development mode with debug off.
+
+## Four Operational States
 
 | State | Mode | Debug | Use Case |
 |-------|------|-------|----------|
@@ -8657,11 +8677,11 @@ Before proceeding, confirm you understand:
 
 ## Debug Flag (`--debug` / `DEBUG=true`)
 
-**Enables ALL debug features regardless of mode. Use sparingly in production.**
+**Enables ALL debug diagnostics regardless of mode. Debug mode affects verbosity and diagnostics ONLY — it NEVER disables authentication or security checks, in any mode, including production. Use sparingly in production.**
 
 | Setting | Behavior |
 |---------|----------|
-| **Operator token (`server.token`) auth** | **BYPASSED** (for manual dev only - NOT for automated tests) |
+| **Operator token (`server.token`) auth** | **NEVER bypassed** — all auth and security checks remain fully enforced |
 | Debug endpoints | **Enabled** (`/debug/*`) |
 | pprof endpoints | **Enabled** (`/debug/pprof/*`) |
 | expvar endpoints | **Enabled** (`/debug/vars`) |
@@ -8686,6 +8706,7 @@ Before proceeding, confirm you understand:
 | `--mode development` | development |
 | `--mode prod` | production |
 | `--mode production` | production |
+| `--mode debug` | development + debug on |
 
 ## Debug Endpoints (`--debug` / `DEBUG=true` Only)
 
@@ -8997,7 +9018,6 @@ var (
     requestCount    = expvar.NewInt("requests_total")
     requestDuration = expvar.NewFloat("requests_duration_seconds")
     errorCount      = expvar.NewInt("errors_total")
-    goroutineCount  = expvar.NewInt("goroutines")
     startTime       = time.Now()
 )
 
@@ -9071,11 +9091,11 @@ go tool pprof -http=:8081 http://localhost:64580/debug/pprof/heap
 
 ```yaml
 server:
-  # Application mode
-  # Enables all debug features
+  # Application mode (does NOT enable debug features by itself)
   mode: development
 
-  # Debug-specific settings (only apply in development mode)
+  # Debug-specific settings — gated by the debug flag
+  # (--debug CLI > DEBUG env > MODE=debug alias), NOT by development mode
   debug:
     # Enable pprof endpoints
     pprof: true
@@ -9140,6 +9160,11 @@ func SetAppMode(m string) {
     switch strings.ToLower(m) {
     case "dev", "devel", "development":
         currentMode = Development
+    case "debug":
+        // Alias: development mode + debug on
+        // (an explicit --debug flag or DEBUG env var still wins)
+        currentMode = Development
+        SetDebugEnabled(true)
     default:
         currentMode = Production
     }
@@ -9194,13 +9219,19 @@ func GetAppModeString() string {
     return s
 }
 
-// FromEnv sets mode and debug from environment variables
+// FromEnv sets mode and debug from environment variables.
+// MODE=debug is an alias for development mode + debug on, but an
+// explicitly set DEBUG env var (truthy OR falsy) always wins over the
+// alias — MODE=debug DEBUG=false runs development mode with debug off.
+// The --debug CLI flag (applied after this) wins over both.
 func FromEnv() {
     if m := os.Getenv("MODE"); m != "" {
-        Set(m)
+        SetAppMode(m)
     }
-    if config.IsTruthy(os.Getenv("DEBUG")) {
-        SetDebug(true)
+    // LookupEnv distinguishes "explicitly set" from "unset": an unset
+    // DEBUG leaves the alias result alone; a set DEBUG overrides it
+    if v, set := os.LookupEnv("DEBUG"); set {
+        SetDebugEnabled(config.IsTruthy(v))
     }
 }
 ```
@@ -9774,7 +9805,7 @@ src/
 
 ```go
 // go.mod
-module {project_org}/{internal_name}
+module github.com/{project_org}/{internal_name}
 
 // Use current latest stable version
 go 1.xx
@@ -9908,7 +9939,7 @@ package banner
 
 import (
     "fmt"
-    "{project_org}/{internal_name}/common/terminal"
+    "github.com/{project_org}/{internal_name}/src/common/terminal"
 )
 
 type BannerConfig struct {
@@ -10149,7 +10180,7 @@ NO_COLOR=1 {project_name} --status | grep -E '✅|❌|⚠️|🚀'
 --color {auto|yes|no}
 # Language for output (default: auto, from LANG env)
 --lang {code}
---maintenance {backup,restore,update,mode,setup,pgp,--help} [optional-file-or-setting-or-action]
+--maintenance {backup,restore,update,mode,setup,pgp,token,data,compliance,--help} [optional-file-or-setting-or-action]
 # Check/perform updates
 --update [check|yes|branch {stable|beta|daily}|--help]
 # Shell integration
@@ -10212,7 +10243,7 @@ Run '{project_name} <command> help' for detailed help on any command.
 | `--backup` | Directory | `/mnt/Backups/{internal_org}/{internal_name}/` (if writable, else `{data_dir}/backup/`) | `~/.local/share/Backups/{internal_org}/{internal_name}/` |
 | `--pid` | File | `/var/run/{internal_org}/{internal_name}.pid` | `~/.local/share/{internal_org}/{internal_name}/{internal_name}.pid` |
 
-**Note:** `--backup` prefers the system backup dir if writable. Fallback is mode-aware: system mode (started as root) falls back to `{data_dir}/backup/` — never a `$HOME`-derived path; user mode falls back to the user dir. See `GetBackupDir()` in PART 5.
+**Note:** `--backup` prefers the system backup dir if writable. Fallback is mode-aware: system mode (started as root) falls back to `{data_dir}/backup/` — never a `$HOME`-derived path; user mode falls back to the user dir. See `GetBackupDir()` in PART 8.
 
 **Directory mode is locked at process start.** System vs user paths are decided ONCE from the EUID at startup, before any privilege drop, and cached for the process lifetime. Never resolve `~` or `$HOME` after the privilege drop — the service account's HOME points at `{data_dir}` (e.g. `/var/lib/{internal_org}/{internal_name}`), so a late `$HOME` lookup nests user-style paths like `.local/share/Backups/` inside the system data dir.
 
@@ -10500,7 +10531,7 @@ PHASE 5: Server startup (actual server start)
    ├─ {data_dir}    (/var/lib/... or ~/.local/share/...)
    ├─ {cache_dir}   (/var/cache/... or ~/.cache/...)
    ├─ {log_dir}     (/var/log/... or ~/.local/log/...)
-   ├─ {backup_dir}  (see PART 5 GetBackupDir - /mnt/Backups/... if writable, else {data_dir}/backup/ in system mode)
+   ├─ {backup_dir}  (see PART 8 GetBackupDir - /mnt/Backups/... if writable, else {data_dir}/backup/ in system mode)
    └─ Never resolve ~/$HOME again after step 8g — the service account's HOME is {data_dir}
 
 8. IF RUNNING AS ROOT - setup system resources BEFORE dropping privileges:
@@ -10949,9 +10980,9 @@ func filterDaemonFlag(args []string) []string {
 
 func Daemonize() error {
     // On Windows, --daemon flag is ignored with a warning
-    // Use Windows Service (--service install/start) instead
+    // Use Windows Service (--service --install, --service start) instead
     fmt.Fprintln(os.Stderr, "Warning: --daemon is not supported on Windows")
-    fmt.Fprintln(os.Stderr, "Use --service install && --service start for Windows Service")
+    fmt.Fprintln(os.Stderr, "Use --service --install && --service start for Windows Service")
     // Continue in foreground
     return nil
 }
@@ -11014,7 +11045,7 @@ healthcheck:
 ```cmd
 C:\> myapp.exe --daemon
 Warning: --daemon is not supported on Windows
-Use --service install && --service start for Windows Service
+Use --service --install && --service start for Windows Service
 [Server starts in foreground]
 ```
 
@@ -11300,6 +11331,10 @@ The app automatically watches config files and hot-reloads what it can. Settings
 
 | Setting | Why |
 |---------|-----|
+| `logging.*` file paths/format | Log files must be closed and reopened |
+| `server.baseurl` | Router must be rebuilt; in-flight requests finish on the old routes |
+| `server.timeouts.*` | http.Server is swapped behind the existing listener |
+
 **Requires Restart:**
 
 | Setting | Why |
@@ -11685,9 +11720,9 @@ INSERT INTO config (key, value, type) VALUES
     ('cors.allowed_origins', '["https://example.com","https://api.example.com"]', 'array'),
     -- per minute per IP (see server.rate_limit.*)
     ('rate_limit.read.requests', '120', 'number'),
-    ('branding.site_name', '"My App"', 'string'),
-    -- auto-generated if blank
-    ('server.token', '"tok_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"', 'string');
+    ('branding.site_name', '"My App"', 'string');
+-- NOTE: server.token is NEVER stored here — it lives in server.yml only,
+-- and only its SHA-256 hash is cached in memory (see API Token Model below)
 ```
 
 ### API Token Model
@@ -11762,10 +11797,10 @@ The server generates the token, stores `SHA-256(token)` in `api_tokens` with `re
 
 **Operator revocation:**
 ```
-{project_name} token revoke <prefix>   # revoke a specific resource token
-{project_name} token list              # list active tokens (prefix + resource)
+{project_name} --maintenance token revoke <prefix>   # revoke a specific resource token
+{project_name} --maintenance token list              # list active tokens (prefix + resource)
 ```
-Token revocation is operator-only via CLI: `{project_name} token revoke <prefix>`
+Token revocation is operator-only via CLI: `{project_name} --maintenance token revoke <prefix>`
 
 **Config Load/Save Helpers:**
 
@@ -11836,17 +11871,15 @@ func flattenConfig(cfg *Config) []ConfigPair {
 On startup, merge all sources. ConfigManager watches server.yml for changes.
 
 ```go
-// Settings that require restart
+// Settings that require restart — prefix-matched, so trailing-dot
+// entries cover their whole section (ssl.*, database.*, tor.*)
 var restartRequiredSettings = []string{
     "server.port",
     "server.address",
-    "ssl.enabled",
-    "ssl.cert",
-    "ssl.key",
-    "ssl.min_version",
     "server.daemonize",
-    "database.path",
-    "tor.enabled",
+    "ssl.",
+    "database.",
+    "tor.",
 }
 
 func categorizeChanges(changes []string) (hotReload, needsRestart []string) {
@@ -11874,7 +11907,7 @@ When a config change requires a process restart, the server logs a warning to `s
 ```
 WARN  config_change requires_restart=true settings="ssl.cert,ssl.key" action="restart required"
 ```
-Operators check pending-restart state via CLI: `{project_name} status`
+Operators check pending-restart state via CLI: `{project_name} --status`
 
 **Health Check Endpoint (`/server/healthz`):**
 
@@ -11999,7 +12032,7 @@ func (m *ConfigManager) ClearPendingRestart() {
 Normal operation:
 
 ```json
-{"status": "ok"}
+{"status": "healthy"}
 ```
 
 Restart required (service running but config changed):
@@ -12060,9 +12093,9 @@ $ kill -TERM $(cat /var/run/myapp.pid)
 | `--address` | `LISTEN` | Listen address |
 | `--mode` | `MODE` | Application mode (production/development) |
 | (none) | `DATABASE_DIR` | SQLite database directory (Docker: `/data/db/sqlite`, Native: `{data_dir}/db/`) |
-| (none) | `BACKUP_DIR` | Backup directory (defaults to `{data_dir}/backup/`, changeable) |
+| (none) | `BACKUP_DIR` | Backup directory (defaults to `/mnt/Backups/{internal_org}/{internal_name}` when writable, else `{data_dir}/backup/`; changeable) |
 
-**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{data_dir}`. Example: `BACKUP_DIR=/mnt/Backups/{internal_org}/{internal_name}`. The default `{data_dir}/backup/` is for development/testing only.
+**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{data_dir}`. Example: `BACKUP_DIR=/mnt/Backups/{internal_org}/{internal_name}`. The fallback `{data_dir}/backup/` is for development/testing only.
 
 **Implementation:**
 
@@ -12207,7 +12240,7 @@ export CONFIG_DIR="/config/${APP_NAME}"
 export DATA_DIR="/data/${APP_NAME}"
 export CACHE_DIR="/data/${APP_NAME}/cache"
 export LOG_DIR="/data/log/${APP_NAME}"
-export DATABASE_DIR="/data/db"
+export DATABASE_DIR="/data/db/sqlite"
 export BACKUP_DIR="/data/backups/${APP_NAME}"
 
 # Tor directories under binary's dirs (binary owns Tor)
@@ -12229,7 +12262,7 @@ services:
       - --data=/data
       - --log=/logs
       - --pid=/run/{internal_name}.pid
-      - --port=8080
+      - --port=80
     volumes:
       # Config (read-only)
       - config:/config:ro
@@ -12240,7 +12273,8 @@ services:
       # PID file
       - /var/run:/run:z
     ports:
-      - "8080:8080"
+      # Random 64xxx host port → container port 80 (prod pattern)
+      - "172.17.0.1:64580:80"
 ```
 
 **Minimal compose (uses container defaults):**
@@ -12253,7 +12287,8 @@ services:
     volumes:
       - {project_name}-data:/data
     ports:
-      - "8080:8080"
+      # Random 64xxx host port → container default port 80
+      - "172.17.0.1:64580:80"
 
 volumes:
   {project_name}-data:
@@ -12685,8 +12720,9 @@ func IsValidSSLHost(host string) bool {
         return false
     }
 
-    // SSL always requires production-valid host (devMode=false)
-    return IsValidHost(host, false)
+    // SSL always requires production-valid host (devMode=false);
+    // projectName is irrelevant here since project TLDs are dev-only
+    return IsValidHost(host, false, "")
 }
 ```
 
@@ -12884,6 +12920,7 @@ Error with structured context (validation, etc.):
 | `TOKEN_INVALID` | 401 | "Invalid token" |
 | `FORBIDDEN` | 403 | "Permission denied" |
 | `ACCOUNT_LOCKED` | 403 | "Account locked" |
+| `CSRF_FAILED` | 403 | "CSRF token validation failed" |
 | `NOT_FOUND` | 404 | "Resource not found" |
 | `METHOD_NOT_ALLOWED` | 405 | "Method not allowed" |
 | `CONFLICT` | 409 | "Resource already exists" |
@@ -12923,7 +12960,7 @@ func mapAPIErrorCodeToHTTPStatus(code string) int {
         return 400
     case "UNAUTHORIZED", "TOKEN_EXPIRED", "TOKEN_INVALID":
         return 401
-    case "FORBIDDEN", "ACCOUNT_LOCKED":
+    case "FORBIDDEN", "ACCOUNT_LOCKED", "CSRF_FAILED":
         return 403
     case "NOT_FOUND":
         return 404
@@ -13075,7 +13112,6 @@ See **PART 12: SERVER CONFIGURATION** for full Valkey/Redis setup.
 
 | Content Type | TTL | Reason |
 |--------------|-----|--------|
-| Session tokens | 7 days | User convenience vs security |
 | API tokens | No expiry | Explicit revocation only |
 | Rate limit counters | 1 minute | Rolling window |
 | User profile | 5 minutes | Balance freshness and load |
@@ -13310,7 +13346,7 @@ server:
     # or "libsql" for Turso remote
     driver: sqlite
     # auto-created; omit for default
-    url: "{data_dir}/db/{internal_name}.db"
+    url: "{data_dir}/db/server.db"
     # For Turso remote:
     # driver: libsql
     # url: libsql://your-db-name.turso.io?authToken=${TURSO_AUTH_TOKEN}
@@ -13658,7 +13694,7 @@ func isSerializationError(err error) bool {
 
 **Debug mode response shape:**
 
-When `DEBUG=true` is active and an error occurs, the canonical error body (PART 16 → "Error Response") gets an additional `_debug` field:
+When `DEBUG=true` is active and an error occurs, the canonical error body (PART 14 → "Error Response") gets an additional `_debug` field:
 
 ```json
 {
@@ -13814,7 +13850,7 @@ The root secret all other derived material hangs off. Without it, in-flight HMAC
 | Generated | First start. Stored in `server.db` row `app_secrets.installation_secret`, base64-encoded. |
 | Scope | Server-wide. Generated on first start and persisted to `server.db`. NEVER appears in a request, response, or log. |
 | Used by | `{security_id}` HMAC (PART 11 → "Security Reports"); PGP private-key KDF (PART 11 → "GPG Keypair Management"); future derived material (cookie signing salts, etc.). |
-| Rotation | Manual via CLI command or config file. Sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt operator password, log to `audit.log` as `security.installation_secret_rotated`. Rotation re-encrypts the PGP private key and re-bases all live HMACs. The previous secret is kept for 7 days to validate any in-flight `{security_id}` URLs that referenced it. |
+| Rotation | Manual via CLI command or config file. Sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt for the operator token, log to `audit.log` as `security.installation_secret_rotated`. Rotation re-encrypts the PGP private key and re-bases all live HMACs. The previous secret is kept for 7 days to validate any in-flight `{security_id}` URLs that referenced it. |
 | Backup | Always — see PART 21 → "Backup Contents". Required for any restore: without it, the PGP private key in the backup is undecryptable. |
 | Loss = catastrophic | Lost = cannot decrypt PGP private key (and therefore cannot decrypt in-flight encrypted security reports); cannot validate `{security_id}` URLs on existing security.txt copies until the file regenerates. Recovery requires the operator to: regenerate keypair, regenerate `installation_secret`, accept that all in-flight encrypted reports are unreadable. |
 
@@ -13831,7 +13867,7 @@ The root secret all other derived material hangs off. Without it, in-flight HMAC
 |-----|--------|---------|---------|----------|
 | `server.security.encryption_key` | 32 bytes (AES-256-GCM) | `server.yml` (auto-generated on first run) | At-rest encryption for ALL sensitive server data: API token hashes, security report bodies (used as the AES fallback when no PGP keypair exists, see PART 11 → "Security Reports"), and any future at-rest encrypted data. | Manual via API (sensitive-op flow). 30-day grace for in-flight encrypted data. |
 
-**Note on consolidation:** `server.security.encryption_key` is the canonical at-rest AES key — every place the spec talks about "encrypt this sensitive data at rest" resolves to this one key, including security report bodies. It is NOT duplicated in `app_secrets`. The four `app_secrets` rows above are HMAC keys (not AES) and a root-secret for HMAC derivation; they are stored in the DB rather than `server.yml` because they have independent rotation lifecycles.
+**Note on consolidation:** `server.security.encryption_key` is the canonical at-rest AES key — every place the spec talks about "encrypt this sensitive data at rest" resolves to this one key, including security report bodies. It is NOT duplicated in `app_secrets`. The three `app_secrets` rows above are HMAC keys (not AES) and a root-secret for HMAC derivation; they are stored in the DB rather than `server.yml` because they have independent rotation lifecycles.
 
 **All secrets above:**
 - Generated on first start, before any user-visible operation.
@@ -13966,14 +14002,12 @@ web:
     # short-burst allowance
     rate_limit_per_ip_burst: 10
 
-  csrf:
-    # See "CSRF Protection" below for full schema.
+  # CSRF config lives under server.csrf — see PART 16 → "CSRF Protection" for full schema.
 
   csp:
     # See "Content Security Policy" below for full schema.
 
-  cors:
-    # See PART 16 → CORS for full schema.
+  # CORS config lives under server.cors — see PART 16 → CORS for full schema.
 
   headers:
     # Modern / privacy / cross-origin headers — see subsections below.
@@ -14319,7 +14353,6 @@ func extractContextFromPath(path string) (*Context, error) {
 | Path | Purpose |
 |------|---------|
 | `/.well-known/acme-challenge/` | Let's Encrypt HTTP-01 challenge |
-| `/.well-known/acme-challenge/` | Let's Encrypt HTTP-01 challenge |
 
 ### Well-Known Namespace Contract
 
@@ -14580,7 +14613,7 @@ Repo-level (source-code) vulnerabilities are reported primarily via GitHub priva
 1. Server re-validates the `security_id` server-side (form value can be tampered with).
 2. Allocates a `tracking_id` — `sec_` prefix + 16 random hex chars. Stored in the security-reports table.
 3. **Encryption at rest:** the report body is encrypted with the project's PGP key if one exists; otherwise AES-256-GCM with `server.security.encryption_key` (the spec's canonical at-rest AES key — see PART 11 → "Cryptographic Keys"). Plaintext is NEVER persisted to disk.
-4. **Maintainer notification:** PGP-encrypted email to the configured operator contact (see `server.security.contact_email`); falls back to AES-encrypted attachment + warning if no PGP key is configured.
+4. **Maintainer notification:** PGP-encrypted email to the configured operator contact (the `security` role — `server.contact.security.email`, see PART 12 → "Contact Configuration"); falls back to AES-encrypted attachment + warning if no PGP key is configured.
 5. **Researcher acknowledgment:** PGP-encrypted email to researcher's submitted email (using their submitted pubkey if any), containing the `tracking_id` and the URL `/server/security/report/{tracking_id}` (with a one-shot token only the researcher can use).
 6. **Response to the form POST:** canonical success body — `{"ok": true, "data": {"tracking_id": "sec_..."}}` — with a clear "we received your report; check your email for confirmation" message rendered server-side.
 7. **Logging:** one entry to `security.log` as `security.report_received` — `tracking_id`, severity, sanitized affected-component, NO researcher PII, NO vulnerability content. Maintainers see full content only via the encrypted email (no web tracker — there is no admin web UI).
@@ -14620,7 +14653,7 @@ Repo-level (source-code) vulnerabilities are reported primarily via GitHub priva
 | **Rotate** | `--maintenance pgp rotate` | Generates a new keypair, signs the new pubkey with the old key, publishes the rotation to configured keyservers. Old key stays valid for 30 days for in-flight reports. |
 | **Publish to keyservers** | `--maintenance pgp publish` | POST the public key to each entry in `web.security.keyservers`. Uses the keyserver's HTTP submission endpoint (`https://keys.openpgp.org/vks/v1/upload` for keys.openpgp.org, similar for ubuntu). Triggered automatically on generate/rotate; manually via `--maintenance pgp publish`. Failures are logged + retried with exponential backoff. |
 | **Export public key** | `--maintenance pgp export public [path]` | Use the public URL `/.well-known/pgp-key.asc`, copy `{config_dir}/security/pgp.pub.asc` directly, or write it to `[path]` (stdout if omitted) via the CLI. |
-| **Export private key** | `--maintenance pgp export private <path>` | **Full export, ASCII-armored, decrypted with the operator's confirmation password.** Triggers a sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt operator password, log to `audit.log` as `security.private_key_exported`, write the key to `<path>` with mode 0600. **The export is rate-limited to 1 per hour per operator and the audit entry includes operator IP and reason text the operator must type.** |
+| **Export private key** | `--maintenance pgp export private <path>` | **Full export, ASCII-armored, decrypted after operator token confirmation.** Triggers a sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt for the operator token, log to `audit.log` as `security.private_key_exported`, write the key to `<path>` with mode 0600. **The export is rate-limited to 1 per hour per operator and the audit entry includes operator IP and reason text the operator must type.** |
 | **Import private key** | `--maintenance pgp import <file>` | Import an existing `pgp.priv.asc` from a local file (e.g., restoring from backup, migrating from another instance). Same sensitive-operation gate. Validates the key's identity matches the project's expected identity (warns on mismatch — operator can override). |
 | **Delete** | `--maintenance pgp delete` | Sensitive-operation flow. Deletes both keys, sets `web.security.publish_pgp_key: false`, removes `Encryption:` line from security.txt. In-flight encrypted reports become un-decryptable — operator warned and must type confirmation. |
 
@@ -14648,7 +14681,7 @@ Repo-level (source-code) vulnerabilities are reported primarily via GitHub priva
 
 **Restore behavior:** restoring a backup re-installs the keypair AND re-publishes the public key to the configured keyservers (idempotent — keyservers de-duplicate by fingerprint). The `installation_secret` is restored from the same backup, so the encrypted private key decrypts correctly.
 
-**Operator UX:** running `{project_name} backup create` and `{project_name} backup restore` covers the security keypair without any extra steps. `{project_name} backup test` runs a dry-run restore of the keypair specifically and reports whether the encrypted private key decrypts successfully.
+**Operator UX:** running `{project_name} --maintenance backup` and `{project_name} --maintenance restore` covers the security keypair without any extra steps. `{project_name} --maintenance backup test` runs a dry-run restore of the keypair specifically and reports whether the encrypted private key decrypts successfully.
 
 ## Logging
 
@@ -14660,7 +14693,7 @@ Repo-level (source-code) vulnerabilities are reported primarily via GitHub priva
 | `server.log` | Application events | `text` | `text`, `json` |
 | `error.log` | Error messages | `text` | `text`, `json` |
 | `app.log` (or `{project_name}.log`) | General application events (info/warn) | `logfmt` | `logfmt`, `json` |
-| `auth.log` | Authentication events (login, logout, token issue/revoke, MFA, failures) | `syslog` | `syslog` (RFC 3164), `json` |
+| `auth.log` | Authentication events (token issue/revoke, failures) | `syslog` | `syslog` (RFC 3164), `json` |
 | `audit.log` | Security events | `json` | `json` only (must be machine-parseable) |
 | `security.log` | Security/auth events | `fail2ban` | `fail2ban`, `syslog`, `cef`, `json`, `text` |
 | `debug.log` | Debug (dev mode) | `text` | `text`, `json` |
@@ -14676,7 +14709,7 @@ Logfmt: space-separated `key=value` pairs, values with spaces or `=` quoted with
 **`auth.log` (syslog RFC 3164) — example line:**
 
 ```
-May 13 10:58:00 hostname {project_name}[pid]: auth: user=xxx ip=1.2.3.4 result=fail reason=invalid_credentials
+May 13 10:58:00 hostname {project_name}[pid]: auth: token_id=xxx ip=1.2.3.4 result=fail reason=invalid_token
 ```
 
 Syslog header: `<MMM DD HH:MM:SS> <hostname> <program>[<pid>]:` followed by the structured message. `result=` is one of `success` / `fail`. `reason=` is a stable machine code (never a free-form message — keeps Fail2ban / SIEM parsers stable).
@@ -14689,6 +14722,21 @@ Syslog header: `<MMM DD HH:MM:SS> <hostname> <program>[<pid>]:` followed by the 
 - One event per line, line ends with `\n`
 
 ANSI/emojis belong on stdout/stderr (interactive console), never in files that ship to log aggregators.
+
+### Health-Check Log Suppression
+
+Successful health-check requests are excluded from `access.log` by default — a 10-second Docker healthcheck otherwise writes ~8,640 identical lines per day of pure noise.
+
+**Suppressed by default (successful 2xx responses only):**
+- `GET /api/{api_version}/server/healthz`
+- `GET /healthz` (root alias, when enabled)
+- The internal health request made by `{project_name} --status`
+
+**Never suppressed:**
+- Any non-2xx health-check response — failures always log to `access.log` and `error.log`
+- All health-check requests when debug is enabled
+
+**`--status` stays silent server-side:** it reports via exit code (0 healthy, 1 unhealthy) and its own stdout; a successful poll writes no server log entry.
 
 ### Log Format Details
 
@@ -14798,6 +14846,8 @@ server:
       custom: ""
       rotate: monthly
       keep: none
+      # Log successful health-check requests (failures always log)
+      log_health_checks: false
 
     server:
       filename: server.log
@@ -14933,14 +14983,14 @@ server:
 | `backup.failed` | Backup failed | Error message |
 | `backup.skipped_disk_full` | Backup skipped — insufficient free space or disk above threshold | Free space, disk usage %, threshold |
 | `server.started` | Application started | Version, mode |
-
-> **Suppression:** `scheduler.task_failed` is not emitted when `backup.failed` fires for the same execution — both would describe the same event. `scheduler.task_failed` fires only for tasks that produce no subsystem-specific audit event.
 | `server.stopped` | Application stopped | Reason, uptime |
 | `server.maintenance_entered` | Maintenance mode enabled | Reason |
 | `server.maintenance_exited` | Maintenance mode disabled | Duration |
 | `server.updated` | Application updated | Old version, new version |
 | `scheduler.task_failed` | Scheduled task failed | Task name, error |
 | `scheduler.task_manual_run` | Task manually triggered | Task name, IP |
+
+> **Suppression:** `scheduler.task_failed` is not emitted when `backup.failed` fires for the same execution — both would describe the same event. `scheduler.task_failed` fires only for tasks that produce no subsystem-specific audit event.
 
 ## Audit Log Format
 
@@ -14992,7 +15042,7 @@ server:
 | Severity | Use For | Examples |
 |----------|---------|----------|
 | `info` | Successful normal operations | Login, config save, backup complete |
-| `warn` | Failed attempts, recoverable issues | Failed login, rate limit hit |
+| `warn` | Failed attempts, recoverable issues | Failed token auth, rate limit hit |
 | `error` | Failures requiring attention | Backup failed, scheduler error |
 | `critical` | Security incidents, server failures | Brute force detected, maintenance mode |
 
@@ -15223,8 +15273,8 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 | Feature | Behavior |
 |---------|----------|
 | Cookie consent | Required popup before any tracking |
-| Data export | `{project_name} data export` CLI command |
-| Data deletion | `{project_name} data delete` CLI command |
+| Data export | `{project_name} --maintenance data export` CLI command |
+| Data deletion | `{project_name} --maintenance data delete` CLI command |
 | Consent tracking | All consents logged with timestamp |
 | Data residency | Configurable allowed regions |
 | Privacy policy | Required, must specify data processing |
@@ -15270,9 +15320,9 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 
 | Feature | Behavior |
 |---------|----------|
-| Data disclosure | `{project_name} data export` - what data is collected (we do not sell data) |
+| Data disclosure | `{project_name} --maintenance data export` - what data is collected (we do not sell data) |
 | Opt-out of sale | Dynamic: if `data.sold=false` shows notice; if `data.sold=true` shows opt-out toggle |
-| Right to delete | `{project_name} data delete` CLI command |
+| Right to delete | `{project_name} --maintenance data delete` CLI command |
 | Non-discrimination | Cannot deny service for exercising rights |
 | Privacy notice | Dynamic based on `server.privacy.data.sold` setting |
 | Verification | Identity verification before data requests |
@@ -15376,7 +15426,7 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 | `/server/privacy` | GET | Privacy policy |
 | `/server/dpo` | GET | Data Protection Officer contact (GDPR) |
 
-**Compliance is configured entirely in `server.yml`. Consent state is stored client-side (cookies, so the server can read it per-request) — there is no server-side user consent table. Operators run `{project_name} compliance report` for a compliance summary.**
+**Compliance is configured entirely in `server.yml`. Consent state is stored client-side (cookies, so the server can read it per-request) — there is no server-side user consent table. Operators run `{project_name} --maintenance compliance report` for a compliance summary.**
 
 ### Compliance Audit Events
 
@@ -15558,11 +15608,7 @@ type AllowlistEntry struct {
 }
 ```
 
-**Allowlist API:**
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-Allowlist entries are managed via config file (`server.security.allowlist`).
+**Allowlist API:** none — allowlist entries are managed via config file (`server.security.allowlist`).
 
 **Middleware:**
 
@@ -15852,7 +15898,7 @@ Expires: {expiry_date}
 
 ## Rate Limiting
 
-Rate limiting is the primary abuse defense. All limits are per-IP using a sliding window counter stored in `server.db`.
+Rate limiting is the primary abuse defense. All limits are per-IP using a sliding window counter stored in `server.db` by default; when an external cache (Valkey/Redis) is configured, the counters live in the cache instead (see the cache usage table in PART 12).
 
 ```yaml
 server:
@@ -15878,10 +15924,10 @@ server:
 |----------------|---------------|--------|-------|
 | Read (GET, HEAD) | 120 req/min | 60s | Per IP, sliding window |
 | Write (POST, PUT, PATCH, DELETE) | 10 req/min | 60s | Per IP, sliding window |
-| Health / status | 120 req/min | 60s | `/healthz`, `/readyz`, `/livez` |
+| Health / status | 120 req/min | 60s | `/server/healthz` (and the optional `/healthz` root alias) |
 | Global burst | 240 req/min | 60s | Absolute ceiling across all types |
 
-**Response when limited:** `429 Too Many Requests` with `Retry-After` header set to seconds until the window resets. Body: `{"ok":false,"error":"RATE_LIMITED","message":"Too many requests","retry_after":N}`.
+**Response when limited:** `429 Too Many Requests` with `Retry-After` header set to seconds until the window resets. Body: `{"ok":false,"error":"RATE_LIMITED","message":"Too many requests"}` — the wait time is conveyed via the `Retry-After` header only, never as a top-level body field (see PART 14 error-response rules).
 
 **Note:** All limits are configurable under `server.rate_limit.*` in `server.yml`.
 
@@ -16010,7 +16056,7 @@ Every outbound webhook POST includes these headers so the receiver can verify th
 |--------|-------|
 | `X-Webhook-Signature` | `sha256=<hex_hmac>` where `hmac = HMAC-SHA256(per_webhook_secret, request_body_bytes)`. The `per_webhook_secret` is auto-generated when the webhook URL is first saved (random 32 bytes, persisted in `server.yml` next to the URL as `webhooks.<name>_secret`) and returned ONCE in the API response for the operator to configure on the receiving end. |
 | `X-Webhook-Timestamp` | Unix seconds — receiver SHOULD reject if delta exceeds `±5 min` to prevent replay |
-| `X-Webhook-ID` | UUID v7 (PART 13) — idempotency key the receiver can use to deduplicate retries |
+| `X-Webhook-ID` | UUID v7 (PART 11) — idempotency key the receiver can use to deduplicate retries |
 | `X-Webhook-Event` | The event type (e.g., `security.report_received`, `admin.backup_failed`) |
 | `User-Agent` | `{project_name}/{project_version} (+{app_url})` |
 
@@ -16061,7 +16107,7 @@ Do NOT introduce flat aliases, duplicate names, or migration shims for contact r
 
 ### Notification Configuration (config file)
 
-Notification channels are configured via config file. Three roles (admin, security, general) each have email and webhook settings.
+Notification channels are configured via config file. Four roles (admin, security, abuse, general) each have email and webhook settings.
 
 ## Analytics Tracking
 
@@ -16795,8 +16841,8 @@ type ConsentState struct {
     Timestamp   int64 `json:"timestamp"`
 }
 
-// Stored in the cookieConsent cookie as JSON (server-readable per request):
-// cookieConsent = {"essential":true,"preferences":true,"analytics":false,"timestamp":1704067200}
+// Stored in the cookie_consent cookie as JSON (server-readable per request):
+// cookie_consent = {"essential":true,"preferences":true,"analytics":false,"timestamp":1704067200}
 ```
 
 ### Granular Consent UI (Manage Preferences)
@@ -17036,7 +17082,7 @@ All settings above are configured via config file:
 
 #### Backend Structure (Go)
 
-**Based on template PARTS: branding (PART 16), modes (PART 6), database (PART 10), features (PARTS 20, 32), scheduler (PART 18).**
+**Based on template PARTS: branding (PART 16), modes (PART 6), database (PART 10), features (PARTS 19, 31), scheduler (PART 18).**
 
 ```go
 // HealthResponse - canonical field order for /server/healthz
@@ -17069,7 +17115,7 @@ type HealthResponse struct {
     // current UTC time
     Timestamp time.Time `json:"timestamp"`
 
-    // 5. Features - PUBLIC only (PARTS 20, 32)
+    // 5. Features - PUBLIC only (PARTS 19, 31)
     Features FeaturesInfo `json:"features"`
 
     // 6. Component health checks
@@ -17169,13 +17215,13 @@ type StatsInfo struct {
 | `build.date` | `version.Date` (build var) | 7 |
 | `uptime` | `formatUptime(startTime)` | - |
 | `mode` | `cfg.Server.Mode` | 6 |
-| `features.tor.*` | `torManager.*` | 32 |
-| `features.geoip` | `cfg.GeoIP.Enabled` (true/false) | 20 |
+| `features.tor.*` | `torManager.*` | 31 |
+| `features.geoip` | `cfg.GeoIP.Enabled` (true/false) | 19 |
 | `features.*` (project-specific) | Show actual status when project-specific optional features used | - |
 | `checks.database` | `checkDatabase()` | 10 |
 | `checks.cache` | `checkCache()` | 10 |
-| `checks.scheduler` | `checkScheduler()` | 19 |
-| `checks.tor` | `checkTor()` | 32 |
+| `checks.scheduler` | `checkScheduler()` | 18 |
+| `checks.tor` | `checkTor()` | 31 |
 | `stats.*` | `statsCollector.*` | - |
 
 #### Frontend Display Order
@@ -17986,7 +18032,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
   margin: 0 auto;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .container {
     width: 98%;
   }
@@ -18053,7 +18099,7 @@ tail -c 2 file.txt | od -An -tx1
 |----------|---------|---------|----------|------------|
 | `/` (public pages) | HTML | HTML | Text | HTML |
 | `/api/{api_version}/*` | JSON | JSON | Text | JSON |
-| `/server/healthz` | HTML | HTML | Text | JSON (Accept: application/json) |
+| `/server/healthz` | HTML | HTML | Text | HTML (standard frontend rules — no special healthz rules, see PART 13) |
 | `*.txt` extension | Text | Text | Text | Text |
 
 ### Smart Content Negotiation
@@ -18163,9 +18209,9 @@ func getAPIResponseFormat(r *http.Request) string {
 | Priority | Method | Example | Returns |
 |----------|--------|---------|---------|
 | **1** | `.txt` extension | `/api/{api_version}/joke.txt` | Plain text (ALWAYS) |
-| **2** | `Accept: application/json` header | `Accept: application/json` | JSON |
-| **3** | `Accept: text/plain` header | `Accept: text/plain` | Plain text |
-| **4** | Default | `/api/{api_version}/joke` | JSON |
+| **2** | `Accept: text/plain` header | `Accept: text/plain` | Plain text |
+| **3** | Non-interactive client detected (HTTP tools: curl, wget) | `curl /api/{api_version}/joke` | Plain text |
+| **4** | Default (browsers, API clients, `Accept: application/json`) | `/api/{api_version}/joke` | JSON |
 
 **For frontend routes (`/**`), response format is determined in this order:**
 
@@ -18186,28 +18232,30 @@ func getAPIResponseFormat(r *http.Request) string {
 
 ```go
 func detectResponseFormat(r *http.Request) string {
-    // 1. Check for .txt extension
-    if strings.HasSuffix(r.URL.Path, ".txt") {
-        return "text/plain"
+    // API routes follow the API priority order (see getAPIResponseFormat above)
+    if strings.HasPrefix(r.URL.Path, "/api/") {
+        if getAPIResponseFormat(r) == "text" {
+            return "text/plain"
+        }
+        return "application/json"
     }
 
-    // 2. Check Accept header
+    // Frontend routes: explicit Accept header wins (text/html, then text/plain)
     accept := r.Header.Get("Accept")
-
     switch {
-    case strings.Contains(accept, "application/json"):
-        return "application/json"
-    case strings.Contains(accept, "text/plain"):
-        return "text/plain"
     case strings.Contains(accept, "text/html"):
         return "text/html"
-    default:
-        // 3. Default based on endpoint
-        if strings.HasPrefix(r.URL.Path, "/api/") {
-            return "application/json"
-        }
-        return "text/html"
+    case strings.Contains(accept, "text/plain"):
+        return "text/plain"
     }
+
+    // User-Agent smart detection: HTTP tools (curl, wget) get formatted text
+    if isNonInteractiveClient(r) {
+        return "text/plain"
+    }
+
+    // Browsers and everything else default to HTML
+    return "text/html"
 }
 ```
 
@@ -19145,7 +19193,7 @@ Need additional compatible endpoints?"
 | `/api/{api_version}/server/swagger` | GET | None | OpenAPI JSON spec (versioned) |
 | `/api/{api_version}/server/graphql` | POST | None | GraphQL queries (versioned; schema may differ across versions) |
 | `/api/{api_version}/server/healthz` | GET | None | Health check (JSON default; text via API rules) |
-| `/api/{api_version}/server/*` | ALL | None | Server API (publicly accessible) |
+| `/api/{api_version}/server/*` | ALL | Mixed | Server API — info endpoints public; operator endpoints require an operator token (see PART 11) |
 
 **NOTE:** OpenAPI is JSON only — no `.yaml` endpoint, no `.json` suffix on the path. The `/api/{api_version}/server/swagger` and `/api/swagger` paths return `Content-Type: application/json`.
 
@@ -19616,8 +19664,11 @@ func isDevTLD(host, projectName string) bool {
     lower := strings.ToLower(host)
 
     // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, {project_name})
-    if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
-        return true
+    if projectName != "" {
+        pn := strings.ToLower(projectName)
+        if lower == pn || strings.HasSuffix(lower, "."+pn) {
+            return true
+        }
     }
 
     // Check static dev TLDs
@@ -19675,7 +19726,7 @@ import (
     "golang.org/x/term"
 )
 
-func PrintServerStartupBanner(appName, version, appMode string, urls []string, forceColor *bool) {
+func PrintServerStartupBanner(appName, version, appMode string, urls []string, forceColor *bool, lang string) {
     width, _, _ := term.GetSize(int(os.Stdout.Fd()))
     if width == 0 {
         // Default
@@ -19689,15 +19740,15 @@ func PrintServerStartupBanner(appName, version, appMode string, urls []string, f
 
     // Plain mode: no emojis (NO_COLOR, TERM=dumb, or --color=no)
     if !useEmojis {
-        printServerBannerPlain(appName, version, appMode, urls)
+        printServerBannerPlain(appName, version, appMode, urls, lang)
         return
     }
 
     switch {
     case width >= 80:
-        printServerBannerFull(appName, version, appMode, urls, useColors)
+        printServerBannerFull(appName, version, appMode, urls, useColors, lang)
     case width >= 60:
-        printServerBannerCompact(appName, version, appMode, urls, useColors)
+        printServerBannerCompact(appName, version, appMode, urls, useColors, lang)
     case width >= 40:
         printServerBannerMinimal(appName, version, urls)
     default:
@@ -19715,12 +19766,12 @@ func printServerBannerPlain(appName, version, appMode string, urls []string, lan
     fmt.Println()
 }
 
-func printServerBannerFull(appName, version, appMode string, urls []string) {
+func printServerBannerFull(appName, version, appMode string, urls []string, useColors bool, lang string) {
     // Full ASCII art logo
     fmt.Println(getASCIIArt(appName))
     fmt.Println()
     fmt.Printf("🚀 %s v%s\n", appName, version)
-    printServerBannerAppModeLine(appMode, true)
+    printServerBannerAppModeLine(appMode, true, lang)
     fmt.Println()
     for _, url := range urls {
         fmt.Printf("  🌐 %s\n", url)
@@ -19728,10 +19779,10 @@ func printServerBannerFull(appName, version, appMode string, urls []string) {
     fmt.Println()
 }
 
-func printServerBannerCompact(appName, version, appMode string, urls []string) {
+func printServerBannerCompact(appName, version, appMode string, urls []string, useColors bool, lang string) {
     // No ASCII art, just icons and text
     fmt.Printf("🚀 %s v%s\n", appName, version)
-    printServerBannerAppModeLine(appMode, true)
+    printServerBannerAppModeLine(appMode, true, lang)
     for _, url := range urls {
         fmt.Printf("🌐 %s\n", url)
     }
@@ -19850,7 +19901,7 @@ Displayed immediately after the header line, before URLs. Shows current mode and
 | development | false | `🔧 Running in mode: development` |
 | development | true | `🔧 Running in mode: development [debugging]` |
 
-**Note:** Development mode always has debug features enabled internally, but `[debugging]` only shows when `--debug` flag or `DEBUG=true` is explicitly set.
+**Note:** Development mode does NOT enable debug features — only the debug flag does. `[debugging]` shows exactly when the debug flag is on (`--debug` CLI, `DEBUG` env truthy, or `MODE=debug` alias when debug is not explicitly set).
 
 **Port Configuration (Project-Wide, NON-NEGOTIABLE):**
 
@@ -22452,7 +22503,7 @@ async function revokeLocalToken() {
 |--------|--------|---------|
 | `theme` | `dark` \| `light` \| `auto` | `dark` |
 | `lang` | BCP 47 tag: `en`, `es`, `fr`, … | `Accept-Language` header |
-| `cookieConsent` | JSON: granular categories + timestamp | unset (banner shown) |
+| `cookie_consent` | JSON: granular categories + timestamp | unset (banner shown) |
 | `ccpa_opt_out` | `true` | unset |
 
 **Preference writes (JS enhancement — the server sets the same cookies on its POST endpoints):**
@@ -22924,6 +22975,7 @@ async function requestPersistentStorage() {
 | `TOKEN_INVALID` | 401 | "Invalid token" | Invalid token |
 | `FORBIDDEN` | 403 | "Permission denied" | Access denied |
 | `ACCOUNT_LOCKED` | 403 | "Account locked" | Account locked, try later |
+| `CSRF_FAILED` | 403 | "CSRF token validation failed" | Session expired, reload and retry |
 | `NOT_FOUND` | 404 | "Resource not found" | Not found |
 | `METHOD_NOT_ALLOWED` | 405 | "Method not allowed" | Invalid operation |
 | `CONFLICT` | 409 | "Resource already exists" | Already exists |
@@ -23151,7 +23203,7 @@ func WriteText(w http.ResponseWriter, text string) {
 
 **See "CORS" section below for complete configuration and behavior.**
 
-Quick reference: Default allows all origins (`*`). Configure via `web.cors` in server.yml.
+Quick reference: Default allows all origins (`*`). Configure via `server.cors.allowed_origins` in server.yml.
 
 ### HTML5 & CSS Over JavaScript
 
@@ -23617,13 +23669,47 @@ function copyToClipboard(text, btn) {
 // ============================================================================
 // Toast notifications
 // ============================================================================
-function showToast(message, type = 'info', duration = 3000) {
+// Durations per toast spec: success/info 3s, warning 5s, error never auto-dismisses
+const TOAST_DURATIONS = { success: 3000, info: 3000, warning: 5000, error: 0 };
+const TOAST_ICONS = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
+  toast.setAttribute('role', 'alert');
+  toast.setAttribute('aria-live', 'polite');
 
-  setTimeout(() => toast.remove(), duration);
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.textContent = TOAST_ICONS[type] || TOAST_ICONS.info;
+
+  const msg = document.createElement('span');
+  msg.className = 'toast-message';
+  msg.textContent = message;
+
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.innerHTML = '&times;';
+
+  toast.append(icon, msg, close);
+
+  // Click anywhere on the toast (or the X) dismisses it
+  toast.addEventListener('click', () => toast.remove());
+
+  const duration = TOAST_DURATIONS[type] ?? TOAST_DURATIONS.info;
+  // duration 0 = no auto-dismiss (errors stay until clicked)
+  if (duration > 0) {
+    const progress = document.createElement('div');
+    progress.className = 'toast-progress';
+    progress.style.animationDuration = `${duration}ms`;
+    toast.appendChild(progress);
+    setTimeout(() => toast.remove(), duration);
+  }
+
+  // Newest on top per the stacking spec
+  container.prepend(toast);
 }
 
 // ============================================================================
@@ -24143,7 +24229,7 @@ var staticFS embed.FS
 - Custom CSS-styled modals (no browser defaults)
 - Backdrop overlay
 - Close button (X) in corner
-- Click outside to close (optional, configurable)
+- Click outside to close (default behavior; warns first when the modal has unsaved changes — see "Modal Behavior" in PART 16)
 - Escape key to close
 - Focus trap (tab stays within modal)
 - Animated entrance/exit
@@ -24165,8 +24251,8 @@ var staticFS embed.FS
 
 | Screen Size | Width |
 |-------------|-------|
-| ≥ 720px | 90% (5% margins) |
-| < 720px | 98% (1% margins) |
+| ≥ 768px | 90% (5% margins) |
+| < 768px | 98% (1% margins) |
 | Footer | Always centered, always at bottom |
 
 ## Themes (NON-NEGOTIABLE - PROJECT-WIDE)
@@ -24416,7 +24502,7 @@ server:
 |----------|--------|------------|---------|
 | Google | Alphanumeric | 43 chars | `^[a-zA-Z0-9_-]+$` |
 | Bing | Hex string | 32 chars | `^[A-F0-9]+$` |
-| Yandex | Alphanumeric | 32 chars | `^[a-f0-9]+$` |
+| Yandex | Hex string | 32 chars | `^[a-f0-9]+$` |
 | Baidu | Alphanumeric | 32 chars | `^[a-zA-Z0-9]+$` |
 | Pinterest | Hex string | 32 chars | `^[a-f0-9]+$` |
 | Facebook | Alphanumeric | 64 chars | `^[a-z0-9]+$` |
@@ -24454,10 +24540,13 @@ server:
 
 | Element | Config Key | Description |
 |---------|------------|-------------|
-| Google Verification | `seo.google_verification` | Google Search Console code |
-| Bing Verification | `seo.bing_verification` | Bing Webmaster code |
-| Yandex Verification | `seo.yandex_verification` | Yandex Webmaster code |
-| Custom Tags | `seo.custom_tags` | Additional verification tags |
+| Google Verification | `server.seo.verification.google` | Google Search Console code |
+| Bing Verification | `server.seo.verification.bing` | Bing Webmaster code |
+| Yandex Verification | `server.seo.verification.yandex` | Yandex Webmaster code |
+| Baidu Verification | `server.seo.verification.baidu` | Baidu Webmaster code |
+| Pinterest Verification | `server.seo.verification.pinterest` | Pinterest verification code |
+| Facebook Verification | `server.seo.verification.facebook` | Facebook domain verification code |
+| Custom Tags | `server.seo.verification.custom` | Additional verification tags |
 
 **Validation:** Server validates codes on startup and logs errors for invalid formats.
 
@@ -24532,15 +24621,15 @@ server:
 
 | Element | Config Key | Description |
 |---------|------------|-------------|
-| Title | `branding.title` | Application display name |
-| Tagline | `branding.tagline` | Short slogan |
-| Description | `branding.description` | Longer description for SEO |
-| Keywords | `branding.keywords` | SEO keywords (comma-separated) |
-| Author | `branding.author` | Author/organization |
-| OG Image | `branding.og_image` | Social sharing image |
-| Twitter Handle | `branding.twitter_handle` | @handle |
-| Favicon | `branding.favicon` | Custom favicon |
-| Logo | `branding.logo` | Custom logo (header) |
+| Title | `server.branding.title` | Application display name |
+| Tagline | `server.branding.tagline` | Short slogan |
+| Description | `server.branding.description` | Longer description for SEO |
+| Keywords | `server.seo.keywords` | SEO keywords (list) |
+| Author | `server.seo.author` | Author/organization |
+| OG Image | `server.seo.og_image` | Social sharing image |
+| Twitter Handle | `server.seo.twitter_handle` | @handle |
+| Favicon | `server.branding.favicon` | Custom favicon |
+| Logo | `server.branding.logo` | Custom logo (header) |
 
 ### Image Sources
 
@@ -24756,9 +24845,9 @@ if err != nil {
 | **Size limits** | Limit download size (default 10MB) |
 | **Type validation** | Only allow image MIME types |
 | **Redirect validation** | Validate each redirect URL |
+| **Timeout** | Set reasonable timeout (default 30s) |
 
 **Rule:** remote user-controlled images follow the same active-content rules as uploads. Do NOT allow remote SVG unless the project explicitly sanitizes and rasterizes it before storage/display.
-| **Timeout** | Set reasonable timeout (default 30s) |
 
 ### Defaults
 
@@ -24824,13 +24913,17 @@ messages:
 ### Configuration
 
 ```yaml
-web:
-  # CORS origin configuration
-  # - "*": Allow all origins (default)
-  # - "https://example.com": Single origin
-  # - "https://example.com,https://app.example.com": Multiple origins (comma-separated)
-  # - "": Disable CORS headers entirely
-  cors: "*"
+server:
+  cors:
+    # Allowed origins list
+    # - ["*"]: Allow all origins (default)
+    # - ["https://example.com"]: Single origin
+    # - ["https://example.com", "https://app.example.com"]: Multiple origins
+    # - [""]: Disable CORS headers entirely
+    allowed_origins:
+      - "*"
+    allow_credentials: true
+    max_age: 86400
 ```
 
 ### CORS Headers
@@ -24851,17 +24944,17 @@ web:
 
 | Scenario | Behavior |
 |----------|----------|
-| `cors: "*"` | Allow all origins, credentials NOT allowed |
-| `cors: "https://example.com"` | Allow single origin, credentials allowed |
-| `cors: "https://a.com,https://b.com"` | Allow listed origins, credentials allowed |
-| `cors: ""` | No CORS headers (same-origin only) |
+| `allowed_origins: ["*"]` | Allow all origins, credentials NOT allowed |
+| `allowed_origins: ["https://example.com"]` | Allow single origin, credentials allowed |
+| `allowed_origins: ["https://a.com", "https://b.com"]` | Allow listed origins, credentials allowed |
+| `allowed_origins: [""]` | No CORS headers (same-origin only) |
 | Preflight (OPTIONS) | Return CORS headers, 204 No Content |
 
 ### CORS Allow-list Resolution Order
 
 The effective CORS allow-list is resolved from these sources in order; the request `Origin` is matched against the combined list:
 
-1. **Explicit config** — origins listed in `web.cors` (comma-separated). `""` disables CORS entirely and stops resolution.
+1. **Explicit config** — origins listed in `server.cors.allowed_origins`. A single `""` entry disables CORS entirely and stops resolution.
 2. **DOMAIN env entries** — every hostname from the `DOMAIN` environment variable is added as an `https://` origin.
 3. **Reverse-proxy-learned hosts** — hostnames observed via `X-Forwarded-Host` from trusted proxies only (gated on `trusted_proxies` — see PART 12 → "Trusted Proxies") are appended at runtime.
 4. **Default** — if no source produced a list, fall back to `*` (credentials NOT allowed).
@@ -24879,12 +24972,12 @@ Credentials (`Access-Control-Allow-Credentials: true`) are sent only when the re
 
 | Element | Config Key | Description |
 |---------|------------|-------------|
-| CORS Origins | `web.cors` | Comma-separated list of allowed origins |
-| Root `/healthz` alias | `web.healthz.root.enabled` | Enables `/healthz` alias for compatibility with tools that require it |
+| CORS Origins | `server.cors.allowed_origins` | List of allowed origins |
+| Root `/healthz` alias | `server.healthz.root.enabled` | Enables `/healthz` alias for compatibility with tools that require it |
 
 ## CSRF Protection
 
-**CSRF protects cookie-authenticated browser forms from cross-site forgery. It does NOT apply to Bearer/API-token requests, public endpoints, read-only methods, or callers that don't carry browser cookies — applying it there breaks legitimate clients (CLI tools, webhooks, OAuth callbacks) without adding security value.**
+**Use the stateless double-submit cookie pattern — there are no sessions, so the token is never stored server-side. The server sets a `csrf_token` cookie (`SameSite=Strict`, `Secure`, NOT `HttpOnly` — JavaScript must read it) and every mutating browser request must echo the same value in the `X-CSRF-Token` header or a `csrf_token` form field. The middleware compares the two in constant time.**
 
 ### When CSRF Validation Runs
 
@@ -24893,27 +24986,26 @@ Credentials (`Access-Control-Allow-Credentials: true`) are sent only when the re
 | Condition | Reason |
 |-----------|--------|
 | Method is `POST`, `PUT`, `PATCH`, or `DELETE` | Read-only methods (`GET`, `HEAD`, `OPTIONS`) cannot change state |
-| The request authenticates via session cookie (no `Authorization` / `X-API-Token` / similar bearer header) | Bearer credentials are not auto-attached by browsers, so cross-site forgery has no vector |
-| `Origin` (or `Referer` if `Origin` absent) indicates a cross-site or unknown source | Same-origin requests are inherently CSRF-safe under the browser's same-origin policy |
+| No `Authorization: Bearer …` / `X-API-Token: …` / similar bearer header present | Bearer credentials are not auto-attached by browsers, so cross-site forgery has no vector |
 
 **Bypass the CSRF check (no validation, no token needed) if ANY of these are true:**
 
 | Bypass | Reason |
 |--------|--------|
-| `Authorization: Bearer …` or `X-API-Token: …` header present | Bearer auth — caller proves possession of a credential the browser cannot auto-attach. CSRF protects against forgery of *cookie* auth; this is a different auth model. |
-| Endpoint is public (no auth required) | Nothing to forge — the endpoint is open to anyone with no session to abuse. |
+| `Authorization: Bearer …` or `X-API-Token: …` header present | Bearer auth — caller proves possession of a credential the browser cannot auto-attach. CSRF protects against forgery of *cookie-carried* values; this is a different auth model. |
 | Method is `GET`, `HEAD`, or `OPTIONS` | Safe per RFC 9110. Must remain side-effect-free; if a `GET` mutates, that is a separate spec violation, not a CSRF problem. |
-| `Origin` matches the app's own host AND session cookie is `SameSite=Strict` | The browser already blocked cross-site cookie attachment; the token is redundant. (Same-origin + Lax SameSite cookie still gets the token check on cross-site POST forms.) |
 | WebSocket upgrade request (`Upgrade: websocket`) | Auth happens at the connection level, then per-message; CSRF tokens don't fit the WS lifecycle. |
-| Endpoint is in the explicit `web.csrf.exempt_paths` allow-list | Operator-declared exception. Used for OAuth callbacks, webhook receivers, and other endpoints that are POST'd to from origins the operator has whitelisted but cannot supply a token. |
+| Endpoint is in the explicit `server.csrf.exempt_paths` allow-list | Operator-declared exception. Used for OAuth callbacks, webhook receivers, and other endpoints that are POST'd to from origins the operator has whitelisted but cannot supply a token. |
 
-**Why these bypasses are safe:** CSRF is a defense against *the browser auto-attaching cookies to a cross-site request*. If cookies aren't the auth (Bearer), or the browser already blocked the attachment (SameSite=Strict + same-origin), or there is no auth at all (public endpoint), there is no auto-attached credential to forge. Adding CSRF on top of those situations breaks legitimate non-browser clients without adding any defense.
+**There is NO Origin-based bypass.** A same-origin `Origin` header never skips token validation — `Origin`/`Referer` can be absent or spoofed by non-browser clients, and the double-submit check is cheap. Every mutating browser request presents the token.
+
+**Why these bypasses are safe:** CSRF is a defense against *the browser auto-attaching cookies to a cross-site request*. If the credential is not cookie-carried (Bearer), or the method cannot change state, there is no auto-attached value to forge. Adding CSRF on top of those situations breaks legitimate non-browser clients without adding any defense.
 
 ### Cookie Posture (the first line of defense)
 
 | Cookie | `SameSite` | Why |
 |--------|------------|-----|
-| Session cookie (default) | `Strict` | Most browser auth is same-origin; `Strict` blocks cross-site cookie attachment entirely, neutralizing most CSRF before the token is even checked. |
+| CSRF token cookie (`csrf_token`) | `Strict` | Browser form posts are same-origin; `Strict` blocks cross-site cookie attachment entirely, neutralizing most CSRF before the token is even checked. |
 | OAuth-callback cookie (state, PKCE-verifier) | `Lax` | OAuth providers redirect cross-site back to our callback; `Strict` would drop the cookie. CSRF token is the second layer here. |
 | Pre-auth cookies (e.g., auth continuation) | `Strict` | Set during auth flow; never crosses sites. |
 
@@ -24922,7 +25014,7 @@ Credentials (`Access-Control-Allow-Credentials: true`) are sent only when the re
 ### Configuration
 
 ```yaml
-web:
+server:
   csrf:
     # default: true. Set false ONLY for API-only deployments (no browser forms at all).
     enabled: true
@@ -24944,8 +25036,8 @@ web:
 |------|--------|
 | Token in cookie + matching value in form/header | Double-submit cookie pattern. Token cookie is `SameSite=Strict`, `HttpOnly=false` (the form needs to read it), `Secure` per `csrf.secure`. |
 | Forms include hidden `<input name="csrf_token" value="…">` | Server-rendered HTML inserts the token automatically — no manual work in templates. |
-| Non-GET requests under cookie-session auth check the token | Per the "When CSRF Validation Runs" table above — Bearer/public/read-only paths skip the check. |
-| Token regenerated on session init and token revocation | Prevents fixation. |
+| Mutating requests without a bearer header check the token | Per the "When CSRF Validation Runs" table above — Bearer/read-only/exempt paths skip the check. |
+| Token regenerated when the `csrf_token` cookie is absent, and on token revocation | Prevents fixation. |
 | Validation failure → `403 FORBIDDEN` with canonical error body | `{"ok": false, "error": "CSRF_FAILED", "message": "CSRF token validation failed"}` (PART 14 → "Error Response"). |
 | Reject if cookie present and header/form missing, or if values mismatch | No silent fallback. |
 | Log to `security.log` as `security.csrf_failure` | IP, endpoint, reason — see PART 11. |
@@ -24954,10 +25046,9 @@ web:
 
 | Attack | Stops it? |
 |--------|-----------|
-| Attacker page POSTs a form to our domain using the victim's cookie session | ✓ Yes (token mismatch / Origin mismatch / SameSite=Strict drops the cookie) |
-| Attacker page calls our JSON API with `fetch()` from another origin, no Bearer | ✓ Yes (Origin mismatch + SameSite=Strict; CORS preflight also blocks) |
+| Attacker page POSTs a form to our domain from the victim's browser | ✓ Yes (token mismatch / SameSite=Strict drops the cookie) |
+| Attacker page calls our JSON API with `fetch()` from another origin, no Bearer | ✓ Yes (token mismatch + SameSite=Strict; CORS preflight also blocks) |
 | Attacker steals a CSRF token via XSS and submits a forged request | ✗ No (XSS bypasses CSRF — the attacker is now running in our origin). XSS defense is CSP + escaping. |
-| Attacker steals the session cookie via XSS | ✗ No (CSRF can't help — session theft is its own problem). Defense is `HttpOnly` cookie + CSP. |
 | Attacker submits a request with a stolen Bearer token | ✗ No (Bearer auth bypasses CSRF by design). Defense is token rotation, scoping, and rate limiting. |
 | Public endpoint POST'd to from anywhere | n/a (no auth, nothing to abuse) |
 | Browser-issued report to `/api/{api_version}/server/reports/*` | n/a (PART 14 reports are deliberately public; rate-limited per-IP) |
@@ -25211,16 +25302,16 @@ When the operator sets `custom_html` in `server.yml`, the server logs at startup
 | **Buttons (mobile)** | Centered below message, side-by-side |
 | **Decline button** | Text/outline style, no background |
 | **"I Agree" button** | Filled white background, purple text |
-| **Persistence** | Remember choice in the `cookieConsent` cookie (set server-side); server skips rendering the banner on later requests |
+| **Persistence** | Remember choice in the `cookie_consent` cookie (set server-side); server skips rendering the banner on later requests |
 | **Z-index** | Above all content, below modals |
 
 ### Banner Behavior
 
 | Action | Result |
 |--------|--------|
-| **I Agree** | Form POST to `/consent` — server sets the `cookieConsent` cookie (all categories accepted), redirects back, enables all cookies + tracking |
-| **Decline** | Form POST to `/consent` — server sets the `cookieConsent` cookie (essential only), redirects back, session cookies only |
-| **Already set** | Server doesn't render the banner when a valid `cookieConsent` cookie exists |
+| **I Agree** | Form POST to `/server/consent` — server sets the `cookie_consent` cookie (all categories accepted), redirects back, enables all cookies + tracking |
+| **Decline** | Form POST to `/server/consent` — server sets the `cookie_consent` cookie (essential only), redirects back, session cookies only |
+| **Already set** | Server doesn't render the banner when a valid `cookie_consent` cookie exists |
 | **First visit** | Server renders the banner (visible, no JS required) until the user responds |
 
 ### Implementation
@@ -25245,7 +25336,7 @@ message := cfg.Privacy.GetConsentMessage()
 ```
 
 ```html
-<!-- Cookie Consent Banner - server-rendered (visible) whenever no valid cookieConsent cookie exists (we use cookies) -->
+<!-- Cookie Consent Banner - server-rendered (visible) whenever no valid cookie_consent cookie exists (we use cookies) -->
 <!-- {message} is dynamically selected based on server.privacy.data.sold -->
 {{ if not .HasConsentCookie }}
 <div id="cookie-consent" class="cookie-banner" data-sold="{data_sold}">
@@ -25254,11 +25345,11 @@ message := cfg.Privacy.GetConsentMessage()
       {message} - <a href="{policy_url}" class="policy-link">{policy_text}</a>
     </span>
     <div class="cookie-buttons">
-      <form method="post" action="/consent">
+      <form method="post" action="/server/consent">
         <input type="hidden" name="choice" value="decline">
         <button type="submit" class="btn-decline">{decline_text}</button>
       </form>
-      <form method="post" action="/consent">
+      <form method="post" action="/server/consent">
         <input type="hidden" name="choice" value="accept">
         <button type="submit" class="btn-accept">{accept_text}</button>
       </form>
@@ -25272,16 +25363,16 @@ message := cfg.Privacy.GetConsentMessage()
 
 | Step | Behavior |
 |------|----------|
-| **Render** | The server renders the banner only when the request has no valid `cookieConsent` cookie — no `display: none`, no reveal script |
-| **POST `/consent`** | Reads `choice` (`accept` / `decline` / `save` from the preferences form), sets the `cookieConsent` cookie (JSON: granular categories + timestamp), redirects back to the originating page |
-| **Later requests** | Server reads `cookieConsent` to skip the banner and to decide tracking injection (`CheckTrackingAllowed`) |
-| **CCPA** | POST `/consent/ccpa` sets/clears the `ccpa_opt_out` cookie and redirects back |
+| **Render** | The server renders the banner only when the request has no valid `cookie_consent` cookie — no `display: none`, no reveal script |
+| **POST `/server/consent`** | Reads `choice` (`accept` / `decline` / `save` from the preferences form), sets the `cookie_consent` cookie (JSON: granular categories + timestamp), redirects back to the originating page |
+| **Later requests** | Server reads `cookie_consent` to skip the banner and to decide tracking injection (`CheckTrackingAllowed`) |
+| **CCPA** | POST `/server/ccpa` sets/clears the `ccpa_opt_out` cookie and redirects back |
 
 **Progressive enhancement (consent module in `static/js/app.js` — ONE JS file, referenced via `<script src>`, never inline):**
 
 ```javascript
 // static/js/app.js - consent module (all JS lives in app.js per the ONE-file rule)
-// Enhancement only - the banner forms POST to /consent and work without JS.
+// Enhancement only - the banner forms POST to /server/consent and work without JS.
 // This script intercepts the submits to skip the reload.
 
 // Granular consent state (matches server.privacy.cookies structure)
@@ -25296,7 +25387,7 @@ const defaultConsent = {
 };
 
 function readConsentCookie() {
-  const match = document.cookie.match(/(?:^|;\s*)cookieConsent=([^;]+)/);
+  const match = document.cookie.match(/(?:^|;\s*)cookie_consent=([^;]+)/);
   if (!match) return null;
   try {
     return JSON.parse(decodeURIComponent(match[1]));
@@ -25307,7 +25398,7 @@ function readConsentCookie() {
 
 function writeConsentCookie(consent) {
   const value = encodeURIComponent(JSON.stringify(consent));
-  document.cookie = "cookieConsent=" + value + "; path=/; max-age=31536000; SameSite=Lax";
+  document.cookie = "cookie_consent=" + value + "; path=/; max-age=31536000; SameSite=Lax";
 }
 
 // Intercept the banner forms - set the cookie and hide the banner without a reload
@@ -25405,11 +25496,11 @@ function ccpaDoNotSell() {
   saveAndApplyConsent(consent);
 }
 
-// Intercept the CCPA opt-out form (POST /consent/ccpa) to skip the reload;
+// Intercept the CCPA opt-out form (POST /server/ccpa) to skip the reload;
 // the opt-in variant is left to the server round-trip (it must clear the cookie)
-document.querySelectorAll('form[action="/consent/ccpa"]').forEach(function(form) {
+document.querySelectorAll('form[action="/server/ccpa"]').forEach(function(form) {
   form.addEventListener('submit', function(event) {
-    if (form.elements.optout.value === 'true') {
+    if (form.elements.choice.value === 'opt-out') {
       event.preventDefault();
       ccpaDoNotSell();
     }
@@ -25519,11 +25610,11 @@ initCCPA();
 
 ### Consent Logic (Granular)
 
-**Consent stored as JSON in the `cookieConsent` cookie (server-readable):** `{"essential":true,"preferences":true,"analytics":false,"timestamp":1704067200}`
+**Consent stored as JSON in the `cookie_consent` cookie (server-readable):** `{"essential":true,"preferences":true,"analytics":false,"timestamp":1704067200}`
 
 | Condition | Show Banner | Essential | Preferences | Analytics |
 |-----------|-------------|-----------|-------------|-----------|
-| No `cookieConsent` cookie (first visit) | **Yes** | Yes (always) | Wait | Wait |
+| No `cookie_consent` cookie (first visit) | **Yes** | Yes (always) | Wait | Wait |
 | Accept All clicked | No | Yes | **Yes** | **Yes** (if `server.tracking` configured) |
 | Decline clicked | No | Yes | No | No |
 | Custom preferences saved | No | Yes | User choice | User choice |
@@ -25547,7 +25638,7 @@ initCCPA();
 | **Analytics/Tracking** | **NEVER loaded** | No tracking scripts injected, no data sent to analytics providers |
 | **Preference cookies** | **NOT set** | Theme defaults to system/dark, language defaults to browser/en |
 | **Essential cookies** | **Still work** | Session, CSRF, auth tokens required for app to function |
-| **localStorage** | **Not used** | Decline is remembered in the `cookieConsent` cookie (essential — the server must read it to skip the banner and block tracking) |
+| **localStorage** | **Not used** | Decline is remembered in the `cookie_consent` cookie (essential — the server must read it to skip the banner and block tracking) |
 | **Third-party scripts** | **NOT loaded** | No Google Analytics, Matomo, etc. |
 | **Embedded content** | **Placeholder shown** | YouTube, social embeds show "Content blocked" placeholder |
 
@@ -25555,7 +25646,7 @@ initCCPA();
 ```
 ✓ Session cookie (required for login/auth)
 ✓ CSRF token cookie (required for form security)
-✓ Remember decline choice (`cookieConsent` cookie — essential)
+✓ Remember decline choice (`cookie_consent` cookie — essential)
 ✓ Basic functionality (browse, view content)
 ```
 
@@ -25889,13 +25980,13 @@ func trackingScript(r *http.Request) template.HTML {
         <span>You have opted out of data sales.</span>
       </div>
       <!-- POST forms work with zero JS - the server sets/clears the ccpa_opt_out cookie and redirects back; app.js intercepts to skip the reload -->
-      <form method="post" action="/consent/ccpa">
-        <input type="hidden" name="optout" value="false">
+      <form method="post" action="/server/ccpa">
+        <input type="hidden" name="choice" value="opt-in">
         <button type="submit" class="btn-secondary">Opt Back In</button>
       </form>
       {{ else }}
-      <form method="post" action="/consent/ccpa">
-        <input type="hidden" name="optout" value="true">
+      <form method="post" action="/server/ccpa">
+        <input type="hidden" name="choice" value="opt-out">
         <button type="submit" class="btn-primary btn-ccpa-opt-out">Do Not Sell My Personal Information</button>
       </form>
       {{ end }}
@@ -25987,7 +26078,7 @@ func trackingScript(r *http.Request) template.HTML {
 - `cookies.analytics.description`: From `GetAnalyticsDescription()` (includes suffix)
 - `content.consent_message`: From `GetConsentMessage()` (returns sold/not-sold message)
 - `content.data_usage`: From `GetDataUsageContent()` (returns sold/not-sold content)
-- `ccpa.applicable`: `true` only when `data.sold = true` (the `ccpa` object is only included when `data.sold = true`)
+- `ccpa.applicable`: `true` only when `data.sold = true` (the `ccpa` object is always included; the CCPA opt-out UI is only shown when `applicable` is `true`)
 - `ccpa.user_opted_out`: From the `ccpa_opt_out` cookie check
 
 **Note:** The `tracking` and `third_party.services` fields are populated based on `server.tracking` config. If no tracking is configured, they remain empty.
@@ -25996,14 +26087,14 @@ func trackingScript(r *http.Request) template.HTML {
 
 | Section | Config Keys |
 |---------|-------------|
-| **Data Policies** | `privacy.data.sold` (default: false), `privacy.data.stored_on_server` |
-| **Consent Banner** | `privacy.consent.message`, `privacy.consent.message_if_sold`, `privacy.consent.policy_link` |
-| **Cookie Descriptions** | `privacy.cookies.essential`, `privacy.cookies.preferences`, `privacy.cookies.analytics` |
-| **Data Collection** | `privacy.data_collection` (Markdown) |
-| **Data Usage** | `privacy.data_usage`, `privacy.data_usage_if_sold` (Markdown) |
-| **Data Security** | `privacy.data_security` (Markdown) |
-| **Data Retention** | `privacy.retention.period`, `privacy.retention.export`, `privacy.retention.deletion` |
-| **Third Parties** | `privacy.third_parties[]` (name, purpose, policy_url) |
+| **Data Policies** | `server.privacy.data.sold` (default: false), `server.privacy.data.stored_on_server`, `server.privacy.data.sharing[]` |
+| **Consent Banner** | `server.privacy.consent.message`, `server.privacy.consent.message_if_sold`, `server.privacy.consent.policy.url`, `server.privacy.consent.policy.text`, `server.privacy.consent.buttons.decline`, `server.privacy.consent.buttons.accept` |
+| **Cookie Descriptions** | `server.privacy.cookies.essential`, `server.privacy.cookies.preferences`, `server.privacy.cookies.analytics` |
+| **Data Collection** | `server.privacy.content.data_collection` (Markdown) |
+| **Data Usage** | `server.privacy.content.data_usage`, `server.privacy.content.data_usage_if_sold` (Markdown) |
+| **Data Security** | `server.privacy.content.data_security` (Markdown) |
+| **Data Retention** | `server.privacy.retention.period`, `server.privacy.retention.export_available`, `server.privacy.retention.deletion_available` |
+| **Third Parties** | `server.privacy.third_party.services[]` (name, purpose, data_sent, policy_url) |
 
 **Default content provided, fully customizable via config file.**
 
@@ -26219,7 +26310,7 @@ server:
 |------|-------------|
 | **About Page** | `pages.about.content` (Markdown) |
 | **Privacy Policy** | `pages.privacy.content` (Markdown) |
-| **Contact Page** | `pages.contact.enabled`, `pages.contact.recipient_email`, `pages.contact.captcha_type`, `pages.contact.success_message` |
+| **Contact Page** | `pages.contact.enabled`, `pages.contact.captcha`, `pages.contact.success_message` (recipient: `server.contact.general.email`, falls back to `server.contact.admin.email`) |
 | **Help Page** | `pages.help.content` (Markdown) |
 | **Terms of Service** | `pages.terms.content` (Markdown) |
 
@@ -26419,7 +26510,7 @@ server:
 | `security_alert` | `Security Alert - {app_name}` | Generic alert for security events (rate limit exceeded, IP blocked) |
 | `backup_complete` | `Backup Complete - {app_name}` | Includes filename and size |
 | `backup_failed` | `Backup Failed - {app_name}` | Includes error message |
-| `ssl_expiring` | `SSL Certificate Expiring - {app_name}` | Sent 30, 14, 7, 3, 1 days before expiry |
+| `ssl_expiring` | `SSL Certificate Expiring - {app_name}` | Sent 7, 3, 1 days before expiry (30/14-day warnings are log-only — see Operator Notifications matrix) |
 | `ssl_renewed` | `SSL Certificate Renewed - {app_name}` | Confirmation of renewal |
 | `ssl_renewal_failed` | `SSL Renewal Failed - {app_name}` | Includes domain, error, days until expiry, next retry |
 | `scheduler_error` | `Scheduled Task Failed - {app_name}` | Includes task name and error |
@@ -26601,7 +26692,7 @@ Next run: {next_run}
 | `{error}` | Error message |
 | `{next_run}` | Next scheduled run |
 
-**Suppression:** `scheduler_error` fires only for tasks that have no dedicated failure event of their own. It is suppressed when a subsystem emits a more specific failure notification for the same execution: `backup_failed` suppresses it for backup tasks; `ssl_renewal_failed` suppresses it for SSL renewal tasks. Tasks with no dedicated failure event (`session_cleanup`, `token_cleanup`, `log_rotation`, `update_check`) still fire `scheduler_error` normally.
+**Suppression:** `scheduler_error` fires only for tasks that have no dedicated failure event of their own. It is suppressed when a subsystem emits a more specific failure notification for the same execution: `backup_failed` suppresses it for backup tasks; `ssl_renewal_failed` suppresses it for SSL renewal tasks. Tasks with no dedicated failure event (`token_cleanup`, `log_rotation`, `update_check`) still fire `scheduler_error` normally.
 
 ## Email Template Configuration
 
@@ -26677,11 +26768,10 @@ Templates are stored as files on disk. Override any built-in template by placing
 
 | Type | Icon | Use For | Auto-dismiss |
 |------|------|---------|--------------|
-| `success` | ✅ | Completed actions, confirmations | 5 seconds |
-| `info` | ℹ️ | Informational, status updates | 5 seconds |
-| `warning` | ⚠️ | Non-critical issues, expiring items | 10 seconds |
-| `error` | ❌ | Failures, critical issues | Manual dismiss |
-| `security` | 🔒 | Security-related alerts | Manual dismiss |
+| `success` | ✅ | Completed actions, confirmations | 3 seconds |
+| `info` | ℹ️ | Informational, status updates | 3 seconds |
+| `warning` | ⚠️ | Non-critical issues, expiring items | 5 seconds |
+| `error` | ❌ | Failures, critical issues (including security alerts) | Manual dismiss |
 
 ### Toast vs Banner
 
@@ -26716,8 +26806,8 @@ Templates are stored as files on disk. Override any built-in template by placing
 | Backup started | INFO | ✗ | Backup in progress |
 | Backup complete | INFO | Optional | Backup finished |
 | Backup failed | ERROR | ✓ | Critical - needs attention |
-| SSL expiring (7+ days) | WARN | ✗ | Early warning, not urgent |
-| SSL expiring (<3 days) | WARN | ✓ | Urgent - needs action |
+| SSL expiring (30/14 days) | WARN | ✗ | Early warning, not urgent (log only) |
+| SSL expiring (7/3/1 days) | WARN | ✓ | Urgent - needs action |
 | SSL renewed | INFO | ✗ | Certificate renewed |
 | SSL renewal failed | ERROR | ✓ | Critical - needs attention |
 | Update available | WARN | Optional | New version available (`update_check` task) |
@@ -26774,7 +26864,7 @@ Templates are stored as files on disk. Override any built-in template by placing
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Toast position | `top-right` | Corner for toast notifications |
-| Toast duration | `5` seconds | Auto-dismiss time (0 = manual) |
+| Toast duration | `3` seconds (success/info), `5` (warning), manual (error) | Auto-dismiss time (0 = manual) |
 | Error dismiss | `manual` | Errors require manual dismiss |
 | Banner type | `info` | Default announcement type when `announcements[].type` is unset |
 
@@ -27128,7 +27218,6 @@ The scheduler status is available via the server status API. Task execution can 
 │  ○ Backup Hourly      Hourly          -                  -           ○     │
 │  ✓ SSL Renewal        03:00 daily     Today 03:00 (1s)   Tomorrow    ✓     │
 │  ✓ GeoIP Update       03:00 Sunday    Jan 12 03:00 (45s) Jan 19      ✓     │
-│  ✓ Session Cleanup    Every 15m       14:15 (0.1s)       14:30       ✓     │
 │  ✓ Token Cleanup      Every 15m       14:15 (0.1s)       14:30       ✓     │
 │  ✓ Log Rotation       00:00 daily     Today 00:00 (2s)   Tomorrow    ✓     │
 │  ✓ Health Check       Every 5m        14:25 (0.1s)       14:30       ✓     │
@@ -27324,8 +27413,10 @@ All databases from [sapics/ip-location-db](https://github.com/sapics/ip-location
 |----------|------|---------|
 | ASN | `asn.mmdb` | `https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb` |
 | Country | `country.mmdb` | `https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb` |
-| City | `city.mmdb` | `https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb` |
-| WHOIS | `whois.mmdb` | `https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb` |
+| City (IPv4) | `dbip-city-ipv4.mmdb` | `https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb` |
+| City (IPv6) | `dbip-city-ipv6.mmdb` | `https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv6.mmdb` |
+
+**WHOIS is not a separate download** — `databases.whois: true` enables a combined lookup that joins the ASN and Country databases at query time (no `whois.mmdb` file exists).
 
 **Database Contents:**
 
@@ -27334,16 +27425,15 @@ All databases from [sapics/ip-location-db](https://github.com/sapics/ip-location
 | ASN | `autonomous_system_number`, `autonomous_system_organization` |
 | Country | `country_code` (ISO 3166-1 alpha-2) |
 | City | `city`, `country_code`, `state1`, `state2`, `postcode`, `latitude`, `longitude`, `timezone` |
-| WHOIS | `registrant_org`, `asn`, `country_code` (combined lookup) |
+| WHOIS (combined) | `registrant_org` (ASN organization), `asn`, `country_code` — joined from ASN + Country |
 
 ## GeoIP Configuration (config file)
 
 | Element | Config Key | Description |
 |---------|------------|-------------|
 | Enable GeoIP | `geoip.enabled` | Turn GeoIP on/off |
-| Country mode | `geoip.country_mode` | `none`, `deny` (blocklist), `allow` (allowlist-only) |
-| Deny countries | `geoip.deny_countries` | ISO 3166-1 alpha-2 codes to block (when mode=deny) |
-| Allow countries | `geoip.allow_countries` | ISO 3166-1 alpha-2 codes to allow exclusively (when mode=allow) |
+| Deny countries | `geoip.deny_countries` | ISO 3166-1 alpha-2 codes to block; all others allowed (mode implied by non-empty list) |
+| Allow countries | `geoip.allow_countries` | ISO 3166-1 alpha-2 codes to allow exclusively; wins if both lists set |
 | ASN database | `geoip.databases.asn` | Enable ASN lookups |
 | Country database | `geoip.databases.country` | Enable country lookups |
 | City database | `geoip.databases.city` | Enable city lookups |
@@ -27378,7 +27468,7 @@ All databases from [sapics/ip-location-db](https://github.com/sapics/ip-location
 |---------|-------------|
 | Format | Prometheus text exposition format |
 | Endpoint | `/metrics` (configurable) |
-| Authentication | None (restrict by IP/network or firewall rule) |
+| Authentication | Optional bearer token |
 | Library | `github.com/prometheus/client_golang` |
 
 ## Access Control
@@ -27807,6 +27897,8 @@ server:
 package metrics
 
 import (
+    "runtime"
+
     "github.com/prometheus/client_golang/prometheus"
     "github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -28047,6 +28139,7 @@ package server
 
 import (
     "net/http"
+    "regexp"
     "strconv"
     "time"
 
@@ -28132,6 +28225,7 @@ package store
 import (
     "context"
     "database/sql"
+    "strings"
     "time"
 
     "github.com/{project_org}/{internal_name}/src/server/metrics"
@@ -28420,10 +28514,11 @@ var (
 
 // SystemCollector collects system metrics periodically
 type SystemCollector struct {
-    dataDir  string
-    interval time.Duration
-    stop     chan struct{}
-    lastGC   uint32
+    dataDir   string
+    interval  time.Duration
+    stop      chan struct{}
+    lastGC    uint32
+    lastPause uint64
 }
 
 func NewSystemCollector(dataDir string, interval time.Duration) *SystemCollector {
@@ -28495,8 +28590,11 @@ func (c *SystemCollector) collectRuntime() {
         c.lastGC = m.NumGC
     }
 
-    // Total GC pause time
-    GoGCPauseTotal.Add(float64(m.PauseTotalNs) / 1e9)
+    // Track GC pause time (delta since last collection)
+    if m.PauseTotalNs > c.lastPause {
+        GoGCPauseTotal.Add(float64(m.PauseTotalNs-c.lastPause) / 1e9)
+        c.lastPause = m.PauseTotalNs
+    }
 }
 ```
 
@@ -28512,10 +28610,23 @@ import (
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// MetricsHandler returns the Prometheus metrics handler.
-// Restrict access by network/firewall rule — do not expose /metrics to the internet.
-func MetricsHandler() http.Handler {
-    return promhttp.Handler()
+// MetricsHandler returns the Prometheus metrics handler with optional auth
+func MetricsHandler(token string) http.Handler {
+    handler := promhttp.Handler()
+
+    if token == "" {
+        return handler
+    }
+
+    // Wrap with bearer token authentication
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        auth := r.Header.Get("Authorization")
+        if auth != "Bearer "+token {
+            http.Error(w, t(r, "errors.unauthorized"), http.StatusUnauthorized)
+            return
+        }
+        handler.ServeHTTP(w, r)
+    })
 }
 ```
 
@@ -28649,7 +28760,7 @@ groups:
       - alert: GoroutineLeak
         expr: |
           {project_name}_go_goroutines > 1000
-          and increase({project_name}_go_goroutines[1h]) > 100
+          and delta({project_name}_go_goroutines[1h]) > 100
         for: 30m
         labels:
           severity: warning
@@ -28748,11 +28859,11 @@ groups:
 
 | Element | Config Key | Description |
 |---------|------------|-------------|
-| Enable metrics | `metrics.enabled` | Turn metrics on/off |
-| Endpoint | `metrics.path` | Metrics endpoint path (default: /metrics) |
-| Include system metrics | `metrics.system` | Include CPU/memory/disk |
-| Include runtime metrics | `metrics.runtime` | Include Go runtime stats |
-| Authentication token | `metrics.token` | Bearer token (empty = no auth) |
+| Enable metrics | `server.metrics.enabled` | Turn metrics on/off |
+| Endpoint | `server.metrics.endpoint` | Metrics endpoint path (default: /metrics) |
+| Include system metrics | `server.metrics.include_system` | Include CPU/memory/disk |
+| Include runtime metrics | `server.metrics.include_runtime` | Include Go runtime stats |
+| Authentication token | `server.metrics.token` | Bearer token (empty = no auth) |
 
 ---
 
@@ -28791,7 +28902,7 @@ groups:
 ### Backup Format
 
 - Single `.tar.gz` file (or `.tar.gz.enc` if encrypted)
-- Filename: `{project_name}_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc]`
+- Filename: `{project_name}_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc]` (manual/timestamped); scheduled daily fulls use `{project_name}_backup_YYYY-MM-DD.tar.gz[.enc]`
 - Includes manifest with version info
 - Encrypted if backup password was set during setup
 
@@ -28903,7 +29014,7 @@ When `server.compliance.enabled: true`:
 # Prompts for password
 ```
 
-**Note:** The `--password` flag is required if encryption is enabled.
+**Note:** When encryption is enabled the CLI prompts for the password interactively — there is no password flag (passwords on the command line leak via shell history and process lists).
 
 **Warning Shown if Encryption Not Enabled:**
 
@@ -29228,7 +29339,7 @@ on a Sunday counts as daily + weekly + monthly + yearly — uses highest priorit
 |-----------|--------------|
 | Database empty (first-run) | ✅ Allowed (nothing to protect) |
 | Running as root | ✅ Allowed (with confirmation) |
-| Running as service user | 🔐 Requires operator password |
+| Running as service user | 🔐 Requires operator token (`server.token`) |
 | Random user | ❌ Denied |
 
 ### Restore Password Handling
@@ -29315,7 +29426,7 @@ Restoring...
 --update [command]
 ```
 
-**Alias:** `--maintenance update` is an alias for `--update yes`
+**Alias:** `--maintenance update [cmd]` is an alias for `--update [cmd]` — it accepts the same subcommands (`check`, `yes`, `branch {name}`) and the same default (`yes` when no subcommand is given)
 
 ## Commands
 
@@ -29637,6 +29748,9 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string) (*Releas
         return nil, err
     }
 
+    // Releases are returned newest-first; channels are cumulative, so the
+    // first match is the newest release across the channel and all
+    // more-stable channels (beta users are never stuck behind a stable release)
     for _, r := range releases {
         if matchesBranch(r, branch) && r.TagName != currentVersion {
             return &r, nil
@@ -29686,6 +29800,15 @@ func DoUpdate(ctx context.Context, release *Release) error {
     }
     tmpFile.Close()
 
+    // Verify SHA256 checksum against the release's checksums.txt (MANDATORY)
+    expectedHash, err := fetchExpectedChecksum(ctx, release, assetName)
+    if err != nil {
+        return fmt.Errorf("failed to fetch checksum: %w", err)
+    }
+    if err := verifyChecksum(tmpPath, expectedHash); err != nil {
+        return err
+    }
+
     // Make executable (Unix)
     if runtime.GOOS != "windows" {
         if err := os.Chmod(tmpPath, 0755); err != nil {
@@ -29720,15 +29843,64 @@ func getBinaryName() string {
     return name
 }
 
+// fetchExpectedChecksum downloads the release's checksums.txt asset and
+// returns the SHA256 hash recorded for assetName
+func fetchExpectedChecksum(ctx context.Context, release *Release, assetName string) (string, error) {
+    var checksumsURL string
+    for _, asset := range release.Assets {
+        if asset.Name == "checksums.txt" {
+            checksumsURL = asset.BrowserDownloadURL
+            break
+        }
+    }
+    if checksumsURL == "" {
+        return "", fmt.Errorf("release has no checksums.txt asset")
+    }
+
+    req, err := http.NewRequestWithContext(ctx, "GET", checksumsURL, nil)
+    if err != nil {
+        return "", err
+    }
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != 200 {
+        return "", fmt.Errorf("checksum download failed: %d", resp.StatusCode)
+    }
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return "", err
+    }
+    // Each line is "{sha256}  {filename}"
+    for _, line := range strings.Split(string(body), "\n") {
+        fields := strings.Fields(line)
+        if len(fields) == 2 && fields[1] == assetName {
+            return fields[0], nil
+        }
+    }
+    return "", fmt.Errorf("no checksum entry for %s", assetName)
+}
+
+// matchesBranch implements cumulative channels: each channel also accepts
+// every release from all more-stable channels
 func matchesBranch(r Release, branch string) bool {
+    // stable releases match every channel
+    if !r.Prerelease {
+        return true
+    }
+    isBeta := strings.HasSuffix(r.TagName, "-beta")
+    // Daily builds are timestamps: YYYYMMDDHHMMSS
+    isDaily := len(r.TagName) == 14 && !strings.Contains(r.TagName, ".")
     switch branch {
     case "beta":
-        return strings.HasSuffix(r.TagName, "-beta")
+        return isBeta
     case "daily":
-        // Daily builds are timestamps: YYYYMMDDHHMMSS
-        return len(r.TagName) == 14 && !strings.Contains(r.TagName, ".")
+        return isBeta || isDaily
     default:
-        return !r.Prerelease
+        return false
     }
 }
 ```
@@ -29852,7 +30024,7 @@ func verifyChecksum(filePath, expectedHash string) error {
 
 Application user creation **REQUIRES** privilege escalation. If the user cannot escalate privileges, the application runs as the current user with user-level directories.
 
-**IMPORTANT: See PART 5 "Smart Escalation Logic" (lines ~7984-8020) for the complete escalation flow:**
+**IMPORTANT: See PART 5 "Privileged Port Binding (<1024)" → "Binary Implementation" (item 3, "Smart escalation flow") for the complete escalation flow:**
 - Binary first checks if already root/admin → skips escalation prompt entirely
 - Only prompts if user CAN actually escalate (is in sudoers/wheel/admin group)
 - Never prompts if user cannot escalate → shows informative error instead
@@ -29988,7 +30160,7 @@ $ {project_name} --maintenance --help
 Maintenance commands:
 
 backup [file]                         - Create backup of all data
-                                        Default: {backup_dir}/{project_name}-{timestamp}.tar.gz
+                                        Default: {backup_dir}/{project_name}_backup_YYYY-MM-DD_HHMMSS.tar.gz
 
 restore <file>                        - Restore from backup file
                                         Stops server, restores data, restarts server
@@ -30000,7 +30172,7 @@ update [cmd]                          - Manage updates
 
 mode <mode>                           - Set application mode
   production                          - Normal operation (default)
-  development                         - Debug logging, dev endpoints
+  development                         - Verbose logging (debug endpoints require the debug flag)
 
 setup                                 - Reset server configuration (first-run or root only)
 
@@ -30075,8 +30247,8 @@ Current:
 
 | Requirement | Value |
 |-------------|-------|
-| Username | `{project_name}` |
-| Group | `{project_name}` |
+| Username | `{internal_name}` |
+| Group | `{internal_name}` |
 | UID/GID | **Must match** - same value for both UID and GID |
 | UID/GID Range | **200-899** (safe system range, avoids well-known service IDs) |
 | Shell | `/sbin/nologin` or `/usr/sbin/nologin` |
@@ -30089,13 +30261,13 @@ Current:
 **The UID and GID MUST be the same value.** Find an unused ID where both UID and GID are available AND not reserved by well-known services:
 
 ```
-1. Start at 999 (top of system range)
+1. Start at 899 (top of the safe 200-899 range)
 2. Check if ID is in reserved list → skip
 3. Check if UID is unused (not in /etc/passwd)
 4. Check if GID is unused (not in /etc/group)
 5. If both available AND not reserved → use this value for both UID and GID
 6. If either taken OR reserved → decrement and repeat
-7. Stop at 100 (bottom of system range)
+7. Stop at 200 (bottom of the safe range)
 8. If no ID found → error (system has no available IDs)
 ```
 
@@ -30236,9 +30408,9 @@ Same reserved IDs as Linux apply (see Reserved/Well-Known UIDs table above).
 # Start at 399, work down, skip reserved IDs
 
 # Create group with specific GID
-dscl . -create /Groups/{project_name}
-dscl . -create /Groups/{project_name} PrimaryGroupID {id}
-dscl . -create /Groups/{project_name} Password "*"
+dscl . -create /Groups/{internal_name}
+dscl . -create /Groups/{internal_name} PrimaryGroupID {id}
+dscl . -create /Groups/{internal_name} Password "*"
 
 # Create user with matching UID
 dscl . -create /Users/{internal_name}
@@ -30375,17 +30547,17 @@ pw useradd -n {internal_name} -u {id} -g {id} \
 
 Virtual Service Accounts are automatically managed by Windows, require no password management, and have minimal privileges. They are created automatically when the service is installed.
 
-**Service Account Format:** `NT SERVICE\{project_name}`
+**Service Account Format:** `NT SERVICE\{internal_name}`
 
 ```powershell
 # Create service with Virtual Service Account (automatic)
-New-Service -Name "{project_name}" `
+New-Service -Name "{internal_name}" `
   -BinaryPathName "C:\Program Files\{internal_org}\{internal_name}\{project_name}.exe" `
   -DisplayName "{project_name}" `
   -Description "{project_name} service" `
   -StartupType Automatic
 
-# Service automatically runs as NT SERVICE\{project_name}
+# Service automatically runs as NT SERVICE\{internal_name}
 # No user creation needed - Windows manages it
 ```
 
@@ -30394,7 +30566,7 @@ New-Service -Name "{project_name}" `
 # Grant Virtual Service Account access to config/data directories
 $acl = Get-Acl "C:\ProgramData\{internal_org}\{internal_name}"
 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-    "NT SERVICE\{project_name}",
+    "NT SERVICE\{internal_name}",
     "FullControl",
     "ContainerInherit,ObjectInherit",
     "None",
@@ -30422,7 +30594,7 @@ func installWindowsService() error {
     // Create service - runs as Virtual Service Account by default
     // when ServiceStartName is empty or "NT SERVICE\{name}"
     s, err := m.CreateService(
-        "{project_name}",
+        "{internal_name}",
         exePath,
         mgr.Config{
             DisplayName:     "{project_name}",
@@ -30549,7 +30721,7 @@ depend() {
 }
 
 start_pre() {
-    checkpath -d -m 0755 -o {internal_name}:{internal_name} /var/run/{project_org}
+    checkpath -d -m 0755 -o {internal_name}:{internal_name} /var/run/{internal_org}
     checkpath -d -m 0755 -o {internal_name}:{internal_name} /var/log/{internal_org}/{internal_name}
 }
 ```
@@ -30651,10 +30823,10 @@ sudo service {internal_name} start
 
 ### runit (Linux)
 
-**Installation path:** `/etc/sv/{project_name}/`
+**Installation path:** `/etc/sv/{internal_name}/`
 
 ```
-/etc/sv/{project_name}/
+/etc/sv/{internal_name}/
 ├── run           # Main service script
 ├── log/
 │   └── run       # Logging script
@@ -30680,14 +30852,14 @@ exec svlogd -tt /var/log/{internal_org}/{internal_name}
 ```bash
 #!/bin/sh
 
-# PROVIDE: {project_name}
+# PROVIDE: {internal_name}
 # REQUIRE: NETWORKING
 # KEYWORD: shutdown
 
 . /etc/rc.subr
 
-name="{project_name}"
-rcvar="{project_name}_enable"
+name="{internal_name}"
+rcvar="{internal_name}_enable"
 command="/usr/local/bin/{project_name}"
 
 load_rc_config $name
@@ -30811,7 +30983,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s c
 - If not present, CLI/Agent users must always specify `--server` flag
 - Sources checked in order:
   1. File: `site.txt` in project root
-  2. Environment variable: `OFFICIALSITE=https://example.com`
+  2. Environment variable: `OFFICIAL_SITE=https://example.com`
   3. CI/CD secrets (repository secrets)
   4. Empty (self-hosted projects)
 
@@ -30894,9 +31066,9 @@ format_version_tag() {
 
 ### Version Priority
 
-1. `VERSION` environment variable (if set)
-2. `release.txt` file (if exists)
-3. Create `release.txt` with `0.1.0` (first release)
+1. `release.txt` file (if it exists, it wins over env/tag/derived values)
+2. `VERSION` environment variable (if set)
+3. Fallback `devel` — create `release.txt` with `0.1.0` before the first release
 
 ## Binary Naming
 
@@ -30955,33 +31127,33 @@ binaries/
 ## Makefile Implementation
 
 ```makefile
-# Infer PROJECTNAME and PROJECTORG from git remote or directory path (NEVER hardcode)
-PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$$|\1|' || basename "$$(pwd)")
-PROJECTORG := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
+# Infer PROJECT_NAME and PROJECT_ORG from git remote or directory path (NEVER hardcode)
+PROJECT_NAME := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$$|\1|' || basename "$$(pwd)")
+PROJECT_ORG := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
 
-# Version precedence: release.txt > env/default fallback
-VERSION ?= $(shell cat release.txt 2>/dev/null || echo "devel")
+# Version precedence: release.txt (wins if it exists) > VERSION env var > "devel" fallback
+VERSION := $(shell cat release.txt 2>/dev/null || echo "$${VERSION:-devel}")
 
 # Build info - ISO 8601 UTC
 # Format: "2025-12-04T13:05:13Z"
-BUILD_DATE := $(shell date -u +"%%Y-%%m-%%dT%%H:%%M:%%SZ")
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 # COMMIT_ID used directly - no VCS_REF alias
 
 # Official site URL (OPTIONAL - never guess or assume)
 # Sources (in order of precedence):
 #   1. File: site.txt in project root (single line, URL only)
-#   2. Environment variable: OFFICIALSITE=https://example.com
+#   2. Environment variable: OFFICIAL_SITE=https://example.com
 #   3. Empty (self-hosted projects - users must use --server flag)
 # NEVER infer from project name, domain, or any other source
-OFFICIALSITE := $(shell [ -f site.txt ] && cat site.txt || echo "${OFFICIALSITE:-}")
+OFFICIAL_SITE := $(shell [ -f site.txt ] && cat site.txt || echo "${OFFICIAL_SITE:-}")
 
 # Linker flags to embed build info
 LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
-	-X 'main.OfficialSite=$(OFFICIALSITE)'
+	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
 
 # Directories
 BINDIR := binaries
@@ -30991,28 +31163,29 @@ RELDIR := releases
 # GO_CACHE: module download cache — safe to share across concurrent builds (Go file-locks writes)
 # GO_BUILD: compile cache — scoped per project to prevent corruption when multiple projects build concurrently
 GO_CACHE  ?= $(HOME)/go/pkg/mod
-GO_BUILD  ?= $(HOME)/.cache/go-build/$(PROJECTNAME)
+GO_BUILD  ?= $(HOME)/.cache/go-build/$(PROJECT_NAME)
 
-# Build targets
-PLATFORMS ?= linux/amd64,linux/arm64
+# Build targets - all 8 platforms
+PLATFORMS ?= linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64,freebsd/amd64,freebsd/arm64
 
 # Docker - Set REGISTRY based on your platform (ghcr.io, registry.gitlab.com, git.example.com)
-REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
+REGISTRY ?= ghcr.io/$(PROJECT_ORG)/$(PROJECT_NAME)
 
 # Resource limits for build containers
 DOCKER_MEM  ?= 4g
 DOCKER_CPUS ?= 2
 
-GO_DOCKER := docker run --rm \
-	--name $(PROJECTNAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
+# GO_DOCKER_RUN: shared docker run prefix (no image) so targets can add mounts before the image
+GO_DOCKER_RUN := docker run --rm \
+	--name $(PROJECT_NAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
 	--memory=$(DOCKER_MEM) --cpus=$(DOCKER_CPUS) \
 	-v $(PWD):/app \
 	-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
 	-v $(GO_BUILD):/usr/local/share/go/cache \
 	-w /app \
 	-e CGO_ENABLED=0 \
-	-e GOFLAGS=-buildvcs=false \
-	casjaysdev/go:latest
+	-e GOFLAGS=-buildvcs=false
+GO_DOCKER := $(GO_DOCKER_RUN) casjaysdev/go:latest
 # CGO_ENABLED=0 and GOFLAGS=-buildvcs=false are casjaysdev/go:latest defaults; set explicitly for clarity
 
 .PHONY: build local release docker test dev clean
@@ -31032,13 +31205,13 @@ build: clean
 	# Build for local OS/ARCH
 	@echo "Building local binary..."
 	@$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
-		go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
+		go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT_NAME) ./src"
 
-	# Build server for all platforms
-	@for platform in $(PLATFORMS); do \
+	# Build server for all platforms (PLATFORMS is comma-separated; split for the loop)
+	@for platform in $$(echo "$(PLATFORMS)" | tr ',' ' '); do \
 		OS=$${platform%/*}; \
 		ARCH=$${platform#*/}; \
-		OUTPUT=$(BINDIR)/$(PROJECTNAME)-$$OS-$$ARCH; \
+		OUTPUT=$(BINDIR)/$(PROJECT_NAME)-$$OS-$$ARCH; \
 		[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 		echo "Building server $$OS/$$ARCH..."; \
 		$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
@@ -31048,10 +31221,10 @@ build: clean
 
 	# Build CLI for all platforms (if exists)
 	@if [ -d "src/client" ]; then \
-		for platform in $(PLATFORMS); do \
+		for platform in $$(echo "$(PLATFORMS)" | tr ',' ' '); do \
 			OS=$${platform%/*}; \
 			ARCH=$${platform#*/}; \
-			OUTPUT=$(BINDIR)/$(PROJECTNAME)-cli-$$OS-$$ARCH; \
+			OUTPUT=$(BINDIR)/$(PROJECT_NAME)-cli-$$OS-$$ARCH; \
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 			echo "Building CLI $$OS/$$ARCH..."; \
 			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
@@ -31076,15 +31249,15 @@ local: clean
 	@$(GO_DOCKER) go mod download
 
 	# Build server binary
-	@echo "Building $(PROJECTNAME)..."
+	@echo "Building $(PROJECT_NAME)..."
 	@$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
-		go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
+		go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT_NAME) ./src"
 
 	# Build CLI binary (if exists)
 	@if [ -d "src/client" ]; then \
-		echo "Building $(PROJECTNAME)-cli..."; \
+		echo "Building $(PROJECT_NAME)-cli..."; \
 		$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
-			go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME)-cli ./src/client"; \
+			go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT_NAME)-cli ./src/client"; \
 	fi
 
 
@@ -31101,7 +31274,7 @@ release: build
 	@echo "$(VERSION)" > $(RELDIR)/version.txt
 
 	# Copy binaries to releases (strip if needed)
-	@for f in $(BINDIR)/$(PROJECTNAME)-*; do \
+	@for f in $(BINDIR)/$(PROJECT_NAME)-*; do \
 		[ -f "$$f" ] || continue; \
 		strip "$$f" 2>/dev/null || true; \
 		cp "$$f" $(RELDIR)/; \
@@ -31110,7 +31283,7 @@ release: build
 	# Create source archive (exclude VCS and build artifacts)
 	@tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
 		--exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
-		-czf $(RELDIR)/$(PROJECTNAME)-$(VERSION)-source.tar.gz .
+		-czf $(RELDIR)/$(PROJECT_NAME)-$(VERSION)-source.tar.gz .
 
 	# Delete existing release/tag if exists
 	@gh release delete $(VERSION) --yes 2>/dev/null || true
@@ -31119,7 +31292,7 @@ release: build
 
 	# Create new release (stable)
 	@gh release create $(VERSION) $(RELDIR)/* \
-		--title "$(PROJECTNAME) $(VERSION)" \
+		--title "$(PROJECT_NAME) $(VERSION)" \
 		--notes "Release $(VERSION)" \
 		--latest
 
@@ -31137,13 +31310,14 @@ docker:
 	@docker buildx version > /dev/null 2>&1 || (echo "docker buildx required" && exit 1)
 
 	# Create/use builder
-	@docker buildx create --name $(PROJECTNAME)-builder --use 2>/dev/null || \
-		docker buildx use $(PROJECTNAME)-builder
+	@docker buildx create --name $(PROJECT_NAME)-builder --use 2>/dev/null || \
+		docker buildx use $(PROJECT_NAME)-builder
 
-	# Build multi-arch locally (no push — pushing is CI/CD's responsibility)
+	# Build multi-arch and push (buildx multi-arch images must be pushed; set REGISTRY first)
 	@docker buildx build \
 		-f docker/Dockerfile \
 		--platform linux/amd64,linux/arm64 \
+		--push \
 		--build-arg VERSION="$(VERSION)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
@@ -31160,8 +31334,8 @@ test:
 	@mkdir -p $(GO_CACHE) $(GO_BUILD)
 	@echo "Running tests with coverage..."
 	@$(GO_DOCKER) sh -c " \
-		mkdir -p \"\$${TMPDIR:-/tmp}/$(PROJECTORG)\" && \
-		COVDIR=\$$(mktemp -d \"\$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX\") && \
+		mkdir -p \"\$${TMPDIR:-/tmp}/$(PROJECT_ORG)\" && \
+		COVDIR=\$$(mktemp -d \"\$${TMPDIR:-/tmp}/$(PROJECT_ORG)/$(PROJECT_NAME)-XXXXXX\") && \
 		go mod download && \
 		go test -v -cover -coverprofile=\$$COVDIR/coverage.out ./... && \
 		COVERAGE=\$$(go tool cover -func=\$$COVDIR/coverage.out | grep total | awk '{print \$$3}' | sed 's/%//') && \
@@ -31189,16 +31363,18 @@ test:
 dev:
 	@mkdir -p $(GO_CACHE) $(GO_BUILD)
 	@$(GO_DOCKER) go mod tidy
-	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)" && \
-		BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
+	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECT_ORG)" && \
+		BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECT_ORG)/$(PROJECT_NAME)-XXXXXX") && \
 		echo "Quick dev build to $$BUILD_DIR..." && \
-		$(GO_DOCKER) go build -buildvcs=false -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
-		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
+		$(GO_DOCKER_RUN) -v $$BUILD_DIR:/build casjaysdev/go:latest \
+			go build -buildvcs=false -o /build/$(PROJECT_NAME) ./src && \
+		echo "Built: $$BUILD_DIR/$(PROJECT_NAME)" && \
 		if [ -d "src/client" ]; then \
-			$(GO_DOCKER) go build -buildvcs=false -o $$BUILD_DIR/$(PROJECTNAME)-cli ./src/client && \
-			echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
+			$(GO_DOCKER_RUN) -v $$BUILD_DIR:/build casjaysdev/go:latest \
+				go build -buildvcs=false -o /build/$(PROJECT_NAME)-cli ./src/client && \
+			echo "Built: $$BUILD_DIR/$(PROJECT_NAME)-cli"; \
 		fi && \
-		echo "Test:  docker run --rm --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
+		echo "Test:  docker run --rm --name $(PROJECT_NAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECT_NAME) --help"
 
 # =============================================================================
 # CLEAN - Remove build artifacts
@@ -31288,7 +31464,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 1. Downloads Go modules (cached)
 2. Runs tests inside Docker container (`casjaysdev/go:latest`)
-3. Mounts project directory to `/build`
+3. Mounts project directory to `/app`
 4. Runs `go test` with coverage
 5. Tests all packages (`./...`)
 6. Container removed after completion (`--rm`)
@@ -31300,7 +31476,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 3. No `-ldflags` (version info not embedded)
 4. Outputs to `{tempdir}/{project_org}/{internal_name}-XXXXXX/` (isolated, org-identifiable)
 5. Uses Docker (`casjaysdev/go:latest`) - keeps local machine clean
-6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}"/${PROJECT_ORG}.*/` or auto-deleted on reboot
+6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}/${PROJECT_ORG}"/${PROJECT_NAME}-*/` or auto-deleted on reboot
 
 ### `make local`
 
@@ -31605,7 +31781,7 @@ docker/
 | Entrypoint script | `/usr/local/bin/entrypoint.sh` |
 | Init system | **tini** |
 | Internal port | **80** |
-| **ENV MODE** | **development** (allows localhost, .local, .test, etc.) |
+| **ENV MODE** | **not set** — binary defaults to production; compose files set `MODE` explicitly (`production` / `development`) |
 
 ### Container Paths
 
@@ -31693,7 +31869,7 @@ volumes:
 
 ### OCI Meta Labels (Required)
 
-All Dockerfiles MUST include these labels:
+All images MUST carry these labels. Dockerfiles stay clean — no `LABEL` blocks; CI applies every label at build time via `--label` flags (or the workflow `labels:` input):
 
 | Label | Value |
 |-------|-------|
@@ -31716,9 +31892,9 @@ All Dockerfiles MUST include these labels:
 
 ### Multi-Arch Image Annotations
 
-**All image metadata is applied as OCI annotations — no LABEL blocks in the Dockerfile.**
+**All image metadata is applied at build time by CI — no LABEL blocks in the Dockerfile.**
 
-Container registries (GHCR, Docker Hub, etc.) read metadata from the manifest index for multi-arch images, not from individual image configs. `LABEL` applies only to per-platform image layers and is not visible on multiarch pulls. Only annotations are used.
+Container registries (GHCR, Docker Hub, etc.) read metadata from the manifest index for multi-arch images, not from individual image configs. Build-time `--label` flags apply only to per-platform image layers and are not visible on multiarch pulls, so CI applies the same metadata as manifest annotations as well.
 
 | Where | How | What For |
 |-------|-----|----------|
@@ -31776,6 +31952,8 @@ ARG TARGETARCH
 ARG VERSION=dev
 ARG BUILD_DATE
 ARG COMMIT_ID
+# Optional: set via --build-arg OFFICIAL_SITE=... (empty by default)
+ARG OFFICIAL_SITE
 
 WORKDIR /app
 
@@ -31835,8 +32013,8 @@ RUN chmod 755 /usr/local/bin/*
 # Set environment
 # Note: Tor available (binary installed) but server binary controls Tor startup (see PART 31)
 # DATABASE_DIR: SQLite location (binary auto-detects container, but explicit is clearer)
-ENV MODE=development \
-    TZ=America/New_York \
+# MODE is never baked into the image — binary defaults to production; compose sets MODE explicitly
+ENV TZ=America/New_York \
     DATABASE_DIR=/data/db/sqlite
 
 # Expose internal port (always 80)
@@ -31996,7 +32174,7 @@ exec $APP_BIN $FLAGS "$@"
 | `restart:` | `always` |
 | `x-logging:` | Anchor for consistent logging (see below) |
 | Network | Custom `{project_name}` with `external: false` |
-| Environment variables | **Inline `${VAR:-default}` fallbacks** — stack works with zero `.env` files |
+| Environment variables | **Hardcode with sane defaults** (NEVER use .env files) |
 | **environment: MODE** | `production` in `docker-compose.yml` · `development` in `docker-compose.dev.yml` |
 
 ### Production Compose (`docker/docker-compose.yml`)
@@ -32019,7 +32197,7 @@ services:
   {project_name}:
     image: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
     container_name: {project_name}-app
-    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    hostname: {project_name}
     restart: always
     pull_policy: always
     logging: *default-logging
@@ -32027,11 +32205,11 @@ services:
       - MODE=production
       - PORT=80
       - DEBUG=false
-      - TZ=${TZ:-America/New_York}
+      - TZ=America/New_York
       - CACHE_URL=valkey://{project_name}-cache:6379
       # For remote libsql/Turso: set DATABASE_DRIVER=libsql and DATABASE_URL
       # - DATABASE_DRIVER=libsql
-      # - DATABASE_URL=libsql://your-db.turso.io?authToken=${TURSO_AUTH_TOKEN}
+      # - DATABASE_URL=libsql://your-db.turso.io?authToken={token}
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
@@ -32080,7 +32258,7 @@ networks:
 | `container_name:` | `{project_name}-app`, `{project_name}-db` | e.g., `jokes-app`, `jokes-db` |
 | Main service | `{project_name}` | Service name matches project name |
 | Database service | `{project_name}-db` | Database service name |
-| `hostname:` | `${BASE_HOST_NAME:-$HOSTNAME}` | Uses env or system hostname |
+| `hostname:` | `{project_name}` | Hardcoded container hostname |
 | `restart:` | `always` | Always restart on failure |
 | `pull_policy:` | `always` | Always pull latest image |
 | `logging:` | `*default-logging` | Use the logging anchor |
@@ -32128,7 +32306,7 @@ services:
   {project_name}:
     image: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:devel
     container_name: {project_name}-app
-    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    hostname: {project_name}
     restart: always
     pull_policy: always
     logging: *default-logging
@@ -32136,12 +32314,13 @@ services:
       - MODE=development
       - PORT=80
       - DEBUG=true
-      - TZ=${TZ:-America/New_York}
+      - TZ=America/New_York
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
     ports:
-      - '172.17.0.1:64580:80'
+      # Development: accessible from all interfaces
+      - '64580:80'
     healthcheck:
       test: /usr/local/bin/{project_name} --status
       interval: 10s
@@ -32321,19 +32500,20 @@ rm -rf "$TEMP_DIR"
 
 ### Environment Variables
 
-**Stack must work with zero `.env` files. Use inline `${VAR:-default}` fallbacks.**
+**ALL environment variables MUST be hardcoded with sane defaults. NEVER require .env files.**
 
 | Rule | Description |
 |------|-------------|
+| **NEVER** | Use `${VAR}` or `${VAR:-default}` syntax requiring .env |
 | **NEVER** | Create `.env`, `.env.example`, `.env.sample` files |
-| **NEVER** | Use `${VAR}` without a fallback (stack breaks if var is unset) |
-| **ALWAYS** | Use `${VAR:-default}` so the stack works without any `.env` |
-| **ALWAYS** | Operators may override via `.env` or shell env — the fallback just handles zero-config |
+| **ALWAYS** | Hardcode values directly in docker-compose.yml |
+| **ALWAYS** | Use sane, working defaults |
 
-**Why inline fallbacks?**
+**Why hardcoded defaults?**
 - Works out of the box — no setup required
-- Operators can still override any value via environment
+- No confusion about required variables
 - No outdated `.env.example` files to maintain
+- Users can override by editing docker-compose.yml directly
 
 ### Docker Compose (Development) - HUMAN USE ONLY
 
@@ -32366,9 +32546,10 @@ services:
       - MODE=development
       - PORT=80
       - DEBUG=true
-      - TZ=${TZ:-America/New_York}
+      - TZ=America/New_York
     ports:
-      - '172.17.0.1:64580:80'
+      # Development: accessible from all interfaces
+      - '64580:80'
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
@@ -32525,7 +32706,7 @@ services:
       # - DOMAIN=myapp.com,www.myapp.com,api.myapp.com
       # For remote libsql/Turso: set DATABASE_DRIVER and DATABASE_URL
       # - DATABASE_DRIVER=libsql
-      # - DATABASE_URL=libsql://your-db.turso.io?authToken=${TURSO_AUTH_TOKEN}
+      # - DATABASE_URL=libsql://your-db.turso.io?authToken={token}
     ports:
       # Production: bound to Docker bridge only (reverse proxy handles external)
       - "172.17.0.1:64580:80"
@@ -32698,7 +32879,7 @@ networks:
 | `release.yml` | Tag push (`v*`, `*.*.*`) | Production releases |
 | `beta.yml` | Push to `beta` branch | Beta releases |
 | `daily.yml` | Daily at 3am UTC + push to main/master | Daily builds |
-| `docker.yml` | Version tag, push to main/master/beta | Docker images |
+| `docker.yml` | Any push (all branches) + version tags | Docker images |
 > **Note:** `ci.yml` and `release.yml` are required on every project. Go projects never have `build-toolchain.yml` — `casjaysdev/go:latest` is maintained externally. `beta.yml`, `daily.yml`, and `docker.yml` are project-specific optional workflows — include only when the project requires them.
 
 **Branch push auto-cancel policy:** Any workflow triggered by pushes to `main`, `master`, `devel`, `dev`, or `beta` MUST use workflow concurrency to cancel older in-progress runs for the same ref. This applies to branch-based CI (for example `beta.yml`, `daily.yml`, `docker.yml`, and any project-specific branch-push workflow).
@@ -32715,7 +32896,7 @@ All workflows MUST set these environment variables:
 #   echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 #   echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
 # Then use in build step:
-#   LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
+#   LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
 ```
 
 ## CI Workflow (GitHub Actions)
@@ -32816,7 +32997,7 @@ permissions:
   contents: write
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
 
 jobs:
   build:
@@ -32857,12 +33038,12 @@ jobs:
           fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
-          # OFFICIALSITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
           # Never guess or assume - must be explicitly defined by user
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITHUB_ENV
           else
-            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITHUB_ENV
           fi
 
       - name: Build server
@@ -32871,8 +33052,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -32882,21 +33063,21 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
 
   release:
@@ -32935,7 +33116,7 @@ jobs:
         run: |
           tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
             --exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
-            -czf binaries/${{ env.PROJECTNAME }}-${{ env.VERSION }}-source.tar.gz .
+            -czf binaries/${{ env.PROJECT_NAME }}-${{ env.VERSION }}-source.tar.gz .
 
       - name: Create Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
@@ -32966,7 +33147,7 @@ permissions:
   contents: write
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
 
 jobs:
   build:
@@ -33007,12 +33188,12 @@ jobs:
           fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
-          # OFFICIALSITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
           # Never guess or assume - must be explicitly defined by user
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITHUB_ENV
           else
-            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITHUB_ENV
           fi
 
       - name: Build server
@@ -33021,8 +33202,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -33032,21 +33213,21 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
 
   release:
@@ -33109,7 +33290,7 @@ permissions:
   contents: write
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
 
 jobs:
   build:
@@ -33150,12 +33331,12 @@ jobs:
           fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
-          # OFFICIALSITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
           # Never guess or assume - must be explicitly defined by user
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITHUB_ENV
           else
-            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITHUB_ENV
           fi
 
       - name: Build server
@@ -33164,8 +33345,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -33175,21 +33356,21 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
 
   release:
@@ -33277,7 +33458,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/beta' }}
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -33301,14 +33482,14 @@ jobs:
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ gitea.actor }}
-          password: ${{ secrets.GITEA_TOKEN }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set build info
         run: |
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "YYMM=$(date +"%y%m")" >> $GITHUB_ENV
-          if [[ "${{ gitea.ref }}" == refs/tags/* ]]; then
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
             echo "VERSION=${VERSION#v}" >> $GITHUB_ENV
             echo "IS_TAG=true" >> $GITHUB_ENV
@@ -33329,7 +33510,7 @@ jobs:
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.YYMM }}"
           else
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
-            if [[ "${{ gitea.ref }}" == refs/heads/beta ]]; then
+            if [[ "${{ github.ref }}" == refs/heads/beta ]]; then
               TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:beta"
             fi
           fi
@@ -33352,28 +33533,28 @@ jobs:
           labels: |
             org.opencontainers.image.vendor={project_org}
             org.opencontainers.image.authors={project_org}
-            org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
-            org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
+            org.opencontainers.image.description=${{ env.PROJECT_NAME }} - standard image (alpine)
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ env.COMMIT_ID }}
-            org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
-            org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
           annotations: |
             manifest:org.opencontainers.image.vendor={project_org}
             manifest:org.opencontainers.image.authors={project_org}
-            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            manifest:org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
+            manifest:org.opencontainers.image.description=${{ env.PROJECT_NAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
-            manifest:org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
-            manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
+            manifest:org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.licenses=MIT
 
 ```
@@ -33409,7 +33590,7 @@ Key differences from GitHub Actions:
 - Registry: Auto-detected from server URL (works with self-hosted)
 - Some GitHub-specific variables have Gitea/Forgejo equivalents (see mapping table below)
 
-## Self-Hosted Configuration (GitHub Actions)
+## Self-Hosted Configuration (Gitea/Forgejo Actions)
 
 **Gitea:**
 
@@ -33440,7 +33621,7 @@ For self-hosted runners, change `runs-on: ubuntu-latest` to your runner label.
 | `release.yml` | Tag push (`v*`, `*.*.*`) | Production releases |
 | `beta.yml` | Push to `beta` branch | Beta releases |
 | `daily.yml` | Daily at 3am UTC + push to main/master | Daily builds |
-| `docker.yml` | Version tag, push to main/master/beta | Docker images |
+| `docker.yml` | Any push (all branches) + version tags | Docker images |
 
 ## Release Workflow — Stable (Gitea/Forgejo Actions)
 
@@ -33463,7 +33644,7 @@ permissions:
   contents: write
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
 
 jobs:
   build:
@@ -33504,12 +33685,12 @@ jobs:
           fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
-          # OFFICIALSITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
           # Never guess or assume - must be explicitly defined by user
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITEA_ENV
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITEA_ENV
           else
-            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITEA_ENV
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITEA_ENV
           fi
 
       - name: Build server
@@ -33518,8 +33699,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -33529,21 +33710,21 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
 
   release:
@@ -33582,7 +33763,7 @@ jobs:
         run: |
           tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
             --exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
-            -czf binaries/${{ env.PROJECTNAME }}-${{ env.VERSION }}-source.tar.gz .
+            -czf binaries/${{ env.PROJECT_NAME }}-${{ env.VERSION }}-source.tar.gz .
 
       - name: Create Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
@@ -33613,7 +33794,7 @@ permissions:
   contents: write
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
 
 jobs:
   build:
@@ -33626,6 +33807,20 @@ jobs:
           - goos: linux
             goarch: amd64
           - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
             goarch: arm64
 
     steps:
@@ -33640,12 +33835,12 @@ jobs:
           fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
-          # OFFICIALSITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
           # Never guess or assume - must be explicitly defined by user
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITEA_ENV
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITEA_ENV
           else
-            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITEA_ENV
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITEA_ENV
           fi
 
       - name: Build server
@@ -33654,8 +33849,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -33665,21 +33860,21 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
 
   release:
@@ -33742,7 +33937,7 @@ permissions:
   contents: write
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
 
 jobs:
   build:
@@ -33783,12 +33978,12 @@ jobs:
           fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
-          # OFFICIALSITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
           # Never guess or assume - must be explicitly defined by user
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITEA_ENV
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITEA_ENV
           else
-            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITEA_ENV
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITEA_ENV
           fi
 
       - name: Build server
@@ -33797,8 +33992,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -33808,21 +34003,21 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIAL_SITE }}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT_NAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
 
   release:
@@ -33890,7 +34085,7 @@ concurrency:
   cancel-in-progress: ${{ gitea.ref == 'refs/heads/main' || gitea.ref == 'refs/heads/master' || gitea.ref == 'refs/heads/devel' || gitea.ref == 'refs/heads/dev' || gitea.ref == 'refs/heads/beta' }}
 
 env:
-  PROJECTNAME: {project_name}
+  PROJECT_NAME: {project_name}
   # Registry auto-detected from Gitea instance (works with self-hosted)
   # Format: {gitea-server}/owner/repo -> extracts server for registry
   IMAGE_NAME: ${{ gitea.repository }}
@@ -33981,9 +34176,9 @@ jobs:
           labels: |
             org.opencontainers.image.vendor={project_org}
             org.opencontainers.image.authors={project_org}
-            org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
-            org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
+            org.opencontainers.image.description=${{ env.PROJECT_NAME }} - standard image (alpine)
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ env.COMMIT_ID }}
@@ -33994,9 +34189,9 @@ jobs:
           annotations: |
             manifest:org.opencontainers.image.vendor={project_org}
             manifest:org.opencontainers.image.authors={project_org}
-            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            manifest:org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
+            manifest:org.opencontainers.image.description=${{ env.PROJECT_NAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
@@ -34039,7 +34234,7 @@ jobs:
 
 GitLab CI uses a single `.gitlab-ci.yml` file in the repository root with stages instead of separate workflow files.
 
-## Self-Hosted Configuration (Gitea/Forgejo Actions)
+## Self-Hosted Configuration (GitLab CI)
 
 | Setting | Value |
 |---------|-------|
@@ -34071,8 +34266,8 @@ All `$CI_*` variables are auto-populated by GitLab (works with self-hosted).
 # Equivalent to GitHub Actions: release.yml, beta.yml, daily.yml, docker.yml
 
 variables:
-  PROJECTNAME: "{project_name}"
-  PROJECTORG: "{project_org}"
+  PROJECT_NAME: "{project_name}"
+  PROJECT_ORG: "{project_org}"
   CGO_ENABLED: "0"
   GOOS: linux
   GOARCH: amd64
@@ -34098,13 +34293,13 @@ stages:
     - export VERSION="${CI_COMMIT_TAG#v}"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
-    # OFFICIALSITE (optional): site.txt wins; otherwise use CI/CD Variables or leave empty
+    # OFFICIAL_SITE (optional): site.txt wins; otherwise use CI/CD Variables or leave empty
     # Never guess or assume - must be explicitly defined by user
     - |
       if [ -f site.txt ]; then
-        export OFFICIALSITE="$(cat site.txt)"
+        export OFFICIAL_SITE="$(cat site.txt)"
       else
-        export OFFICIALSITE="${OFFICIALSITE:-}"
+        export OFFICIAL_SITE="${OFFICIAL_SITE:-}"
       fi
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIAL_SITE}'"
 
@@ -34311,10 +34506,11 @@ build:beta:
   <<: *go-build
   stage: build
   before_script:
-    - apk add --no-cache git bash
+    # All tooling is pre-installed in casjaysdev/go:latest — never `apk add` in a CI job
     - export VERSION="$(date +%Y%m%d%H%M%S)-beta"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
+    - if [ -f site.txt ]; then export OFFICIAL_SITE="$(cat site.txt)"; else export OFFICIAL_SITE="${OFFICIAL_SITE:-}"; fi
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIAL_SITE}'"
   script:
     # Build all 8 platforms
@@ -34351,10 +34547,11 @@ build:daily:
   <<: *go-build
   stage: build
   before_script:
-    - apk add --no-cache git bash
+    # All tooling is pre-installed in casjaysdev/go:latest — never `apk add` in a CI job
     - export VERSION="$(date +%Y%m%d%H%M%S)"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
+    - if [ -f site.txt ]; then export OFFICIAL_SITE="$(cat site.txt)"; else export OFFICIAL_SITE="${OFFICIAL_SITE:-}"; fi
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIAL_SITE}'"
   script:
     # Build all 8 platforms
@@ -34539,8 +34736,8 @@ pipeline {
     }
 
     environment {
-        PROJECTNAME = '{project_name}'
-        PROJECTORG = '{project_org}'
+        PROJECT_NAME = '{project_name}'
+        PROJECT_ORG = '{project_org}'
         BINDIR = 'binaries'
         RELDIR = 'releases'
         // Go cache bind-mounted from host: GO_CACHE (mod) and GO_BUILD (build cache)
@@ -34599,10 +34796,10 @@ pipeline {
                     }
                     env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     env.BUILD_DATE = sh(script: 'date +"%a %b %d, %Y at %H:%M:%S %Z"', returnStdout: true).trim()
-                    // OFFICIALSITE (optional): site.txt wins; otherwise use Jenkins credentials or leave empty
+                    // OFFICIAL_SITE (optional): site.txt wins; otherwise use Jenkins credentials or leave empty
                     // Never guess or assume - must be explicitly defined by user
-                    env.OFFICIALSITE = sh(script: '[ -f site.txt ] && cat site.txt || echo "${OFFICIALSITE:-}"', returnStdout: true).trim()
-                    env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIALSITE}'"
+                    env.OFFICIAL_SITE = sh(script: '[ -f site.txt ] && cat site.txt || echo "${OFFICIAL_SITE:-}"', returnStdout: true).trim()
+                    env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIAL_SITE}'"
                     env.HAS_CLI = sh(script: '[ -d src/client ] && echo true || echo false', returnStdout: true).trim()
                 }
                 sh 'mkdir -p ${BINDIR} ${RELDIR}'
@@ -34916,7 +35113,7 @@ pipeline {
             }
         }
 
-        stage('Test')        stage('Test') {
+        stage('Test') {
             agent { label 'amd64' }
             steps {
                 sh '''
@@ -35141,7 +35338,7 @@ REGISTRY = "ghcr.io/${PROJECT_ORG}/${PROJECT_NAME}"
 
 Before proceeding, confirm you understand:
 - [ ] Docker uses tini as init, Alpine base
-- [ ] Makefile has exactly 4 targets: build, release, docker, test
+- [ ] Makefile has exactly 6 targets: dev, local, build, test, release, docker
 - [ ] Binary naming: NEVER include -musl suffix
 - [ ] All 8 platform builds required (4 OS x 2 arch)
 - [ ] CLI builds (if src/client/ exists): 8 additional binaries with `-cli` suffix
@@ -35759,7 +35956,7 @@ make test
 **In CI/CD Pipeline (REQUIRED):**
 
 ```yaml
-# .github/workflows/test.yml
+# .github/workflows/ci.yml (coverage job)
 test:
   runs-on: ubuntu-latest
   steps:
@@ -35909,8 +36106,8 @@ verify_all_endpoints_tested
 |------|----------|---------|
 | **During development** | `make test` (Phase 1 — toolchain gate) | Fast feedback, verify source logic |
 | **Before committing** | `make test` (Phase 1 required) | Toolchain gate must pass before every commit |
-| **Before release** | `make test` + `./tests/incus.sh` | Phase 1 + Phase 2 binary validation |
-| **In CI/CD** | Phase 1 + Phase 2 | Toolchain gate + binary verification |
+| **Before release** | `make test` + `./tests/incus.sh` | Phase 1 + Phase 2 binary validation (manual) |
+| **In CI/CD** | Phase 1 only | Toolchain gate; Phase 2 is manual |
 
 **Test Execution Order:**
 ```bash
@@ -35956,7 +36153,7 @@ make build
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
 GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
-docker run --rm --name "${PROJECT_NAME}-build" -v $PWD:/app -w /app \
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD:/app -w /app \
   -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
@@ -36004,7 +36201,7 @@ fi
 
 **docker.sh and incus.sh MUST:**
 1. Host cache dirs (`GO_CACHE`/`GO_BUILD`) provide persistent Go cache across builds
-2. Build all binaries using Docker (casjaysdev/go:latest) in temp directory:
+2. Build all binaries using Docker (casjaysdev/go:latest), output to `binaries/` (same as `make build`):
    - Server (`./src`)
    - Client (`./src/client`) if exists
 3. Install test tools in container (Docker: `apk add --no-cache curl bash file jq`)
@@ -36031,8 +36228,8 @@ fi
 set -eo pipefail
 
 # Detect project info
-PROJECTNAME=$(basename "$PWD")
-PROJECTORG=$(basename "$(dirname "$PWD")")
+PROJECT_NAME=$(basename "$PWD")
+PROJECT_ORG=$(basename "$(dirname "$PWD")")
 
 # Build — use Makefile if present (standard for all bootstrapped projects)
 # Output always lands in binaries/
@@ -36046,20 +36243,20 @@ else
     GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
     mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
     docker run --rm \
-      --name "${PROJECT_NAME}-build" \
+      --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
       -v $PWD:/app \
       -v $GO_CACHE:/usr/local/share/go/pkg/mod \
       -v $GO_BUILD:/usr/local/share/go/cache \
       -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
-      casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME} ./src
+      casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECT_NAME} ./src
     if [ -d "src/client" ]; then
         docker run --rm \
-          --name "${PROJECT_NAME}-build-cli" \
+          --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
           -v $PWD:/app \
           -v $GO_CACHE:/usr/local/share/go/pkg/mod \
           -v $GO_BUILD:/usr/local/share/go/cache \
           -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
-          casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME}-cli ./src/client
+          casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECT_NAME}-cli ./src/client
     fi
 fi
 
@@ -36202,8 +36399,8 @@ if ! command -v incus &>/dev/null; then
 fi
 
 # Detect project info
-PROJECTNAME=$(basename "$PWD")
-PROJECTORG=$(basename "$(dirname "$PWD")")
+PROJECT_NAME=$(basename "$PWD")
+PROJECT_ORG=$(basename "$(dirname "$PWD")")
 CONTAINER_NAME="test-${PROJECT_NAME}-$$"
 
 # Incus image - use latest Debian stable (update when new stable releases)
@@ -36223,24 +36420,22 @@ else
     GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
     mkdir -p "$GO_CACHE" "$GO_BUILD" binaries
     docker run --rm \
-      --name "${PROJECT_NAME}-build" \
+      --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
       -v $PWD:/app \
       -v $GO_CACHE:/usr/local/share/go/pkg/mod \
       -v $GO_BUILD:/usr/local/share/go/cache \
       -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
-      casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME} ./src
+      casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECT_NAME} ./src
     if [ -d "src/client" ]; then
         docker run --rm \
-          --name "${PROJECT_NAME}-build-cli" \
+          --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
           -v $PWD:/app \
           -v $GO_CACHE:/usr/local/share/go/pkg/mod \
           -v $GO_BUILD:/usr/local/share/go/cache \
           -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
-          casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECTNAME}-cli ./src/client
+          casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/${PROJECT_NAME}-cli ./src/client
     fi
 fi
-fi
-
 
 echo "Launching Incus container (Debian + systemd)..."
 incus launch "$INCUS_IMAGE" "$CONTAINER_NAME"
@@ -36417,7 +36612,7 @@ fi
 | **Permissions** | Executable (`chmod +x tests/*.sh`) |
 | **Build method** | ALWAYS use Docker (casjaysdev/go:latest) with host cache dirs (`GO_CACHE`/`GO_BUILD`) |
 | **Go cache** | Host cache dirs bind-mounted: `GO_CACHE` → mod cache, `GO_BUILD` → build cache |
-| **Build location** | ALWAYS use temp directory |
+| **Build location** | `binaries/` in the project root (same output as `make build`) |
 | **Build all components** | Build server, client (if `src/client/` exists) |
 | **Test container tools** | Docker alpine MUST install: `apk add --no-cache curl bash file jq` |
 | **Test all binaries** | Test `--version` and `--help` for server and client if built |
@@ -36608,7 +36803,7 @@ GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
 GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 mkdir -p "$GO_CACHE" "$GO_BUILD"
 docker run --rm \
-  --name "${PROJECT_NAME}-build" \
+  --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v $PWD:/app \
   -v $GO_CACHE:/usr/local/share/go/pkg/mod \
   -v $GO_BUILD:/usr/local/share/go/cache \
@@ -36616,7 +36811,7 @@ docker run --rm \
   casjaysdev/go:latest go build -buildvcs=false -trimpath -ldflags "-s -w" -o /app/binaries/{project_name} ./src
 
 # Test in Docker (quick) - install tools first
-docker run --rm --name "${PROJECT_NAME}-test" -v $PWD/binaries:/app alpine:latest sh -c "
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v $PWD/binaries:/app alpine:latest sh -c "
   apk add --no-cache curl bash file jq >/dev/null
   /app/{project_name} --help
 "
@@ -37416,7 +37611,7 @@ chmod +x {project_name}-linux-amd64
 ## Systemd Service
 
 ```bash
-sudo ./{project_name} --service install
+sudo ./{project_name} --service --install
 # operator action on target host — not an AI-executed command during development
 sudo systemctl start {project_name}
 # operator action on target host — not an AI-executed command during development
@@ -38060,7 +38255,6 @@ var localeFS embed.FS
     "account_locked": "Cuenta bloqueada",
     "method_not_allowed": "Método no permitido",
     "conflict": "El recurso ya existe",
-    "rate_limited": "Demasiadas solicitudes",
     "server_error": "Error interno del servidor",
     "maintenance_mode": "Servicio no disponible"
   },
@@ -38287,7 +38481,7 @@ var localeFS embed.FS
     "graceful_shutdown": "Apagado graceful completado",
     "shutdown_error": "Error de apagado del servidor HTTP: {error}",
     "windows_daemon_warning": "Advertencia: --daemon no es compatible en Windows",
-    "windows_service_hint": "Use --service install && --service start para Servicio de Windows",
+    "windows_service_hint": "Use --service --install && --service start para Servicio de Windows",
     "error_create_dir": "Error al crear directorio {path}: {error}",
     "error_not_writable": "El directorio {path} no es escribible: {error}",
     "error_reserved_path": "'{path}' es una ruta reservada",
@@ -38546,9 +38740,8 @@ func sendOperatorAlert(recipient, alertType, lang string) {
 |----------|--------|---------|
 | 1 | `--lang` flag | `--lang es` |
 | 2 | Config file | `lang: es` (in `server.yml` or `cli.yml`) |
-| 3 | `LANG` / `LC_ALL` env var | `LANG=es_ES.UTF-8` |
-| 4 | Auto-detect | System locale |
-| 5 | Default | `en` (English) |
+| 3 | `LANG` / `LC_ALL` env var (system locale) | `LANG=es_ES.UTF-8` |
+| 4 | Default | `en` (English) |
 
 ```go
 func getLanguage(flagLang string) string {
@@ -39079,11 +39272,11 @@ server:
     # Maximum circuits to keep open (higher = faster but more memory)
     max_circuits: 32
 
-    # Circuit timeout (how long before giving up)
-    circuit_timeout: 60s
+    # Circuit timeout in seconds (how long before giving up)
+    circuit_timeout: 60
 
-    # Bootstrap timeout (wait for Tor network connection)
-    bootstrap_timeout: 3m
+    # Bootstrap timeout in seconds (wait for Tor network connection)
+    bootstrap_timeout: 180
 
     # --- Security Settings ---
     # Scrub sensitive info from Tor logs
@@ -39467,7 +39660,6 @@ func DefaultTorConfig() TorConfig {
         // auto-detect
         Binary:                    "",
         UseNetwork:                false,
-        AllowUserPreference:       true,
         MaxCircuits:               32,
         CircuitTimeout:            60,
         BootstrapTimeout:          180,
@@ -39607,8 +39799,8 @@ func startDedicatedTor(ctx context.Context, serverPort int, cfg *TorConfig) (*To
         serverPort: serverPort,
     }
 
-    // Initialize outbound dialer if enabled (server-wide or user preference allowed)
-    if cfg.UseNetwork || cfg.AllowUserPreference {
+    // Initialize outbound dialer if enabled (server-wide setting)
+    if cfg.UseNetwork {
         dialer, err := t.Dialer(ctx, nil)
         if err != nil {
             log.Printf("Warning: failed to create Tor dialer: %v", err)
@@ -39747,7 +39939,7 @@ func getTorConfig(cfg *TorConfig) string {
     // SocksPort: enabled for outbound connections, disabled for hidden service only
     // "auto" = Tor picks available high port at runtime (never saved)
     var socksConfig string
-    if cfg.UseNetwork || cfg.AllowUserPreference {
+    if cfg.UseNetwork {
         // Enable SOCKS for outbound - "auto" picks high port at runtime
         socksConfig = "SocksPort auto"
     } else {
@@ -39775,7 +39967,7 @@ AccountingMax %s`, cfg.MaxMonthlyBandwidth)
     return fmt.Sprintf(`
 # ============================================================
 # Tor Configuration - Generated by server binary
-# This file is PERSISTENT - manual edits are preserved
+# This file is PERSISTENT - it is not regenerated on normal startup
 # Manual edits may be overwritten when config is saved via operator
 # ============================================================
 
@@ -40438,7 +40630,7 @@ userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 
 ## CLI Open API Access
 
-**The server is an open API — no authentication required. The CLI connects to the server URL and calls endpoints directly.**
+**The server is an open API — no authentication is required to use it (pastebin model). The CLI connects to the server URL and calls public endpoints directly. Tokens exist for OWNERSHIP: a valid token authorizes edit/delete of the objects it owns, and operator/admin endpoints additionally require an operator token (see Authentication below).**
 
 | Flag | Description |
 |------|-------------|
@@ -40446,8 +40638,8 @@ userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 
 **Server sources (priority order):**
 1. `--server` flag (explicit)
-2. Environment variable: `{PROJECT_NAME}_SERVER`
-3. Config file: `cli.yml` → `server: https://...`
+2. Environment variable: `{PROJECT_NAME}_SERVER_PRIMARY`
+3. Config file: `cli.yml` → `server.primary: https://...`
 4. Compiled default (if IDEA.md specifies one)
 
 **Usage:**
@@ -40458,12 +40650,12 @@ userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 
 ## CLI Config File Permissions
 
-**`cli.yml` contains server connection config. Create with standard permissions:**
+**`cli.yml` contains server connection config AND the API token — create with user-only permissions:**
 
 | Path | Required perms |
 |------|----------------|
-| `~/.config/{internal_org}/{internal_name}/cli.yml` (Unix) | `0644` |
-| `%APPDATA%\{internal_org}\{internal_name}\cli.yml` (Windows) | Default ACL |
+| `~/.config/{internal_org}/{internal_name}/cli.yml` (Unix) | `0600` |
+| `%APPDATA%\{internal_org}\{internal_name}\cli.yml` (Windows) | User-only ACL |
 
 ## CLI Auto-Update (Same Pattern as Server Self-Update)
 
@@ -40669,12 +40861,17 @@ func detectMode(args []string) string {
         return "plain"
     }
 
-    // Config-only flags don't prevent TUI
+    // Config-only flags don't prevent TUI (value: flag consumes the next arg)
     configFlags := map[string]bool{
         "--config": true, "--server": true, "--token": true, "--debug": true,
     }
+    valueFlags := map[string]bool{
+        "--config": true, "--server": true, "--token": true,
+    }
 
-    for _, arg := range args[1:] {
+    rest := args[1:]
+    for i := 0; i < len(rest); i++ {
+        arg := rest[i]
         if !strings.HasPrefix(arg, "-") {
             // Command/arg provided
             return "cli"
@@ -40683,6 +40880,10 @@ func detectMode(args []string) string {
         if !configFlags[flag] {
             // Action flag
             return "cli"
+        }
+        // Space syntax: skip the flag's value (--flag value)
+        if valueFlags[flag] && !strings.Contains(arg, "=") && i+1 < len(rest) {
+            i++
         }
     }
 
@@ -41487,7 +41688,7 @@ func calculateGUILayout(width, height int, dpi float64) Layout {
 // src/client/tui/layout.go
 package tui
 
-import "{project_org}/{internal_name}/common/terminal"
+import "github.com/{project_org}/{internal_name}/src/common/terminal"
 
 // LayoutConfig provides TUI-specific layout settings based on SizeMode
 type LayoutConfig struct {
@@ -41830,7 +42031,7 @@ The client uses the same user directory structure as the server in user mode. Th
 | Config | `~/.config/{internal_org}/{internal_name}/` | Configuration files |
 | Config File | `~/.config/{internal_org}/{internal_name}/cli.yml` | CLI configuration |
 | Data | `~/.local/share/{internal_org}/{internal_name}/` | Persistent data |
-| Cache | `~/.cache/{project_org}/{internal_name}/` | Temporary/cached data |
+| Cache | `~/.cache/{internal_org}/{internal_name}/` | Temporary/cached data |
 | Logs | `~/.local/log/{internal_org}/{internal_name}/` | Log files |
 | Log File | `~/.local/log/{internal_org}/{internal_name}/cli.log` | CLI log output |
 
@@ -41841,7 +42042,7 @@ The client uses the same user directory structure as the server in user mode. Th
 | Config | `%APPDATA%\{internal_org}\{internal_name}\` | Configuration files |
 | Config File | `%APPDATA%\{internal_org}\{internal_name}\cli.yml` | CLI configuration |
 | Data | `%LOCALAPPDATA%\{internal_org}\{internal_name}\data\` | Persistent data |
-| Cache | `%LOCALAPPDATA%\{project_org}\{internal_name}\cache\` | Temporary/cached data |
+| Cache | `%LOCALAPPDATA%\{internal_org}\{internal_name}\cache\` | Temporary/cached data |
 | Logs | `%LOCALAPPDATA%\{internal_org}\{internal_name}\log\` | Log files |
 | Log File | `%LOCALAPPDATA%\{internal_org}\{internal_name}\log\cli.log` | CLI log output |
 
@@ -42239,7 +42440,7 @@ defaults:
 
 | Scenario | Result |
 |----------|--------|
-| `--server` flag used | Use that server, **save to `server.primary` in cli.yml** |
+| `--server` flag used | Use that server, **save to `server.primary` in cli.yml only if empty/invalid** |
 | `server.primary` in cli.yml | Use configured primary server |
 | Project has `{official_site}` | Use official site as default |
 | No server available | Error with setup instructions |
@@ -42247,19 +42448,19 @@ defaults:
 **Config save rule: Validate everything, only save valid, never clear valid.**
 
 ```go
-// saveIfEmpty saves value to config only if current is empty and new is valid
-func saveIfEmpty(current, newValue string, validate func(string) bool) (string, error) {
+// saveIfUnset saves value to config only if current is empty or invalid and new is valid
+func saveIfUnset(current, newValue string, validate func(string) bool) (string, error) {
     if newValue == "" {
         return current, nil
     }
     if !validate(newValue) {
         return "", fmt.Errorf("invalid value: %s", newValue)
     }
-    if current == "" {
-        // Save to config
+    if current == "" || !validate(current) {
+        // Save to config (empty or invalid current is replaced)
         return newValue, nil
     }
-    // Use for session, don't save (current preserved)
+    // Current is valid - use flag for session, don't save
     return newValue, nil
 }
 ```
@@ -42387,7 +42588,8 @@ server:
 | `--token` | Authenticated operations |
 | `--config` | Multiple config profiles |
 | `--output` | Multiple output formats (json/table/plain) |
-| `--debug` | Debug mode |
+
+**`--debug` is NOT optional — it is required on all binaries (see FINAL CHECKPOINT).**
 
 ### Flag Argument Syntax (ALL Binaries)
 
@@ -42570,7 +42772,7 @@ eval "$({project_name}-cli --shell init)"
 ```go
 func handleShellCommand(args []string) {
     if len(args) < 1 {
-        fmt.Fprintln(os.Stderr, "Usage: --shell [completions|init] [SHELL]")
+        fmt.Fprintln(os.Stderr, "Usage: --shell [completions|init|help] [SHELL]")
         os.Exit(1)
     }
 
@@ -42590,6 +42792,14 @@ func handleShellCommand(args []string) {
         printCompletions(shell, binaryName)
     case "init":
         printInit(shell, binaryName)
+    case "help":
+        fmt.Printf("Shell integration for %s:\n", binaryName)
+        fmt.Println("  --shell completions [SHELL]  Print shell completions")
+        fmt.Println("  --shell init [SHELL]         Print shell init command")
+        fmt.Println("  SHELL: bash, zsh, fish, powershell (auto-detect if omitted)")
+    default:
+        fmt.Fprintln(os.Stderr, "Usage: --shell [completions|init|help] [SHELL]")
+        os.Exit(1)
     }
 }
 
@@ -42732,14 +42942,14 @@ Example commands (project-dependent):
 | Operator Token (`server.token`) | Server-wide operator actions (CLI only) |
 
 **Token Storage:**
-- Stored in `cli.yml` under `server.token`
-- `--token` flag saves to cli.yml only if not already set (same as `--server`)
-- Environment variable: `{PROJECT_NAME}_CLI_TOKEN` (does NOT save to config)
+- Stored in `cli.yml` under `auth.token`
+- `--token` flag saves to cli.yml only if config value is empty/invalid (same as `--server`)
+- Environment variable: `{PROJECT_NAME}_TOKEN` (does NOT save to config)
 
 **Priority (highest to lowest):**
 1. `--token` flag (saves only if config empty/invalid)
-2. `{PROJECT_NAME}_CLI_TOKEN` environment variable
-3. `server.token` in cli.yml
+2. `{PROJECT_NAME}_TOKEN` environment variable
+3. `auth.token` in cli.yml
 
 ## HTTP Client Identity
 
@@ -43238,7 +43448,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 client uses `common/terminal` from PART 7:
 ```go
 // CLI uses common/terminal package (defined in PART 7)
-import "{project_org}/{internal_name}/common/terminal"
+import "github.com/{project_org}/{internal_name}/src/common/terminal"
 
 func (m SizeMode) MaxTableColumns() int {
     switch m {
@@ -43533,7 +43743,7 @@ Error: cannot connect to server at https://{project_name}.example.com
 $ {project_name}-cli server status --token invalid
 Error: authentication failed
   Your API token is invalid or expired.
-  Update server.token in cli.yml or use --token flag.
+  Update auth.token in cli.yml or use --token flag.
 
 # Not found
 $ {project_name}-cli get abc123
@@ -43694,7 +43904,7 @@ project_org:     {project_org}
 # FROZEN — equals project_name on first install, never changes
 internal_name:   {project_name}
 app_name:        {project_name}
-official_site:   {fqdn}
+official_site:   https://{fqdn}
 maintainer_name: {maintainer_name — defaults to {project_org} if unset}
 maintainer_email: {maintainer_email — or empty; used only if set}
 
@@ -43724,7 +43934,7 @@ maintainer_email: {maintainer_email — or empty; used only if set}
 **Rules for the example contents above:**
 
 - No hardcoded routes — say "Get random joke", not `/api/v1/jokes/random`. AI.md PART 14 defines route patterns.
-- No implementation details — describe behavior, not algorithms or libraries. AI.md PARTS 0–36 define HOW.
+- No implementation details — describe behavior, not algorithms or libraries. AI.md PARTS 0–33 define HOW.
 - Cross-reference AI.md PARTs by number for any pattern that already exists there (database → PART 10, security → PART 11, scheduler → PART 18, etc.).
 
 ---
@@ -43744,7 +43954,7 @@ project_name:    jokes-api
 project_org:     casjay
 internal_name:   jokes-api
 app_name:        Jokes API
-official_site:   jokes.example.com
+official_site:   https://jokes.example.com
 maintainer_name: Jane Doe
 maintainer_email: jane@example.com
 
@@ -43796,7 +44006,7 @@ project_name:    linkshort
 project_org:     casjay
 internal_name:   linkshort
 app_name:        LinkShort
-official_site:   short.example.com
+official_site:   https://short.example.com
 maintainer_name: Jane Doe
 maintainer_email: jane@example.com
 
@@ -43848,7 +44058,7 @@ project_name:    weather-api
 project_org:     casjay
 internal_name:   weather-api
 app_name:        Weather API
-official_site:   weather.example.com
+official_site:   https://weather.example.com
 maintainer_name: Jane Doe
 maintainer_email: jane@example.com
 
@@ -43939,7 +44149,7 @@ maintainer_email: jane@example.com
 - [ ] No external runtime dependencies - everything embedded
 - [ ] Use ONLY approved libraries (see PART 5)
 - [ ] Follow exact config paths: `server.xxx`, not variations
-- [ ] Follow exact route patterns: `/api/{api_version}/...` (no auth gates)
+- [ ] Follow exact route patterns: `/api/{api_version}/...` (open access; ownership tokens and operator routes per PART 11)
 
 ### Container Rules
 
@@ -44109,7 +44319,7 @@ make docker
 - [ ] Config file: `server.yml` (not .yaml, not .json)
 - [ ] Hierarchy: CLI flags > env vars > file > defaults
 - [ ] Environment prefix: `{PROJECT_NAME}_`
-- [ ] Boolean values: true/false, yes/no, 1/0, on/off all work
+- [ ] Boolean values: true/false, yes/no, 1/0, on/off, enable/disable all work
 - [ ] All config values have sane defaults
 - [ ] Unknown config keys are ERRORS, not ignored
 - [ ] Config validation on load
@@ -44117,10 +44327,10 @@ make docker
 
 **PART 6: Application Modes**
 - [ ] Production mode: Default, optimized, no debug
-- [ ] Development mode: Verbose logging, debug endpoints
-- [ ] Mode detection: env var, CLI flag, config file
-- [ ] Debug endpoints disabled in production
-- [ ] `/debug/pprof/` only in development mode
+- [ ] Development mode: Verbose logging (does NOT enable debug endpoints)
+- [ ] Mode priority: `--mode` CLI flag > `MODE` env var > default production
+- [ ] Debug priority: `--debug` CLI flag > `DEBUG` env var (truthy) > `MODE=debug` alias > default off
+- [ ] `/debug/*` endpoints (pprof, expvar) enabled only by debug flag, never by mode
 
 ### Phase 2: Binary Core (PARTS 7-9)
 
@@ -44146,7 +44356,7 @@ make docker
 - [ ] `--address {addr}` - Listen address
 - [ ] `--port {port}` - Listen port
 - [ ] `--baseurl {path}` - URL path prefix (default: /)
-- [ ] `--mode {production|development}` - Application mode
+- [ ] `--mode {production|development}` - Application mode (aliases: prod, dev, devel; `debug` = development + debug on)
 - [ ] `--status` - Show running status
 - [ ] `--daemon` - Daemonize (detach)
 - [ ] `--debug` - Enable debug mode
@@ -44256,7 +44466,7 @@ make docker
 - [ ] Long strings have `word-break: break-all` CSS (IPv6, .onion, tokens, hashes)
 - [ ] Touch targets minimum 44x44px on mobile
 
-### Phase 6: Email & Scheduler (PARTS 17-18)
+### Phase 6: Email & Scheduler (PART 17)
 
 **PART 17: Email & Notifications**
 - [ ] SMTP configuration in config file and API
@@ -44266,7 +44476,7 @@ make docker
 - [ ] Email queue with retry logic
 - [ ] Email logging (success/failure)
 
-### Phase 7: Features (PARTS 19-22)
+### Phase 7: Features (PARTS 18-21)
 
 **PART 18: Scheduler**
 - [ ] Built-in scheduler always running
@@ -44305,7 +44515,7 @@ make docker
 - [ ] **Daily incremental** `{project_name}-daily.tar.gz[.enc]` always valid
 - [ ] **Hourly incremental** `{project_name}-hourly.tar.gz[.enc]` (if enabled)
 
-### Phase 8: Maintenance (PARTS 23-26)
+### Phase 8: Maintenance (PARTS 22-25)
 
 **PART 22: Update Command**
 - [ ] `--update check` - Check for updates
@@ -44322,8 +44532,8 @@ make docker
 - [ ] Service operations require appropriate rights
 
 **PART 24: Service Support**
-- [ ] `--service install` - Install as service
-- [ ] `--service uninstall` - Remove service
+- [ ] `--service --install` - Install as service
+- [ ] `--service --uninstall` - Remove service
 - [ ] `--service start/stop/restart/reload`
 - [ ] Linux: systemd service file
 - [ ] macOS: launchd plist
@@ -44340,7 +44550,7 @@ make docker
 - [ ] Cross-compilation targets
 - [ ] Version injection at build time
 
-### Phase 9: Build & Deploy (PARTS 27-29)
+### Phase 9: Build & Deploy (PARTS 26-28)
 
 **PART 26: Docker**
 - [ ] Multi-stage Dockerfile
@@ -44375,7 +44585,7 @@ make docker
 - [ ] API testing included
 - [ ] Beta testing procedures documented
 
-### Phase 10: Documentation (PARTS 30-31)
+### Phase 10: Documentation (PARTS 29-30)
 
 **PART 29: ReadTheDocs Documentation**
 - [ ] docs/ directory for MkDocs only
@@ -44763,6 +44973,9 @@ make docker
 - [ ] Environment variables for configuration
 - [ ] Single process per container
 - [ ] Stateless (data in volumes)
+- [ ] HTTP listener mapped `172.17.0.1:{64xxx}:80` (prod)
+- [ ] Raw protocol listeners mapped 1:1 to their standard port — never `64xxx`
+- [ ] No raw protocol routed through an HTTP proxy/vhost
 
 ---
 
@@ -45395,7 +45608,7 @@ When bootstrapping a new project from this specification:
 
 **Test:** Server starts and responds to `/server/healthz`
 
-#### Step 3: Docker & CI/CD (PARTS 27-28)
+#### Step 3: Docker & CI/CD (PARTS 26-27)
 
 1. **Create docker/Dockerfile** - Multi-stage build
 2. **Create docker-compose files** - Production, dev, test
