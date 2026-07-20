@@ -2905,6 +2905,8 @@ Purpose: {inferred from code/config}
 
 **Read the spec sections relevant to the current task before implementing. Do NOT rely on memory; do NOT pre-load the whole spec speculatively.**
 
+**Hook-enforced:** `spec-guard.sh` blocks Edit/Write on project files until AI.md/SPEC.md has been Read this session; the gate re-arms after every compaction.
+
 ## Before Starting Work
 
 1. **Read the AI.md PART(s) relevant to the first task** - do not load the entire file speculatively
@@ -3085,6 +3087,7 @@ Implemented core server functionality and API.
 | **docker/Dockerfile** | PART 26, actual code | Build stages, packages, paths correct |
 | **docker/docker-compose.yml** | PART 26, actual config | Ports, volumes, env vars match |
 | **docker/docker-compose.dev.yml** | PART 26 | Dev workflow correct |
+| **docker/docker-compose.test.yml** | PART 26 | Test workflow correct, cache service ephemeral |
 | **docker/rootfs/** | Actual container overlay needs | Entrypoint and overlay files match what the image expects |
 | **.github/CODEOWNERS** | Actual repo layout | Catch-all owner exists and sensitive paths are covered |
 | **.github/SECURITY.md** | security.txt/contact/reporting flow | Reporting instructions and support window are accurate |
@@ -5983,7 +5986,7 @@ PROJECT_ORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+
 │   ├── Dockerfile.dev      # devel image — same as release but binary runs in debug mode; tagged :devel (project-specific)
 │   ├── docker-compose.yml  # Production compose (NO debug)
 │   ├── docker-compose.dev.yml  # Development compose
-│   ├── docker-compose.test.yml # Test compose (DEBUG=true)
+│   ├── docker-compose.test.yml # Test compose (DEBUG: 1, MODE: dev)
 │   └── rootfs/            # Build-time container filesystem overlay (committed)
 │       ├── usr/
 │       │   └── local/
@@ -32161,7 +32164,7 @@ exec $APP_BIN $FLAGS "$@"
 
 ## Docker Compose Requirements
 
-**Locations:** `docker/docker-compose.yml` (production) · `docker/docker-compose.dev.yml` (development)
+**Locations:** `docker/docker-compose.yml` (production) · `docker/docker-compose.dev.yml` (development) · `docker/docker-compose.test.yml` (automated testing)
 
 | Requirement | Value |
 |-------------|-------|
@@ -32174,12 +32177,12 @@ exec $APP_BIN $FLAGS "$@"
 | `restart:` | `always` |
 | `x-logging:` | Anchor for consistent logging (see below) |
 | Network | Custom `{project_name}` with `external: false` |
-| Environment variables | **Hardcode with sane defaults** (NEVER use .env files) |
-| **environment: MODE** | `production` in `docker-compose.yml` · `development` in `docker-compose.dev.yml` |
+| Environment variables | **Hardcode with sane defaults** (NEVER use .env files); always YAML map style (`KEY: value`), never list style (`- KEY=value`) |
+| **environment: DEBUG/MODE** | `docker-compose.yml` sets **neither** `DEBUG` nor `MODE` (production defaults apply) · `docker-compose.dev.yml` and `docker-compose.test.yml` both set `DEBUG: 1` and `MODE: dev` |
 
 ### Production Compose (`docker/docker-compose.yml`)
 
-App + Valkey for persistent session/rate-limit cache. Use `MODE=production`.
+App + Valkey for persistent session/rate-limit cache. NO `DEBUG`/`MODE` env vars — the binary defaults to production behavior.
 
 ```yaml
 # nginx proxy address - http://172.17.0.1:{port}
@@ -32202,14 +32205,12 @@ services:
     pull_policy: always
     logging: *default-logging
     environment:
-      - MODE=production
-      - PORT=80
-      - DEBUG=false
-      - TZ=America/New_York
-      - CACHE_URL=valkey://{project_name}-cache:6379
-      # For remote libsql/Turso: set DATABASE_DRIVER=libsql and DATABASE_URL
-      # - DATABASE_DRIVER=libsql
-      # - DATABASE_URL=libsql://your-db.turso.io?authToken={token}
+      PORT: 80
+      TZ: America/New_York
+      CACHE_URL: valkey://{project_name}-cache:6379
+      # For remote libsql/Turso: set DATABASE_DRIVER and DATABASE_URL
+      # DATABASE_DRIVER: libsql
+      # DATABASE_URL: libsql://your-db.turso.io?authToken={token}
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
@@ -32311,15 +32312,15 @@ services:
     pull_policy: always
     logging: *default-logging
     environment:
-      - MODE=development
-      - PORT=80
-      - DEBUG=true
-      - TZ=America/New_York
+      PORT: 80
+      DEBUG: 1
+      MODE: dev
+      TZ: America/New_York
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
     ports:
-      # Development: accessible from all interfaces
+      # Development: accessible from all interfaces, no 172.17.0.1 bind
       - '64580:80'
     healthcheck:
       test: /usr/local/bin/{project_name} --status
@@ -32347,12 +32348,13 @@ networks:
 
 ### Compose Variants
 
-Two compose files ship in the `docker/` directory:
+Three compose files ship in the `docker/` directory:
 
 | File | Image Tag | Cache | Purpose |
 |------|-----------|-------|---------|
-| `docker/docker-compose.yml` | `:latest` | Valkey (separate container) | Production deployment |
-| `docker/docker-compose.dev.yml` | `:devel` | Memory (in-process) | Local development |
+| `docker/docker-compose.yml` | `:latest` | Valkey, `{project_name}-cache` (persistent volume) | Production deployment |
+| `docker/docker-compose.dev.yml` | `:devel` | None | Local development (human use only) |
+| `docker/docker-compose.test.yml` | `:latest` | Valkey, `{project_name}-cache-test` (ephemeral `tmpfs`) | Automated testing |
 
 **Build Commands:**
 
@@ -32543,12 +32545,12 @@ services:
     restart: always
     logging: *default-logging
     environment:
-      - MODE=development
-      - PORT=80
-      - DEBUG=true
-      - TZ=America/New_York
+      PORT: 80
+      DEBUG: 1
+      MODE: dev
+      TZ: America/New_York
     ports:
-      # Development: accessible from all interfaces
+      # Development: accessible from all interfaces, no 172.17.0.1 bind
       - '64580:80'
     volumes:
       - './volumes/config:/config:z'
@@ -32583,10 +32585,16 @@ cd "$TEMP_DIR" && docker compose up -d
 
 **⚠️ FOR HUMAN USE ONLY - AI assistants must NEVER use this file.**
 
-Production has NO debug options. Debug must be set via CLI if needed. Humans deploy this for production use.
+Production has NO `DEBUG`/`MODE` env vars. Debug must be set via CLI if needed. Humans deploy this for production use. Includes the Valkey cache service (persistent volume).
 
 ```yaml
 name: {project_name}
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
 
 services:
   {project_name}:
@@ -32594,26 +32602,54 @@ services:
     pull_policy: always
     container_name: {project_name}-app
     restart: always
+    logging: *default-logging
     environment:
       # Production: strict security, minimal logging, caching enabled
-      # NO debug options - debug must be explicitly set via CLI if needed
-      - MODE=production
-      - TZ=America/New_York
+      # NO DEBUG/MODE - debug must be explicitly set via CLI if needed
+      PORT: 80
+      TZ: America/New_York
+      CACHE_URL: valkey://{project_name}-cache:6379
       # DOMAIN (optional - auto-detects from reverse proxy headers)
-      # - DOMAIN=myapp.com,www.myapp.com
+      # DOMAIN: myapp.com,www.myapp.com
       # SMTP (optional - autodetects if not set)
-      # - SMTP_HOST=smtp.example.com
-      # - SMTP_PORT=587
-      # - SMTP_USERNAME=user
-      # - SMTP_PASSWORD=pass
-    ports:
-      # Production: bound to Docker bridge only (reverse proxy handles external)
-      - "172.17.0.1:64580:80"
+      # SMTP_HOST: smtp.example.com
+      # SMTP_PORT: 587
+      # SMTP_USERNAME: user
+      # SMTP_PASSWORD: pass
     volumes:
       # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
       # NEVER run from project directory - always use temp dir workflow
       - ./volumes/config:/config:z
       - ./volumes/data:/data:z
+    ports:
+      # Production: bound to Docker bridge only (reverse proxy handles external)
+      - "172.17.0.1:64580:80"
+    healthcheck:
+      test: /usr/local/bin/{project_name} --status
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    depends_on:
+      {project_name}-cache:
+        condition: service_healthy
+    networks:
+      - {project_name}
+
+  {project_name}-cache:
+    image: valkey/valkey:alpine
+    pull_policy: always
+    container_name: {project_name}-cache
+    restart: always
+    logging: *default-logging
+    volumes:
+      - ./volumes/data/db/valkey:/data:z
+    healthcheck:
+      test: valkey-cli ping || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - {project_name}
 
@@ -32636,12 +32672,18 @@ cd "$TEMP_DIR" && docker compose up -d
 
 **Location:** `docker/docker-compose.test.yml`
 
-**✅ FOR AI AND AUTOMATED TESTING - This is the ONLY docker-compose file AI may use.**
+**FOR AUTOMATED TESTING.** AI's preferred interface is the project's `tests/` directory scripts (`tests/run_tests.sh`, `tests/docker.sh`) — NOT invoking this file directly. Direct invocation (copy to a temp dir, `./volumes` resolves there) is only a fallback when no `tests/` script exists yet.
 
-Debug enabled for test visibility. **MUST be copied to temp directory before use - NEVER run from project directory.**
+Debug enabled for test visibility. Includes an ephemeral Valkey cache service (`tmpfs`, no persistent volume). **MUST be copied to temp directory before direct use - NEVER run from project directory.**
 
 ```yaml
 name: {project_name}-test
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
 
 services:
   {project_name}:
@@ -32649,18 +32691,47 @@ services:
     pull_policy: always
     container_name: {project_name}-test
     restart: "no"
+    logging: *default-logging
     environment:
-      - MODE=development
-      - DEBUG=true
-      - TZ=America/New_York
-    ports:
-      - "64581:80"
+      PORT: 80
+      DEBUG: 1
+      MODE: dev
+      TZ: America/New_York
+      CACHE_URL: valkey://{project_name}-cache-test:6379
     volumes:
       # CRITICAL: ./volumes/ must resolve to $TEMP_DIR/volumes/, NOT project directory
       # This file MUST be copied to a temp directory before running
       # AI: NEVER run this from the project directory
       - ./volumes/config:/config:z
       - ./volumes/data:/data:z
+    ports:
+      - "172.17.0.1:64581:80"
+    healthcheck:
+      test: /usr/local/bin/{project_name} --status
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    depends_on:
+      {project_name}-cache-test:
+        condition: service_healthy
+    networks:
+      - {project_name}-test
+
+  {project_name}-cache-test:
+    image: valkey/valkey:alpine
+    pull_policy: always
+    container_name: {project_name}-cache-test
+    restart: "no"
+    logging: *default-logging
+    tmpfs:
+      - /data
+    healthcheck:
+      test: valkey-cli ping || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - {project_name}-test
 
@@ -32670,7 +32741,7 @@ networks:
     external: false
 ```
 
-**AI/Automated Testing Workflow (REQUIRED):**
+**AI/Automated Testing Workflow (REQUIRED — prefer `tests/` scripts; this is the fallback):**
 ```bash
 mkdir -p "${TMPDIR:-/tmp}/{project_org}"
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{project_org}/{internal_name}-XXXXXX")
@@ -32688,31 +32759,46 @@ rm -rf "$TEMP_DIR"
 ```yaml
 name: {project_name}
 
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
 services:
   {project_name}:
     image: {PLATFORM_CONTAINER_REGISTRY}/{project_org}/{internal_name}:latest
     pull_policy: always
     container_name: {project_name}-app
     restart: always
-    depends_on:
-      {project_name}-cache:
-        condition: service_healthy
+    logging: *default-logging
     environment:
       # Tor auto-enabled (tor binary installed in image)
-      - MODE=production
-      - TZ=America/New_York
+      # NO DEBUG/MODE - production defaults apply
+      PORT: 80
+      TZ: America/New_York
+      CACHE_URL: valkey://{project_name}-cache:6379
       # DOMAIN (optional - containers behind reverse proxy auto-detect from headers)
       # Only set if NOT behind reverse proxy, comma-separated list supported
-      # - DOMAIN=myapp.com,www.myapp.com,api.myapp.com
+      # DOMAIN: myapp.com,www.myapp.com,api.myapp.com
       # For remote libsql/Turso: set DATABASE_DRIVER and DATABASE_URL
-      # - DATABASE_DRIVER=libsql
-      # - DATABASE_URL=libsql://your-db.turso.io?authToken={token}
-    ports:
-      # Production: bound to Docker bridge only (reverse proxy handles external)
-      - "172.17.0.1:64580:80"
+      # DATABASE_DRIVER: libsql
+      # DATABASE_URL: libsql://your-db.turso.io?authToken={token}
     volumes:
       - ./volumes/config:/config:z
       - ./volumes/data:/data:z
+    ports:
+      # Production: bound to Docker bridge only (reverse proxy handles external)
+      - "172.17.0.1:64580:80"
+    healthcheck:
+      test: /usr/local/bin/{project_name} --status
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    depends_on:
+      {project_name}-cache:
+        condition: service_healthy
     networks:
       - {project_name}
 
@@ -32721,6 +32807,7 @@ services:
     pull_policy: always
     container_name: {project_name}-cache
     restart: always
+    logging: *default-logging
     volumes:
       - ./volumes/data/db/valkey/{project_name}:/data:z
     healthcheck:
@@ -35411,9 +35498,9 @@ When a test or debug step requires `reboot`, `systemctl`, `iptables`, `mount`, p
 
 | File | Purpose | How AI Uses It |
 |------|---------|----------------|
-| `docker/docker-compose.test.yml` | Automated testing | Copy to temp dir, run from there |
+| `docker/docker-compose.test.yml` | Automated testing | **Preferred:** run via the project's `tests/` scripts (`tests/run_tests.sh`, `tests/docker.sh`). **Fallback:** copy to temp dir and run directly, only when no `tests/` script exists yet |
 
-**AI testing workflow:**
+**AI testing workflow (fallback, when no `tests/` script exists):**
 ```bash
 # 1. Create temp directory (REQUIRED)
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
@@ -35447,7 +35534,7 @@ rm -rf "$TEMP_DIR"
 | Actor | docker-compose.yml | docker-compose.dev.yml | docker-compose.test.yml |
 |-------|-------------------|------------------------|------------------------|
 | **Human** | ✅ Production | ✅ Development | ✅ Testing |
-| **AI** | ❌ FORBIDDEN | ❌ FORBIDDEN | ✅ ONLY THIS (in temp dir) |
+| **AI** | ❌ FORBIDDEN | ❌ FORBIDDEN | ✅ Preferred via `tests/` scripts; direct temp-dir invocation only as a fallback |
 
 ## Config Files: Runtime-Generated Only
 
