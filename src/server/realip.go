@@ -190,13 +190,3 @@ func resolveForwardedClientIP(r *http.Request) string {
 
 	return ""
 }
-
-// originalPeerAddr returns the original TCP peer address stored in the
-// request context by realIPMiddleware, falling back to RemoteAddr when
-// the middleware has not run (e.g. in tests)
-func originalPeerAddr(r *http.Request) string {
-	if v, ok := r.Context().Value(originalPeerContextKey).(string); ok && v != "" {
-		return v
-	}
-	return r.RemoteAddr
-}

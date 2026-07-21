@@ -6,7 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -359,7 +361,7 @@ func installWindows() error {
 	}
 
 	// Create service using sc.exe
-	displayName := strings.Title(appName) + " Manager"
+	displayName := cases.Title(language.Und).String(appName) + " Manager"
 	cmd := exec.Command("sc.exe", "create", appName,
 		"binPath=", binaryPath,
 		"DisplayName=", displayName,

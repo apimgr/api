@@ -184,7 +184,7 @@ func (s *Service) DNSLookup(domain, recordType string) ([]string, error) {
 	case "A":
 		ips, err := resolver.LookupIP(ctx, "ip4", domain)
 		if err != nil {
-			return nil, fmt.Errorf("A lookup failed: %w", err)
+			return nil, fmt.Errorf("a-record lookup failed: %w", err)
 		}
 		results := make([]string, 0, len(ips))
 		for _, ip := range ips {

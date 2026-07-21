@@ -30,13 +30,10 @@ var templatesFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-var templates *template.Template
-
 // Version information
 var (
 	Version   = "1.0.0"
 	BuildTime = "unknown"
-	startTime = time.Now()
 )
 
 // New creates a new HTTP server
@@ -1382,47 +1379,8 @@ func apiConvertTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 
 // Middleware functions
 
-// requestIDMiddleware adds a unique request ID to each request
-func getUptime() string {
-	d := time.Since(startTime)
-
-	days := int(d.Hours()) / 24
-	hours := int(d.Hours()) % 24
-	minutes := int(d.Minutes()) % 60
-
-	if days > 0 {
-		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
-	}
-	if hours > 0 {
-		return fmt.Sprintf("%dh %dm", hours, minutes)
-	}
-	return fmt.Sprintf("%dm", minutes)
-}
-
 func apiPlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotImplemented)
 	fmt.Fprintf(w, `{"success":false,"error":"Endpoint not yet implemented","timestamp":"%s"}`+"\n", time.Now().Format(time.RFC3339))
-}
-
-// Register all remaining endpoints with generic handlers
-func registerAllEndpoints(r chi.Router) {
-	// Text endpoints (89 total)
-	textEndpoints := []string{
-		"lorem", "hipsum", "bacon", "cupcake", "pirate", "zombie", "corporate", "tech",
-		"ulid", "nanoid", "ksuid", "xid", "cuid", "snowflake", "objectid",
-		"slugify", "count", "diff", "levenshtein", "similarity", "soundex", "metaphone",
-		"compress", "decompress", "regex", "regex/explain",
-		"markdown", "markdown/toc", "bbcode", "rot47", "caesar", "vigenere",
-		"binary", "morse", "extract", "extract/emails", "extract/urls", "extract/ips",
-		"lines", "dedupe", "sort", "shuffle", "trim", "strip",
-	}
-
-	for _, ep := range textEndpoints {
-		r.Get("/text/"+ep, handler.GenericHandler("text", ep))
-		r.Post("/text/"+ep, handler.GenericHandler("text", ep))
-	}
-
-	// Similar registration for all other services...
-	// Crypto (147), Network (98), Docker (24), DateTime (67), etc.
 }

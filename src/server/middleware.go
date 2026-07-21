@@ -138,34 +138,3 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 		})
 	}
 }
-
-// maintenanceModeMiddleware checks if maintenance mode is enabled
-func maintenanceModeMiddleware(dataDir string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Allow health checks even in maintenance mode
-			switch r.URL.Path {
-			case "/healthz", "/server/healthz", "/api/v1/server/healthz", "/api/healthz":
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Check for maintenance mode file
-			maintenanceFile := fmt.Sprintf("%s/maintenance", dataDir)
-			if fileExists(maintenanceFile) {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprintf(w, `{"error":"Service is in maintenance mode","status":503}`)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// fileExists checks if a file exists
-func fileExists(path string) bool {
-	_, err := http.Dir(".").Open(path)
-	return err == nil
-}

@@ -83,10 +83,10 @@ func main() {
 
 	// Handle version
 	if *showVersion {
-		fmt.Printf("%s v%s\n", binaryName, Version)
-		fmt.Printf("Built: %s\n", BuildTime)
-		fmt.Printf("Go: %s\n", runtime.Version())
-		fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+		cprintf("%s v%s\n", binaryName, Version)
+		cprintf("Built: %s\n", BuildTime)
+		cprintf("Go: %s\n", runtime.Version())
+		cprintf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
@@ -291,7 +291,7 @@ func main() {
 				}
 				continue
 			}
-			fmt.Println("\n🛑 Shutting down gracefully...")
+			cprintln("\n🛑 Shutting down gracefully...")
 		case err := <-errChan:
 			log.Printf("Server error: %v", err)
 		}
@@ -306,11 +306,11 @@ func main() {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
 
-	fmt.Println("✅ Server stopped")
+	cprintln("✅ Server stopped")
 }
 
 func printHelp(binaryName string) {
-	fmt.Printf(`%s - Universal API Toolkit
+	cprintf(`%s - Universal API Toolkit
 
 Usage: %s [options]
 
@@ -381,14 +381,14 @@ Documentation: https://apimgr-api.readthedocs.io
 }
 
 func printStartup(cfg *config.Config, binaryName string) {
-	fmt.Println()
-	fmt.Printf("✅ %s v%s started successfully\n", binaryName, Version)
-	fmt.Printf("📡 Listening on http://%s:%s\n", getDisplayAddress(cfg), cfg.Server.Port)
-	fmt.Printf("📊 Swagger UI: http://%s:%s/openapi\n", getDisplayAddress(cfg), cfg.Server.Port)
-	fmt.Printf("🔮 GraphQL: http://%s:%s/graphql\n", getDisplayAddress(cfg), cfg.Server.Port)
-	fmt.Printf("📚 API Docs: http://%s:%s/api\n", getDisplayAddress(cfg), cfg.Server.Port)
-	fmt.Printf("🔧 Admin Panel: http://%s:%s/admin\n", getDisplayAddress(cfg), cfg.Server.Port)
-	fmt.Println()
+	cprintln()
+	cprintf("✅ %s v%s started successfully\n", binaryName, Version)
+	cprintf("📡 Listening on http://%s:%s\n", getDisplayAddress(cfg), cfg.Server.Port)
+	cprintf("📊 Swagger UI: http://%s:%s/openapi\n", getDisplayAddress(cfg), cfg.Server.Port)
+	cprintf("🔮 GraphQL: http://%s:%s/graphql\n", getDisplayAddress(cfg), cfg.Server.Port)
+	cprintf("📚 API Docs: http://%s:%s/api\n", getDisplayAddress(cfg), cfg.Server.Port)
+	cprintf("🔧 Admin Panel: http://%s:%s/admin\n", getDisplayAddress(cfg), cfg.Server.Port)
+	cprintln()
 }
 
 func getDisplayAddress(cfg *config.Config) string {
@@ -413,19 +413,19 @@ func checkStatus() {
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(addr)
 	if err != nil {
-		fmt.Println("❌ Service is not running")
+		cprintln("❌ Service is not running")
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println("✅ Service is running")
-		fmt.Printf("   Port: %s\n", cfg.Server.Port)
-		fmt.Printf("   Config: %s\n", config.GetConfigPath())
+		cprintln("✅ Service is running")
+		cprintf("   Port: %s\n", cfg.Server.Port)
+		cprintf("   Config: %s\n", config.GetConfigPath())
 		os.Exit(0)
 	}
 
-	fmt.Println("⚠️ Service returned unexpected status")
+	cprintln("⚠️ Service returned unexpected status")
 	os.Exit(2)
 }
 
@@ -449,71 +449,71 @@ func handleServiceCommand(cmd string, binaryName string) {
 	case "--help", "help":
 		printServiceHelp(binaryName)
 	default:
-		fmt.Printf("Unknown service command: %s\n", cmd)
-		fmt.Println("Valid commands: start, stop, restart, reload, --install, --uninstall, --disable, --help")
+		cprintf("Unknown service command: %s\n", cmd)
+		cprintln("Valid commands: start, stop, restart, reload, --install, --uninstall, --disable, --help")
 		os.Exit(1)
 	}
 }
 
 func installService(binaryName string) {
 	if err := sysservice.Install(); err != nil {
-		fmt.Printf("❌ Failed to install service: %v\n", err)
+		cprintf("❌ Failed to install service: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✅ Service installed successfully")
-	fmt.Printf("   Run '%s --service start' to start the service\n", binaryName)
+	cprintln("✅ Service installed successfully")
+	cprintf("   Run '%s --service start' to start the service\n", binaryName)
 }
 
 func uninstallService(binaryName string) {
 	if err := sysservice.Uninstall(); err != nil {
-		fmt.Printf("❌ Failed to uninstall service: %v\n", err)
+		cprintf("❌ Failed to uninstall service: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✅ Service uninstalled successfully")
+	cprintln("✅ Service uninstalled successfully")
 }
 
 func startService(binaryName string) {
 	if err := sysservice.Start(); err != nil {
-		fmt.Printf("❌ Failed to start service: %v\n", err)
+		cprintf("❌ Failed to start service: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✅ Service started")
+	cprintln("✅ Service started")
 }
 
 func stopService(binaryName string) {
 	if err := sysservice.Stop(); err != nil {
-		fmt.Printf("❌ Failed to stop service: %v\n", err)
+		cprintf("❌ Failed to stop service: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✅ Service stopped")
+	cprintln("✅ Service stopped")
 }
 
 func restartService(binaryName string) {
 	if err := sysservice.Restart(); err != nil {
-		fmt.Printf("❌ Failed to restart service: %v\n", err)
+		cprintf("❌ Failed to restart service: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✅ Service restarted")
+	cprintln("✅ Service restarted")
 }
 
 func reloadService(binaryName string) {
 	if err := sysservice.Reload(); err != nil {
-		fmt.Printf("❌ Failed to reload service: %v\n", err)
+		cprintf("❌ Failed to reload service: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✅ Configuration reloaded")
+	cprintln("✅ Configuration reloaded")
 }
 
 func disableService(binaryName string) {
 	if err := sysservice.Disable(); err != nil {
-		fmt.Printf("❌ Failed to disable service: %v\n", err)
+		cprintf("❌ Failed to disable service: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✅ Service disabled (will not start on boot)")
+	cprintln("✅ Service disabled (will not start on boot)")
 }
 
 func printServiceHelp(binaryName string) {
-	fmt.Printf(`Service Management
+	cprintf(`Service Management
 
 Available service commands:
   %s --service start         Start the service
@@ -541,36 +541,36 @@ func handleMaintenanceCommand(cmd string, optionalArg string, binaryName string)
 
 	case "restore":
 		if optionalArg == "" {
-			fmt.Println("❌ Restore requires a backup file path")
-			fmt.Printf("   Usage: %s --maintenance restore /path/to/backup.json\n", binaryName)
+			cprintln("❌ Restore requires a backup file path")
+			cprintf("   Usage: %s --maintenance restore /path/to/backup.json\n", binaryName)
 			os.Exit(1)
 		}
 		handleRestore(optionalArg, binaryName)
 
 	case "update":
 		if optionalArg == "" {
-			fmt.Println("❌ Update requires a setting name and value")
-			fmt.Printf("   Usage: %s --maintenance update setting_name value\n", binaryName)
+			cprintln("❌ Update requires a setting name and value")
+			cprintf("   Usage: %s --maintenance update setting_name value\n", binaryName)
 			os.Exit(1)
 		}
-		fmt.Printf("⚠️ Configuration update via CLI not yet implemented\n")
-		fmt.Printf("   Use the admin panel at /admin to update settings\n")
+		cprintf("⚠️ Configuration update via CLI not yet implemented\n")
+		cprintf("   Use the admin panel at /admin to update settings\n")
 
 	case "mode":
 		if optionalArg == "" {
-			fmt.Println("❌ Mode change requires a mode value")
-			fmt.Printf("   Usage: %s --maintenance mode {production|development}\n", binaryName)
+			cprintln("❌ Mode change requires a mode value")
+			cprintf("   Usage: %s --maintenance mode {production|development}\n", binaryName)
 			os.Exit(1)
 		}
 		handleModeChange(optionalArg, binaryName)
 
 	case "setup":
-		fmt.Printf("⚠️ Setup wizard is available at the web interface\n")
-		fmt.Printf("   Visit http://localhost:64580/admin/setup\n")
+		cprintf("⚠️ Setup wizard is available at the web interface\n")
+		cprintf("   Visit http://localhost:64580/admin/setup\n")
 
 	default:
-		fmt.Printf("Unknown maintenance command: %s\n", cmd)
-		fmt.Println("Valid commands: backup, restore, update, mode, setup")
+		cprintf("Unknown maintenance command: %s\n", cmd)
+		cprintln("Valid commands: backup, restore, update, mode, setup")
 		os.Exit(1)
 	}
 }
@@ -579,47 +579,47 @@ func handleMaintenanceCommand(cmd string, optionalArg string, binaryName string)
 func handleUpdateCommand(cmd string, optionalArg string, binaryName string) {
 	switch strings.ToLower(cmd) {
 	case "check":
-		fmt.Println("🔍 Checking for updates...")
-		fmt.Printf("   Current version: %s\n", Version)
-		fmt.Println("   ℹ️ Update checking requires internet connectivity")
-		fmt.Println("   ℹ️ Check https://github.com/apimgr/api/releases for latest version")
+		cprintln("🔍 Checking for updates...")
+		cprintf("   Current version: %s\n", Version)
+		cprintln("   ℹ️ Update checking requires internet connectivity")
+		cprintln("   ℹ️ Check https://github.com/apimgr/api/releases for latest version")
 
 	case "yes":
-		fmt.Println("🔍 Checking for updates...")
-		fmt.Printf("   Current version: %s\n", Version)
-		fmt.Println("\n⚠️ Automatic updates not yet implemented")
-		fmt.Println("   Please download the latest release manually from:")
-		fmt.Println("   https://github.com/apimgr/api/releases/latest")
+		cprintln("🔍 Checking for updates...")
+		cprintf("   Current version: %s\n", Version)
+		cprintln("\n⚠️ Automatic updates not yet implemented")
+		cprintln("   Please download the latest release manually from:")
+		cprintln("   https://github.com/apimgr/api/releases/latest")
 
 	case "branch":
 		if optionalArg == "" {
-			fmt.Println("❌ Branch command requires a channel argument")
-			fmt.Printf("   Usage: %s --update branch {stable|beta|daily}\n", binaryName)
+			cprintln("❌ Branch command requires a channel argument")
+			cprintf("   Usage: %s --update branch {stable|beta|daily}\n", binaryName)
 			os.Exit(1)
 		}
 		switch optionalArg {
 		case "stable", "beta", "daily":
 			cfg, err := config.Load()
 			if err != nil {
-				fmt.Printf("❌ Failed to load config: %v\n", err)
+				cprintf("❌ Failed to load config: %v\n", err)
 				os.Exit(1)
 			}
 			cfg.Server.Update.Branch = optionalArg
 			if err := config.Save(cfg); err != nil {
-				fmt.Printf("❌ Failed to save config: %v\n", err)
+				cprintf("❌ Failed to save config: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Printf("✅ Update channel set to: %s\n", optionalArg)
-			fmt.Println("   This setting will be used for future update checks")
+			cprintf("✅ Update channel set to: %s\n", optionalArg)
+			cprintln("   This setting will be used for future update checks")
 		default:
-			fmt.Printf("❌ Unknown update channel: %s\n", optionalArg)
-			fmt.Println("   Valid channels: stable, beta, daily")
+			cprintf("❌ Unknown update channel: %s\n", optionalArg)
+			cprintln("   Valid channels: stable, beta, daily")
 			os.Exit(1)
 		}
 
 	default:
-		fmt.Printf("Unknown update command: %s\n", cmd)
-		fmt.Printf("Usage: %s --update {check|yes|branch <channel>}\n", binaryName)
+		cprintf("Unknown update command: %s\n", cmd)
+		cprintf("Usage: %s --update {check|yes|branch <channel>}\n", binaryName)
 		os.Exit(1)
 	}
 }
@@ -630,30 +630,30 @@ func handleModeChange(newMode string, binaryName string) {
 	case "production", "development":
 		cfg, err := config.Load()
 		if err != nil {
-			fmt.Printf("❌ Failed to load config: %v\n", err)
+			cprintf("❌ Failed to load config: %v\n", err)
 			os.Exit(1)
 		}
 		cfg.Server.Mode = strings.ToLower(newMode)
 		if err := config.Save(cfg); err != nil {
-			fmt.Printf("❌ Failed to save config: %v\n", err)
+			cprintf("❌ Failed to save config: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("✅ Mode will be set to: %s\n", newMode)
-		fmt.Println("   Mode change requires server restart to take effect")
+		cprintf("✅ Mode will be set to: %s\n", newMode)
+		cprintln("   Mode change requires server restart to take effect")
 	default:
-		fmt.Printf("❌ Unknown mode: %s\n", newMode)
-		fmt.Println("   Valid modes: production, development")
+		cprintf("❌ Unknown mode: %s\n", newMode)
+		cprintln("   Valid modes: production, development")
 		os.Exit(1)
 	}
 }
 
 // Backup handling
 func handleBackup(backupPath string, binaryName string) {
-	fmt.Printf("📦 Creating backup to: %s\n", backupPath)
+	cprintf("📦 Creating backup to: %s\n", backupPath)
 
 	// Create backup directory
 	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
-		fmt.Printf("❌ Failed to create backup directory: %v\n", err)
+		cprintf("❌ Failed to create backup directory: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -673,45 +673,45 @@ func handleBackup(backupPath string, binaryName string) {
 	// Write backup file
 	data, err := json.MarshalIndent(backupData, "", "  ")
 	if err != nil {
-		fmt.Printf("❌ Failed to create backup data: %v\n", err)
+		cprintf("❌ Failed to create backup data: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		fmt.Printf("❌ Failed to write backup file: %v\n", err)
+		cprintf("❌ Failed to write backup file: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✅ Backup created successfully")
-	fmt.Printf("   Config: %s\n", config.GetConfigPath())
-	fmt.Printf("   Data: %s\n", paths.DataDir())
+	cprintln("✅ Backup created successfully")
+	cprintf("   Config: %s\n", config.GetConfigPath())
+	cprintf("   Data: %s\n", paths.DataDir())
 }
 
 // Restore handling
 func handleRestore(restorePath string, binaryName string) {
-	fmt.Printf("📥 Restoring from: %s\n", restorePath)
+	cprintf("📥 Restoring from: %s\n", restorePath)
 
 	// Read backup file
 	data, err := os.ReadFile(restorePath)
 	if err != nil {
-		fmt.Printf("❌ Failed to read backup file: %v\n", err)
+		cprintf("❌ Failed to read backup file: %v\n", err)
 		os.Exit(1)
 	}
 
 	var backupData map[string]interface{}
 	if err := json.Unmarshal(data, &backupData); err != nil {
-		fmt.Printf("❌ Invalid backup file format: %v\n", err)
+		cprintf("❌ Invalid backup file format: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Validate backup
 	if _, ok := backupData["version"]; !ok {
-		fmt.Println("❌ Invalid backup file: missing version")
+		cprintln("❌ Invalid backup file: missing version")
 		os.Exit(1)
 	}
 
-	fmt.Printf("   Backup version: %v\n", backupData["version"])
-	fmt.Printf("   Created: %v\n", backupData["created_at"])
+	cprintf("   Backup version: %v\n", backupData["version"])
+	cprintf("   Created: %v\n", backupData["created_at"])
 
 	// Restore config if present
 	if cfgData, ok := backupData["config"]; ok && cfgData != nil {
@@ -719,13 +719,13 @@ func handleRestore(restorePath string, binaryName string) {
 		var cfg config.Config
 		if err := json.Unmarshal(cfgBytes, &cfg); err == nil {
 			if err := config.Save(&cfg); err != nil {
-				fmt.Printf("⚠️ Failed to restore config: %v\n", err)
+				cprintf("⚠️ Failed to restore config: %v\n", err)
 			} else {
-				fmt.Println("✅ Configuration restored")
+				cprintln("✅ Configuration restored")
 			}
 		}
 	}
 
-	fmt.Println("✅ Restore completed")
-	fmt.Println("   Restart the service to apply changes")
+	cprintln("✅ Restore completed")
+	cprintln("   Restart the service to apply changes")
 }

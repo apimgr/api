@@ -2,7 +2,6 @@ package config
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"sync"
@@ -255,13 +254,6 @@ var (
 	currentConfig *Config
 	configMu      sync.RWMutex
 )
-
-// generateRandomString generates a random hex string
-func generateRandomString(length int) string {
-	bytes := make([]byte, length/2)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
-}
 
 // generateRandomPort generates a random port in the 64xxx range
 func generateRandomPort() string {

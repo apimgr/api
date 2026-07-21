@@ -31,6 +31,8 @@ import (
 	"unicode"
 
 	"github.com/google/uuid"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var rng *rand.Rand
@@ -195,8 +197,12 @@ func ToUpper(input string) string {
 	return strings.ToUpper(input)
 }
 
+// titleCaser is the non-deprecated replacement for strings.Title, per
+// staticcheck SA1019 (golang.org/x/text/cases instead of strings.Title).
+var titleCaser = cases.Title(language.Und)
+
 func ToTitle(input string) string {
-	return strings.Title(strings.ToLower(input))
+	return titleCaser.String(strings.ToLower(input))
 }
 
 func ToCamelCase(input string) string {
@@ -309,7 +315,7 @@ func LoremSentences(count int) []string {
 	for i := 0; i < count; i++ {
 		wordCount := 8 + rng.Intn(10) // 8-17 words per sentence
 		words := LoremWords(wordCount)
-		words[0] = strings.Title(words[0])
+		words[0] = titleCaser.String(words[0])
 		sentences[i] = strings.Join(words, " ") + "."
 	}
 

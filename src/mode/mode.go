@@ -10,8 +10,6 @@ import (
 	"github.com/apimgr/api/src/config"
 )
 
-const appName = "api"
-
 // Mode represents the application execution mode
 type Mode string
 
