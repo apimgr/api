@@ -46,13 +46,6 @@ server:
     title: "API Toolkit"
     tagline: "Universal API Services"
 
-  # Admin account
-  admin:
-    email: "admin@example.com"
-    username: "admin"
-    password: "" # Set on first run via setup wizard
-    token: "" # Generated automatically
-
   # SSL/TLS configuration
   ssl:
     enabled: false
@@ -157,9 +150,6 @@ export API_ADDRESS=0.0.0.0
 export API_MODE=production
 export API_FQDN=api.example.com
 
-# Admin settings
-export API_ADMIN_EMAIL=admin@example.com
-export API_ADMIN_USERNAME=admin
 
 # SSL settings
 export API_SSL_ENABLED=true

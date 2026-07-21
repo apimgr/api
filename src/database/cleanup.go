@@ -6,7 +6,7 @@ import (
 )
 
 // CleanupExpiredTokens removes expired tokens from the database
-// This includes API keys, password reset tokens, and email verification tokens
+// This includes password reset tokens and email verification tokens
 func CleanupExpiredTokens() (int64, error) {
 	db := GetUsersDB()
 	if db == nil {
@@ -16,29 +16,15 @@ func CleanupExpiredTokens() (int64, error) {
 	now := time.Now()
 	var totalCleaned int64
 
-	// Clean expired API keys
-	result, err := db.Exec(`
-		DELETE FROM api_keys
-		WHERE expires_at IS NOT NULL AND expires_at < ?
-	`, now)
-	if err != nil {
-		return 0, err
-	}
-	count, _ := result.RowsAffected()
-	totalCleaned += count
-	if count > 0 {
-		log.Printf("Database: Cleaned %d expired API keys", count)
-	}
-
 	// Clean expired password reset tokens
-	result, err = db.Exec(`
+	result, err := db.Exec(`
 		DELETE FROM password_resets
 		WHERE expires_at < ? OR used = 1
 	`, now)
 	if err != nil {
 		return totalCleaned, err
 	}
-	count, _ = result.RowsAffected()
+	count, _ := result.RowsAffected()
 	totalCleaned += count
 	if count > 0 {
 		log.Printf("Database: Cleaned %d expired password reset tokens", count)

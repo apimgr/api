@@ -63,7 +63,7 @@ function confirmDelete(form, message = 'Are you sure you want to delete this?') 
 // Form validation helper
 function validateForm(formId) {
   const form = document.getElementById(formId);
-  if (!form)returnfalse;
+  if (!form) return false;
   
   const required = form.querySelectorAll('[required]');
   let valid = true;

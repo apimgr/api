@@ -20,32 +20,62 @@ type Config struct {
 
 // ServerConfig holds server-related settings
 type ServerConfig struct {
-	Port     string         `yaml:"port"`
-	FQDN     string         `yaml:"fqdn"`
-	Address  string         `yaml:"address"`
-	Mode     string         `yaml:"mode"`
-	Branding BrandingConfig `yaml:"branding"`
-	Admin    AdminConfig    `yaml:"admin"`
-	SSL      SSLConfig      `yaml:"ssl"`
-	Schedule ScheduleConfig `yaml:"schedule"`
-	RateLimit RateLimitConfig `yaml:"rate_limit"`
-	Database DatabaseConfig `yaml:"database"`
-	Logs     LogsConfig     `yaml:"logs"`
-	Users    UsersConfig    `yaml:"users"`
+	Port           string               `yaml:"port"`
+	FQDN           string               `yaml:"fqdn"`
+	Address        string               `yaml:"address"`
+	Mode           string               `yaml:"mode"`
+	APIVersion     string               `yaml:"api_version"`
+	BaseURL        string               `yaml:"baseurl"`
+	Branding       BrandingConfig       `yaml:"branding"`
+	SSL            SSLConfig            `yaml:"ssl"`
+	Schedule       ScheduleConfig       `yaml:"schedule"`
+	TrustedProxies TrustedProxiesConfig `yaml:"trusted_proxies"`
+	RateLimit      RateLimitConfig      `yaml:"rate_limit"`
+	Database       DatabaseConfig       `yaml:"database"`
+	Healthz        HealthzConfig        `yaml:"healthz"`
+	Logs           LogsConfig           `yaml:"logs"`
+	Users          UsersConfig          `yaml:"users"`
+	Update         UpdateConfig         `yaml:"update"`
+}
+
+// UpdateConfig holds release-channel and auto-update settings
+type UpdateConfig struct {
+	// Branch selects the release channel: stable, beta, or daily
+	Branch string `yaml:"branch"`
+	// AutoInstall auto-installs updates found by the update_check task.
+	// Default OFF: the task only notifies; installing is always an
+	// explicit operator decision
+	AutoInstall bool `yaml:"auto_install"`
+	// DeferDays is the defer window (0-365): a release is only eligible
+	// once it is this many days old
+	DeferDays int `yaml:"defer_days"`
+}
+
+// HealthzConfig holds health-check endpoint settings
+type HealthzConfig struct {
+	Root HealthzRootConfig `yaml:"root"`
+}
+
+// HealthzRootConfig controls whether health information is exposed at "/"
+// in addition to "/server/healthz"
+type HealthzRootConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// TrustedProxiesConfig holds the reverse-proxy trust allow-list
+// Only peers in this list (plus always-trusted private ranges) may set
+// X-Forwarded-*/X-Real-IP and related client-IP/FQDN/proto headers
+type TrustedProxiesConfig struct {
+	// Additional IPs/CIDRs/DNS names to trust beyond the always-trusted
+	// private ranges (RFC 1918, RFC 4193, loopback, link-local)
+	Additional []string `yaml:"additional"`
 }
 
 // BrandingConfig holds branding/SEO settings
 type BrandingConfig struct {
-	Title   string `yaml:"title"`
-	Tagline string `yaml:"tagline"`
-}
-
-// AdminConfig holds admin authentication settings
-type AdminConfig struct {
-	Email    string `yaml:"email"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	Token    string `yaml:"token"`
+	Title       string `yaml:"title"`
+	Tagline     string `yaml:"tagline"`
+	Description string `yaml:"description"`
 }
 
 // SSLConfig holds SSL/TLS settings
@@ -69,14 +99,27 @@ type ScheduleConfig struct {
 
 // RateLimitConfig holds rate limiting settings
 type RateLimitConfig struct {
-	Enabled  bool `yaml:"enabled"`
-	Requests int  `yaml:"requests"`
-	Window   int  `yaml:"window"`
+	Enabled bool `yaml:"enabled"`
+	// GET/HEAD requests, per minute per IP
+	Read RateLimitClassConfig `yaml:"read"`
+	// POST/PUT/PATCH/DELETE requests, per minute per IP
+	Write RateLimitClassConfig `yaml:"write"`
+	// Health/status endpoints, per minute per IP
+	Health RateLimitClassConfig `yaml:"health"`
+	// Absolute ceiling across all endpoint types, per minute per IP
+	GlobalBurst int `yaml:"global_burst"`
+}
+
+// RateLimitClassConfig holds the requests/window pair for one rate limit class
+type RateLimitClassConfig struct {
+	Requests int `yaml:"requests"`
+	Window   int `yaml:"window"`
 }
 
 // DatabaseConfig holds database/storage settings
 type DatabaseConfig struct {
 	Driver string `yaml:"driver"`
+	URL    string `yaml:"url"`
 }
 
 // LogsConfig holds logging settings
@@ -85,6 +128,8 @@ type LogsConfig struct {
 	Access   LogConfig         `yaml:"access"`
 	Server   LogConfig         `yaml:"server"`
 	Error    LogConfig         `yaml:"error"`
+	App      LogConfig         `yaml:"app"`
+	Auth     LogConfig         `yaml:"auth"`
 	Audit    AuditLogConfig    `yaml:"audit"`
 	Security SecurityLogConfig `yaml:"security"`
 	Debug    DebugLogConfig    `yaml:"debug"`
@@ -110,7 +155,7 @@ type AuditLogConfig struct {
 }
 
 // SecurityLogConfig holds security log settings
-type SecurityLogConfig struct{
+type SecurityLogConfig struct {
 	Filename string `yaml:"filename"`
 	Format   string `yaml:"format"`
 	Custom   string `yaml:"custom"`
@@ -130,13 +175,12 @@ type DebugLogConfig struct {
 
 // UsersConfig holds user management settings
 type UsersConfig struct {
-	Enabled      bool                `yaml:"enabled"`
-	Registration RegistrationConfig  `yaml:"registration"`
-	Roles        RolesConfig         `yaml:"roles"`
-	Tokens       TokensConfig        `yaml:"tokens"`
-	Profile      ProfileConfig       `yaml:"profile"`
-	Auth         AuthConfig          `yaml:"auth"`
-	Limits       UserLimitsConfig    `yaml:"limits"`
+	Enabled      bool               `yaml:"enabled"`
+	Registration RegistrationConfig `yaml:"registration"`
+	Tokens       TokensConfig       `yaml:"tokens"`
+	Profile      ProfileConfig      `yaml:"profile"`
+	Auth         AuthConfig         `yaml:"auth"`
+	Limits       UserLimitsConfig   `yaml:"limits"`
 }
 
 // RegistrationConfig holds user registration settings
@@ -146,12 +190,6 @@ type RegistrationConfig struct {
 	RequireApproval          bool     `yaml:"require_approval"`
 	AllowedDomains           []string `yaml:"allowed_domains"`
 	BlockedDomains           []string `yaml:"blocked_domains"`
-}
-
-// RolesConfig holds role settings
-type RolesConfig struct {
-	Available []string `yaml:"available"`
-	Default   string   `yaml:"default"`
 }
 
 // TokensConfig holds API token settings
@@ -243,19 +281,16 @@ func defaultConfig() *Config {
 
 	return &Config{
 		Server: ServerConfig{
-			Port:    "64365",
-			FQDN:    hostname,
-			Address: "0.0.0.0",
-			Mode:    "production",
+			Port:       generateRandomPort(),
+			FQDN:       hostname,
+			Address:    "0.0.0.0",
+			Mode:       "production",
+			APIVersion: "v1",
+			BaseURL:    "/",
 			Branding: BrandingConfig{
-				Title:   "CasTools",
-				Tagline: "Universal API Toolkit",
-			},
-			Admin: AdminConfig{
-				Email:    "admin@" + hostname,
-				Username: "administrator",
-				Password: generateRandomString(32),
-				Token:    generateRandomString(64),
+				Title:       "CasTools",
+				Tagline:     "Universal API Toolkit",
+				Description: "Universal API toolkit for text, crypto, network, and system utilities",
 			},
 			SSL: SSLConfig{
 				Enabled:  false,
@@ -269,13 +304,29 @@ func defaultConfig() *Config {
 			Schedule: ScheduleConfig{
 				Enabled: true,
 			},
+			TrustedProxies: TrustedProxiesConfig{
+				Additional: []string{},
+			},
 			RateLimit: RateLimitConfig{
-				Enabled:  true,
-				Requests: 120,
-				Window:   60,
+				Enabled:     true,
+				Read:        RateLimitClassConfig{Requests: 120, Window: 60},
+				Write:       RateLimitClassConfig{Requests: 10, Window: 60},
+				Health:      RateLimitClassConfig{Requests: 120, Window: 60},
+				GlobalBurst: 240,
 			},
 			Database: DatabaseConfig{
-				Driver: "file",
+				Driver: "sqlite",
+				URL:    filepath.Join(paths.DataDir(), "db", "server.db"),
+			},
+			Healthz: HealthzConfig{
+				Root: HealthzRootConfig{
+					Enabled: false,
+				},
+			},
+			Update: UpdateConfig{
+				Branch:      "stable",
+				AutoInstall: false,
+				DeferDays:   0,
 			},
 			Logs: LogsConfig{
 				Level: "warn",
@@ -294,6 +345,18 @@ func defaultConfig() *Config {
 				Error: LogConfig{
 					Filename: "error.log",
 					Format:   "text",
+					Rotate:   "weekly,50MB",
+					Keep:     "none",
+				},
+				App: LogConfig{
+					Filename: "app.log",
+					Format:   "logfmt",
+					Rotate:   "weekly,50MB",
+					Keep:     "none",
+				},
+				Auth: LogConfig{
+					Filename: "auth.log",
+					Format:   "syslog",
 					Rotate:   "weekly,50MB",
 					Keep:     "none",
 				},
@@ -327,10 +390,6 @@ func defaultConfig() *Config {
 					RequireApproval:          false,
 					AllowedDomains:           []string{},
 					BlockedDomains:           []string{},
-				},
-				Roles: RolesConfig{
-					Available: []string{"admin", "user"},
-					Default:   "user",
 				},
 				Tokens: TokensConfig{
 					Enabled:        true,
@@ -388,6 +447,7 @@ func Load() (*Config, error) {
 		if err := Save(cfg); err != nil {
 			return cfg, err
 		}
+		applyDatabaseEnvOverrides(cfg)
 		return cfg, nil
 	}
 
@@ -402,12 +462,29 @@ func Load() (*Config, error) {
 		return cfg, err
 	}
 
+	applyDatabaseEnvOverrides(cfg)
+
 	// Store in global
 	configMu.Lock()
 	currentConfig = cfg
 	configMu.Unlock()
 
 	return cfg, nil
+}
+
+// applyDatabaseEnvOverrides applies DATABASE_DRIVER/DATABASE_URL/DATABASE_DIR
+// runtime environment variables over the loaded config. These are checked
+// on every load (not just first run), and take priority over the
+// server.yml values when explicitly set.
+func applyDatabaseEnvOverrides(cfg *Config) {
+	if v := os.Getenv("DATABASE_DRIVER"); v != "" {
+		cfg.Server.Database.Driver = v
+	}
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		cfg.Server.Database.URL = v
+	} else if v := os.Getenv("DATABASE_DIR"); v != "" {
+		cfg.Server.Database.URL = filepath.Join(v, "server.db")
+	}
 }
 
 // Save saves configuration to file
@@ -459,9 +536,6 @@ func Reload() error {
 	Set(cfg)
 	return nil
 }
-
-// ParseBool parses various boolean representations
-// Accepts: 1, yes, true, enable, enabled, on (and their negatives)
 
 // GetConfigPath returns the path to the config file
 func GetConfigPath() string {

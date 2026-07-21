@@ -334,14 +334,14 @@ func PasswordStrength(password string) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"score":          score,
-		"strength":       strength,
-		"length":         length,
-		"entropy_bits":   entropy,
-		"has_uppercase":  hasUpper,
-		"has_lowercase":  hasLower,
-		"has_numbers":    hasDigit,
-		"has_symbols":    hasSymbol,
-		"charset_size":   charsetSize,
+		"score":         score,
+		"strength":      strength,
+		"length":        length,
+		"entropy_bits":  entropy,
+		"has_uppercase": hasUpper,
+		"has_lowercase": hasLower,
+		"has_numbers":   hasDigit,
+		"has_symbols":   hasSymbol,
+		"charset_size":  charsetSize,
 	}
 }

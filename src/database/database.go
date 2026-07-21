@@ -20,7 +20,7 @@ var (
 // Init initializes the database connections
 // Creates two SQLite databases per spec:
 // - server.db: Server state (config, sessions, rate limits, audit, scheduler)
-// - users.db: User data (admins, users, API keys)
+// - users.db: User data (admins, users)
 func Init(dataDir string) error {
 	// Ensure database directory exists
 	dbDir := filepath.Join(dataDir, "db")
@@ -280,22 +280,6 @@ func createUsersSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 	CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
-	-- API authentication keys
-	CREATE TABLE IF NOT EXISTS api_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		key TEXT UNIQUE NOT NULL,
-		name TEXT NOT NULL,
-		admin_id INTEGER,
-		user_id INTEGER,
-		permissions TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME,
-		last_used DATETIME,
-		enabled BOOLEAN DEFAULT 1
-	);
-	CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
-	CREATE INDEX IF NOT EXISTS idx_api_keys_expires ON api_keys(expires_at);
-
 	-- Password reset tokens
 	CREATE TABLE IF NOT EXISTS password_resets (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -341,16 +325,5 @@ func createUsersSchema() error {
 	}
 
 	log.Println("Database: Users schema created/verified")
-	return nil
-}
-
-// RunMigrations runs any pending database migrations
-func RunMigrations() error {
-	// TODO: Implement migration system
-	// Check current schema version
-	// Apply migrations in order
-	// Update schema version
-
-	log.Println("Database: Migrations check completed")
 	return nil
 }

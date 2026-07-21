@@ -597,7 +597,7 @@ func RegisterTextRoutes(r chi.Router) {
 	r.Get("/api/v1/text/uuids", TextUUIDsHandler)
 	r.Get("/api/v1/text/hash", TextHashHandler)
 	r.Get("/api/v1/text/hash/all", TextHashAllHandler)
-	
+
 	// Encoding
 	r.Get("/api/v1/text/base64/encode", TextBase64EncodeHandler)
 	r.Get("/api/v1/text/base64/decode", TextBase64DecodeHandler)
@@ -609,7 +609,7 @@ func RegisterTextRoutes(r chi.Router) {
 	r.Get("/api/v1/text/hex/decode", TextHexDecodeHandler)
 	r.Get("/api/v1/text/url/encode", TextURLEncodeHandler)
 	r.Get("/api/v1/text/url/decode", TextURLDecodeHandler)
-	
+
 	// Case
 	r.Get("/api/v1/text/case/lower", TextCaseLowerHandler)
 	r.Get("/api/v1/text/case/upper", TextCaseUpperHandler)
@@ -617,17 +617,17 @@ func RegisterTextRoutes(r chi.Router) {
 	r.Get("/api/v1/text/case/camel", TextCaseCamelHandler)
 	r.Get("/api/v1/text/case/snake", TextCaseSnakeHandler)
 	r.Get("/api/v1/text/case/kebab", TextCaseKebabHandler)
-	
+
 	// Utilities
 	r.Get("/api/v1/text/reverse", TextReverseHandler)
 	r.Get("/api/v1/text/stats", TextStatsHandler)
 	r.Get("/api/v1/text/rot13", TextROT13Handler)
-	
+
 	// Lorem
 	r.Get("/api/v1/text/lorem/words", TextLoremWordsHandler)
 	r.Get("/api/v1/text/lorem/sentences", TextLoremSentencesHandler)
 	r.Get("/api/v1/text/lorem/paragraphs", TextLoremParagraphsHandler)
-	
+
 	// IDs
 	r.Get("/api/v1/text/ulid", TextULIDHandler)
 	r.Get("/api/v1/text/nanoid", TextNanoIDHandler)

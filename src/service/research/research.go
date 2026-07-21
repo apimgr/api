@@ -35,7 +35,7 @@ type Reference struct {
 
 func (s *Service) GenerateBibliography(references []Reference, style string) []string {
 	var bibliography []string
-	
+
 	for _, ref := range references {
 		var citation string
 		switch style {
@@ -50,7 +50,7 @@ func (s *Service) GenerateBibliography(references []Reference, style string) []s
 		}
 		bibliography = append(bibliography, citation)
 	}
-	
+
 	return bibliography
 }
 

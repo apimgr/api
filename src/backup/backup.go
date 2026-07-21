@@ -6,7 +6,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +14,15 @@ import (
 	"path/filepath"
 	"time"
 
-	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/crypto/argon2"
+)
+
+// Argon2id key-derivation parameters (PART 21: password -> 256-bit AES-256-GCM key)
+const (
+	argon2Time    = 1
+	argon2Memory  = 64 * 1024
+	argon2Threads = 4
+	argon2KeyLen  = 32
 )
 
 // Backup represents a backup file
@@ -175,13 +182,13 @@ func Restore(backupPath string, password string) error {
 // encrypt encrypts data using AES-256-GCM
 // Returns an io.WriteCloser that encrypts data as it's written
 func encrypt(w io.Writer, password string) (io.WriteCloser, error) {
-	// Derive key from password using PBKDF2
+	// Derive key from password using Argon2id
 	salt := make([]byte, 32)
 	if _, err := rand.Read(salt); err != nil {
 		return nil, err
 	}
 
-	key := pbkdf2.Key([]byte(password), salt, 100000, 32, sha256.New)
+	key := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
 
 	// Create AES cipher
 	block, err := aes.NewCipher(key)
@@ -221,8 +228,8 @@ func decrypt(r io.Reader, password string) (io.Reader, error) {
 		return nil, err
 	}
 
-	// Derive key from password
-	key := pbkdf2.Key([]byte(password), salt, 100000, 32, sha256.New)
+	// Derive key from password using Argon2id
+	key := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
 
 	// Create AES cipher
 	block, err := aes.NewCipher(key)
@@ -242,8 +249,7 @@ func decrypt(r io.Reader, password string) (io.Reader, error) {
 		return nil, err
 	}
 
-	// TODO: Return a streaming cipher reader
-	// For now, return original reader
+	// Return a reader that decrypts the buffered ciphertext on first read
 	return &decryptedReader{r: r, gcm: gcm, nonce: nonce}, nil
 }
 

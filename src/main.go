@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -19,14 +18,19 @@ import (
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/geoip"
+	"github.com/apimgr/api/src/metrics"
+	appmode "github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/paths"
+	"github.com/apimgr/api/src/pidfile"
 	"github.com/apimgr/api/src/scheduler"
 	"github.com/apimgr/api/src/server"
 	"github.com/apimgr/api/src/server/handler"
+	"github.com/apimgr/api/src/sysservice"
 )
 
 var (
 	Version   = "1.0.0"
+	CommitID  = "unknown"
 	BuildTime = "unknown"
 )
 
@@ -45,11 +49,17 @@ func main() {
 	configDir := flag.String("config", "", "Configuration directory")
 	dataDir := flag.String("data", "", "Data directory")
 	logDir := flag.String("log", "", "Log directory")
+	cacheDir := flag.String("cache", "", "Cache directory")
+	backupDir := flag.String("backup", "", "Backup directory")
 	pidFile := flag.String("pid", "", "PID file path")
 	address := flag.String("address", "", "Listen address")
 	port := flag.String("port", "", "Listen port")
+	baseURL := flag.String("baseurl", "", "URL path prefix (default: /)")
 	daemon := flag.Bool("daemon", false, "Daemonize (detach from terminal)")
 	debug := flag.Bool("debug", false, "Enable debug mode")
+	colorFlag := flag.String("color", "auto", "Color output: auto, yes, no")
+	langFlag := flag.String("lang", "", "Interface language code")
+	shellCmd := flag.String("shell", "", "Shell integration: completions, init, help")
 
 	// Status check
 	showStatus := flag.Bool("status", false, "Show service status")
@@ -80,8 +90,40 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Resolve directory/network flags against their environment variable
+	// fallbacks (CLI flag > env var > default), per PART 8.
+	resolvedConfigDir := envOrFlag(*configDir, "CONFIG_DIR")
+	resolvedDataDir := envOrFlag(*dataDir, "DATA_DIR")
+	resolvedLogDir := envOrFlag(*logDir, "LOG_DIR")
+	resolvedCacheDir := envOrFlag(*cacheDir, "CACHE_DIR")
+	resolvedBackupDir := envOrFlag(*backupDir, "BACKUP_DIR")
+	resolvedPIDFile := envOrFlag(*pidFile, "PID_FILE")
+	resolvedAddress := envOrFlag(*address, "LISTEN")
+	resolvedPort := envOrFlag(*port, "PORT")
+
 	// Initialize paths early for commands that need them
-	paths.Init(*configDir, *dataDir, *logDir)
+	paths.Init(resolvedConfigDir, resolvedDataDir, resolvedLogDir)
+	paths.InitCache(resolvedCacheDir)
+	paths.InitBackup(resolvedBackupDir)
+
+	// Resolve --color/NO_COLOR and --lang, applying them process-wide
+	applyColorMode(*colorFlag)
+	if *langFlag != "" {
+		appmode.SetLang(*langFlag)
+	} else if envLang := os.Getenv("LANG"); envLang != "" {
+		appmode.SetLang(envLang)
+	}
+
+	// Handle --shell before anything else needs a config/database
+	if *shellCmd != "" {
+		args := flag.Args()
+		shellArg := ""
+		if len(args) > 0 {
+			shellArg = args[0]
+		}
+		handleShellCommand(*shellCmd, shellArg, binaryName)
+		os.Exit(0)
+	}
 
 	// Handle status check
 	if *showStatus {
@@ -125,11 +167,6 @@ func main() {
 	}
 	defer database.Close()
 
-	// Run database migrations
-	if err := database.RunMigrations(); err != nil {
-		log.Fatalf("Failed to run database migrations: %v", err)
-	}
-
 	// Set database for health checks
 	handler.SetDatabase(database.GetServerDB())
 
@@ -150,25 +187,60 @@ func main() {
 	}
 
 	// Override config with CLI flags (flags have highest priority)
-	if *mode != "" {
-		cfg.Server.Mode = *mode
+	if resolvedAddress != "" {
+		cfg.Server.Address = resolvedAddress
 	}
-	if *address != "" {
-		cfg.Server.Address = *address
+	if resolvedPort != "" {
+		cfg.Server.Port = resolvedPort
 	}
-	if *port != "" {
-		cfg.Server.Port = *port
-	}
-
-	// Set debug mode if flag provided
-	if *debug {
-		os.Setenv("DEBUG", "true")
+	if *baseURL != "" {
+		cfg.Server.BaseURL = *baseURL
 	}
 
-	// TODO: Handle --daemon flag (requires platform-specific fork/detach code)
-	// TODO: Handle --pid flag (write PID file)
-	_ = daemon
-	_ = pidFile
+	// Determine whether --debug was explicitly passed (as opposed to
+	// defaulting to false), so it can win over DEBUG env / mode alias
+	// per the priority order in mode.Initialize.
+	debugFlagSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "debug" {
+			debugFlagSet = true
+		}
+	})
+
+	// Set application mode + debug flag (CLI > env > "debug" mode alias > default)
+	if err := appmode.Initialize(*mode, *debug, debugFlagSet); err != nil {
+		log.Fatalf("Invalid --mode value: %v", err)
+	}
+	cfg.Server.Mode = appmode.Get().String()
+
+	// Daemonize (detach from terminal) before writing the PID file, so the
+	// PID file reflects the actual detached process, not the parent. Per
+	// AI.md PART 8, --daemon is a manual-start-only concern: --service
+	// start decides for itself via shouldDaemonize/detectServiceManager.
+	if *daemon {
+		if err := daemonize(); err != nil {
+			log.Fatalf("Failed to daemonize: %v", err)
+		}
+	}
+
+	// Write PID file (skipped entirely in containers per PART 8 - the
+	// container runtime supervises the process and PIDs are namespace-local)
+	pidPath := resolvedPIDFile
+	if pidPath == "" {
+		pidPath = paths.DefaultPIDPath()
+	}
+	if err := pidfile.WritePIDFile(pidPath); err != nil {
+		log.Fatalf("Failed to write PID file: %v", err)
+	}
+	defer pidfile.RemovePIDFile(pidPath)
+
+	// Pass build version info to the health handler
+	handler.Version = Version
+	handler.CommitID = CommitID
+	handler.BuildDate = BuildTime
+
+	// Pass build version info to the metrics app_info gauge
+	metrics.Get().SetBuildInfo(Version, CommitID, BuildTime)
 
 	// Create server
 	srv := server.New(cfg)
@@ -250,11 +322,17 @@ Server Options:
   --config DIR            Set configuration directory
   --data DIR              Set data directory
   --log DIR               Set log directory
+  --cache DIR             Set cache directory
+  --backup DIR            Set backup directory
   --pid FILE              Set PID file path
   --address ADDR          Set listen address (default: 0.0.0.0)
   --port PORT             Set listen port (default: 64580)
+  --baseurl URL           Set the public base URL
   --daemon                Daemonize (detach from terminal)
   --debug                 Enable debug mode (verbose logging, debug endpoints)
+  --color MODE            Set color output (auto|yes|no)
+  --lang CODE             Set interface language
+  --shell ACTION [SHELL]  Shell integration (completions|init|help)
 
 Service Management:
   --service start         Start the service
@@ -281,11 +359,16 @@ Update Commands:
   --update branch daily          Switch to daily channel
 
 Environment Variables:
-  API_MODE                Application mode
-  API_CONFIG              Configuration directory
-  API_DATA                Data directory
-  API_LOG                 Log directory
-  API_DEBUG               Enable debug mode
+  MODE                    Application mode
+  CONFIG_DIR              Configuration directory
+  DATA_DIR                Data directory
+  CACHE_DIR               Cache directory
+  LOG_DIR                 Log directory
+  BACKUP_DIR              Backup directory
+  PID_FILE                PID file path
+  PORT                    Listen port
+  LISTEN                  Listen address
+  DEBUG                   Enable debug mode
 
 Signals:
   SIGHUP                  Reload configuration (auto via file watcher)
@@ -373,80 +456,24 @@ func handleServiceCommand(cmd string, binaryName string) {
 }
 
 func installService(binaryName string) {
-	if runtime.GOOS != "linux" {
-		fmt.Println("❌ Service installation is only supported on Linux")
+	if err := sysservice.Install(); err != nil {
+		fmt.Printf("❌ Failed to install service: %v\n", err)
 		os.Exit(1)
 	}
-
-	execPath, err := os.Executable()
-	if err != nil {
-		fmt.Printf("❌ Failed to get executable path: %v\n", err)
-		os.Exit(1)
-	}
-
-	serviceName := "api"
-	serviceContent := fmt.Sprintf(`[Unit]
-Description=API - Universal API Toolkit
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=%s
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-`, execPath)
-
-	servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
-	if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
-		fmt.Printf("❌ Failed to write service file: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Reload systemd
-	exec.Command("systemctl", "daemon-reload").Run()
-
 	fmt.Println("✅ Service installed successfully")
 	fmt.Printf("   Run '%s --service start' to start the service\n", binaryName)
-	fmt.Printf("   Run 'systemctl enable %s' to start on boot\n", serviceName)
 }
 
 func uninstallService(binaryName string) {
-	if runtime.GOOS != "linux" {
-		fmt.Println("❌ Service uninstallation is only supported on Linux")
+	if err := sysservice.Uninstall(); err != nil {
+		fmt.Printf("❌ Failed to uninstall service: %v\n", err)
 		os.Exit(1)
 	}
-
-	serviceName := "api"
-
-	// Stop the service first
-	exec.Command("systemctl", "stop", serviceName).Run()
-	exec.Command("systemctl", "disable", serviceName).Run()
-
-	servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
-	if err := os.Remove(servicePath); err != nil && !os.IsNotExist(err) {
-		fmt.Printf("❌ Failed to remove service file: %v\n", err)
-		os.Exit(1)
-	}
-
-	exec.Command("systemctl", "daemon-reload").Run()
-
 	fmt.Println("✅ Service uninstalled successfully")
 }
 
 func startService(binaryName string) {
-	if runtime.GOOS != "linux" {
-		fmt.Println("❌ Service management is only supported on Linux")
-		os.Exit(1)
-	}
-
-	serviceName := "api"
-	if err := exec.Command("systemctl", "start", serviceName).Run(); err != nil {
+	if err := sysservice.Start(); err != nil {
 		fmt.Printf("❌ Failed to start service: %v\n", err)
 		os.Exit(1)
 	}
@@ -454,13 +481,7 @@ func startService(binaryName string) {
 }
 
 func stopService(binaryName string) {
-	if runtime.GOOS != "linux" {
-		fmt.Println("❌ Service management is only supported on Linux")
-		os.Exit(1)
-	}
-
-	serviceName := "api"
-	if err := exec.Command("systemctl", "stop", serviceName).Run(); err != nil {
+	if err := sysservice.Stop(); err != nil {
 		fmt.Printf("❌ Failed to stop service: %v\n", err)
 		os.Exit(1)
 	}
@@ -468,13 +489,7 @@ func stopService(binaryName string) {
 }
 
 func restartService(binaryName string) {
-	if runtime.GOOS != "linux" {
-		fmt.Println("❌ Service management is only supported on Linux")
-		os.Exit(1)
-	}
-
-	serviceName := "api"
-	if err := exec.Command("systemctl", "restart", serviceName).Run(); err != nil {
+	if err := sysservice.Restart(); err != nil {
 		fmt.Printf("❌ Failed to restart service: %v\n", err)
 		os.Exit(1)
 	}
@@ -482,13 +497,7 @@ func restartService(binaryName string) {
 }
 
 func reloadService(binaryName string) {
-	if runtime.GOOS != "linux" {
-		fmt.Println("❌ Service management is only supported on Linux")
-		os.Exit(1)
-	}
-
-	serviceName := "api"
-	if err := exec.Command("systemctl", "reload-or-restart", serviceName).Run(); err != nil {
+	if err := sysservice.Reload(); err != nil {
 		fmt.Printf("❌ Failed to reload service: %v\n", err)
 		os.Exit(1)
 	}
@@ -496,13 +505,7 @@ func reloadService(binaryName string) {
 }
 
 func disableService(binaryName string) {
-	if runtime.GOOS != "linux" {
-		fmt.Println("❌ Service management is only supported on Linux")
-		os.Exit(1)
-	}
-
-	serviceName := "api"
-	if err := exec.Command("systemctl", "disable", serviceName).Run(); err != nil {
+	if err := sysservice.Disable(); err != nil {
 		fmt.Printf("❌ Failed to disable service: %v\n", err)
 		os.Exit(1)
 	}
@@ -596,9 +599,18 @@ func handleUpdateCommand(cmd string, optionalArg string, binaryName string) {
 		}
 		switch optionalArg {
 		case "stable", "beta", "daily":
+			cfg, err := config.Load()
+			if err != nil {
+				fmt.Printf("❌ Failed to load config: %v\n", err)
+				os.Exit(1)
+			}
+			cfg.Server.Update.Branch = optionalArg
+			if err := config.Save(cfg); err != nil {
+				fmt.Printf("❌ Failed to save config: %v\n", err)
+				os.Exit(1)
+			}
 			fmt.Printf("✅ Update channel set to: %s\n", optionalArg)
 			fmt.Println("   This setting will be used for future update checks")
-			// TODO: Store update channel preference in config
 		default:
 			fmt.Printf("❌ Unknown update channel: %s\n", optionalArg)
 			fmt.Println("   Valid channels: stable, beta, daily")
@@ -616,9 +628,18 @@ func handleUpdateCommand(cmd string, optionalArg string, binaryName string) {
 func handleModeChange(newMode string, binaryName string) {
 	switch strings.ToLower(newMode) {
 	case "production", "development":
+		cfg, err := config.Load()
+		if err != nil {
+			fmt.Printf("❌ Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+		cfg.Server.Mode = strings.ToLower(newMode)
+		if err := config.Save(cfg); err != nil {
+			fmt.Printf("❌ Failed to save config: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Printf("✅ Mode will be set to: %s\n", newMode)
 		fmt.Println("   Mode change requires server restart to take effect")
-		// TODO: Update config file with new mode
 	default:
 		fmt.Printf("❌ Unknown mode: %s\n", newMode)
 		fmt.Println("   Valid modes: production, development")
@@ -708,5 +729,3 @@ func handleRestore(restorePath string, binaryName string) {
 	fmt.Println("✅ Restore completed")
 	fmt.Println("   Restart the service to apply changes")
 }
-
-// Generate secure password

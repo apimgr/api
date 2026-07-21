@@ -38,18 +38,18 @@ func (s *Service) GenerateMockUser() map[string]interface{} {
 	}
 }
 
-func (s *Service) GenerateMockAPI Response() map[string]interface{} {
+func (s *Service) GenerateMockAPIResponse() map[string]interface{} {
 	return map[string]interface{}{
-		"success": true,
-		"message": "Test response",
-		"data":    map[string]string{"test": "value"},
+		"success":   true,
+		"message":   "Test response",
+		"data":      map[string]string{"test": "value"},
 		"timestamp": time.Now().Format(time.RFC3339),
 	}
 }
 
 // Assertion helpers
 type TestResult struct {
-	Passed bool
+	Passed  bool
 	Message string
 }
 

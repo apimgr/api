@@ -51,8 +51,8 @@ func SetThemeCookie(w http.ResponseWriter, theme Theme) {
 		Value:    string(theme),
 		Path:     "/",
 		MaxAge:   365 * 24 * 60 * 60, // 1 year
-		HttpOnly: false,               // JavaScript needs to read this
-		Secure:   false,               // Set to true when SSL is enabled
+		HttpOnly: false,              // JavaScript needs to read this
+		Secure:   false,              // Set to true when SSL is enabled
 		SameSite: http.SameSiteLaxMode,
 	})
 }

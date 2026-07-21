@@ -22,26 +22,26 @@ func Now(timezone string) (map[string]interface{}, error) {
 	_, offset := now.Zone()
 
 	return map[string]interface{}{
-		"unix":              now.Unix(),
-		"unix_ms":           now.UnixMilli(),
-		"unix_ns":           now.UnixNano(),
-		"iso8601":           now.Format(time.RFC3339),
-		"rfc2822":           now.Format(time.RFC1123Z),
-		"rfc3339":           now.Format(time.RFC3339),
-		"rfc3339_nano":      now.Format(time.RFC3339Nano),
-		"human":             now.Format("Monday, January 2, 2006 at 3:04:05 PM MST"),
-		"date":              now.Format("2006-01-02"),
-		"time":              now.Format("15:04:05"),
-		"timezone":          loc.String(),
-		"offset":            formatOffset(offset),
-		"offset_seconds":    offset,
-		"day_of_week":       int(now.Weekday()),
-		"day_of_week_name":  now.Weekday().String(),
-		"day_of_year":       now.YearDay(),
-		"week_number":       getWeekNumber(now),
-		"quarter":           (int(now.Month())-1)/3 + 1,
-		"is_leap_year":      isLeapYear(now.Year()),
-		"days_in_month":     daysInMonth(now.Year(), int(now.Month())),
+		"unix":             now.Unix(),
+		"unix_ms":          now.UnixMilli(),
+		"unix_ns":          now.UnixNano(),
+		"iso8601":          now.Format(time.RFC3339),
+		"rfc2822":          now.Format(time.RFC1123Z),
+		"rfc3339":          now.Format(time.RFC3339),
+		"rfc3339_nano":     now.Format(time.RFC3339Nano),
+		"human":            now.Format("Monday, January 2, 2006 at 3:04:05 PM MST"),
+		"date":             now.Format("2006-01-02"),
+		"time":             now.Format("15:04:05"),
+		"timezone":         loc.String(),
+		"offset":           formatOffset(offset),
+		"offset_seconds":   offset,
+		"day_of_week":      int(now.Weekday()),
+		"day_of_week_name": now.Weekday().String(),
+		"day_of_year":      now.YearDay(),
+		"week_number":      getWeekNumber(now),
+		"quarter":          (int(now.Month())-1)/3 + 1,
+		"is_leap_year":     isLeapYear(now.Year()),
+		"days_in_month":    daysInMonth(now.Year(), int(now.Month())),
 	}, nil
 }
 
@@ -72,18 +72,18 @@ func FromUnix(timestamp int64, timezone string) (map[string]interface{}, error) 
 	_, offset := t.Zone()
 
 	return map[string]interface{}{
-		"unix":           t.Unix(),
-		"unix_ms":        t.UnixMilli(),
-		"iso8601":        t.Format(time.RFC3339),
-		"rfc2822":        t.Format(time.RFC1123Z),
-		"human":          t.Format("Monday, January 2, 2006 at 3:04:05 PM MST"),
-		"date":           t.Format("2006-01-02"),
-		"time":           t.Format("15:04:05"),
-		"timezone":       loc.String(),
-		"offset":         formatOffset(offset),
-		"day_of_week":    t.Weekday().String(),
-		"day_of_year":    t.YearDay(),
-		"is_leap_year":   isLeapYear(t.Year()),
+		"unix":         t.Unix(),
+		"unix_ms":      t.UnixMilli(),
+		"iso8601":      t.Format(time.RFC3339),
+		"rfc2822":      t.Format(time.RFC1123Z),
+		"human":        t.Format("Monday, January 2, 2006 at 3:04:05 PM MST"),
+		"date":         t.Format("2006-01-02"),
+		"time":         t.Format("15:04:05"),
+		"timezone":     loc.String(),
+		"offset":       formatOffset(offset),
+		"day_of_week":  t.Weekday().String(),
+		"day_of_year":  t.YearDay(),
+		"is_leap_year": isLeapYear(t.Year()),
 	}, nil
 }
 
@@ -123,10 +123,10 @@ func AddDuration(timestamp int64, duration string) (map[string]interface{}, erro
 	result := t.Add(d)
 
 	return map[string]interface{}{
-		"original":     t.Format(time.RFC3339),
-		"duration":     duration,
-		"result":       result.Format(time.RFC3339),
-		"result_unix":  result.Unix(),
+		"original":    t.Format(time.RFC3339),
+		"duration":    duration,
+		"result":      result.Format(time.RFC3339),
+		"result_unix": result.Unix(),
 	}, nil
 }
 

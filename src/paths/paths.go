@@ -5,6 +5,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"time"
 )
 
 const (
@@ -18,7 +20,29 @@ var (
 	configDir string
 	dataDir   string
 	logsDir   string
+	cacheDir  string
+	backupDir string
 )
+
+// startedElevated captures whether the process began with elevated
+// privileges, evaluated once at package init before any privilege drop.
+// GetBackupDir's fallback logic must not flip modes mid-run.
+var startedElevated = isElevatedNow()
+
+// isElevatedNow reports whether the current process is running with
+// root/Administrator privileges at this instant
+func isElevatedNow() bool {
+	if runtime.GOOS == "windows" {
+		return os.Getenv("USERDOMAIN") == os.Getenv("COMPUTERNAME")
+	}
+	return os.Geteuid() == 0
+}
+
+// IsElevated returns whether the process started with elevated privileges,
+// captured once at startup before any privilege drop (see startedElevated).
+func IsElevated() bool {
+	return startedElevated
+}
 
 // Init initializes the paths with optional overrides
 func Init(config, data, logs string) {
@@ -60,11 +84,43 @@ func LogDir() string {
 	return logs
 }
 
+// InitCache sets the cache directory override (from --cache flag)
+func InitCache(cache string) {
+	if cache != "" {
+		cacheDir = cache
+	}
+}
+
+// InitBackup sets the backup directory override (from --backup flag)
+func InitBackup(backup string) {
+	if backup != "" {
+		backupDir = backup
+	}
+}
+
+// BackupDir returns the backup directory, honoring the --backup override
+func BackupDir() string {
+	if backupDir != "" {
+		return backupDir
+	}
+	return GetBackupDir()
+}
+
+// CacheDir returns the cache directory
+func CacheDir() string {
+	if cacheDir != "" {
+		return cacheDir
+	}
+	return GetCacheDir()
+}
+
 // GetDefaultDirs returns OS-specific default directories based on privileges
 func GetDefaultDirs() (configDir, dataDir, logsDir string) {
 	// Check if running in container
 	if IsRunningInContainer() {
-		return "/config", "/data", "/data/logs"
+		return filepath.Join("/config", ProjectName),
+			filepath.Join("/data", ProjectName),
+			filepath.Join("/data/log", ProjectName)
 	}
 
 	// Check if running as root/admin
@@ -143,11 +199,71 @@ func GetDefaultDirs() (configDir, dataDir, logsDir string) {
 			}
 			configDir = filepath.Join(xdgConfig, OrgName, ProjectName)
 			dataDir = filepath.Join(xdgData, OrgName, ProjectName)
-			logsDir = filepath.Join(xdgData, OrgName, ProjectName, "logs")
+			logsDir = filepath.Join(homeDir, ".local", "log", OrgName, ProjectName)
 		}
 	}
 
 	return configDir, dataDir, logsDir
+}
+
+// GetCacheDir returns the OS-specific default cache directory based on
+// privileges, per AI.md PART 4 (Cache row of the path tables)
+func GetCacheDir() string {
+	if IsRunningInContainer() {
+		return filepath.Join("/data", ProjectName, "cache")
+	}
+
+	isRoot := false
+	if runtime.GOOS == "windows" {
+		isRoot = os.Getenv("USERDOMAIN") == os.Getenv("COMPUTERNAME")
+	} else {
+		isRoot = os.Geteuid() == 0
+	}
+
+	if isRoot {
+		switch runtime.GOOS {
+		case "windows":
+			programData := os.Getenv("ProgramData")
+			if programData == "" {
+				programData = "C:\\ProgramData"
+			}
+			return filepath.Join(programData, OrgName, ProjectName, "cache")
+		case "darwin":
+			return filepath.Join("/Library/Caches", OrgName, ProjectName)
+		default:
+			// Linux and BSD privileged
+			return filepath.Join("/var/cache", OrgName, ProjectName)
+		}
+	}
+
+	var homeDir string
+	currentUser, err := user.Current()
+	if err == nil {
+		homeDir = currentUser.HomeDir
+	} else {
+		homeDir = os.Getenv("HOME")
+		if homeDir == "" {
+			homeDir = os.Getenv("USERPROFILE")
+		}
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData == "" {
+			localAppData = filepath.Join(homeDir, "AppData", "Local")
+		}
+		return filepath.Join(localAppData, OrgName, ProjectName, "cache")
+	case "darwin":
+		return filepath.Join(homeDir, "Library", "Caches", OrgName, ProjectName)
+	default:
+		// Linux and BSD user
+		xdgCache := os.Getenv("XDG_CACHE_HOME")
+		if xdgCache == "" {
+			xdgCache = filepath.Join(homeDir, ".cache")
+		}
+		return filepath.Join(xdgCache, OrgName, ProjectName)
+	}
 }
 
 // EnsureDir creates a directory if it doesn't exist
@@ -181,36 +297,49 @@ func IsRunningInContainer() bool {
 	return comm == "tini\n" || comm == "tini" || comm == "dumb-init\n"
 }
 
-// GetBackupDir returns the default backup directory
+// GetBackupDir returns the default backup directory. It prefers the
+// system-level backup path if writable; otherwise it falls back per
+// AI.md PART 8: system mode (started elevated) falls back inside the
+// data dir (never a $HOME-derived path, since service accounts may have
+// HOME pointed at the data dir); user mode falls back to the user
+// backup dir.
 func GetBackupDir() string {
 	if IsRunningInContainer() {
-		return "/data/backups"
+		return filepath.Join("/data/backups", ProjectName)
 	}
 
-	isRoot := false
-	if runtime.GOOS == "windows" {
-		isRoot = os.Getenv("USERDOMAIN") == os.Getenv("COMPUTERNAME")
-	} else {
-		isRoot = os.Geteuid() == 0
+	sysBackup := systemBackupDir()
+	if isWritable(sysBackup) {
+		return sysBackup
 	}
 
-	if isRoot {
-		switch runtime.GOOS {
-		case "windows":
-			programData := os.Getenv("ProgramData")
-			if programData == "" {
-				programData = "C:\\ProgramData"
-			}
-			return filepath.Join(programData, "Backups", OrgName, ProjectName)
-		case "darwin":
-			return filepath.Join("/Library/Backups", OrgName, ProjectName)
-		case "freebsd", "openbsd", "netbsd":
-			return filepath.Join("/var/backups", OrgName, ProjectName)
-		default:
-			return filepath.Join("/mnt/Backups", OrgName, ProjectName)
+	if startedElevated {
+		return filepath.Join(DataDir(), "backup")
+	}
+
+	return userBackupDir()
+}
+
+// systemBackupDir returns the system-level backup directory
+func systemBackupDir() string {
+	switch runtime.GOOS {
+	case "windows":
+		programData := os.Getenv("ProgramData")
+		if programData == "" {
+			programData = "C:\\ProgramData"
 		}
+		return filepath.Join(programData, "Backups", OrgName, ProjectName)
+	case "darwin":
+		return filepath.Join("/Library/Backups", OrgName, ProjectName)
+	case "freebsd", "openbsd", "netbsd":
+		return filepath.Join("/var/backups", OrgName, ProjectName)
+	default:
+		return filepath.Join("/mnt/Backups", OrgName, ProjectName)
 	}
+}
 
+// userBackupDir returns the user-level backup directory
+func userBackupDir() string {
 	var homeDir string
 	currentUser, err := user.Current()
 	if err == nil {
@@ -232,6 +361,67 @@ func GetBackupDir() string {
 	case "darwin":
 		return filepath.Join(homeDir, "Library", "Backups", OrgName, ProjectName)
 	default:
-		return filepath.Join(homeDir, ".local", "backups", OrgName, ProjectName)
+		return filepath.Join(homeDir, ".local", "share", "Backups", OrgName, ProjectName)
 	}
+}
+
+// DefaultPIDPath returns the OS-specific default PID file path, per AI.md
+// PART 8's Directory Flags table (root vs. user rows). Containers use the
+// data directory since the PID file is skipped entirely at write time
+// anyway (see IsRunningInContainer callers in pidfile.WritePIDFile).
+func DefaultPIDPath() string {
+	if IsRunningInContainer() {
+		return filepath.Join("/data", ProjectName, ProjectName+".pid")
+	}
+
+	if startedElevated {
+		switch runtime.GOOS {
+		case "windows":
+			programData := os.Getenv("ProgramData")
+			if programData == "" {
+				programData = "C:\\ProgramData"
+			}
+			return filepath.Join(programData, OrgName, ProjectName, ProjectName+".pid")
+		default:
+			return filepath.Join("/var/run", OrgName, ProjectName+".pid")
+		}
+	}
+
+	var homeDir string
+	currentUser, err := user.Current()
+	if err == nil {
+		homeDir = currentUser.HomeDir
+	} else {
+		homeDir = os.Getenv("HOME")
+		if homeDir == "" {
+			homeDir = os.Getenv("USERPROFILE")
+		}
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData == "" {
+			localAppData = filepath.Join(homeDir, "AppData", "Local")
+		}
+		return filepath.Join(localAppData, OrgName, ProjectName, ProjectName+".pid")
+	default:
+		return filepath.Join(homeDir, ".local", "share", OrgName, ProjectName, ProjectName+".pid")
+	}
+}
+
+// isWritable checks if a directory is writable, creating its parent
+// chain if needed to test
+func isWritable(path string) bool {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return false
+	}
+	testFile := filepath.Join(path, ".write_test_"+strconv.FormatInt(time.Now().UnixNano(), 36))
+	f, err := os.Create(testFile)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	os.Remove(testFile)
+	return true
 }

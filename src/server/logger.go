@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/paths"
 )
 
@@ -19,10 +21,73 @@ type Logger struct {
 	accessLog   *log.Logger
 	serverLog   *log.Logger
 	errorLog    *log.Logger
+	appLog      *log.Logger
+	authLog     *log.Logger
 	auditLog    *log.Logger
 	securityLog *log.Logger
 	debugLog    *log.Logger
 	config      *config.LogsConfig
+}
+
+// sensitiveQueryParams are the query parameter names redacted from logged
+// URLs and query strings, per the Output Sanitization Pipeline (AI.md
+// PART 11). Matching is case-insensitive.
+var sensitiveQueryParams = map[string]bool{
+	"token":         true,
+	"session":       true,
+	"code":          true,
+	"key":           true,
+	"password":      true,
+	"secret":        true,
+	"auth":          true,
+	"pwd":           true,
+	"api_key":       true,
+	"apikey":        true,
+	"access_token":  true,
+	"refresh_token": true,
+}
+
+// healthCheckPaths are the request paths excluded from access.log on a
+// successful (2xx) response, per the Health-Check Log Suppression rules -
+// mirrors the health-check routes actually registered in server.go
+var healthCheckPaths = map[string]bool{
+	"/healthz":               true,
+	"/server/healthz":        true,
+	"/api/healthz":           true,
+	"/api/v1/server/healthz": true,
+}
+
+// redactQuery drops the value of any sensitive query parameter (matched
+// case-insensitively) from a raw query string, preserving the rest
+func redactQuery(rawQuery string) string {
+	if rawQuery == "" {
+		return rawQuery
+	}
+
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return rawQuery
+	}
+
+	redacted := false
+	for key := range values {
+		if sensitiveQueryParams[strings.ToLower(key)] {
+			values.Set(key, "REDACTED")
+			redacted = true
+		}
+	}
+
+	if !redacted {
+		return rawQuery
+	}
+
+	return values.Encode()
+}
+
+// isHealthCheckPath reports whether path is a health-check endpoint
+// eligible for access-log suppression on a successful response
+func isHealthCheckPath(path string) bool {
+	return healthCheckPaths[path]
 }
 
 // NewLogger creates a new logger instance
@@ -50,6 +115,16 @@ func NewLogger(cfg *config.LogsConfig) (*Logger, error) {
 
 	// Initialize error log
 	if err := logger.initErrorLog(logDir); err != nil {
+		return nil, err
+	}
+
+	// Initialize app log
+	if err := logger.initAppLog(logDir); err != nil {
+		return nil, err
+	}
+
+	// Initialize auth log
+	if err := logger.initAuthLog(logDir); err != nil {
 		return nil, err
 	}
 
@@ -109,6 +184,30 @@ func (l *Logger) initErrorLog(logDir string) error {
 	return nil
 }
 
+// initAppLog initializes the application event log (logfmt)
+func (l *Logger) initAppLog(logDir string) error {
+	logPath := filepath.Join(logDir, l.config.App.Filename)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open app log: %w", err)
+	}
+
+	l.appLog = log.New(f, "", 0)
+	return nil
+}
+
+// initAuthLog initializes the authentication event log (syslog RFC 3164)
+func (l *Logger) initAuthLog(logDir string) error {
+	logPath := filepath.Join(logDir, l.config.Auth.Filename)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open auth log: %w", err)
+	}
+
+	l.authLog = log.New(f, "", 0)
+	return nil
+}
+
 // initAuditLog initializes the audit log (JSON only)
 func (l *Logger) initAuditLog(logDir string) error {
 	logPath := filepath.Join(logDir, l.config.Audit.Filename)
@@ -148,6 +247,12 @@ func (l *Logger) initDebugLog(logDir string) error {
 // LogAccess logs HTTP access in the specified format
 func (l *Logger) LogAccess(r *http.Request, status int, size int, duration time.Duration) {
 	if l.accessLog == nil {
+		return
+	}
+
+	// Suppress successful health-check requests unless debug mode is
+	// enabled or the response was not a 2xx
+	if status >= 200 && status < 300 && !mode.IsDebugEnabled() && isHealthCheckPath(r.URL.Path) {
 		return
 	}
 
@@ -199,7 +304,7 @@ func (l *Logger) LogAccess(r *http.Request, status int, size int, duration time.
 			"ip":         r.RemoteAddr,
 			"method":     r.Method,
 			"path":       r.URL.Path,
-			"query":      r.URL.RawQuery,
+			"query":      redactQuery(r.URL.RawQuery),
 			"status":     status,
 			"size":       size,
 			"latency_ms": duration.Milliseconds(),
@@ -265,6 +370,44 @@ func (l *Logger) LogError(err error, context map[string]interface{}) {
 	}
 }
 
+// LogApp logs general application events (info/warn) in logfmt
+// Example: time=2026-05-13T10:58:00-04:00 level=INFO msg="user created" id=abc123 ip=1.2.3.4
+func (l *Logger) LogApp(level, message string, fields map[string]interface{}) {
+	if l.appLog == nil {
+		return
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "time=%s level=%s msg=%q", time.Now().Format(time.RFC3339), level, message)
+
+	for k, v := range fields {
+		fmt.Fprintf(&b, " %s=%v", k, v)
+	}
+
+	l.appLog.Println(b.String())
+}
+
+// LogAuth logs authentication events (token issue/revoke, failures) in
+// syslog RFC 3164 format
+// Example: May 13 10:58:00 hostname api[pid]: auth: token_id=xxx ip=1.2.3.4 result=fail reason=invalid_token
+func (l *Logger) LogAuth(fields map[string]interface{}) {
+	if l.authLog == nil {
+		return
+	}
+
+	hostname, _ := os.Hostname()
+	timestamp := time.Now().Format("Jan _2 15:04:05")
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s api[%d]: auth:", timestamp, hostname, os.Getpid())
+
+	for k, v := range fields {
+		fmt.Fprintf(&b, " %s=%v", k, v)
+	}
+
+	l.authLog.Println(b.String())
+}
+
 // LogAudit logs audit events (JSON only)
 func (l *Logger) LogAudit(event string, details map[string]interface{}) {
 	if l.auditLog == nil || !l.config.Audit.Enabled {
@@ -309,6 +452,15 @@ func (l *Logger) LogSecurity(event string, ip string, details map[string]interfa
 			event,
 			ip,
 		)
+
+	case "cef":
+		// Common Event Format (CEF:Version|Vendor|Product|Version|SignatureID|Name|Severity|Extension)
+		var ext strings.Builder
+		fmt.Fprintf(&ext, "src=%s", ip)
+		for k, v := range details {
+			fmt.Fprintf(&ext, " %s=%v", k, v)
+		}
+		l.securityLog.Printf("CEF:0|apimgr|api|1.0|%s|%s|5|%s", event, event, ext.String())
 
 	case "json":
 		entry := map[string]interface{}{
@@ -363,7 +515,7 @@ func (l *Logger) formatCustom(format string, r *http.Request, status int, size i
 		"{remote_ip}":  r.RemoteAddr,
 		"{method}":     r.Method,
 		"{path}":       r.URL.Path,
-		"{query}":      r.URL.RawQuery,
+		"{query}":      redactQuery(r.URL.RawQuery),
 		"{status}":     fmt.Sprintf("%d", status),
 		"{bytes}":      fmt.Sprintf("%d", size),
 		"{latency}":    duration.String(),

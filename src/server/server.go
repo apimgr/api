@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apimgr/api/src/admin"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/graphql"
 	"github.com/apimgr/api/src/metrics"
@@ -50,9 +49,9 @@ func New(cfg *config.Config) *http.Server {
 	r := chi.NewRouter()
 
 	// Core middleware
-	r.Use(middleware.RealIP)
+	r.Use(realIPMiddleware(cfg))
 	r.Use(requestIDMiddleware)
-	r.Use(middleware.Logger)
+	r.Use(loggingMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 	r.Use(securityHeadersMiddleware(cfg))
@@ -88,15 +87,20 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/server/contact", contactPageHandler(cfg))
 	r.Get("/server/help", helpPageHandler(cfg))
 
-	// Admin routes (from admin package)
-	admin.SetupRoutes(r, cfg)
+	// Health check (PART 13: frontend route, optional root alias, API
+	// route, and unversioned machine-friendly alias — all mount the same
+	// handler so content negotiation behaves identically)
+	r.Get("/server/healthz", handler.ServerHealthz(cfg, true))
+	if cfg.Server.Healthz.Root.Enabled {
+		r.Get("/healthz", handler.ServerHealthz(cfg, true))
+	}
+	r.Get("/api/v1/server/healthz", handler.ServerHealthz(cfg, false))
+	r.Get("/api/healthz", handler.ServerHealthz(cfg, false))
 
-	// Health check
-	r.Get("/healthz", healthHandler)
-
-	// Metrics endpoint (Prometheus-compatible)
+	// Metrics endpoint (Prometheus-compatible, PART 20 — internal only,
+	// no JSON alias: the spec defines a single Prometheus text-format
+	// endpoint, not a versioned API route)
 	r.Get("/metrics", metricsPrometheusHandler)
-	r.Get("/api/v1/metrics", metricsJSONHandler)
 
 	// Special files
 	r.Get("/robots.txt", robotsHandler(cfg))
@@ -106,19 +110,7 @@ func New(cfg *config.Config) *http.Server {
 
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// System Service (7 endpoints)
-		r.Route("/system", func(r chi.Router) {
-			r.Get("/health", handler.HandleHealth)
-			r.Get("/liveness", handler.HandleLiveness)
-			r.Get("/readiness", handler.HandleReadiness)
-			r.Get("/info", handler.HandleSystemInfo)
-			r.Get("/version", handler.HandleVersion)
-			r.Get("/endpoints", handler.HandleEndpoints)
-			r.Get("/stats", handler.HandleStats)
-		})
-
-		// Legacy health check and version (maintain backwards compatibility)
-		r.Get("/healthz", handler.HandleHealth)
+		// Version
 		r.Get("/version", handler.HandleVersion)
 
 		// Theme switching
@@ -231,7 +223,12 @@ func New(cfg *config.Config) *http.Server {
 
 		// Network utilities
 		r.Route("/network", func(r chi.Router) {
-			r.Get("/ip", apiPlaceholderHandler)
+			r.Get("/ip", apiNetworkCallerHandler)
+			r.Get("/user-agent", apiNetworkUserAgentHandler)
+			r.Get("/mac/{mac}", apiNetworkMACVendorHandler)
+			r.Get("/subnet", apiNetworkSubnetHandler)
+			r.Get("/ula", apiNetworkULAHandler)
+			r.Get("/port", apiNetworkPortHandler)
 		})
 
 		// Docker utilities
@@ -313,11 +310,6 @@ func New(cfg *config.Config) *http.Server {
 		r.Route("/image", func(r chi.Router) {
 			r.Get("/placeholder/{width}/{height}", apiPlaceholderHandler)
 		})
-
-		// Health & System
-		r.Route("/system", func(r chi.Router) {
-			r.Get("/info", apiPlaceholderHandler)
-		})
 	})
 
 	return &http.Server{
@@ -342,7 +334,6 @@ type PageData struct {
 	Version           string
 	BuildTime         string
 	Mode              string
-	AdminEmail        string
 	SecurityEmail     string
 	UpdatedAt         string
 	RateLimitRequests int
@@ -384,22 +375,6 @@ func initTemplates() error {
 			return fmt.Errorf("failed to parse %s template: %w", page, err)
 		}
 		pageTemplates[page] = tmpl
-	}
-
-	// Admin pages use admin layout
-	adminPages := []string{"dashboard", "settings"}
-
-	for _, page := range adminPages {
-		tmpl, err := template.ParseFS(templatesFS,
-			"template/layout/admin.tmpl",
-			"template/partial/*.tmpl",
-			"template/components/*.tmpl",
-			fmt.Sprintf("template/admin/%s.tmpl", page),
-		)
-		if err != nil {
-			return fmt.Errorf("failed to parse admin/%s template: %w", page, err)
-		}
-		pageTemplates["admin-"+page] = tmpl
 	}
 
 	return nil
@@ -493,7 +468,6 @@ func contactPageHandler(cfg *config.Config) http.HandlerFunc {
 		data := newPageData(cfg, "contact")
 		data.PageTitle = "Contact"
 		data.PageDescription = "Contact information"
-		data.AdminEmail = cfg.Server.Admin.Email
 		data.SecurityEmail = cfg.Web.Security.Contact
 		renderPage(w, "contact", data)
 	}
@@ -504,8 +478,8 @@ func helpPageHandler(cfg *config.Config) http.HandlerFunc {
 		data := newPageData(cfg, "help")
 		data.PageTitle = "Help"
 		data.PageDescription = "Getting started with " + cfg.Server.Branding.Title
-		data.RateLimitRequests = cfg.Server.RateLimit.Requests
-		data.RateLimitWindow = cfg.Server.RateLimit.Window
+		data.RateLimitRequests = cfg.Server.RateLimit.Read.Requests
+		data.RateLimitWindow = cfg.Server.RateLimit.Read.Window
 		renderPage(w, "help", data)
 	}
 }
@@ -567,32 +541,9 @@ func graphqlQueryHandler(cfg *config.Config) http.HandlerFunc {
 	return graphql.HandleQuery
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{
-		"status":    "healthy",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"service":   "CasTools",
-		"version":   "1.0.0",
-	})
-}
-
-func apiHealthHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{
-		"status":    "healthy",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"service":   "CasTools",
-		"version":   "1.0.0",
-	})
-}
-
 // metricsPrometheusHandler serves metrics in Prometheus format
 func metricsPrometheusHandler(w http.ResponseWriter, r *http.Request) {
 	metrics.Get().ServePrometheus(w, r)
-}
-
-// metricsJSONHandler serves metrics in JSON format
-func metricsJSONHandler(w http.ResponseWriter, r *http.Request) {
-	metrics.Get().ServeJSON(w, r)
 }
 
 func robotsHandler(cfg *config.Config) http.HandlerFunc {
@@ -1456,22 +1407,22 @@ func apiPlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 
 // Register all remaining endpoints with generic handlers
 func registerAllEndpoints(r chi.Router) {
-// Text endpoints (89 total)
-textEndpoints := []string{
-"lorem", "hipsum", "bacon", "cupcake", "pirate", "zombie", "corporate", "tech",
-"ulid", "nanoid", "ksuid", "xid", "cuid", "snowflake", "objectid",
-"slugify", "count", "diff", "levenshtein", "similarity", "soundex", "metaphone",
-"compress", "decompress", "regex", "regex/explain",
-"markdown", "markdown/toc", "bbcode", "rot47", "caesar", "vigenere",
-"binary", "morse", "extract", "extract/emails", "extract/urls", "extract/ips",
-"lines", "dedupe", "sort", "shuffle", "trim", "strip",
-}
+	// Text endpoints (89 total)
+	textEndpoints := []string{
+		"lorem", "hipsum", "bacon", "cupcake", "pirate", "zombie", "corporate", "tech",
+		"ulid", "nanoid", "ksuid", "xid", "cuid", "snowflake", "objectid",
+		"slugify", "count", "diff", "levenshtein", "similarity", "soundex", "metaphone",
+		"compress", "decompress", "regex", "regex/explain",
+		"markdown", "markdown/toc", "bbcode", "rot47", "caesar", "vigenere",
+		"binary", "morse", "extract", "extract/emails", "extract/urls", "extract/ips",
+		"lines", "dedupe", "sort", "shuffle", "trim", "strip",
+	}
 
-for _, ep := range textEndpoints {
-r.Get("/text/"+ep, handler.GenericHandler("text", ep))
-r.Post("/text/"+ep, handler.GenericHandler("text", ep))
-}
+	for _, ep := range textEndpoints {
+		r.Get("/text/"+ep, handler.GenericHandler("text", ep))
+		r.Post("/text/"+ep, handler.GenericHandler("text", ep))
+	}
 
-// Similar registration for all other services...
-// Crypto (147), Network (98), Docker (24), DateTime (67), etc.
+	// Similar registration for all other services...
+	// Crypto (147), Network (98), Docker (24), DateTime (67), etc.
 }

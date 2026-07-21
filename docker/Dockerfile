@@ -1,7 +1,9 @@
 # =============================================================================
 # Build Stage - Compile Go binary
 # =============================================================================
-FROM golang:alpine AS builder
+FROM casjaysdev/go:latest AS builder
+
+RUN apk add --no-cache git bash
 
 ARG TARGETARCH
 ARG VERSION=dev
@@ -52,12 +54,19 @@ LABEL org.opencontainers.image.licenses="${LICENSE}" \
       org.opencontainers.image.revision="${COMMIT_ID}"
 
 # Install required packages including Tor
+# libcap provides setcap, used below to grant the non-root user
+# permission to bind the privileged port 80 (PART 26 exception:
+# prefer setcap over running as root for privileged ports)
 RUN apk add --no-cache \
     git \
     curl \
     bash \
     tini \
-    tor
+    tor \
+    libcap
+
+# Create non-root user/group to run the application
+RUN addgroup -S app && adduser -S -G app app
 
 # Create directories with proper structure
 RUN mkdir -p /config /config/security /data/db /data/logs /data/tor /data/geoip /data/backup
@@ -73,6 +82,15 @@ COPY docker/Dockerfile /root/Dockerfile
 
 # Make all binaries/scripts in /usr/local/bin executable (755)
 RUN chmod 755 /usr/local/bin/*
+
+# Grant the api binary permission to bind port 80 without running as root
+RUN setcap 'cap_net_bind_service=+ep' /usr/local/bin/api
+
+# Hand ownership of config/data directories to the non-root user
+RUN chown -R app:app /config /data
+
+# Run as non-root user; setcap above allows binding port 80
+USER app
 
 # Set environment
 # Note: Tor auto-enabled because tor binary is installed above

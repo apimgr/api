@@ -42,19 +42,3 @@ func (s *Service) GetLanguageName(code string) (string, error) {
 func (s *Service) ListLanguages() map[string]string {
 	return languageCodes
 }
-
-// DetectLanguage attempts basic language detection
-func (s *Service) DetectLanguage(text string) (string, error) {
-	// TODO: Implement with language detection library
-	return "", fmt.Errorf("language detection not yet implemented")
-}
-
-// Translate text between languages
-func (s *Service) Translate(text, from, to string) (string, error) {
-	// TODO: Integrate with translation API
-	return "", fmt.Errorf("translation not yet implemented")
-}
-
-// Note: Full language service requires:
-// 1. Language detection library (e.g., github.com/pemistahl/lingua-go)
-// 2. Translation API integration (Google Translate, DeepL, etc.)

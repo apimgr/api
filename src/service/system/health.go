@@ -13,29 +13,29 @@ var (
 	Version   = "dev"
 	CommitID  = "unknown"
 	BuildDate = "unknown"
-	
+
 	// Runtime info
 	StartTime = time.Now()
 )
 
 // HealthResponse represents basic health check response
 type HealthResponse struct {
-	Status        string `json:"status"`          // "healthy"
-	Version       string `json:"version"`         // e.g., "1.0.0"
-	Uptime        string `json:"uptime"`          // e.g., "2h34m12s"
-	UptimeSeconds int64  `json:"uptime_seconds"`  // seconds since start
+	Status        string `json:"status"`         // "healthy"
+	Version       string `json:"version"`        // e.g., "1.0.0"
+	Uptime        string `json:"uptime"`         // e.g., "2h34m12s"
+	UptimeSeconds int64  `json:"uptime_seconds"` // seconds since start
 }
 
 // SystemInfoResponse represents system information
 type SystemInfoResponse struct {
-	Name       string `json:"name"`        // "api" (CasTools)
-	Version    string `json:"version"`     // e.g., "1.0.0"
-	CommitID   string `json:"commit_id"`   // Git short hash
-	BuildDate  string `json:"build_date"`  // Build timestamp
-	GoVersion  string `json:"go_version"`  // Go runtime version
-	OS         string `json:"os"`          // Operating system
-	Arch       string `json:"arch"`        // Architecture
-	Endpoints  int    `json:"endpoints"`   // Total endpoint count
+	Name      string `json:"name"`       // "api" (CasTools)
+	Version   string `json:"version"`    // e.g., "1.0.0"
+	CommitID  string `json:"commit_id"`  // Git short hash
+	BuildDate string `json:"build_date"` // Build timestamp
+	GoVersion string `json:"go_version"` // Go runtime version
+	OS        string `json:"os"`         // Operating system
+	Arch      string `json:"arch"`       // Architecture
+	Endpoints int    `json:"endpoints"`  // Total endpoint count
 }
 
 // Health returns basic health status

@@ -537,6 +537,28 @@ func Restart() error {
 	}
 }
 
+// Disable disables autostart for the service without uninstalling it
+func Disable() error {
+	serviceType := DetectServiceManager()
+
+	switch serviceType {
+	case ServiceSystemd:
+		return exec.Command("systemctl", "disable", appName).Run()
+	case ServiceRunit:
+		downFile := fmt.Sprintf("/etc/sv/%s/down", appName)
+		return os.WriteFile(downFile, []byte{}, 0644)
+	case ServiceLaunchd:
+		plistPath := fmt.Sprintf("/Library/LaunchDaemons/com.%s.%s.plist", orgName, appName)
+		return exec.Command("launchctl", "unload", "-w", plistPath).Run()
+	case ServiceWindows:
+		return exec.Command("sc.exe", "config", appName, "start=", "demand").Run()
+	case ServiceBSDRC:
+		return exec.Command("sysrc", fmt.Sprintf("%s_enable=NO", appName)).Run()
+	default:
+		return fmt.Errorf("unsupported service manager")
+	}
+}
+
 // Reload sends reload signal to the service
 func Reload() error {
 	serviceType := DetectServiceManager()

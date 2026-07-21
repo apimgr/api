@@ -19,7 +19,7 @@ func New() *Service {
 var (
 	ErrDivisionByZero     = fmt.Errorf("division by zero")
 	ErrNegativeSquareRoot = fmt.Errorf("cannot take square root of negative number")
-}
+)
 
 // Basic operations
 func (s *Service) Add(a, b float64) float64 {

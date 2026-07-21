@@ -22,18 +22,18 @@ type Coordinate struct {
 // Distance calculates distance between two points (Haversine formula)
 func (s *Service) Distance(lat1, lon1, lat2, lon2 float64) float64 {
 	const earthRadius = 6371 // km
-	
+
 	lat1Rad := lat1 * math.Pi / 180
 	lat2Rad := lat2 * math.Pi / 180
 	deltaLat := (lat2 - lat1) * math.Pi / 180
 	deltaLon := (lon2 - lon1) * math.Pi / 180
-	
+
 	a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
 		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
 			math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
-	
+
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-	
+
 	return earthRadius * c
 }
 
@@ -48,16 +48,16 @@ func (s *Service) Midpoint(lat1, lon1, lat2, lon2 float64) *Coordinate {
 	lon1Rad := lon1 * math.Pi / 180
 	lat2Rad := lat2 * math.Pi / 180
 	lon2Rad := lon2 * math.Pi / 180
-	
+
 	bx := math.Cos(lat2Rad) * math.Cos(lon2Rad-lon1Rad)
 	by := math.Cos(lat2Rad) * math.Sin(lon2Rad-lon1Rad)
-	
+
 	lat3 := math.Atan2(
 		math.Sin(lat1Rad)+math.Sin(lat2Rad),
 		math.Sqrt((math.Cos(lat1Rad)+bx)*(math.Cos(lat1Rad)+bx)+by*by),
 	)
 	lon3 := lon1Rad + math.Atan2(by, math.Cos(lat1Rad)+bx)
-	
+
 	return &Coordinate{
 		Latitude:  lat3 * 180 / math.Pi,
 		Longitude: lon3 * 180 / math.Pi,
@@ -69,11 +69,11 @@ func (s *Service) Bearing(lat1, lon1, lat2, lon2 float64) float64 {
 	lat1Rad := lat1 * math.Pi / 180
 	lat2Rad := lat2 * math.Pi / 180
 	deltaLon := (lon2 - lon1) * math.Pi / 180
-	
+
 	y := math.Sin(deltaLon) * math.Cos(lat2Rad)
 	x := math.Cos(lat1Rad)*math.Sin(lat2Rad) -
 		math.Sin(lat1Rad)*math.Cos(lat2Rad)*math.Cos(deltaLon)
-	
+
 	bearing := math.Atan2(y, x) * 180 / math.Pi
 	return math.Mod(bearing+360, 360)
 }
@@ -86,19 +86,19 @@ func (s *Service) IsValidCoordinate(lat, lon float64) bool {
 // Destination calculates destination point given distance and bearing
 func (s *Service) Destination(lat, lon, distance, bearing float64) *Coordinate {
 	const earthRadius = 6371 // km
-	
+
 	latRad := lat * math.Pi / 180
 	lonRad := lon * math.Pi / 180
 	bearingRad := bearing * math.Pi / 180
-	
+
 	lat2 := math.Asin(math.Sin(latRad)*math.Cos(distance/earthRadius) +
 		math.Cos(latRad)*math.Sin(distance/earthRadius)*math.Cos(bearingRad))
-	
+
 	lon2 := lonRad + math.Atan2(
 		math.Sin(bearingRad)*math.Sin(distance/earthRadius)*math.Cos(latRad),
 		math.Cos(distance/earthRadius)-math.Sin(latRad)*math.Sin(lat2),
 	)
-	
+
 	return &Coordinate{
 		Latitude:  lat2 * 180 / math.Pi,
 		Longitude: lon2 * 180 / math.Pi,
@@ -110,15 +110,15 @@ func (s *Service) ToDMS(decimal float64) string {
 	abs := math.Abs(decimal)
 	degrees := int(abs)
 	minutes := int((abs - float64(degrees)) * 60)
-	seconds := ((abs - float64(degrees)) * 60 - float64(minutes)) * 60
-	
+	seconds := ((abs-float64(degrees))*60 - float64(minutes)) * 60
+
 	direction := ""
 	if decimal >= 0 {
 		direction = "N/E"
 	} else {
 		direction = "S/W"
 	}
-	
+
 	return fmt.Sprintf("%d°%d'%.2f\"%s", degrees, minutes, seconds, direction)
 }
 

@@ -27,7 +27,7 @@ func (s *Service) Words(count int) (string, error) {
 	if count < 1 {
 		count = 1
 	}
-	
+
 	var words []string
 	for i := 0; i < count; i++ {
 		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(loremWords))))
@@ -36,7 +36,7 @@ func (s *Service) Words(count int) (string, error) {
 		}
 		words = append(words, loremWords[idx.Int64()])
 	}
-	
+
 	return strings.Join(words, " "), nil
 }
 
@@ -44,17 +44,17 @@ func (s *Service) Sentence(wordCount int) (string, error) {
 	if wordCount < 1 {
 		wordCount = 10
 	}
-	
+
 	words, err := s.Words(wordCount)
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Capitalize first letter
 	if len(words) > 0 {
 		words = strings.ToUpper(string(words[0])) + words[1:]
 	}
-	
+
 	return words + ".", nil
 }
 
@@ -62,7 +62,7 @@ func (s *Service) Paragraph(sentenceCount int) (string, error) {
 	if sentenceCount < 1 {
 		sentenceCount = 5
 	}
-	
+
 	var sentences []string
 	for i := 0; i < sentenceCount; i++ {
 		sentence, err := s.Sentence(10)
@@ -71,7 +71,7 @@ func (s *Service) Paragraph(sentenceCount int) (string, error) {
 		}
 		sentences = append(sentences, sentence)
 	}
-	
+
 	return strings.Join(sentences, " "), nil
 }
 
@@ -95,10 +95,10 @@ func (s *Service) Person() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	firstName := firstNames[firstIdx.Int64()]
 	lastName := lastNames[lastIdx.Int64()]
-	
+
 	return map[string]string{
 		"name":  fmt.Sprintf("%s %s", firstName, lastName),
 		"email": fmt.Sprintf("%s.%s@example.com", strings.ToLower(firstName), strings.ToLower(lastName)),
@@ -121,7 +121,7 @@ func (s *Service) Address() (map[string]string, error) {
 		return nil, err
 	}
 	idx := cityIdx.Int64()
-	
+
 	return map[string]string{
 		"street": fmt.Sprintf("%d Main St", randomInt(9999)+1),
 		"city":   cities[idx],
@@ -149,7 +149,7 @@ func (s *Service) Company() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return map[string]string{
 		"name":     companies[companyIdx.Int64()],
 		"industry": industries[industryIdx.Int64()],

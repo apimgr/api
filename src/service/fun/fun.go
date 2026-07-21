@@ -157,7 +157,7 @@ func (s *Service) RandomJokeType() (string, error) {
 func (s *Service) Shuffle(items []string) ([]string, error) {
 	result := make([]string, len(items))
 	copy(result, items)
-	
+
 	for i := len(result) - 1; i > 0; i-- {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
 		if err != nil {
@@ -166,7 +166,7 @@ func (s *Service) Shuffle(items []string) ([]string, error) {
 		j := int(n.Int64())
 		result[i], result[j] = result[j], result[i]
 	}
-	
+
 	return result, nil
 }
 
@@ -174,7 +174,7 @@ func (s *Service) Shuffle(items []string) ([]string, error) {
 func (s *Service) RockPaperScissors(choice string) (string, error) {
 	choice = strings.ToLower(strings.TrimSpace(choice))
 	validChoices := []string{"rock", "paper", "scissors"}
-	
+
 	// Validate user choice
 	valid := false
 	for _, v := range validChoices {
@@ -186,23 +186,23 @@ func (s *Service) RockPaperScissors(choice string) (string, error) {
 	if !valid {
 		return "", fmt.Errorf("invalid choice: must be rock, paper, or scissors")
 	}
-	
+
 	// Computer choice
 	computerChoice, err := s.RandomChoice(validChoices)
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Determine winner
 	if choice == computerChoice {
 		return fmt.Sprintf("Draw! Both chose %s", choice), nil
 	}
-	
+
 	if (choice == "rock" && computerChoice == "scissors") ||
 		(choice == "paper" && computerChoice == "rock") ||
 		(choice == "scissors" && computerChoice == "paper") {
 		return fmt.Sprintf("You win! %s beats %s", choice, computerChoice), nil
 	}
-	
+
 	return fmt.Sprintf("Computer wins! %s beats %s", computerChoice, choice), nil
 }

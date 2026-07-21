@@ -13,8 +13,6 @@ import (
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/geoip"
 	"github.com/apimgr/api/src/paths"
-	"github.com/apimgr/api/src/ratelimit"
-	"github.com/apimgr/api/src/session"
 	"github.com/apimgr/api/src/ssl"
 )
 
@@ -29,11 +27,8 @@ func (s *Scheduler) RegisterDefaultTasks() {
 	// GeoIP database update at 03:00 Sunday
 	s.AddTask("geoip_update", "0 3 * * 0", geoipUpdateTask, true)
 
-	// Session cleanup every hour
-	s.AddTask("session_cleanup", "@hourly", sessionCleanupTask, true)
-
-	// Token cleanup daily at 06:00
-	s.AddTask("token_cleanup", "0 6 * * *", tokenCleanupTask, true)
+	// Token cleanup every 15 minutes
+	s.AddTask("token_cleanup", "@every 15m", tokenCleanupTask, true)
 
 	// Log rotation daily at midnight
 	s.AddTask("log_rotation", "0 0 * * *", logRotationTask, true)
@@ -57,7 +52,7 @@ func backupTask() error {
 
 	// Sources to backup
 	sources := []string{
-		filepath.Join(paths.DataDir(), "db"),        // Databases
+		filepath.Join(paths.DataDir(), "db"),           // Databases
 		filepath.Join(paths.ConfigDir(), "server.yml"), // Config file
 	}
 
@@ -112,20 +107,6 @@ func geoipUpdateTask() error {
 	return nil
 }
 
-// sessionCleanupTask removes expired sessions
-func sessionCleanupTask() error {
-	log.Println("Scheduler: Cleaning up expired sessions...")
-
-	// Use session package to clean up expired sessions
-	if err := session.CleanupExpired(); err != nil {
-		log.Printf("Scheduler: Session cleanup failed: %v", err)
-		return err
-	}
-
-	log.Println("Scheduler: Session cleanup completed")
-	return nil
-}
-
 // tokenCleanupTask removes expired tokens
 func tokenCleanupTask() error {
 	log.Println("Scheduler: Cleaning up expired tokens...")
@@ -165,11 +146,6 @@ func logRotationTask() error {
 		log.Printf("Scheduler: Scheduler history cleanup failed: %v", err)
 	} else if historyCount > 0 {
 		log.Printf("Scheduler: Cleaned %d old scheduler history entries", historyCount)
-	}
-
-	// Clean old rate limit entries
-	if err := ratelimit.CleanupOldEntries(); err != nil {
-		log.Printf("Scheduler: Rate limit cleanup failed: %v", err)
 	}
 
 	// Rotate actual log files on disk
@@ -240,35 +216,4 @@ func torHealthTask() error {
 	log.Printf("Scheduler: Tor binary found at %s (health check not yet implemented)", torPath)
 
 	return nil
-}
-
-// parseScheduleExpression converts schedule string to next run time
-// Supports: cron expressions, @hourly, @daily, @weekly, @every Xm
-func parseScheduleExpression(expr string) (time.Duration, error) {
-	// Handle special expressions
-	switch expr {
-	case "@hourly":
-		return time.Hour, nil
-	case "@daily":
-		return 24 * time.Hour, nil
-	case "@weekly":
-		return 7 * 24 * time.Hour, nil
-	case "@monthly":
-		return 30 * 24 * time.Hour, nil
-	}
-
-	// Handle @every expressions
-	if len(expr) > 7 && expr[:7] == "@every " {
-		return time.ParseDuration(expr[7:])
-	}
-
-	// Handle cron expressions
-	// Simple cron parser for common patterns:
-	// "0 2 * * *" = daily at 02:00 -> 24 hours
-	// "0 3 * * 0" = weekly Sunday at 03:00 -> 7 days
-	// "0 * * * *" = hourly -> 1 hour
-	//
-	// Full cron parsing would require github.com/robfig/cron library
-	// For now, return daily as default for any cron expression
-	return 24 * time.Hour, nil
 }

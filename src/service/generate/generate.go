@@ -52,7 +52,7 @@ func (s *Service) RandomAlphanumeric(length int) (string, error) {
 func (s *Service) randomStringFromCharset(length int, charset string) (string, error) {
 	result := make([]byte, length)
 	charsetLen := big.NewInt(int64(len(charset)))
-	
+
 	for i := range result {
 		num, err := rand.Int(rand.Reader, charsetLen)
 		if err != nil {
@@ -60,7 +60,7 @@ func (s *Service) randomStringFromCharset(length int, charset string) (string, e
 		}
 		result[i] = charset[num.Int64()]
 	}
-	
+
 	return string(result), nil
 }
 
@@ -69,23 +69,23 @@ func (s *Service) Password(length int, includeSpecial bool) (string, error) {
 	if length < 8 {
 		length = 8
 	}
-	
+
 	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	if includeSpecial {
 		charset += "!@#$%^&*()_+-=[]{}|;:,.<>?"
 	}
-	
+
 	password, err := s.randomStringFromCharset(length, charset)
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Ensure at least one of each required type
 	hasLower := false
 	hasUpper := false
 	hasDigit := false
 	hasSpecial := false
-	
+
 	for _, r := range password {
 		switch {
 		case r >= 'a' && r <= 'z':
@@ -98,12 +98,12 @@ func (s *Service) Password(length int, includeSpecial bool) (string, error) {
 			hasSpecial = true
 		}
 	}
-	
+
 	// If missing required characters, regenerate
 	if !hasLower || !hasUpper || !hasDigit || (includeSpecial && !hasSpecial) {
 		return s.Password(length, includeSpecial)
 	}
-	
+
 	return password, nil
 }
 
@@ -141,7 +141,7 @@ func (s *Service) APIKey() (string, error) {
 func (s *Service) Slug(text string) string {
 	// Convert to lowercase
 	slug := strings.ToLower(text)
-	
+
 	// Replace spaces and special chars with hyphens
 	slug = strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
@@ -149,15 +149,15 @@ func (s *Service) Slug(text string) string {
 		}
 		return '-'
 	}, slug)
-	
+
 	// Remove multiple consecutive hyphens
 	for strings.Contains(slug, "--") {
 		slug = strings.ReplaceAll(slug, "--", "-")
 	}
-	
+
 	// Trim hyphens from ends
 	slug = strings.Trim(slug, "-")
-	
+
 	return slug
 }
 

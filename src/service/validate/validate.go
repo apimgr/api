@@ -63,28 +63,28 @@ func (s *Service) IsCreditCard(number string) bool {
 	// Remove spaces and dashes
 	number = strings.ReplaceAll(number, " ", "")
 	number = strings.ReplaceAll(number, "-", "")
-	
+
 	if len(number) < 13 || len(number) > 19 {
 		return false
 	}
-	
+
 	sum := 0
 	isSecond := false
-	
+
 	for i := len(number) - 1; i >= 0; i-- {
 		digit := int(number[i] - '0')
-		
+
 		if isSecond {
 			digit *= 2
 			if digit > 9 {
 				digit -= 9
 			}
 		}
-		
+
 		sum += digit
 		isSecond = !isSecond
 	}
-	
+
 	return sum%10 == 0
 }
 
@@ -158,12 +158,12 @@ func (s *Service) PasswordStrength(password string) string {
 	if len(password) < 8 {
 		return "weak"
 	}
-	
+
 	hasUpper := false
 	hasLower := false
 	hasDigit := false
 	hasSpecial := false
-	
+
 	for _, r := range password {
 		switch {
 		case unicode.IsUpper(r):
@@ -176,7 +176,7 @@ func (s *Service) PasswordStrength(password string) string {
 			hasSpecial = true
 		}
 	}
-	
+
 	strength := 0
 	if hasUpper {
 		strength++
@@ -190,7 +190,7 @@ func (s *Service) PasswordStrength(password string) string {
 	if hasSpecial {
 		strength++
 	}
-	
+
 	if strength >= 4 && len(password) >= 12 {
 		return "strong"
 	} else if strength >= 3 {

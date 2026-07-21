@@ -1,38 +1,34 @@
+// Package metrics implements PART 20's Prometheus-compatible metrics
+// endpoint. All metric names are prefixed with "api_" (the project name)
+// and follow Prometheus naming conventions (snake_case, base units,
+// counters end in "_total").
 package metrics
 
 import (
-	"fmt"
 	"net/http"
+	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Metrics tracks application metrics
+const namespace = "api"
+
+// Metrics holds all Prometheus collectors exposed at /metrics.
 type Metrics struct {
-	// Request counters
-	totalRequests   uint64
-	successRequests uint64
-	errorRequests   uint64
+	registry *prometheus.Registry
 
-	// Status code counters
-	status2xx uint64
-	status3xx uint64
-	status4xx uint64
-	status5xx uint64
+	appInfo           *prometheus.GaugeVec
+	appStartTimestamp prometheus.Gauge
 
-	// Latency tracking
-	mu             sync.RWMutex
-	latencies      []time.Duration
-	maxLatency     time.Duration
-	minLatency     time.Duration
-	totalLatencyMs uint64
+	httpRequestsTotal   *prometheus.CounterVec
+	httpRequestDuration *prometheus.HistogramVec
+	httpRequestSize     *prometheus.HistogramVec
+	httpResponseSize    *prometheus.HistogramVec
+	httpActiveRequests  prometheus.Gauge
 
-	// Endpoint counters
-	endpointCounts map[string]uint64
-	endpointMu     sync.RWMutex
-
-	// Start time
 	startTime time.Time
 }
 
@@ -41,194 +37,124 @@ var (
 	metricsOnce   sync.Once
 )
 
-// Get returns the singleton metrics instance
+// Get returns the singleton metrics instance.
 func Get() *Metrics {
 	metricsOnce.Do(func() {
-		globalMetrics = &Metrics{
-			latencies:      make([]time.Duration, 0, 1000),
-			endpointCounts: make(map[string]uint64),
-			startTime:      time.Now(),
-			minLatency:     time.Hour, // Set high initial value
-		}
+		globalMetrics = newMetrics()
 	})
 	return globalMetrics
 }
 
-// RecordRequest records a completed HTTP request
-func (m *Metrics) RecordRequest(status int, latency time.Duration, endpoint string) {
-	// Increment total requests
-	atomic.AddUint64(&m.totalRequests, 1)
+func newMetrics() *Metrics {
+	registry := prometheus.NewRegistry()
 
-	// Track by status code
-	if status >= 200 && status < 300 {
-		atomic.AddUint64(&m.successRequests, 1)
-		atomic.AddUint64(&m.status2xx, 1)
-	} else if status >= 300 && status < 400 {
-		atomic.AddUint64(&m.status3xx, 1)
-	} else if status >= 400 && status < 500 {
-		atomic.AddUint64(&m.errorRequests, 1)
-		atomic.AddUint64(&m.status4xx, 1)
-	} else if status >= 500 {
-		atomic.AddUint64(&m.errorRequests, 1)
-		atomic.AddUint64(&m.status5xx, 1)
+	m := &Metrics{
+		registry:  registry,
+		startTime: time.Now(),
+
+		appInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "app",
+			Name:      "info",
+			Help:      "Application information (always 1, labels carry build info)",
+		}, []string{"version", "commit", "build_date", "go_version"}),
+
+		appStartTimestamp: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "app",
+			Name:      "start_timestamp",
+			Help:      "Unix timestamp when the application started",
+		}),
+
+		httpRequestsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "http",
+			Name:      "requests_total",
+			Help:      "Total number of HTTP requests processed",
+		}, []string{"method", "path", "status"}),
+
+		httpRequestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "http",
+			Name:      "request_duration_seconds",
+			Help:      "HTTP request latency distribution",
+			Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		}, []string{"method", "path"}),
+
+		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "http",
+			Name:      "request_size_bytes",
+			Help:      "HTTP request body size distribution",
+			Buckets:   []float64{100, 1000, 10000, 100000, 1000000, 10000000},
+		}, []string{"method", "path"}),
+
+		httpResponseSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "http",
+			Name:      "response_size_bytes",
+			Help:      "HTTP response body size distribution",
+			Buckets:   []float64{100, 1000, 10000, 100000, 1000000, 10000000},
+		}, []string{"method", "path"}),
+
+		httpActiveRequests: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "http",
+			Name:      "active_requests",
+			Help:      "Number of requests currently being processed",
+		}),
 	}
 
-	// Track latency
-	m.mu.Lock()
-	if latency > m.maxLatency {
-		m.maxLatency = latency
-	}
-	if latency < m.minLatency {
-		m.minLatency = latency
-	}
-	atomic.AddUint64(&m.totalLatencyMs, uint64(latency.Milliseconds()))
-
-	// Keep last 1000 latencies for percentile calculations
-	if len(m.latencies) >= 1000 {
-		m.latencies = m.latencies[1:]
-	}
-	m.latencies = append(m.latencies, latency)
-	m.mu.Unlock()
-
-	// Track endpoint usage
-	m.endpointMu.Lock()
-	m.endpointCounts[endpoint]++
-	m.endpointMu.Unlock()
-}
-
-// GetStats returns current metrics statistics
-func (m *Metrics) GetStats() map[string]interface{} {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	total := atomic.LoadUint64(&m.totalRequests)
-	success := atomic.LoadUint64(&m.successRequests)
-	errors := atomic.LoadUint64(&m.errorRequests)
-	totalLatencyMs := atomic.LoadUint64(&m.totalLatencyMs)
-
-	avgLatencyMs := float64(0)
-	if total > 0 {
-		avgLatencyMs = float64(totalLatencyMs) / float64(total)
-	}
-
-	uptime := time.Since(m.startTime)
-
-	return map[string]interface{}{
-		"uptime_seconds":    uptime.Seconds(),
-		"total_requests":    total,
-		"success_requests":  success,
-		"error_requests":    errors,
-		"status_2xx":        atomic.LoadUint64(&m.status2xx),
-		"status_3xx":        atomic.LoadUint64(&m.status3xx),
-		"status_4xx":        atomic.LoadUint64(&m.status4xx),
-		"status_5xx":        atomic.LoadUint64(&m.status5xx),
-		"avg_latency_ms":    avgLatencyMs,
-		"min_latency_ms":    m.minLatency.Milliseconds(),
-		"max_latency_ms":    m.maxLatency.Milliseconds(),
-		"requests_per_sec":  float64(total) / uptime.Seconds(),
-	}
-}
-
-// ServePrometheus serves metrics in Prometheus format
-func (m *Metrics) ServePrometheus(w http.ResponseWriter, r *http.Request) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	total := atomic.LoadUint64(&m.totalRequests)
-	success := atomic.LoadUint64(&m.successRequests)
-	errors := atomic.LoadUint64(&m.errorRequests)
-	totalLatencyMs := atomic.LoadUint64(&m.totalLatencyMs)
-
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-
-	fmt.Fprintf(w, "# HELP api_requests_total Total number of HTTP requests\n")
-	fmt.Fprintf(w, "# TYPE api_requests_total counter\n")
-	fmt.Fprintf(w, "api_requests_total %d\n", total)
-	fmt.Fprintf(w, "\n")
-
-	fmt.Fprintf(w, "# HELP api_requests_success Total number of successful HTTP requests\n")
-	fmt.Fprintf(w, "# TYPE api_requests_success counter\n")
-	fmt.Fprintf(w, "api_requests_success %d\n", success)
-	fmt.Fprintf(w, "\n")
-
-	fmt.Fprintf(w, "# HELP api_requests_errors Total number of failed HTTP requests\n")
-	fmt.Fprintf(w, "# TYPE api_requests_errors counter\n")
-	fmt.Fprintf(w, "api_requests_errors %d\n", errors)
-	fmt.Fprintf(w, "\n")
-
-	fmt.Fprintf(w, "# HELP api_status_2xx Total 2xx status codes\n")
-	fmt.Fprintf(w, "# TYPE api_status_2xx counter\n")
-	fmt.Fprintf(w, "api_status_2xx %d\n", atomic.LoadUint64(&m.status2xx))
-	fmt.Fprintf(w, "\n")
-
-	fmt.Fprintf(w, "# HELP api_status_4xx Total 4xx status codes\n")
-	fmt.Fprintf(w, "# TYPE api_status_4xx counter\n")
-	fmt.Fprintf(w, "api_status_4xx %d\n", atomic.LoadUint64(&m.status4xx))
-	fmt.Fprintf(w, "\n")
-
-	fmt.Fprintf(w, "# HELP api_status_5xx Total 5xx status codes\n")
-	fmt.Fprintf(w, "# TYPE api_status_5xx counter\n")
-	fmt.Fprintf(w, "api_status_5xx %d\n", atomic.LoadUint64(&m.status5xx))
-	fmt.Fprintf(w, "\n")
-
-	avgLatency := float64(0)
-	if total > 0 {
-		avgLatency = float64(totalLatencyMs) / float64(total)
-	}
-
-	fmt.Fprintf(w, "# HELP api_latency_avg_ms Average request latency in milliseconds\n")
-	fmt.Fprintf(w, "# TYPE api_latency_avg_ms gauge\n")
-	fmt.Fprintf(w, "api_latency_avg_ms %.2f\n", avgLatency)
-	fmt.Fprintf(w, "\n")
-
-	fmt.Fprintf(w, "# HELP api_latency_max_ms Maximum request latency in milliseconds\n")
-	fmt.Fprintf(w, "# TYPE api_latency_max_ms gauge\n")
-	fmt.Fprintf(w, "api_latency_max_ms %d\n", m.maxLatency.Milliseconds())
-	fmt.Fprintf(w, "\n")
-
-	// Endpoint-specific metrics
-	m.endpointMu.RLock()
-	for endpoint, count := range m.endpointCounts {
-		fmt.Fprintf(w, "api_endpoint_requests{endpoint=\"%s\"} %d\n", endpoint, count)
-	}
-	m.endpointMu.RUnlock()
-}
-
-// ServeJSON serves metrics in JSON format
-func (m *Metrics) ServeJSON(w http.ResponseWriter, r *http.Request) {
-	stats := m.GetStats()
-
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{
-  "uptime_seconds": %.2f,
-  "total_requests": %d,
-  "success_requests": %d,
-  "error_requests": %d,
-  "status_codes": {
-    "2xx": %d,
-    "3xx": %d,
-    "4xx": %d,
-    "5xx": %d
-  },
-  "latency": {
-    "avg_ms": %.2f,
-    "min_ms": %d,
-    "max_ms": %d
-  },
-  "requests_per_second": %.2f
-}`,
-		stats["uptime_seconds"],
-		stats["total_requests"],
-		stats["success_requests"],
-		stats["error_requests"],
-		stats["status_2xx"],
-		stats["status_3xx"],
-		stats["status_4xx"],
-		stats["status_5xx"],
-		stats["avg_latency_ms"],
-		stats["min_latency_ms"],
-		stats["max_latency_ms"],
-		stats["requests_per_sec"],
+	registry.MustRegister(
+		m.appInfo,
+		m.appStartTimestamp,
+		m.httpRequestsTotal,
+		m.httpRequestDuration,
+		m.httpRequestSize,
+		m.httpResponseSize,
+		m.httpActiveRequests,
 	)
+	registry.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "app",
+		Name:      "uptime_seconds",
+		Help:      "Seconds since application start",
+	}, func() float64 {
+		return time.Since(m.startTime).Seconds()
+	}))
+
+	m.appStartTimestamp.Set(float64(m.startTime.Unix()))
+
+	return m
 }
 
+// SetBuildInfo records the application's version/build labels. Callers pass
+// this once at startup after version info has been resolved.
+func (m *Metrics) SetBuildInfo(version, commit, buildDate string) {
+	m.appInfo.WithLabelValues(version, commit, buildDate, runtime.Version()).Set(1)
+}
+
+// RecordRequest records a completed HTTP request. path must already be a
+// normalized route pattern (e.g. the chi route pattern), never a raw
+// request path, to keep label cardinality bounded.
+func (m *Metrics) RecordRequest(method, path, status string, duration time.Duration, requestSize, responseSize int) {
+	m.httpRequestsTotal.WithLabelValues(method, path, status).Inc()
+	m.httpRequestDuration.WithLabelValues(method, path).Observe(duration.Seconds())
+	m.httpRequestSize.WithLabelValues(method, path).Observe(float64(requestSize))
+	m.httpResponseSize.WithLabelValues(method, path).Observe(float64(responseSize))
+}
+
+// IncActiveRequests increments the in-flight request gauge.
+func (m *Metrics) IncActiveRequests() {
+	m.httpActiveRequests.Inc()
+}
+
+// DecActiveRequests decrements the in-flight request gauge.
+func (m *Metrics) DecActiveRequests() {
+	m.httpActiveRequests.Dec()
+}
+
+// ServePrometheus serves metrics in Prometheus text exposition format.
+func (m *Metrics) ServePrometheus(w http.ResponseWriter, r *http.Request) {
+	promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
+}

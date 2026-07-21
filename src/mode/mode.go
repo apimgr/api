@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/apimgr/api/src/config"
 )
 
 const appName = "api"
@@ -23,7 +25,11 @@ const (
 var (
 	// currentMode stores the active application mode
 	currentMode Mode = Production
-	// mu protects concurrent access to currentMode
+	// debugEnabled stores whether --debug/DEBUG=true diagnostics are active
+	debugEnabled bool
+	// currentLang stores the active interface language code (--lang/LANG)
+	currentLang string
+	// mu protects concurrent access to currentMode, debugEnabled, and currentLang
 	mu sync.RWMutex
 )
 
@@ -49,18 +55,36 @@ func Set(mode string) error {
 }
 
 // ParseMode parses a mode string into a Mode constant
-// Accepts: "dev", "development", "prod", "production" (case-insensitive)
+// Accepts: "dev", "devel", "development", "prod", "production", "debug" (case-insensitive)
+// "debug" is an alias for "development" — callers that need the debug-flag
+// side effect of the alias should use SetWithDebugAlias instead.
 func ParseMode(s string) (Mode, error) {
 	normalized := strings.ToLower(strings.TrimSpace(s))
 
 	switch normalized {
-	case "development", "dev":
+	case "development", "dev", "devel", "debug":
 		return Development, nil
 	case "production", "prod":
 		return Production, nil
 	default:
-		return "", fmt.Errorf("invalid mode: %q (expected: production, prod, development, or dev)", s)
+		return "", fmt.Errorf("invalid mode: %q (expected: production, prod, development, dev, devel, or debug)", s)
 	}
+}
+
+// SetWithDebugAlias sets the application mode, applying the "debug" alias:
+// "--mode debug" / "MODE=debug" expands to mode=development + debug=on.
+// An explicitly set --debug flag or DEBUG env var (applied afterward by the
+// caller) still wins over the alias.
+func SetWithDebugAlias(mode string) error {
+	if err := Set(mode); err != nil {
+		return err
+	}
+
+	if strings.EqualFold(strings.TrimSpace(mode), "debug") {
+		SetDebugEnabled(true)
+	}
+
+	return nil
 }
 
 // IsDevelopment returns true if the current mode is Development
@@ -73,22 +97,77 @@ func IsProduction() bool {
 	return Get() == Production
 }
 
-// Initialize sets the mode based on priority order:
-// 1. CLI flag (passed as parameter)
-// 2. MODE environment variable
-// 3. Default: production
-func Initialize(cliMode string) error {
-	// Priority 1: CLI flag
-	if cliMode != "" {
-		return Set(cliMode)
+// SetDebugEnabled enables or disables --debug/DEBUG=true diagnostics.
+// Debug mode affects verbosity and diagnostics ONLY — it never bypasses
+// authentication or security checks, in any mode, including production.
+func SetDebugEnabled(enabled bool) {
+	mu.Lock()
+	defer mu.Unlock()
+	debugEnabled = enabled
+}
+
+// IsDebugEnabled returns true if --debug/DEBUG=true diagnostics are active
+func IsDebugEnabled() bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	return debugEnabled
+}
+
+// SetLang sets the active interface language code (--lang flag or LANG
+// environment variable, per PART 8 shared flags).
+func SetLang(lang string) {
+	mu.Lock()
+	defer mu.Unlock()
+	currentLang = lang
+}
+
+// GetLang returns the active interface language code, or "" if none was set
+func GetLang() string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return currentLang
+}
+
+// Initialize sets the mode and debug flag based on priority order:
+//
+// Mode:
+//  1. cliMode (--mode flag), highest priority
+//  2. MODE environment variable
+//  3. Default: production ("--mode debug" / "MODE=debug" is an alias for
+//     development + debug on)
+//
+// Debug:
+//  1. cliDebug (--debug flag), highest priority
+//  2. DEBUG environment variable (truthy/falsy, if explicitly set)
+//  3. "debug" mode alias
+//  4. Default: false
+func Initialize(cliMode string, cliDebug bool, cliDebugSet bool) error {
+	// Priority 1/2/3 for mode (also applies the "debug" alias)
+	switch {
+	case cliMode != "":
+		if err := SetWithDebugAlias(cliMode); err != nil {
+			return err
+		}
+	default:
+		if envMode := os.Getenv("MODE"); envMode != "" {
+			if err := SetWithDebugAlias(envMode); err != nil {
+				return err
+			}
+		}
 	}
 
-	// Priority 2: Environment variable
-	if envMode := os.Getenv("MODE"); envMode != "" {
-		return Set(envMode)
+	// Priority 1 for debug: explicit --debug flag always wins
+	if cliDebugSet {
+		SetDebugEnabled(cliDebug)
+		return nil
 	}
 
-	// Priority 3: Default (already set to Production)
+	// Priority 2 for debug: explicitly set DEBUG env var wins over the alias
+	if v, set := os.LookupEnv("DEBUG"); set {
+		SetDebugEnabled(config.IsTruthy(v))
+	}
+
+	// Otherwise: leave whatever the mode alias (or default false) produced
 	return nil
 }
 
@@ -109,10 +188,12 @@ func GetErrorDetail(err error) string {
 	return "An internal error occurred. Please contact support if the problem persists."
 }
 
-// ShouldShowDebugEndpoints returns true if debug endpoints should be enabled
-// Debug endpoints include /debug/pprof/* and /debug/vars
+// ShouldShowDebugEndpoints returns true if debug endpoints should be enabled.
+// Debug endpoints (/debug/pprof/*, /debug/vars, /debug/config, etc.) are
+// gated by the debug flag (--debug/DEBUG=true), NOT by development mode —
+// they return 404 otherwise, in both production and development.
 func ShouldShowDebugEndpoints() bool {
-	return IsDevelopment()
+	return IsDebugEnabled()
 }
 
 // CacheHeaders represents HTTP cache control headers
@@ -161,9 +242,10 @@ func ShouldEnableAutoReload() bool {
 	return IsDevelopment()
 }
 
-// ShouldEnableProfiling returns true if profiling endpoints should be enabled
+// ShouldEnableProfiling returns true if runtime profiling (block/mutex
+// profiling, pprof) should be enabled. Gated by the debug flag, not by mode.
 func ShouldEnableProfiling() bool {
-	return IsDevelopment()
+	return IsDebugEnabled()
 }
 
 // GetPanicRecoveryMode returns the panic recovery behavior for the current mode

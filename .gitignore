@@ -11,6 +11,10 @@ releases/
 # Runtime volumes (docker compose, never committed)
 volumes/
 
+# Go module/build cache created by the toolchain container
+.gomodcache/
+.gocache/
+
 # Environment files (spec prohibits .env files)
 .env
 .env.*
@@ -26,7 +30,6 @@ volumes/
 # Legacy spec files (only AI.md should exist)
 TEMPLATE.md
 SPEC.md
-CLAUDE.md
 TODO.md
 
 # OS generated files

@@ -44,7 +44,7 @@ func (s *Service) ParseURL(urlStr string) (*URLParts, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &URLParts{
 		Scheme:   u.Scheme,
 		Host:     u.Host,
@@ -90,13 +90,13 @@ func (s *Service) ParseDateTime(dateStr string) (time.Time, error) {
 		"01-02-2006",
 		"2006/01/02",
 	}
-	
+
 	for _, format := range formats {
 		if t, err := time.Parse(format, dateStr); err == nil {
 			return t, nil
 		}
 	}
-	
+
 	return time.Time{}, fmt.Errorf("unable to parse date: %s", dateStr)
 }
 
@@ -126,10 +126,10 @@ func (s *Service) ParseCSVLine(line string) []string {
 	var result []string
 	var current strings.Builder
 	inQuotes := false
-	
+
 	for i := 0; i < len(line); i++ {
 		char := line[i]
-		
+
 		switch char {
 		case '"':
 			inQuotes = !inQuotes
@@ -144,7 +144,7 @@ func (s *Service) ParseCSVLine(line string) []string {
 			current.WriteByte(char)
 		}
 	}
-	
+
 	result = append(result, current.String())
 	return result
 }
@@ -154,7 +154,7 @@ func (s *Service) ParseUserAgent(ua string) *UserAgent {
 	result := &UserAgent{
 		Raw: ua,
 	}
-	
+
 	// Detect browser
 	if strings.Contains(ua, "Chrome") {
 		result.Browser = "Chrome"
@@ -167,7 +167,7 @@ func (s *Service) ParseUserAgent(ua string) *UserAgent {
 	} else if strings.Contains(ua, "MSIE") || strings.Contains(ua, "Trident") {
 		result.Browser = "Internet Explorer"
 	}
-	
+
 	// Detect OS
 	if strings.Contains(ua, "Windows") {
 		result.OS = "Windows"
@@ -180,7 +180,7 @@ func (s *Service) ParseUserAgent(ua string) *UserAgent {
 	} else if strings.Contains(ua, "iOS") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") {
 		result.OS = "iOS"
 	}
-	
+
 	// Detect device type
 	if strings.Contains(ua, "Mobile") || strings.Contains(ua, "Android") || strings.Contains(ua, "iPhone") {
 		result.Device = "Mobile"
@@ -189,7 +189,7 @@ func (s *Service) ParseUserAgent(ua string) *UserAgent {
 	} else {
 		result.Device = "Desktop"
 	}
-	
+
 	return result
 }
 
@@ -206,7 +206,7 @@ func (s *Service) ParseEmail(email string) (*EmailParts, error) {
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid email format")
 	}
-	
+
 	return &EmailParts{
 		Local:  parts[0],
 		Domain: parts[1],

@@ -1,105 +1,72 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 )
 
-// ParseBool parses a boolean value from various string formats.
-// Accepts all truthy/falsy values defined in the specification.
-//
-// Truthy values (case-insensitive):
-// - "1", "yes", "true", "on", "enable", "enabled"
-// - "y", "t", "yep", "yup", "yeah", "aye", "si", "oui"
-//
-// Falsy values (case-insensitive):
-// - "0", "no", "false", "off", "disable", "disabled"
-// - "n", "f", "nope", "nah", "nay", "nein", "non"
-//
-// Returns false for any unrecognized value.
-func ParseBool(value string) bool {
-	// Normalize to lowercase for comparison
-	v := strings.ToLower(strings.TrimSpace(value))
-
-	// Truthy values
-	truthy := map[string]bool{
-		"1":       true,
-		"yes":     true,
-		"true":    true,
-		"on":      true,
-		"enable":  true,
-		"enabled": true,
-		"y":       true,
-		"t":       true,
-		"yep":     true,
-		"yup":     true,
-		"yeah":    true,
-		"aye":     true,
-		"si":      true,
-		"oui":     true,
-	}
-
-	// Check if value is truthy
-	if truthy[v] {
-		return true
-	}
-
-	// All other values (including falsy and unrecognized) return false
-	return false
+// Truthy values (case-insensitive)
+var truthyValues = map[string]bool{
+	"1": true, "y": true, "t": true,
+	"yes": true, "true": true, "on": true, "ok": true,
+	"enable": true, "enabled": true,
+	"yep": true, "yup": true, "yeah": true,
+	"aye": true, "si": true, "oui": true, "da": true, "hai": true,
+	"affirmative": true, "accept": true, "allow": true, "grant": true,
+	"sure": true, "totally": true,
 }
 
-// ParseBoolWithDefault parses a boolean value with a default fallback.
-// If the value is empty or unrecognized, returns the default value.
-func ParseBoolWithDefault(value string, defaultValue bool) bool {
-	if value == "" {
-		return defaultValue
+// Falsy values (case-insensitive)
+var falsyValues = map[string]bool{
+	"0": true, "n": true, "f": true,
+	"no": true, "false": true, "off": true,
+	"disable": true, "disabled": true,
+	"nope": true, "nah": true, "nay": true,
+	"nein": true, "non": true, "niet": true, "iie": true, "lie": true,
+	"negative": true, "reject": true, "block": true, "revoke": true,
+	"deny": true, "never": true, "noway": true,
+}
+
+// ParseBool parses a string into a boolean using truthy/falsy values.
+// Returns the parsed value and nil on success.
+// Returns false and an error for invalid values.
+// Empty string returns the provided default value.
+func ParseBool(s string, defaultVal bool) (bool, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+
+	if s == "" {
+		return defaultVal, nil
 	}
 
-	// Normalize to lowercase
-	v := strings.ToLower(strings.TrimSpace(value))
-
-	// Check if it's explicitly falsy
-	falsy := map[string]bool{
-		"0":        true,
-		"no":       true,
-		"false":    true,
-		"off":      true,
-		"disable":  true,
-		"disabled": true,
-		"n":        true,
-		"f":        true,
-		"nope":     true,
-		"nah":      true,
-		"nay":      true,
-		"nein":     true,
-		"non":      true,
+	if truthyValues[s] {
+		return true, nil
 	}
 
-	if falsy[v] {
-		return false
+	if falsyValues[s] {
+		return false, nil
 	}
 
-	// Check if it's explicitly truthy
-	truthy := map[string]bool{
-		"1":       true,
-		"yes":     true,
-		"true":    true,
-		"on":      true,
-		"enable":  true,
-		"enabled": true,
-		"y":       true,
-		"t":       true,
-		"yep":     true,
-		"yup":     true,
-		"yeah":    true,
-		"aye":     true,
-		"si":      true,
-		"oui":     true,
-	}
+	return false, fmt.Errorf("invalid boolean value: %q", s)
+}
 
-	if truthy[v] {
-		return true
+// MustParseBool parses a string into a boolean, panics on invalid value.
+// Use only during initialization where invalid config should halt startup.
+func MustParseBool(s string, defaultVal bool) bool {
+	val, err := ParseBool(s, defaultVal)
+	if err != nil {
+		panic(err)
 	}
+	return val
+}
 
-	// Unrecognized value - use default
-	return defaultValue
+// IsTruthy returns true if the string is a truthy value.
+// Returns false for empty, invalid, or falsy values (no error).
+func IsTruthy(s string) bool {
+	return truthyValues[strings.TrimSpace(strings.ToLower(s))]
+}
+
+// IsFalsy returns true if the string is a falsy value.
+// Returns false for empty, invalid, or truthy values (no error).
+func IsFalsy(s string) bool {
+	return falsyValues[strings.TrimSpace(strings.ToLower(s))]
 }

@@ -5,20 +5,21 @@ import (
 	"log"
 	"net"
 	"net/smtp"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // Config holds email configuration
 type Config struct {
-	Enabled  bool
-	SMTPHost string
-	SMTPPort int
-	Username string
-	Password string
-	FromName string
+	Enabled   bool
+	SMTPHost  string
+	SMTPPort  int
+	Username  string
+	Password  string
+	FromName  string
 	FromEmail string
-	TLS      string // auto, starttls, tls, none
+	TLS       string // auto, starttls, tls, none
 }
 
 // Message represents an email message
@@ -73,7 +74,7 @@ func (c *Client) Send(msg Message) error {
 	emailMsg += "\r\n" + msg.Body
 
 	// Send via SMTP
-	addr := fmt.Sprintf("%s:%d", c.config.SMTPHost, c.config.SMTPPort)
+	addr := net.JoinHostPort(c.config.SMTPHost, strconv.Itoa(c.config.SMTPPort))
 
 	// Simple auth (if credentials provided)
 	var auth smtp.Auth
@@ -92,7 +93,7 @@ func (c *Client) Send(msg Message) error {
 
 // TestConnection tests the SMTP connection
 func TestConnection(host string, port int) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	// Attempt to connect
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
@@ -153,52 +154,6 @@ func SendNotification(client *Client, to []string, subject, body string) error {
 		Subject: subject,
 		Body:    body,
 		HTML:    false,
-	}
-
-	return client.Send(msg)
-}
-
-// SendWelcomeEmail sends a welcome email to a new user
-func SendWelcomeEmail(client *Client, to, username string) error {
-	msg := Message{
-		To:      []string{to},
-		Subject: "Welcome to API Toolkit",
-		Body: fmt.Sprintf(`Hello %s,
-
-Welcome to API Toolkit! Your account has been created successfully.
-
-You can now access the admin panel at:
-http://localhost:64580/admin
-
-Best regards,
-API Toolkit Team
-`, username),
-		HTML: false,
-	}
-
-	return client.Send(msg)
-}
-
-// SendPasswordResetEmail sends a password reset email
-func SendPasswordResetEmail(client *Client, to, token string) error {
-	resetURL := fmt.Sprintf("http://localhost:64580/auth/reset?token=%s", token)
-
-	msg := Message{
-		To:      []string{to},
-		Subject: "Password Reset Request",
-		Body: fmt.Sprintf(`A password reset was requested for your account.
-
-Click the link below to reset your password:
-%s
-
-This link will expire in 1 hour.
-
-If you did not request this reset, please ignore this email.
-
-Best regards,
-API Toolkit Team
-`, resetURL),
-		HTML: false,
 	}
 
 	return client.Send(msg)

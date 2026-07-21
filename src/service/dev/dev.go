@@ -45,11 +45,11 @@ func (s *Service) ToCamelCase(str string) string {
 	words := strings.FieldsFunc(str, func(r rune) bool {
 		return r == '_' || r == '-' || r == ' '
 	})
-	
+
 	if len(words) == 0 {
 		return ""
 	}
-	
+
 	result := strings.ToLower(words[0])
 	for _, word := range words[1:] {
 		if len(word) > 0 {
@@ -63,7 +63,7 @@ func (s *Service) ToPascalCase(str string) string {
 	words := strings.FieldsFunc(str, func(r rune) bool {
 		return r == '_' || r == '-' || r == ' '
 	})
-	
+
 	var result string
 	for _, word := range words {
 		if len(word) > 0 {
@@ -77,11 +77,11 @@ func (s *Service) ToSnakeCase(str string) string {
 	// Handle camelCase and PascalCase
 	re := regexp.MustCompile("([a-z0-9])([A-Z])")
 	str = re.ReplaceAllString(str, "${1}_${2}")
-	
+
 	// Handle spaces and hyphens
 	str = strings.ReplaceAll(str, " ", "_")
 	str = strings.ReplaceAll(str, "-", "_")
-	
+
 	// Convert to lowercase
 	return strings.ToLower(str)
 }
@@ -90,11 +90,11 @@ func (s *Service) ToKebabCase(str string) string {
 	// Handle camelCase and PascalCase
 	re := regexp.MustCompile("([a-z0-9])([A-Z])")
 	str = re.ReplaceAllString(str, "${1}-${2}")
-	
+
 	// Handle spaces and underscores
 	str = strings.ReplaceAll(str, " ", "-")
 	str = strings.ReplaceAll(str, "_", "-")
-	
+
 	// Convert to lowercase
 	return strings.ToLower(str)
 }
@@ -144,7 +144,7 @@ func (s *Service) EscapeRegex(str string) string {
 func (s *Service) AddLineComments(code string, commentStyle string) string {
 	lines := strings.Split(code, "\n")
 	var result []string
-	
+
 	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {
 			result = append(result, commentStyle+" "+line)
@@ -152,14 +152,14 @@ func (s *Service) AddLineComments(code string, commentStyle string) string {
 			result = append(result, line)
 		}
 	}
-	
+
 	return strings.Join(result, "\n")
 }
 
 func (s *Service) RemoveLineComments(code string, commentStyle string) string {
 	lines := strings.Split(code, "\n")
 	var result []string
-	
+
 	prefix := commentStyle + " "
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -169,7 +169,7 @@ func (s *Service) RemoveLineComments(code string, commentStyle string) string {
 			result = append(result, line)
 		}
 	}
-	
+
 	return strings.Join(result, "\n")
 }
 
@@ -178,7 +178,7 @@ func (s *Service) Indent(code string, spaces int) string {
 	indent := strings.Repeat(" ", spaces)
 	lines := strings.Split(code, "\n")
 	var result []string
-	
+
 	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {
 			result = append(result, indent+line)
@@ -186,7 +186,7 @@ func (s *Service) Indent(code string, spaces int) string {
 			result = append(result, line)
 		}
 	}
-	
+
 	return strings.Join(result, "\n")
 }
 
@@ -194,7 +194,7 @@ func (s *Service) Dedent(code string, spaces int) string {
 	prefix := strings.Repeat(" ", spaces)
 	lines := strings.Split(code, "\n")
 	var result []string
-	
+
 	for _, line := range lines {
 		if strings.HasPrefix(line, prefix) {
 			result = append(result, strings.TrimPrefix(line, prefix))
@@ -202,7 +202,7 @@ func (s *Service) Dedent(code string, spaces int) string {
 			result = append(result, line)
 		}
 	}
-	
+
 	return strings.Join(result, "\n")
 }
 
@@ -224,23 +224,23 @@ func (s *Service) CountLines(code string) int {
 func (s *Service) RemoveEmptyLines(code string) string {
 	lines := strings.Split(code, "\n")
 	var result []string
-	
+
 	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {
 			result = append(result, line)
 		}
 	}
-	
+
 	return strings.Join(result, "\n")
 }
 
 func (s *Service) NumberLines(code string) string {
 	lines := strings.Split(code, "\n")
 	var result []string
-	
+
 	for i, line := range lines {
 		result = append(result, fmt.Sprintf("%4d | %s", i+1, line))
 	}
-	
+
 	return strings.Join(result, "\n")
 }

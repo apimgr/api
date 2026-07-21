@@ -16,47 +16,47 @@ func New() *Service {
 // Dockerfile generation helpers
 func (s *Service) GenerateDockerfile(config DockerfileConfig) string {
 	var lines []string
-	
+
 	// FROM
 	if config.BaseImage != "" {
 		lines = append(lines, fmt.Sprintf("FROM %s", config.BaseImage))
 	}
-	
+
 	// LABEL
 	if config.Maintainer != "" {
 		lines = append(lines, fmt.Sprintf("LABEL maintainer=\"%s\"", config.Maintainer))
 	}
-	
+
 	// WORKDIR
 	if config.WorkDir != "" {
 		lines = append(lines, fmt.Sprintf("WORKDIR %s", config.WorkDir))
 	}
-	
+
 	// COPY
 	for _, copy := range config.CopyInstructions {
 		lines = append(lines, fmt.Sprintf("COPY %s %s", copy.Source, copy.Dest))
 	}
-	
+
 	// RUN
 	for _, run := range config.RunCommands {
 		lines = append(lines, fmt.Sprintf("RUN %s", run))
 	}
-	
+
 	// ENV
 	for key, value := range config.Environment {
 		lines = append(lines, fmt.Sprintf("ENV %s=%s", key, value))
 	}
-	
+
 	// EXPOSE
 	for _, port := range config.ExposePorts {
 		lines = append(lines, fmt.Sprintf("EXPOSE %d", port))
 	}
-	
+
 	// VOLUME
 	for _, volume := range config.Volumes {
 		lines = append(lines, fmt.Sprintf("VOLUME %s", volume))
 	}
-	
+
 	// CMD or ENTRYPOINT
 	if config.Cmd != "" {
 		lines = append(lines, fmt.Sprintf("CMD %s", config.Cmd))
@@ -64,21 +64,21 @@ func (s *Service) GenerateDockerfile(config DockerfileConfig) string {
 	if config.Entrypoint != "" {
 		lines = append(lines, fmt.Sprintf("ENTRYPOINT %s", config.Entrypoint))
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
 type DockerfileConfig struct {
-	BaseImage         string
-	Maintainer        string
-	WorkDir           string
-	CopyInstructions  []CopyInstruction
-	RunCommands       []string
-	Environment       map[string]string
-	ExposePorts       []int
-	Volumes           []string
-	Cmd               string
-	Entrypoint        string
+	BaseImage        string
+	Maintainer       string
+	WorkDir          string
+	CopyInstructions []CopyInstruction
+	RunCommands      []string
+	Environment      map[string]string
+	ExposePorts      []int
+	Volumes          []string
+	Cmd              string
+	Entrypoint       string
 }
 
 type CopyInstruction struct {
@@ -89,53 +89,53 @@ type CopyInstruction struct {
 // Docker compose helpers
 func (s *Service) GenerateComposeService(name string, config ComposeServiceConfig) string {
 	var lines []string
-	
+
 	lines = append(lines, fmt.Sprintf("  %s:", name))
-	
+
 	if config.Image != "" {
 		lines = append(lines, fmt.Sprintf("    image: %s", config.Image))
 	}
-	
+
 	if config.Build != "" {
 		lines = append(lines, fmt.Sprintf("    build: %s", config.Build))
 	}
-	
+
 	if config.ContainerName != "" {
 		lines = append(lines, fmt.Sprintf("    container_name: %s", config.ContainerName))
 	}
-	
+
 	if len(config.Ports) > 0 {
 		lines = append(lines, "    ports:")
 		for _, port := range config.Ports {
 			lines = append(lines, fmt.Sprintf("      - \"%s\"", port))
 		}
 	}
-	
+
 	if len(config.Volumes) > 0 {
 		lines = append(lines, "    volumes:")
 		for _, volume := range config.Volumes {
 			lines = append(lines, fmt.Sprintf("      - %s", volume))
 		}
 	}
-	
+
 	if len(config.Environment) > 0 {
 		lines = append(lines, "    environment:")
 		for key, value := range config.Environment {
 			lines = append(lines, fmt.Sprintf("      %s: %s", key, value))
 		}
 	}
-	
+
 	if config.Restart != "" {
 		lines = append(lines, fmt.Sprintf("    restart: %s", config.Restart))
 	}
-	
+
 	if len(config.DependsOn) > 0 {
 		lines = append(lines, "    depends_on:")
 		for _, dep := range config.DependsOn {
 			lines = append(lines, fmt.Sprintf("      - %s", dep))
 		}
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -155,7 +155,7 @@ func (s *Service) ParseImageName(image string) *ImageInfo {
 	info := &ImageInfo{
 		Original: image,
 	}
-	
+
 	// Split by : for tag
 	parts := strings.Split(image, ":")
 	if len(parts) == 2 {
@@ -164,7 +164,7 @@ func (s *Service) ParseImageName(image string) *ImageInfo {
 	} else {
 		info.Tag = "latest"
 	}
-	
+
 	// Split by / for registry and repository
 	slashParts := strings.Split(image, "/")
 	if len(slashParts) >= 3 {
@@ -177,7 +177,7 @@ func (s *Service) ParseImageName(image string) *ImageInfo {
 	} else {
 		info.Repository = slashParts[0]
 	}
-	
+
 	return info
 }
 
@@ -196,18 +196,18 @@ func (s *Service) IsValidContainerName(name string) bool {
 	if len(name) == 0 {
 		return false
 	}
-	
+
 	firstChar := name[0]
 	if !((firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z') || (firstChar >= '0' && firstChar <= '9')) {
 		return false
 	}
-	
+
 	for _, r := range name {
 		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-') {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -228,12 +228,12 @@ func (s *Service) ParsePortMapping(mapping string) (hostPort, containerPort int,
 	} else {
 		protocol = "tcp"
 	}
-	
+
 	portParts := strings.Split(mapping, ":")
 	if len(portParts) != 2 {
 		return 0, 0, "", fmt.Errorf("invalid port mapping format")
 	}
-	
+
 	var hp, cp int
 	if _, err := fmt.Sscanf(portParts[0], "%d", &hp); err != nil {
 		return 0, 0, "", err
@@ -241,7 +241,7 @@ func (s *Service) ParsePortMapping(mapping string) (hostPort, containerPort int,
 	if _, err := fmt.Sscanf(portParts[1], "%d", &cp); err != nil {
 		return 0, 0, "", err
 	}
-	
+
 	return hp, cp, protocol, nil
 }
 

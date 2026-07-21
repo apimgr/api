@@ -2,7 +2,10 @@ package server
 
 import (
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/apimgr/api/src/metrics"
 )
@@ -39,6 +42,10 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			size:           0,
 		}
 
+		m := metrics.Get()
+		m.IncActiveRequests()
+		defer m.DecActiveRequests()
+
 		// Serve the request
 		next.ServeHTTP(wrapped, r)
 
@@ -50,7 +57,12 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			logger.LogAccess(r, wrapped.status, wrapped.size, duration)
 		}
 
-		// Record metrics
-		metrics.Get().RecordRequest(wrapped.status, duration, r.URL.Path)
+		// Record metrics using the matched chi route pattern (never the
+		// raw request path) to keep label cardinality bounded
+		routePattern := chi.RouteContext(r.Context()).RoutePattern()
+		if routePattern == "" {
+			routePattern = "unmatched"
+		}
+		m.RecordRequest(r.Method, routePattern, strconv.Itoa(wrapped.status), duration, int(r.ContentLength), wrapped.size)
 	})
 }

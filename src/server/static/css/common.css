@@ -98,7 +98,8 @@ body {
 }
 
 main {
-  flex: 1; /* Pushes footer to bottom per PART 17 */
+  /* Pushes footer to bottom per PART 17 */
+  flex: 1;
 }
 
 /* ============================================================================

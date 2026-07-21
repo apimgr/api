@@ -94,8 +94,28 @@ Purpose:
 - Full spec: `AI.md` (~46k lines) ← **SOURCE OF TRUTH**
 
 ## Current Project State
-- Bootstrap pass (PART 0-6) completed against pre-existing scaffolded Go repo.
+- Bootstrap pass (PART 0-6) plus a full line-by-line spec-compliance audit
+  (`AUDIT.AI.md`) have both landed against the pre-existing scaffolded Go
+  repo; work spans well past PART 0-6 at this point — see `AUDIT.AI.md` for
+  the authoritative, itemized list of what's fixed vs. still open per PART.
+- IDEA.md non-goals (no admin panel, no auth/sessions, no user accounts) are
+  confirmed authoritative over base AI.md; `src/admin/`, `src/session/`, and
+  related admin/session template and config code were removed accordingly.
 - `src/mode/` wired to the PART 6 mode+debug priority chain (CLI > env > alias > default); `main.go` now calls `appmode.Initialize`.
+- `src/paths/paths.go` now implements `GetCacheDir()`/`--cache` and a
+  writable-fallback `GetBackupDir()`/`--backup`, both wired into `main.go`.
+- `src/sysservice/service.go` (cross-platform systemd/runit/launchd/Windows/
+  BSD rc.d service management) is wired into `main.go`'s `--service`
+  subcommands, replacing the prior Linux-only hand-rolled implementation.
+- CI/CD (`.github/workflows/ci.yml`, `release.yml`), `Makefile`, and
+  `docker/Dockerfile` have been brought into PART 25-27 compliance
+  (`casjaysdev/go:latest` toolchain, 8-platform release matrix, non-root
+  Docker user, secret scanning).
+- Several previously-stubbed service packages (`crypto`, `network`, `test`,
+  `weather`, `osint`, `image`) have real implementations now; multiple
+  packages remain open per `AUDIT.AI.md` Pass 1/3/5/6 (security hardening,
+  scheduler cron parsing, geoip MMDB migration, `api-cli` client source
+  under PART 32, metrics/logger subsystems).
 - `.claude/rules/ai-rules.md` and `.claude/rules/project-rules.md` created (PART 0-4 coverage).
 - `.claude/rules/config-rules.md` (PART 5, 6, 12) NOT yet created — PART 12 (Server Configuration) has not been read; do not create a partial file, read PART 12 first.
 - Later-PART rule files (frontend-rules.md PART 16, etc.) not yet created — out of scope for this pass.

@@ -43,14 +43,14 @@ type Request struct {
 }
 
 // Response represents a GraphQL response
-type Response struct{
+type Response struct {
 	Data   interface{} `json:"data,omitempty"`
 	Errors []Error     `json:"errors,omitempty"`
 }
 
 // Error represents a GraphQL error
 type Error struct {
-	Message string `json:"message"`
+	Message string   `json:"message"`
 	Path    []string `json:"path,omitempty"`
 }
 

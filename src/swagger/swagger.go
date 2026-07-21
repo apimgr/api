@@ -7,11 +7,11 @@ import (
 
 // Spec represents the OpenAPI specification structure
 type Spec struct {
-	OpenAPI string                 `json:"openapi"`
-	Info    Info                   `json:"info"`
-	Servers []Server               `json:"servers"`
-	Paths   map[string]PathItem    `json:"paths"`
-	Components Components           `json:"components,omitempty"`
+	OpenAPI    string              `json:"openapi"`
+	Info       Info                `json:"info"`
+	Servers    []Server            `json:"servers"`
+	Paths      map[string]PathItem `json:"paths"`
+	Components Components          `json:"components,omitempty"`
 }
 
 // Info contains API metadata
@@ -65,11 +65,11 @@ type Operation struct {
 
 // Parameter represents an operation parameter
 type Parameter struct {
-	Name        string      `json:"name"`
-	In          string      `json:"in"` // query, header, path, cookie
-	Description string      `json:"description,omitempty"`
-	Required    bool        `json:"required,omitempty"`
-	Schema      Schema      `json:"schema,omitempty"`
+	Name        string `json:"name"`
+	In          string `json:"in"` // query, header, path, cookie
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+	Schema      Schema `json:"schema,omitempty"`
 }
 
 // RequestBody represents request body
@@ -366,8 +366,8 @@ func generateSchemas() map[string]Schema {
 		"Error": {
 			Type: "object",
 			Properties: map[string]Schema{
-				"error":   {Type: "string", Example: "Error message"},
-				"status":  {Type: "integer", Example: 400},
+				"error":      {Type: "string", Example: "Error message"},
+				"status":     {Type: "integer", Example: 400},
 				"request_id": {Type: "string", Example: "abc123"},
 			},
 		},

@@ -28,7 +28,7 @@ A versatile REST API toolkit providing multiple utility services through a unifi
   - Multi-format logging (access, server, error, audit, security)
   - Automated backup and restore
   - Background task scheduler
-  - Systemd service integration
+  - Cross-platform service integration (systemd, runit, launchd, Windows Service Manager, BSD rc.d)
   - Docker containerization
 
 ## Quick Start
@@ -148,6 +148,11 @@ api --maintenance restore /path/to/backup.json
 
 # Check for updates
 api --update check
+
+# Directory overrides
+api --config /etc/apimgr/api --data /var/lib/apimgr/api \
+    --log /var/log/apimgr/api --cache /var/cache/apimgr/api \
+    --backup /mnt/Backups/apimgr/api
 ```
 
 ## Documentation
@@ -182,26 +187,19 @@ server:
 
   rate_limit:
     enabled: true
-    requests: 100
-    window: 60
+    read:
+      requests: 120
+      window: 60
+    write:
+      requests: 10
+      window: 60
+    health:
+      requests: 120
+      window: 60
+    global_burst: 240
 
   schedule:
     enabled: true
-
-api:
-  services:
-    text:
-      enabled: true
-    crypto:
-      enabled: true
-    datetime:
-      enabled: true
-    network:
-      enabled: true
-
-  limits:
-    max_input_size: 1048576  # 1MB
-    max_batch_operations: 100
 ```
 
 ## Development
