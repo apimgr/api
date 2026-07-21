@@ -73,8 +73,15 @@ func rotateImage(img image.Image, degrees int) image.Image {
 	angle := float64(deg) * math.Pi / 180
 	cos, sin := math.Cos(angle), math.Sin(angle)
 
-	newW := int(math.Ceil(math.Abs(float64(w)*cos) + math.Abs(float64(h)*sin)))
-	newH := int(math.Ceil(math.Abs(float64(w)*sin) + math.Abs(float64(h)*cos)))
+	// math.Cos/math.Sin return a tiny nonzero epsilon (rather than an
+	// exact 0) at 90/180/270 degrees, which otherwise pushes the Ceil
+	// below up by a spurious extra pixel for axis-aligned rotations.
+	// Rounding to 9 decimal places removes that float noise while still
+	// preserving genuine fractional bounding-box growth at other angles.
+	rawW := math.Abs(float64(w)*cos) + math.Abs(float64(h)*sin)
+	rawH := math.Abs(float64(w)*sin) + math.Abs(float64(h)*cos)
+	newW := int(math.Ceil(math.Round(rawW*1e9) / 1e9))
+	newH := int(math.Ceil(math.Round(rawH*1e9) / 1e9))
 	if newW <= 0 {
 		newW = 1
 	}

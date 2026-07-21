@@ -132,7 +132,10 @@ func (s *Service) EscapeSQL(str string) string {
 }
 
 func (s *Service) EscapeRegex(str string) string {
-	special := []string{".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|", "\\"}
+	// Backslash must be escaped first: escaping it after the other
+	// special characters would re-escape the backslashes those earlier
+	// substitutions just introduced, corrupting the output.
+	special := []string{"\\", ".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|"}
 	result := str
 	for _, char := range special {
 		result = strings.ReplaceAll(result, char, "\\"+char)

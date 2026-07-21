@@ -168,17 +168,22 @@ func (s *Service) ParseUserAgent(ua string) *UserAgent {
 		result.Browser = "Internet Explorer"
 	}
 
-	// Detect OS
+	// Detect OS.
+	//
+	// iOS is checked before "Mac OS": real iPhone/iPad Safari user
+	// agents always include the compatibility string "like Mac OS X",
+	// so checking "Mac OS" first would permanently misdetect every
+	// actual iOS device as macOS.
 	if strings.Contains(ua, "Windows") {
 		result.OS = "Windows"
+	} else if strings.Contains(ua, "iOS") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") {
+		result.OS = "iOS"
 	} else if strings.Contains(ua, "Mac OS") {
 		result.OS = "macOS"
 	} else if strings.Contains(ua, "Linux") {
 		result.OS = "Linux"
 	} else if strings.Contains(ua, "Android") {
 		result.OS = "Android"
-	} else if strings.Contains(ua, "iOS") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") {
-		result.OS = "iOS"
 	}
 
 	// Detect device type
