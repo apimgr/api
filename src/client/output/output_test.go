@@ -14,10 +14,10 @@ import (
 // when mode is ColorAuto (or unrecognized).
 func TestColorEnabled(t *testing.T) {
 	tests := []struct {
-		name     string
-		mode     ColorMode
-		noColor  string
-		want     bool
+		name    string
+		mode    ColorMode
+		noColor string
+		want    bool
 	}{
 		{"explicit yes ignores NO_COLOR", ColorYes, "1", true},
 		{"explicit no ignores NO_COLOR", ColorNo, "", false},

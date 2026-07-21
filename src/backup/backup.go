@@ -268,12 +268,13 @@ func (ew *encryptedWriter) Write(p []byte) (n int, err error) {
 }
 
 func (ew *encryptedWriter) Close() error {
-	// Encrypt buffered data
-	if len(ew.buf) > 0 {
-		encrypted := ew.gcm.Seal(nil, ew.nonce, ew.buf, nil)
-		if _, err := ew.w.Write(encrypted); err != nil {
-			return err
-		}
+	// Encrypt buffered data. Seal must run even for an empty payload:
+	// GCM always appends an authentication tag, so skipping the write
+	// for zero-length input leaves the stream with no tag at all and
+	// decryption later fails with "message authentication failed".
+	encrypted := ew.gcm.Seal(nil, ew.nonce, ew.buf, nil)
+	if _, err := ew.w.Write(encrypted); err != nil {
+		return err
 	}
 
 	// Close underlying writer if possible

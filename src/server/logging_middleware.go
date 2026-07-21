@@ -58,8 +58,13 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Record metrics using the matched chi route pattern (never the
-		// raw request path) to keep label cardinality bounded
-		routePattern := chi.RouteContext(r.Context()).RoutePattern()
+		// raw request path) to keep label cardinality bounded. Guard
+		// against a nil chi route context (e.g. the handler invoked
+		// directly outside of chi's router) to avoid a nil pointer panic.
+		routePattern := ""
+		if rctx := chi.RouteContext(r.Context()); rctx != nil {
+			routePattern = rctx.RoutePattern()
+		}
 		if routePattern == "" {
 			routePattern = "unmatched"
 		}
