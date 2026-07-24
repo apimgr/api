@@ -14,6 +14,10 @@ import (
 // PID reused by an unrelated process is never mistaken for ours.
 const binaryName = "api"
 
+// stillActive is the Windows STILL_ACTIVE exit-code sentinel (259); it is
+// not exported by golang.org/x/sys/windows, so it is defined here.
+const stillActive = 259
+
 // isProcessRunning checks if a process with the given PID exists (Windows)
 func isProcessRunning(pid int) bool {
 	process, err := os.FindProcess(pid)
@@ -23,7 +27,7 @@ func isProcessRunning(pid int) bool {
 	var exitCode uint32
 	handle := windows.Handle(uintptr(process.Pid))
 	err = windows.GetExitCodeProcess(handle, &exitCode)
-	return err == nil && exitCode == windows.STILL_ACTIVE
+	return err == nil && exitCode == stillActive
 }
 
 // isOurProcess verifies the process is actually our binary (Windows)
