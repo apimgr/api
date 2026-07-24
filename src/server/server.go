@@ -71,6 +71,24 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/crypto", cryptoPageHandler(cfg))
 	r.Get("/datetime", datetimePageHandler(cfg))
 	r.Get("/network", categoryPageHandler(cfg, "network", "Network Tools", "IP lookup, DNS, WHOIS, SSL, and network utilities"))
+	r.Get("/categories", categoriesPageHandler(cfg))
+	r.Get("/convert", categoryPageHandler(cfg, "convert", "Unit Conversion", "Length, weight, temperature, currency, and color conversions"))
+	r.Get("/dev", categoryPageHandler(cfg, "dev", "Developer Tools", "HTTP echo, formatters, minifiers, and development utilities"))
+	r.Get("/docker", categoryPageHandler(cfg, "docker", "Docker Tools", "Docker run/compose conversion, linting, and validation"))
+	r.Get("/fun", categoryPageHandler(cfg, "fun", "Fun & Content", "Jokes, quotes, facts, and random entertainment"))
+	r.Get("/generate", categoryPageHandler(cfg, "generate", "Generators", "QR codes, barcodes, configs, avatars, and more"))
+	r.Get("/geo", categoryPageHandler(cfg, "geo", "Geolocation", "IP lookup, geocoding, distance calculations, and geo encoding"))
+	r.Get("/image", categoryPageHandler(cfg, "image", "Images", "Image resize, crop, filters, and manipulation"))
+	r.Get("/language", categoryPageHandler(cfg, "language", "Language Tools", "Spell checking, dictionary, thesaurus, and language detection"))
+	r.Get("/lorem", categoryPageHandler(cfg, "lorem", "Lorem & Fake Data", "Generate realistic fake data for testing and development"))
+	r.Get("/math", categoryPageHandler(cfg, "math", "Math & Numbers", "Calculations, statistics, primes, and matrix operations"))
+	r.Get("/osint", categoryPageHandler(cfg, "osint", "OSINT Tools", "Email intelligence, domain research, and username searches"))
+	r.Get("/parse", categoryPageHandler(cfg, "parse", "Parsers", "Parsing JSON, YAML, XML, CSV, and format conversions"))
+	r.Get("/research", categoryPageHandler(cfg, "research", "Research Tools", "Content extraction, summarization, and citations"))
+	r.Get("/system", categoryPageHandler(cfg, "system", "Health & System", "Server health checks, system information, and version details"))
+	r.Get("/testing", categoryPageHandler(cfg, "testing", "Testing Tools", "Mocks, fixtures, assertions, and API testing"))
+	r.Get("/validate", categoryPageHandler(cfg, "validate", "Validators", "Validating emails, phones, URLs, credit cards, and more"))
+	r.Get("/weather", categoryPageHandler(cfg, "weather", "Weather", "Current weather, forecasts, and air quality data"))
 	r.Get("/api", apiDocsHandler(cfg))
 	r.Get("/openapi", openapiHandler(cfg))
 	r.Get("/openapi.json", openapiJSONHandler(cfg))
@@ -337,6 +355,16 @@ type PageData struct {
 	UpdatedAt         string
 	RateLimitRequests int
 	RateLimitWindow   int
+	Categories        []CategoryInfo
+}
+
+// CategoryInfo describes one tool category shown on the /categories index page
+type CategoryInfo struct {
+	Path        string
+	Icon        string
+	Name        string
+	Description string
+	Count       int
 }
 
 func newPageData(cfg *config.Config, activePage string) PageData {
@@ -361,7 +389,11 @@ func initTemplates() error {
 	pageTemplates = make(map[string]*template.Template)
 
 	// Public pages use base layout
-	publicPages := []string{"index", "text", "crypto", "datetime", "openapi", "error", "healthz", "about", "privacy", "contact", "help"}
+	publicPages := []string{
+		"index", "text", "crypto", "datetime", "network", "openapi", "error", "healthz", "about", "privacy", "contact", "help",
+		"categories", "convert", "dev", "docker", "fun", "generate", "geo", "image", "language", "lorem", "math",
+		"osint", "parse", "research", "system", "testing", "validate", "weather",
+	}
 
 	for _, page := range publicPages {
 		tmpl, err := template.ParseFS(templatesFS,
@@ -427,6 +459,43 @@ func categoryPageHandler(cfg *config.Config, category, title, description string
 		data.PageTitle = title
 		data.PageDescription = description
 		renderPage(w, category, data)
+	}
+}
+
+// allCategories lists the 21 tool categories shown on the /categories index page
+func allCategories() []CategoryInfo {
+	return []CategoryInfo{
+		{Path: "/text", Icon: "📝", Name: "Text Utilities", Description: "UUID generation, hashing, encoding, and text manipulation", Count: 89},
+		{Path: "/crypto", Icon: "🔐", Name: "Cryptography", Description: "Password hashing, TOTP generation, and secure passwords", Count: 147},
+		{Path: "/datetime", Icon: "🕐", Name: "Date & Time", Description: "Timestamp conversion, timezone handling, and date calculations", Count: 67},
+		{Path: "/network", Icon: "🌐", Name: "Network Tools", Description: "IP lookup, DNS, WHOIS, SSL, and network utilities", Count: 98},
+		{Path: "/convert", Icon: "🔄", Name: "Unit Conversion", Description: "Length, weight, temperature, currency, and color conversions", Count: 42},
+		{Path: "/dev", Icon: "🛠️", Name: "Developer Tools", Description: "HTTP echo, formatters, minifiers, and development utilities", Count: 94},
+		{Path: "/docker", Icon: "🐋", Name: "Docker Tools", Description: "Docker run/compose conversion, linting, and validation", Count: 24},
+		{Path: "/fun", Icon: "🎉", Name: "Fun & Content", Description: "Jokes, quotes, facts, and random entertainment", Count: 71},
+		{Path: "/generate", Icon: "✨", Name: "Generators", Description: "QR codes, barcodes, configs, avatars, and more", Count: 76},
+		{Path: "/geo", Icon: "🌍", Name: "Geolocation", Description: "IP lookup, geocoding, distance calculations, and geo encoding", Count: 52},
+		{Path: "/image", Icon: "🖼️", Name: "Images", Description: "Image resize, crop, filters, and manipulation", Count: 68},
+		{Path: "/language", Icon: "📖", Name: "Language Tools", Description: "Spell checking, dictionary, thesaurus, and language detection", Count: 48},
+		{Path: "/lorem", Icon: "🎭", Name: "Lorem & Fake Data", Description: "Generate realistic fake data for testing and development", Count: 3},
+		{Path: "/math", Icon: "🔢", Name: "Math & Numbers", Description: "Calculations, statistics, primes, and matrix operations", Count: 84},
+		{Path: "/osint", Icon: "🕵️", Name: "OSINT Tools", Description: "Email intelligence, domain research, and username searches", Count: 42},
+		{Path: "/parse", Icon: "🔍", Name: "Parsers", Description: "Parsing JSON, YAML, XML, CSV, and format conversions", Count: 72},
+		{Path: "/research", Icon: "📚", Name: "Research Tools", Description: "Content extraction, summarization, and citations", Count: 28},
+		{Path: "/system", Icon: "🩺", Name: "Health & System", Description: "Server health checks, system information, and version details", Count: 3},
+		{Path: "/testing", Icon: "🧪", Name: "Testing Tools", Description: "Mocks, fixtures, assertions, and API testing", Count: 36},
+		{Path: "/validate", Icon: "✅", Name: "Validators", Description: "Validating emails, phones, URLs, credit cards, and more", Count: 68},
+		{Path: "/weather", Icon: "⛅", Name: "Weather", Description: "Current weather, forecasts, and air quality data", Count: 15},
+	}
+}
+
+func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, "categories")
+		data.PageTitle = "Browse All Categories"
+		data.PageDescription = "All tool categories available in " + cfg.Server.Branding.Title
+		data.Categories = allCategories()
+		renderPage(w, "categories", data)
 	}
 }
 
