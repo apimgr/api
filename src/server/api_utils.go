@@ -16,7 +16,6 @@ import (
 	"github.com/apimgr/api/src/service/math"
 	"github.com/apimgr/api/src/service/osint"
 	"github.com/apimgr/api/src/service/parse"
-	"github.com/apimgr/api/src/service/research"
 	"github.com/apimgr/api/src/service/test"
 	"github.com/apimgr/api/src/service/validate"
 	"github.com/apimgr/api/src/service/weather"
@@ -33,7 +32,6 @@ var (
 	parseService    = parse.New()
 	testService     = test.New()
 	osintService    = osint.New()
-	researchService = research.New()
 	funService      = fun.New()
 	loremService    = lorem.New()
 	devService      = dev.New()
