@@ -231,82 +231,82 @@ func New(cfg *config.Config) *http.Server {
 
 		// Docker utilities
 		r.Route("/docker", func(r chi.Router) {
-			r.Get("/version", apiPlaceholderHandler)
+			r.Get("/version", apiDockerVersionHandler)
 		})
 
 		// Weather
 		r.Route("/weather", func(r chi.Router) {
-			r.Get("/current/{location}", apiPlaceholderHandler)
+			r.Get("/current/{location}", apiWeatherCurrentHandler)
 		})
 
 		// Geolocation
 		r.Route("/geo", func(r chi.Router) {
-			r.Get("/ip/{ip}", apiPlaceholderHandler)
+			r.Get("/ip/{ip}", apiGeoIPHandler)
 		})
 
 		// Math
 		r.Route("/math", func(r chi.Router) {
-			r.Get("/calculate", apiPlaceholderHandler)
+			r.Get("/calculate", apiMathCalculateHandler)
 		})
 
 		// Unit Conversion
 		r.Route("/convert", func(r chi.Router) {
-			r.Get("/length/{value}/{from}/{to}", apiPlaceholderHandler)
+			r.Get("/length/{value}/{from}/{to}", apiConvertLengthHandler)
 		})
 
 		// Generators
 		r.Route("/generate", func(r chi.Router) {
-			r.Get("/qr", apiPlaceholderHandler)
+			r.Get("/qr", apiGenerateQRHandler)
 		})
 
 		// Validators
 		r.Route("/validate", func(r chi.Router) {
-			r.Post("/email", apiPlaceholderHandler)
+			r.Post("/email", apiValidateEmailHandler)
 		})
 
 		// Parsers
 		r.Route("/parse", func(r chi.Router) {
-			r.Post("/json", apiPlaceholderHandler)
+			r.Post("/json", apiParseJSONHandler)
 		})
 
 		// Language Tools
 		r.Route("/language", func(r chi.Router) {
-			r.Post("/detect", apiPlaceholderHandler)
+			r.Post("/detect", apiLanguageDetectHandler)
 		})
 
 		// Testing Tools
 		r.Route("/test", func(r chi.Router) {
-			r.Get("/http", apiPlaceholderHandler)
+			r.Get("/http", apiTestHTTPHandler)
 		})
 
 		// OSINT Tools
 		r.Route("/osint", func(r chi.Router) {
-			r.Get("/email/{email}", apiPlaceholderHandler)
+			r.Get("/email/{email}", apiOsintEmailHandler)
 		})
 
 		// Research Tools
 		r.Route("/research", func(r chi.Router) {
-			r.Post("/extract", apiPlaceholderHandler)
+			r.Post("/extract", apiResearchExtractHandler)
 		})
 
 		// Fun & Content
 		r.Route("/fun", func(r chi.Router) {
-			r.Get("/joke", apiPlaceholderHandler)
+			r.Get("/joke", apiFunJokeHandler)
 		})
 
 		// Lorem & Fake Data
 		r.Route("/lorem", func(r chi.Router) {
-			r.Get("/person", apiPlaceholderHandler)
+			r.Get("/person", apiLoremPersonHandler)
 		})
 
 		// Developer Tools
 		r.Route("/dev", func(r chi.Router) {
-			r.Post("/format/json", apiPlaceholderHandler)
+			r.Post("/format/json", apiDevFormatJSONHandler)
 		})
 
 		// Images
 		r.Route("/image", func(r chi.Router) {
-			r.Get("/placeholder/{width}/{height}", apiPlaceholderHandler)
+			r.Get("/placeholder/{width}/{height}", apiImagePlaceholderHandler)
 		})
 	})
 
@@ -1381,9 +1381,3 @@ func apiConvertTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Middleware functions
-
-func apiPlaceholderHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	fmt.Fprintf(w, `{"success":false,"error":"Endpoint not yet implemented","timestamp":"%s"}`+"\n", time.Now().Format(time.RFC3339))
-}

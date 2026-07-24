@@ -110,7 +110,7 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"healthz unversioned alias", http.MethodGet, "/api/healthz", http.StatusOK},
 		{"metrics", http.MethodGet, "/metrics", http.StatusOK},
 		{"api v1 uuid", http.MethodGet, "/api/v1/text/uuid", http.StatusOK},
-		{"api v1 docker placeholder", http.MethodGet, "/api/v1/docker/version", http.StatusNotImplemented},
+		{"api v1 docker version missing image", http.MethodGet, "/api/v1/docker/version", http.StatusBadRequest},
 		{"unknown route 404", http.MethodGet, "/this-route-does-not-exist", http.StatusNotFound},
 	}
 
@@ -1093,19 +1093,6 @@ func TestApiConvertTimezoneHandler(t *testing.T) {
 		apiConvertTimezoneHandler(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
-}
-
-// TestApiPlaceholderHandler covers the not-yet-implemented stub used for
-// every unbuilt endpoint category — must always be 501 with a
-// success:false JSON body.
-func TestApiPlaceholderHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/docker/version", nil)
-	rec := httptest.NewRecorder()
-	apiPlaceholderHandler(rec, req)
-
-	assert.Equal(t, http.StatusNotImplemented, rec.Code)
-	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-	assert.Contains(t, rec.Body.String(), `"success":false`)
 }
 
 // TestRobotsHandler covers that configured Allow/Deny paths are emitted
