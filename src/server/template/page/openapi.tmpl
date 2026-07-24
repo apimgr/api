@@ -1,0 +1,33 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">📖 {{.PageTitle}}</h1>
+    <p class="hero-subtitle">{{.PageDescription}}</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">Interactive Documentation</div>
+      <div class="card-body">
+        <p>
+          Browse and try every endpoint from the interactive Swagger UI.
+        </p>
+        <a href="/swagger" class="btn btn-primary">Open Swagger UI</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">OpenAPI Specification</div>
+      <div class="card-body">
+        <p>
+          The raw OpenAPI specification (JSON) is available for import into
+          API clients and code generators.
+        </p>
+        <a href="/openapi.json" class="btn btn-secondary">Download openapi.json</a>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

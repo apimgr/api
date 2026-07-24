@@ -21,3 +21,20 @@ Read: AI.md PART 28
 
 ## [ ] Resolve main.go daemon/pid TODO comments (separate feature, not part of PART 0-6 scope)
 Read: AI.md PART 8
+
+## [ ] Fix build-info variable naming mismatch (Version/CommitID/BuildDate)
+Read: AI.md line 663 (LDFLAGS), lines 31405-31459 (build info variable table)
+- src/main.go declares `BuildTime` but Makefile's LDFLAGS targets `-X 'main.BuildDate=...'`;
+  the linker silently no-ops on the mismatched symbol name, so the real build
+  timestamp is never injected and the binary permanently reports the hardcoded
+  "unknown" default instead of the actual build date
+- Rename src/main.go's `BuildTime` var to `BuildDate` (spec-mandated name) and
+  update every call site that currently reads `BuildTime` (e.g. `handler.BuildDate = BuildTime`,
+  `metrics.Get().SetBuildInfo(...)`)
+- src/server/server.go also has its own separate local `var (Version, BuildTime)`
+  block (never ldflags-injected regardless of name, since ldflags only target
+  `main.*`); align it with PageData's `Version`/`BuildTime` fields or remove the
+  duplicate block in favor of values passed in from main.go's handler.Version/
+  handler.BuildDate assignment — decide during the fix, not before
+- Not app-breaking (display-only defect on /server/about's Build Information
+  card), so deferred here rather than bundled into the template-wiring fix commit

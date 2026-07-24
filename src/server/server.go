@@ -24,7 +24,7 @@ import (
 	"github.com/go-chi/cors"
 )
 
-//go:embed template/*.tmpl template/**/*.tmpl
+//go:embed template
 var templatesFS embed.FS
 
 //go:embed static/*
@@ -363,9 +363,9 @@ func initTemplates() error {
 
 	for _, page := range publicPages {
 		tmpl, err := template.ParseFS(templatesFS,
-			"template/layout/base.tmpl",
+			"template/layout/public.tmpl",
 			"template/partial/*.tmpl",
-			"template/components/*.tmpl",
+			"template/partial/public/*.tmpl",
 			fmt.Sprintf("template/page/%s.tmpl", page),
 		)
 		if err != nil {
@@ -385,7 +385,7 @@ func renderPage(w http.ResponseWriter, page string, data PageData) {
 		return
 	}
 
-	err := tmpl.ExecuteTemplate(w, "base", data)
+	err := tmpl.ExecuteTemplate(w, "public.tmpl", data)
 	if err != nil {
 		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
 	}

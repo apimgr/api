@@ -61,21 +61,19 @@ func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]interfa
 	return out
 }
 
-// newTestServer builds the real router via New(), skipping the test with
-// a clear reason if New() panics. As of this writing New() panics on any
-// call because initTemplates() references template paths that do not
-// exist in template/ (e.g. "template/layout/base.tmpl" and
-// "template/components/*.tmpl") — a pre-existing PART 16/17 frontend
-// template-wiring gap, not something introduced or fixable here without
-// restructuring the template subsystem, which is out of scope for this
-// test pass.
+// newTestServer builds the real router via New(). initTemplates() parses
+// the spec-mandated layout/public.tmpl plus the mandatory partial set
+// (partial/*.tmpl, partial/public/*.tmpl) against every publicPages entry,
+// all of which now have a corresponding template/page/*.tmpl file, so
+// New() no longer panics; the recover here guards against a future
+// regression reintroducing a template-wiring gap.
 func newTestServer(t *testing.T, cfg *config.Config) *http.Server {
 	t.Helper()
 	var srv *http.Server
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				t.Skipf("New(cfg) panicked (pre-existing template wiring gap, PART 16/17 out of scope): %v", r)
+				t.Fatalf("New(cfg) panicked: %v", r)
 			}
 		}()
 		srv = New(cfg)

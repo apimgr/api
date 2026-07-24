@@ -1,0 +1,21 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">ℹ️ About {{.SiteTitle}}</h1>
+    <p class="hero-subtitle">{{.Tagline}}</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">Build Information</div>
+      <div class="card-body">
+        <p><strong>Version:</strong> {{.Version}}</p>
+        <p><strong>Build Time:</strong> {{.BuildTime}}</p>
+        <p><strong>Mode:</strong> {{.Mode}}</p>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
