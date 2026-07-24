@@ -89,6 +89,12 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/testing", categoryPageHandler(cfg, "testing", "Testing Tools", "Mocks, fixtures, assertions, and API testing"))
 	r.Get("/validate", categoryPageHandler(cfg, "validate", "Validators", "Validating emails, phones, URLs, credit cards, and more"))
 	r.Get("/weather", categoryPageHandler(cfg, "weather", "Weather", "Current weather, forecasts, and air quality data"))
+
+	// Per-tool detail pages (see TODO.AI.md for remaining sub-tool wiring)
+	for _, tp := range toolPages() {
+		r.Get("/"+tp.category+"/"+tp.tool, toolPageHandler(cfg, tp.category, tp.tool, tp.title, tp.description))
+	}
+
 	r.Get("/api", apiDocsHandler(cfg))
 	r.Get("/openapi", openapiHandler(cfg))
 	r.Get("/openapi.json", openapiJSONHandler(cfg))
@@ -408,7 +414,58 @@ func initTemplates() error {
 		pageTemplates[page] = tmpl
 	}
 
+	// Per-tool detail pages nested under template/page/tools/{category}/{tool}.tmpl,
+	// registered under composite keys like "crypto/hash"
+	for _, tp := range toolPages() {
+		key := tp.category + "/" + tp.tool
+		tmpl, err := template.ParseFS(templatesFS,
+			"template/layout/public.tmpl",
+			"template/partial/*.tmpl",
+			"template/partial/public/*.tmpl",
+			fmt.Sprintf("template/page/tools/%s.tmpl", key),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to parse %s tool template: %w", key, err)
+		}
+		pageTemplates[key] = tmpl
+	}
+
 	return nil
+}
+
+// toolPage describes one per-tool detail page nested under a category
+type toolPage struct {
+	category    string
+	tool        string
+	title       string
+	description string
+}
+
+// toolPages lists the per-tool detail pages that currently have templates on
+// disk under template/page/tools/{category}/{tool}.tmpl (PART 16 frontend
+// route mirrors API route rule). Most of the ~240 sub-tool pages linked from
+// the 21 category pages have neither a template nor a route yet — see
+// TODO.AI.md for the remaining wiring work.
+func toolPages() []toolPage {
+	return []toolPage{
+		{category: "crypto", tool: "hash", title: "Hash Generator", description: "Generate cryptographic hashes using various algorithms (MD5, SHA-1, SHA-256, SHA-512, BLAKE3)"},
+		{category: "crypto", tool: "jwt", title: "JWT Decoder", description: "Decode and inspect JSON Web Tokens (JWT). View header, payload, and signature details"},
+		{category: "crypto", tool: "password", title: "Password Generator", description: "Generate secure random passwords with customizable length and character sets"},
+		{category: "datetime", tool: "now", title: "Current Time", description: "Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable"},
+		{category: "network", tool: "ip", title: "IP Address Lookup", description: "Get detailed information about any IP address including location, ISP, and network details"},
+		{category: "network", tool: "dns", title: "DNS Lookup", description: "Query DNS records for any domain. Supports A, AAAA, CNAME, MX, TXT, NS, SOA, and more"},
+		{category: "text", tool: "uuid", title: "UUID Generator", description: "Generate UUIDs (v1, v3, v4, v5, v6, v7) for use in applications and databases"},
+	}
+}
+
+// toolPageHandler renders a per-tool detail page under a category
+func toolPageHandler(cfg *config.Config, category, tool, title, description string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, category)
+		data.PageTitle = title
+		data.PageDescription = description
+		renderPage(w, category+"/"+tool, data)
+	}
 }
 
 // renderPage renders a page using the base layout
