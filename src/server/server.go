@@ -33,7 +33,8 @@ var staticFS embed.FS
 // Version information
 var (
 	Version   = "1.0.0"
-	BuildTime = "unknown"
+	CommitID  = "unknown"
+	BuildDate = "unknown"
 )
 
 // New creates a new HTTP server
@@ -329,7 +330,8 @@ type PageData struct {
 	PageDescription   string
 	Tagline           string
 	Version           string
-	BuildTime         string
+	CommitID          string
+	BuildDate         string
 	Mode              string
 	SecurityEmail     string
 	UpdatedAt         string
@@ -444,7 +446,8 @@ func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
 		data.PageDescription = "About " + cfg.Server.Branding.Title
 		data.Tagline = cfg.Server.Branding.Tagline
 		data.Version = Version
-		data.BuildTime = BuildTime
+		data.CommitID = CommitID
+		data.BuildDate = BuildDate
 		data.Mode = cfg.Server.Mode
 		renderPage(w, "about", data)
 	}

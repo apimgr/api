@@ -31,7 +31,7 @@ import (
 var (
 	Version   = "1.0.0"
 	CommitID  = "unknown"
-	BuildTime = "unknown"
+	BuildDate = "unknown"
 )
 
 func main() {
@@ -84,7 +84,7 @@ func main() {
 	// Handle version
 	if *showVersion {
 		cprintf("%s v%s\n", binaryName, Version)
-		cprintf("Built: %s\n", BuildTime)
+		cprintf("Built: %s\n", BuildDate)
 		cprintf("Go: %s\n", runtime.Version())
 		cprintf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
@@ -237,10 +237,15 @@ func main() {
 	// Pass build version info to the health handler
 	handler.Version = Version
 	handler.CommitID = CommitID
-	handler.BuildDate = BuildTime
+	handler.BuildDate = BuildDate
+
+	// Pass build version info to the web frontend
+	server.Version = Version
+	server.CommitID = CommitID
+	server.BuildDate = BuildDate
 
 	// Pass build version info to the metrics app_info gauge
-	metrics.Get().SetBuildInfo(Version, CommitID, BuildTime)
+	metrics.Get().SetBuildInfo(Version, CommitID, BuildDate)
 
 	// Create server
 	srv := server.New(cfg)
