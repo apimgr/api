@@ -211,7 +211,7 @@ func main() {
 	if err := appmode.Initialize(*mode, *debug, debugFlagSet); err != nil {
 		log.Fatalf("Invalid --mode value: %v", err)
 	}
-	cfg.Server.Mode = appmode.Get().String()
+	cfg.Server.Mode = appmode.GetCurrentMode().String()
 
 	// Daemonize (detach from terminal) before writing the PID file, so the
 	// PID file reflects the actual detached process, not the parent. Per

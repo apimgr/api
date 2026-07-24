@@ -61,32 +61,32 @@ func TestParseMode(t *testing.T) {
 func TestSet(t *testing.T) {
 	resetState(t)
 
-	require.NoError(t, Set("development"))
-	assert.Equal(t, Development, Get())
+	require.NoError(t, SetMode("development"))
+	assert.Equal(t, Development, GetCurrentMode())
 	assert.True(t, IsDevelopment())
 	assert.False(t, IsProduction())
 
-	require.NoError(t, Set("production"))
-	assert.Equal(t, Production, Get())
+	require.NoError(t, SetMode("production"))
+	assert.Equal(t, Production, GetCurrentMode())
 	assert.True(t, IsProduction())
 	assert.False(t, IsDevelopment())
 
 	// An invalid mode must not be applied and must return an error.
-	err := Set("nonsense")
+	err := SetMode("nonsense")
 	require.Error(t, err)
-	assert.Equal(t, Production, Get())
+	assert.Equal(t, Production, GetCurrentMode())
 }
 
 func TestSetWithDebugAlias(t *testing.T) {
 	resetState(t)
 
 	require.NoError(t, SetWithDebugAlias("debug"))
-	assert.Equal(t, Development, Get())
+	assert.Equal(t, Development, GetCurrentMode())
 	assert.True(t, IsDebugEnabled())
 
 	resetState(t)
 	require.NoError(t, SetWithDebugAlias("production"))
-	assert.Equal(t, Production, Get())
+	assert.Equal(t, Production, GetCurrentMode())
 	assert.False(t, IsDebugEnabled())
 
 	resetState(t)
@@ -120,7 +120,7 @@ func TestInitialize_CLIModeWins(t *testing.T) {
 	os.Unsetenv("DEBUG")
 
 	require.NoError(t, Initialize("development", false, false))
-	assert.Equal(t, Development, Get())
+	assert.Equal(t, Development, GetCurrentMode())
 }
 
 func TestInitialize_EnvModeUsedWhenNoCLI(t *testing.T) {
@@ -129,7 +129,7 @@ func TestInitialize_EnvModeUsedWhenNoCLI(t *testing.T) {
 	os.Unsetenv("DEBUG")
 
 	require.NoError(t, Initialize("", false, false))
-	assert.Equal(t, Development, Get())
+	assert.Equal(t, Development, GetCurrentMode())
 }
 
 func TestInitialize_DefaultProductionWhenNothingSet(t *testing.T) {
@@ -138,7 +138,7 @@ func TestInitialize_DefaultProductionWhenNothingSet(t *testing.T) {
 	os.Unsetenv("DEBUG")
 
 	require.NoError(t, Initialize("", false, false))
-	assert.Equal(t, Production, Get())
+	assert.Equal(t, Production, GetCurrentMode())
 	assert.False(t, IsDebugEnabled())
 }
 
@@ -166,7 +166,7 @@ func TestInitialize_DebugAliasAppliesWhenNoExplicitDebug(t *testing.T) {
 	os.Unsetenv("DEBUG")
 
 	require.NoError(t, Initialize("debug", false, false))
-	assert.Equal(t, Development, Get())
+	assert.Equal(t, Development, GetCurrentMode())
 	assert.True(t, IsDebugEnabled())
 }
 
@@ -190,11 +190,11 @@ func TestGetErrorDetail(t *testing.T) {
 
 	assert.Equal(t, "", GetErrorDetail(nil))
 
-	require.NoError(t, Set("development"))
+	require.NoError(t, SetMode("development"))
 	err := assert.AnError
 	assert.Equal(t, err.Error(), GetErrorDetail(err))
 
-	require.NoError(t, Set("production"))
+	require.NoError(t, SetMode("production"))
 	assert.Equal(t, "An internal error occurred. Please contact support if the problem persists.", GetErrorDetail(err))
 }
 
@@ -209,13 +209,13 @@ func TestShouldShowDebugEndpoints(t *testing.T) {
 func TestGetCacheHeaders(t *testing.T) {
 	resetState(t)
 
-	require.NoError(t, Set("development"))
+	require.NoError(t, SetMode("development"))
 	headers := GetCacheHeaders()
 	assert.Equal(t, "no-cache, no-store, must-revalidate", headers.CacheControl)
 	assert.Equal(t, "no-cache", headers.Pragma)
 	assert.Equal(t, "0", headers.Expires)
 
-	require.NoError(t, Set("production"))
+	require.NoError(t, SetMode("production"))
 	headers = GetCacheHeaders()
 	assert.Equal(t, "public, max-age=31536000, immutable", headers.CacheControl)
 	assert.Equal(t, "", headers.Pragma)
@@ -225,30 +225,30 @@ func TestGetCacheHeaders(t *testing.T) {
 func TestGetLogLevel(t *testing.T) {
 	resetState(t)
 
-	require.NoError(t, Set("development"))
+	require.NoError(t, SetMode("development"))
 	assert.Equal(t, "debug", GetLogLevel())
 
-	require.NoError(t, Set("production"))
+	require.NoError(t, SetMode("production"))
 	assert.Equal(t, "info", GetLogLevel())
 }
 
 func TestShouldCacheTemplates(t *testing.T) {
 	resetState(t)
 
-	require.NoError(t, Set("production"))
+	require.NoError(t, SetMode("production"))
 	assert.True(t, ShouldCacheTemplates())
 
-	require.NoError(t, Set("development"))
+	require.NoError(t, SetMode("development"))
 	assert.False(t, ShouldCacheTemplates())
 }
 
 func TestShouldEnableAutoReload(t *testing.T) {
 	resetState(t)
 
-	require.NoError(t, Set("development"))
+	require.NoError(t, SetMode("development"))
 	assert.True(t, ShouldEnableAutoReload())
 
-	require.NoError(t, Set("production"))
+	require.NoError(t, SetMode("production"))
 	assert.False(t, ShouldEnableAutoReload())
 }
 
@@ -263,10 +263,10 @@ func TestShouldEnableProfiling(t *testing.T) {
 func TestGetPanicRecoveryMode(t *testing.T) {
 	resetState(t)
 
-	require.NoError(t, Set("development"))
+	require.NoError(t, SetMode("development"))
 	assert.Equal(t, "verbose", GetPanicRecoveryMode())
 
-	require.NoError(t, Set("production"))
+	require.NoError(t, SetMode("production"))
 	assert.Equal(t, "graceful", GetPanicRecoveryMode())
 }
 

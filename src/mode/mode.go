@@ -31,16 +31,16 @@ var (
 	mu sync.RWMutex
 )
 
-// Get returns the current application mode
-func Get() Mode {
+// GetCurrentMode returns the current application mode
+func GetCurrentMode() Mode {
 	mu.RLock()
 	defer mu.RUnlock()
 	return currentMode
 }
 
-// Set sets the application mode
+// SetMode sets the application mode
 // Valid values: "production", "prod", "development", "dev"
-func Set(mode string) error {
+func SetMode(mode string) error {
 	parsed, err := ParseMode(mode)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func ParseMode(s string) (Mode, error) {
 // An explicitly set --debug flag or DEBUG env var (applied afterward by the
 // caller) still wins over the alias.
 func SetWithDebugAlias(mode string) error {
-	if err := Set(mode); err != nil {
+	if err := SetMode(mode); err != nil {
 		return err
 	}
 
@@ -87,12 +87,12 @@ func SetWithDebugAlias(mode string) error {
 
 // IsDevelopment returns true if the current mode is Development
 func IsDevelopment() bool {
-	return Get() == Development
+	return GetCurrentMode() == Development
 }
 
 // IsProduction returns true if the current mode is Production
 func IsProduction() bool {
-	return Get() == Production
+	return GetCurrentMode() == Production
 }
 
 // SetDebugEnabled enables or disables --debug/DEBUG=true diagnostics.
