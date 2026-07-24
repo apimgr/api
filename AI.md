@@ -1582,7 +1582,7 @@ Purpose:
 6. Built-in scheduler, GeoIP, metrics, email, backup, update
 7. All settings configurable via API and config file
 8. Client binary for ALL projects
-9. Commit often via `gitcommit <command>` — small, focused commits, each with a fresh accurate `.git/COMMIT_MESS`. See "gitcommit Script" → "Commit Cadence". Do NOT hoard unrelated changes into one big commit. **Subagents do not commit** — complete edits and report back to the parent instance; the parent reviews the diff and owns the commit.
+9. Commit often via `gitcommit <command>` — small, focused commits, each with a fresh accurate `.git/COMMIT_MESS`. See "gitcommit Script" → "Commit Cadence". Do NOT hoard unrelated changes into one big commit. **Findings-based work (audits, reviews, numbered fix-lists) defaults to one commit per finding** — never batch distinct findings into one commit just because they share a file or session. **Feature work is the opposite — one commit for the whole feature, never split per part. Unrelated bugs found mid-feature go to `TODO.AI.md`, except app-breaking bugs, which must be fixed immediately.** **Subagents do not commit** — complete edits and report back to the parent instance; the parent reviews the diff and owns the commit.
 
 ## File Locations
 - Config: `{config_dir}/server.yml`
