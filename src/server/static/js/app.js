@@ -113,6 +113,69 @@ function executeTool(toolId, endpoint) {
     });
 }
 
+// executeToolTemplate builds a GET URL by substituting {field} placeholders
+// in a path template with the matching form field's value, for tools backed
+// by path-param API routes (e.g. /api/v1/text/hash/{algorithm}/{input}).
+function executeToolTemplate(toolId, urlTemplate) {
+  const form = document.getElementById(toolId);
+  const resultDiv = document.getElementById(`${toolId}-result`);
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const formData = new FormData(form);
+
+  const url = urlTemplate.replace(/\{(\w+)\}/g, function(match, field) {
+    const value = formData.get(field);
+    return value !== null ? encodeURIComponent(value) : match;
+  });
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Processing...';
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  fetch(url)
+    .then(response => response.text())
+    .then(result => {
+      resultDiv.textContent = result;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Execute';
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Execute';
+      showToast('Request failed', 'danger');
+    });
+}
+
+// executeToolBody POSTs the value of a form's single textarea as the raw
+// request body, for tools backed by raw-body POST API routes
+// (e.g. /api/v1/parse/json).
+function executeToolBody(toolId, endpoint) {
+  const form = document.getElementById(toolId);
+  const resultDiv = document.getElementById(`${toolId}-result`);
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const body = form.querySelector('textarea').value;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Processing...';
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  fetch(endpoint, { method: 'POST', body: body })
+    .then(response => response.text())
+    .then(result => {
+      resultDiv.textContent = result;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Execute';
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Execute';
+      showToast('Request failed', 'danger');
+    });
+}
+
 // ============================================================================
 // Search functionality
 // ============================================================================
@@ -176,5 +239,43 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.key === 'Escape') {
       document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
     }
+  });
+
+  // Wire tool forms declared with data-endpoint (no inline onsubmit)
+  document.querySelectorAll('form.tool-form[data-endpoint]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      executeTool(form.id, form.dataset.endpoint);
+    });
+  });
+
+  // Wire tool forms declared with data-template (path-param GET endpoints)
+  document.querySelectorAll('form.tool-form[data-template]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      executeToolTemplate(form.id, form.dataset.template);
+    });
+  });
+
+  // Wire tool forms declared with data-body-endpoint (raw-body POST endpoints)
+  document.querySelectorAll('form.tool-form[data-body-endpoint]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      executeToolBody(form.id, form.dataset.bodyEndpoint);
+    });
+  });
+
+  // Wire favorite buttons declared with data-favorite (no inline onclick)
+  document.querySelectorAll('[data-favorite]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      addToFavorites(btn.dataset.favorite);
+    });
+  });
+
+  // Wire copy buttons declared with data-copy (no inline onclick)
+  document.querySelectorAll('[data-copy]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      copyCode(btn);
+    });
   });
 });

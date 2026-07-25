@@ -455,6 +455,7 @@ func toolPages() []toolPage {
 		{category: "network", tool: "ip", title: "IP Address Lookup", description: "Get detailed information about any IP address including location, ISP, and network details"},
 		{category: "network", tool: "dns", title: "DNS Lookup", description: "Query DNS records for any domain. Supports A, AAAA, CNAME, MX, TXT, NS, SOA, and more"},
 		{category: "text", tool: "uuid", title: "UUID Generator", description: "Generate UUIDs (v1, v3, v4, v5, v6, v7) for use in applications and databases"},
+		{category: "text", tool: "hash", title: "Hash Generator", description: "Generate cryptographic hashes of arbitrary text (MD5, SHA-1, SHA-256, SHA-512, BLAKE3)"},
 	}
 }
 
