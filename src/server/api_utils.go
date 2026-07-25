@@ -523,6 +523,168 @@ func apiMathStatsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// apiMathFibonacciHandler returns the first {count} Fibonacci numbers using
+// math.Service.Fibonacci; ?count= is required and must be a non-negative
+// integer.
+func apiMathFibonacciHandler(w http.ResponseWriter, r *http.Request) {
+	countParam := r.URL.Query().Get("count")
+	if countParam == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COUNT", "count query parameter is required", nil)
+		return
+	}
+	count, err := strconv.Atoi(countParam)
+	if err != nil || count < 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a non-negative integer", nil)
+		return
+	}
+
+	values, err := mathService.Fibonacci(count)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", err.Error(), nil)
+		return
+	}
+	sequence := make([]string, len(values))
+	for i, v := range values {
+		sequence[i] = v.String()
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"count":    count,
+		"sequence": sequence,
+	})
+}
+
+// apiMathBaseHandler converts ?number= from ?from_base= to ?to_base= using
+// math.Service.BaseConvert; both bases must be between 2 and 36.
+func apiMathBaseHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	number := q.Get("number")
+	fromBaseParam := q.Get("from_base")
+	toBaseParam := q.Get("to_base")
+	if number == "" || fromBaseParam == "" || toBaseParam == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PARAMS", "number, from_base, and to_base query parameters are required", nil)
+		return
+	}
+
+	fromBase, err := strconv.Atoi(fromBaseParam)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "from_base must be an integer", nil)
+		return
+	}
+	toBase, err := strconv.Atoi(toBaseParam)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "to_base must be an integer", nil)
+		return
+	}
+
+	result, err := mathService.BaseConvert(number, fromBase, toBase)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"number":    number,
+		"from_base": fromBase,
+		"to_base":   toBase,
+		"result":    result,
+	})
+}
+
+// matrixRequest is the shared JSON body shape for apiMathMatrixHandler:
+// two matrices ("a" required always, "b" required for add/multiply).
+type matrixRequest struct {
+	Operation string      `json:"operation"`
+	A         [][]float64 `json:"a"`
+	B         [][]float64 `json:"b"`
+}
+
+// apiMathMatrixHandler performs add, multiply, or determinant on the
+// matrices supplied in the JSON request body, using the corresponding
+// math.Service Matrix* method.
+func apiMathMatrixHandler(w http.ResponseWriter, r *http.Request) {
+	var req matrixRequest
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be JSON with operation, a, and (for add/multiply) b", nil)
+		return
+	}
+	if len(req.A) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MATRIX", "matrix a is required", nil)
+		return
+	}
+
+	switch req.Operation {
+	case "add":
+		result, err := mathService.MatrixAdd(req.A, req.B)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MATRIX", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
+	case "multiply":
+		result, err := mathService.MatrixMultiply(req.A, req.B)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MATRIX", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
+	case "determinant":
+		result, err := mathService.MatrixDeterminant(req.A)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MATRIX", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_OPERATION", "operation must be one of: add, multiply, determinant", nil)
+	}
+}
+
+// apiMathSequenceHandler generates ?count= numbers of ?type= (arithmetic or
+// geometric) starting at ?start= and stepping by ?step=, using
+// math.Service.Sequence.
+func apiMathSequenceHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	seqType := q.Get("type")
+	startParam := q.Get("start")
+	stepParam := q.Get("step")
+	countParam := q.Get("count")
+	if seqType == "" || startParam == "" || stepParam == "" || countParam == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PARAMS", "type, start, step, and count query parameters are required", nil)
+		return
+	}
+
+	start, err := strconv.ParseFloat(startParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "start must be numeric", nil)
+		return
+	}
+	step, err := strconv.ParseFloat(stepParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "step must be numeric", nil)
+		return
+	}
+	count, err := strconv.Atoi(countParam)
+	if err != nil || count < 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a non-negative integer", nil)
+		return
+	}
+
+	values, err := mathService.Sequence(seqType, start, step, count)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"type":     seqType,
+		"start":    start,
+		"step":     step,
+		"count":    count,
+		"sequence": values,
+	})
+}
+
 // lengthConversions maps a "from-to" unit pair to the convert.Service
 // bidirectional function that implements it. Only pairs actually
 // exported by convert.Service are listed; unlisted pairs return

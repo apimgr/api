@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"strconv"
+	"strings"
 )
 
 // Service provides mathematical utilities
@@ -255,4 +257,150 @@ func (s *Service) PercentageChange(oldVal, newVal float64) float64 {
 		return 0
 	}
 	return ((newVal - oldVal) / oldVal) * 100
+}
+
+// Fibonacci returns the first count numbers of the Fibonacci sequence
+// (0, 1, 1, 2, 3, 5, ...) as *big.Int for overflow safety on large counts
+func (s *Service) Fibonacci(count int) ([]*big.Int, error) {
+	if count < 0 {
+		return nil, fmt.Errorf("count must be non-negative")
+	}
+	result := make([]*big.Int, count)
+	a, b := big.NewInt(0), big.NewInt(1)
+	for i := 0; i < count; i++ {
+		result[i] = new(big.Int).Set(a)
+		a, b = b, new(big.Int).Add(a, b)
+	}
+	return result, nil
+}
+
+// BaseConvert converts number (expressed in fromBase) to its representation
+// in toBase; both bases must be in the range 2-36
+func (s *Service) BaseConvert(number string, fromBase, toBase int) (string, error) {
+	if fromBase < 2 || fromBase > 36 {
+		return "", fmt.Errorf("fromBase must be between 2 and 36")
+	}
+	if toBase < 2 || toBase > 36 {
+		return "", fmt.Errorf("toBase must be between 2 and 36")
+	}
+	value, err := strconv.ParseInt(strings.TrimSpace(number), fromBase, 64)
+	if err != nil {
+		return "", fmt.Errorf("invalid number %q for base %d", number, fromBase)
+	}
+	return strconv.FormatInt(value, toBase), nil
+}
+
+// MatrixAdd adds two matrices of identical dimensions element-wise
+func (s *Service) MatrixAdd(a, b [][]float64) ([][]float64, error) {
+	if len(a) == 0 || len(b) == 0 || len(a) != len(b) {
+		return nil, fmt.Errorf("matrices must have the same non-zero dimensions")
+	}
+	result := make([][]float64, len(a))
+	for i := range a {
+		if len(a[i]) != len(b[i]) {
+			return nil, fmt.Errorf("matrices must have the same non-zero dimensions")
+		}
+		result[i] = make([]float64, len(a[i]))
+		for j := range a[i] {
+			result[i][j] = a[i][j] + b[i][j]
+		}
+	}
+	return result, nil
+}
+
+// MatrixMultiply multiplies matrix a (m x n) by matrix b (n x p), returning
+// the resulting m x p matrix
+func (s *Service) MatrixMultiply(a, b [][]float64) ([][]float64, error) {
+	if len(a) == 0 || len(b) == 0 {
+		return nil, fmt.Errorf("matrices must be non-empty")
+	}
+	rowsA, colsA := len(a), len(a[0])
+	rowsB, colsB := len(b), len(b[0])
+	if colsA != rowsB {
+		return nil, fmt.Errorf("matrix a columns (%d) must equal matrix b rows (%d)", colsA, rowsB)
+	}
+	result := make([][]float64, rowsA)
+	for i := 0; i < rowsA; i++ {
+		result[i] = make([]float64, colsB)
+		for j := 0; j < colsB; j++ {
+			sum := 0.0
+			for k := 0; k < colsA; k++ {
+				sum += a[i][k] * b[k][j]
+			}
+			result[i][j] = sum
+		}
+	}
+	return result, nil
+}
+
+// MatrixDeterminant computes the determinant of a square matrix using
+// recursive cofactor expansion
+func (s *Service) MatrixDeterminant(m [][]float64) (float64, error) {
+	n := len(m)
+	if n == 0 {
+		return 0, fmt.Errorf("matrix must be non-empty")
+	}
+	for _, row := range m {
+		if len(row) != n {
+			return 0, fmt.Errorf("matrix must be square")
+		}
+	}
+	return matrixDeterminantRecursive(m), nil
+}
+
+// matrixDeterminantRecursive is the unexported recursive cofactor-expansion
+// helper backing MatrixDeterminant
+func matrixDeterminantRecursive(m [][]float64) float64 {
+	n := len(m)
+	if n == 1 {
+		return m[0][0]
+	}
+	if n == 2 {
+		return m[0][0]*m[1][1] - m[0][1]*m[1][0]
+	}
+	det := 0.0
+	for col := 0; col < n; col++ {
+		minor := make([][]float64, n-1)
+		for i := 1; i < n; i++ {
+			minorRow := make([]float64, 0, n-1)
+			for j := 0; j < n; j++ {
+				if j == col {
+					continue
+				}
+				minorRow = append(minorRow, m[i][j])
+			}
+			minor[i-1] = minorRow
+		}
+		sign := 1.0
+		if col%2 != 0 {
+			sign = -1.0
+		}
+		det += sign * m[0][col] * matrixDeterminantRecursive(minor)
+	}
+	return det
+}
+
+// Sequence generates count numbers of the given sequence type starting at
+// start; seqType "arithmetic" adds step each time, "geometric" multiplies by
+// step each time
+func (s *Service) Sequence(seqType string, start, step float64, count int) ([]float64, error) {
+	if count < 0 {
+		return nil, fmt.Errorf("count must be non-negative")
+	}
+	result := make([]float64, count)
+	switch seqType {
+	case "arithmetic":
+		for i := 0; i < count; i++ {
+			result[i] = start + step*float64(i)
+		}
+	case "geometric":
+		value := start
+		for i := 0; i < count; i++ {
+			result[i] = value
+			value *= step
+		}
+	default:
+		return nil, fmt.Errorf("unknown sequence type %q (expected arithmetic or geometric)", seqType)
+	}
+	return result, nil
 }

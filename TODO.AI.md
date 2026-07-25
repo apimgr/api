@@ -3,7 +3,7 @@ Read: AI.md PART 16 (frontend), src/server/template/page/*.tmpl
 Every sub-tool that mapped directly onto an existing, non-stub backend
 service method has now been wired end-to-end (template + `toolPages()`
 entry + frontend route + API route + tool-page test + handler test).
-103 tools are wired as of this pass:
+107 tools are wired as of this pass:
 convert/{length,temperature,time,volume,weight};
 crypto/{bcrypt,decrypt,encrypt,hash,hmac,jwt,password,password-strength,pin,random,rsa,totp};
 datetime/{add,convert,diff,now,timestamp,unix};
@@ -14,7 +14,7 @@ geo/{bearing,distance,ip,midpoint};
 image/{convert,crop,metadata,placeholder,resize};
 language/{phonetic,word-count};
 lorem/{address,company,person};
-math/{calculate,gcd,logarithm,percentage,prime,random,stats,trigonometry};
+math/{base,calculate,fibonacci,gcd,logarithm,matrix,percentage,prime,random,sequence,stats,trigonometry};
 network/{dns,headers,ip,mac,port,subnet,ula,user-agent};
 osint/{cert,domain,email,ip};
 parse/{csv,json,jwt,xml};
@@ -32,7 +32,7 @@ This READY batch is exhausted — every remaining linked sub-tool below
 needs net-new backend service work (not just a template/route), which is
 scoped as its own body of work in the next section.
 
-## [ ] MISSING sub-tools needing net-new backend service work (137 linked, unwired)
+## [ ] MISSING sub-tools needing net-new backend service work (133 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -60,7 +60,6 @@ One commit per tool or small logical group when picked up.
 - image (7): avatar, barcode, filter, identicon, optimize, qr, watermark
 - language (10): detect, dictionary, grammar, keywords, readability,
   reading-time, sentiment, spell-check, thesaurus, translate
-- math (4): base, fibonacci, matrix, sequence
 - network (6): ping, ssl, traceroute, url, useragent, whois
   (`useragent` here is the broken-link duplicate of the already-wired
   `user-agent` — see bug list below, not a real missing tool)

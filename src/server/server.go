@@ -319,6 +319,10 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/prime/{n}", apiMathPrimeHandler)
 			r.Get("/random/{min}/{max}", apiMathRandomHandler)
 			r.Get("/stats", apiMathStatsHandler)
+			r.Get("/fibonacci", apiMathFibonacciHandler)
+			r.Get("/base", apiMathBaseHandler)
+			r.Post("/matrix", apiMathMatrixHandler)
+			r.Get("/sequence", apiMathSequenceHandler)
 		})
 
 		// Unit Conversion
@@ -583,6 +587,10 @@ func toolPages() []toolPage {
 		{category: "math", tool: "prime", title: "Prime Checker", description: "Check whether a number is prime"},
 		{category: "math", tool: "random", title: "Random Number Generator", description: "Generate a random integer within a range"},
 		{category: "math", tool: "stats", title: "Statistics Calculator", description: "Calculate min, max, sum, average, and median of a list of numbers"},
+		{category: "math", tool: "fibonacci", title: "Fibonacci Generator", description: "Generate the first N numbers of the Fibonacci sequence"},
+		{category: "math", tool: "base", title: "Base Converter", description: "Convert a number between bases 2-36"},
+		{category: "math", tool: "matrix", title: "Matrix Calculator", description: "Add, multiply, or find the determinant of matrices"},
+		{category: "math", tool: "sequence", title: "Sequence Generator", description: "Generate arithmetic or geometric number sequences"},
 		{category: "parse", tool: "json", title: "JSON Parser", description: "Parse a raw JSON document and view the decoded structure"},
 		{category: "parse", tool: "xml", title: "XML Parser", description: "Parse a raw XML document and view the decoded structure"},
 		{category: "parse", tool: "csv", title: "CSV Parser", description: "Parse a CSV document (first row as headers) into structured rows"},

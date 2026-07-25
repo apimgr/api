@@ -182,6 +182,194 @@ func TestAPIMathCalculateHandler(t *testing.T) {
 	})
 }
 
+func TestAPIMathFibonacciHandler(t *testing.T) {
+	t.Run("missing count", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/fibonacci", nil)
+		w := httptest.NewRecorder()
+
+		apiMathFibonacciHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_COUNT", env["error"])
+	})
+
+	t.Run("valid count", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/fibonacci?count=6", nil)
+		w := httptest.NewRecorder()
+
+		apiMathFibonacciHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		sequence, ok := data["sequence"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, sequence, 6)
+		assert.Equal(t, []interface{}{"0", "1", "1", "2", "3", "5"}, sequence)
+	})
+
+	t.Run("negative count", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/fibonacci?count=-1", nil)
+		w := httptest.NewRecorder()
+
+		apiMathFibonacciHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_COUNT", env["error"])
+	})
+}
+
+func TestAPIMathBaseHandler(t *testing.T) {
+	t.Run("missing params", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/base", nil)
+		w := httptest.NewRecorder()
+
+		apiMathBaseHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PARAMS", env["error"])
+	})
+
+	t.Run("decimal to hex", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/base?number=255&from_base=10&to_base=16", nil)
+		w := httptest.NewRecorder()
+
+		apiMathBaseHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "ff", data["result"])
+	})
+
+	t.Run("invalid number for base", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/base?number=zz&from_base=10&to_base=16", nil)
+		w := httptest.NewRecorder()
+
+		apiMathBaseHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_VALUE", env["error"])
+	})
+}
+
+func TestAPIMathMatrixHandler(t *testing.T) {
+	t.Run("missing matrix", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/math/matrix", strings.NewReader(`{"operation":"add"}`))
+		w := httptest.NewRecorder()
+
+		apiMathMatrixHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_MATRIX", env["error"])
+	})
+
+	t.Run("add", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/math/matrix", strings.NewReader(`{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}`))
+		w := httptest.NewRecorder()
+
+		apiMathMatrixHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["result"])
+	})
+
+	t.Run("determinant", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/math/matrix", strings.NewReader(`{"operation":"determinant","a":[[1,2],[3,4]]}`))
+		w := httptest.NewRecorder()
+
+		apiMathMatrixHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(-2), data["result"])
+	})
+
+	t.Run("dimension mismatch", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/math/matrix", strings.NewReader(`{"operation":"add","a":[[1,2]],"b":[[1,2,3]]}`))
+		w := httptest.NewRecorder()
+
+		apiMathMatrixHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MATRIX", env["error"])
+	})
+
+	t.Run("unknown operation", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/math/matrix", strings.NewReader(`{"operation":"frobnicate","a":[[1]]}`))
+		w := httptest.NewRecorder()
+
+		apiMathMatrixHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_OPERATION", env["error"])
+	})
+}
+
+func TestAPIMathSequenceHandler(t *testing.T) {
+	t.Run("missing params", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/sequence", nil)
+		w := httptest.NewRecorder()
+
+		apiMathSequenceHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PARAMS", env["error"])
+	})
+
+	t.Run("arithmetic", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/sequence?type=arithmetic&start=1&step=2&count=5", nil)
+		w := httptest.NewRecorder()
+
+		apiMathSequenceHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, []interface{}{float64(1), float64(3), float64(5), float64(7), float64(9)}, data["sequence"])
+	})
+
+	t.Run("geometric", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/sequence?type=geometric&start=2&step=2&count=4", nil)
+		w := httptest.NewRecorder()
+
+		apiMathSequenceHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, []interface{}{float64(2), float64(4), float64(8), float64(16)}, data["sequence"])
+	})
+
+	t.Run("unknown type", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/math/sequence?type=frobnicate&start=1&step=1&count=1", nil)
+		w := httptest.NewRecorder()
+
+		apiMathSequenceHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_VALUE", env["error"])
+	})
+}
+
 // apiConvertLengthHandler must convert a supported unit pair and reject an
 // unsupported one.
 func TestAPIConvertLengthHandler(t *testing.T) {
