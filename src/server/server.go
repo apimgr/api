@@ -343,6 +343,8 @@ func New(cfg *config.Config) *http.Server {
 		// Developer Tools
 		r.Route("/dev", func(r chi.Router) {
 			r.Post("/format/json", apiDevFormatJSONHandler)
+			r.Post("/base64", apiDevBase64Handler)
+			r.Post("/url-encode", apiDevURLEncodeHandler)
 		})
 
 		// Images
@@ -507,6 +509,8 @@ func toolPages() []toolPage {
 		{category: "testing", tool: "http", title: "Mock HTTP Response", description: "Generate a mock API response fixture and measure execution time"},
 		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
 		{category: "dev", tool: "format-json", title: "Format JSON", description: "Pretty-print and re-indent a raw JSON document"},
+		{category: "dev", tool: "base64", title: "Base64 Encode/Decode", description: "Encode or decode text using standard or URL-safe base64"},
+		{category: "dev", tool: "url-encode", title: "URL Encode/Decode", description: "Encode or decode text for safe use in URLs"},
 		{category: "validate", tool: "email", title: "Validate Email", description: "Check whether an email address is correctly formatted"},
 		{category: "image", tool: "placeholder", title: "Placeholder Image", description: "Generate a placeholder image of any size, format, and background color"},
 		{category: "text", tool: "encode", title: "Encode", description: "Encode text using base64, base32, hex, URL, or HTML encoding"},

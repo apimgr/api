@@ -154,14 +154,28 @@ function executeToolBody(toolId, endpoint) {
   const form = document.getElementById(toolId);
   const resultDiv = document.getElementById(`${toolId}-result`);
   const submitBtn = form.querySelector('button[type="submit"]');
-  const body = form.querySelector('textarea').value;
+  const bodyField = form.querySelector('textarea');
+  const body = bodyField.value;
+
+  // Any other named fields (selects, checkboxes, text inputs) besides the
+  // raw-body textarea are appended to the endpoint as query-string params,
+  // for tools like /api/v1/dev/base64 that take ?action=&urlsafe= alongside
+  // a raw request body.
+  const query = new URLSearchParams();
+  new FormData(form).forEach(function(value, key) {
+    if (key !== bodyField.name && value !== '') {
+      query.append(key, value);
+    }
+  });
+  const queryString = query.toString();
+  const url = queryString ? `${endpoint}?${queryString}` : endpoint;
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Processing...';
   resultDiv.style.display = 'block';
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
-  fetch(endpoint, { method: 'POST', body: body })
+  fetch(url, { method: 'POST', body: body })
     .then(response => response.text())
     .then(result => {
       resultDiv.textContent = result;

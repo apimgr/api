@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/service/convert"
 	"github.com/apimgr/api/src/service/dev"
 	"github.com/apimgr/api/src/service/docker"
@@ -19,6 +20,7 @@ import (
 	"github.com/apimgr/api/src/service/osint"
 	"github.com/apimgr/api/src/service/parse"
 	"github.com/apimgr/api/src/service/test"
+	"github.com/apimgr/api/src/service/text"
 	"github.com/apimgr/api/src/service/validate"
 	"github.com/apimgr/api/src/service/weather"
 	"github.com/go-chi/chi/v5"
@@ -659,6 +661,77 @@ func apiLoremPersonHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiDevFormatJSONHandler pretty-prints the raw JSON document supplied in
 // the request body.
+// apiDevBase64Handler encodes or decodes the raw request body as base64
+// (standard or URL-safe, per ?urlsafe=) depending on the ?action= query
+// parameter (encode, the default, or decode).
+func apiDevBase64Handler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	action := r.URL.Query().Get("action")
+	if action == "" {
+		action = "encode"
+	}
+	urlSafe := config.IsTruthy(r.URL.Query().Get("urlsafe"))
+
+	switch action {
+	case "encode":
+		result := text.Base64Encode(string(raw))
+		if urlSafe {
+			result = text.Base64URLEncode(string(raw))
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
+	case "decode":
+		var (
+			result string
+			err    error
+		)
+		if urlSafe {
+			result, err = text.Base64URLDecode(string(raw))
+		} else {
+			result, err = text.Base64Decode(string(raw))
+		}
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BASE64", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ACTION", "action must be encode or decode", nil)
+	}
+}
+
+// apiDevURLEncodeHandler URL-encodes or URL-decodes the raw request body
+// depending on the ?action= query parameter (encode, the default, or
+// decode).
+func apiDevURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	action := r.URL.Query().Get("action")
+	if action == "" {
+		action = "encode"
+	}
+
+	switch action {
+	case "encode":
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": text.URLEncode(string(raw))})
+	case "decode":
+		result, err := text.URLDecode(string(raw))
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_URL_ENCODING", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ACTION", "action must be encode or decode", nil)
+	}
+}
+
 func apiDevFormatJSONHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {

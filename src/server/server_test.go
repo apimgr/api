@@ -173,6 +173,8 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"testing http tool page", http.MethodGet, "/testing/http", http.StatusOK},
 		{"osint email tool page", http.MethodGet, "/osint/email", http.StatusOK},
 		{"dev format json tool page", http.MethodGet, "/dev/format-json", http.StatusOK},
+		{"dev base64 tool page", http.MethodGet, "/dev/base64", http.StatusOK},
+		{"dev url-encode tool page", http.MethodGet, "/dev/url-encode", http.StatusOK},
 		{"validate email tool page", http.MethodGet, "/validate/email", http.StatusOK},
 		{"image placeholder tool page", http.MethodGet, "/image/placeholder", http.StatusOK},
 		{"text encode tool page", http.MethodGet, "/text/encode", http.StatusOK},
