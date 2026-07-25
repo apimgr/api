@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/apimgr/api/src/service/dev"
 	"github.com/apimgr/api/src/service/docker"
 	"github.com/apimgr/api/src/service/fun"
+	"github.com/apimgr/api/src/service/geo"
 	"github.com/apimgr/api/src/service/image"
 	"github.com/apimgr/api/src/service/lorem"
 	"github.com/apimgr/api/src/service/math"
@@ -37,6 +39,7 @@ var (
 	testService     = test.New()
 	osintService    = osint.New()
 	funService      = fun.New()
+	geoService      = geo.New()
 	loremService    = lorem.New()
 	devService      = dev.New()
 	imageService    = image.New()
@@ -173,6 +176,93 @@ func apiGeoIPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
+// parseGeoCoordinateParams parses the lat1/lon1/lat2/lon2 query parameters
+// shared by the two-point geo.Service operations (distance, bearing,
+// midpoint), returning a descriptive error if any are missing or invalid.
+func parseGeoCoordinateParams(q url.Values) (lat1, lon1, lat2, lon2 float64, err error) {
+	parse := func(name string) (float64, error) {
+		raw := q.Get(name)
+		if raw == "" {
+			return 0, fmt.Errorf("%s query parameter is required", name)
+		}
+		v, parseErr := strconv.ParseFloat(raw, 64)
+		if parseErr != nil {
+			return 0, fmt.Errorf("%s must be a number", name)
+		}
+		return v, nil
+	}
+
+	if lat1, err = parse("lat1"); err != nil {
+		return
+	}
+	if lon1, err = parse("lon1"); err != nil {
+		return
+	}
+	if lat2, err = parse("lat2"); err != nil {
+		return
+	}
+	if lon2, err = parse("lon2"); err != nil {
+		return
+	}
+	return
+}
+
+// apiGeoDistanceHandler computes the great-circle distance between two
+// coordinates, in kilometers (default) or miles via ?unit=mi.
+func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	lat1, lon1, lat2, lon2, err := parseGeoCoordinateParams(q)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+
+	unit := strings.ToLower(q.Get("unit"))
+	if unit == "" {
+		unit = "km"
+	}
+
+	var distance float64
+	switch unit {
+	case "km":
+		distance = geoService.Distance(lat1, lon1, lat2, lon2)
+	case "mi":
+		distance = geoService.DistanceInMiles(lat1, lon1, lat2, lon2)
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_UNIT", "unit must be km or mi", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"distance": distance,
+		"unit":     unit,
+	})
+}
+
+// apiGeoBearingHandler computes the initial compass bearing (in degrees)
+// from one coordinate to another.
+func apiGeoBearingHandler(w http.ResponseWriter, r *http.Request) {
+	lat1, lon1, lat2, lon2, err := parseGeoCoordinateParams(r.URL.Query())
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]float64{
+		"bearing": geoService.Bearing(lat1, lon1, lat2, lon2),
+	})
+}
+
+// apiGeoMidpointHandler computes the geographic midpoint between two
+// coordinates.
+func apiGeoMidpointHandler(w http.ResponseWriter, r *http.Request) {
+	lat1, lon1, lat2, lon2, err := parseGeoCoordinateParams(r.URL.Query())
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, geoService.Midpoint(lat1, lon1, lat2, lon2))
 }
 
 // apiMathCalculateHandler dispatches to a math.Service operation selected

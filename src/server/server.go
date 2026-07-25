@@ -279,6 +279,9 @@ func New(cfg *config.Config) *http.Server {
 		// Geolocation
 		r.Route("/geo", func(r chi.Router) {
 			r.Get("/ip/{ip}", apiGeoIPHandler)
+			r.Get("/distance", apiGeoDistanceHandler)
+			r.Get("/bearing", apiGeoBearingHandler)
+			r.Get("/midpoint", apiGeoMidpointHandler)
 		})
 
 		// Math
@@ -497,6 +500,9 @@ func toolPages() []toolPage {
 		{category: "network", tool: "port", title: "Random Port", description: "Suggest a random unprivileged TCP/UDP port"},
 		{category: "weather", tool: "current", title: "Current Weather", description: "Get current weather conditions for a location"},
 		{category: "geo", tool: "ip", title: "IP Geolocation", description: "Look up geolocation details for a public IP address"},
+		{category: "geo", tool: "distance", title: "Distance Calculator", description: "Calculate the great-circle distance between two coordinates"},
+		{category: "geo", tool: "bearing", title: "Bearing Calculator", description: "Calculate the initial compass bearing from one coordinate to another"},
+		{category: "geo", tool: "midpoint", title: "Midpoint Calculator", description: "Calculate the geographic midpoint between two coordinates"},
 		{category: "convert", tool: "length", title: "Length Converter", description: "Convert a length value between feet, meters, inches, centimeters, miles, and kilometers"},
 		{category: "convert", tool: "temperature", title: "Temperature Converter", description: "Convert a temperature value between Celsius, Fahrenheit, and Kelvin"},
 		{category: "convert", tool: "weight", title: "Weight Converter", description: "Convert a weight value between pounds, kilograms, ounces, and grams"},
