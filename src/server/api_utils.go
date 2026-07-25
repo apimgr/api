@@ -264,6 +264,170 @@ func apiConvertLengthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// temperatureConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func temperatureConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"c-f": s.CelsiusToFahrenheit,
+		"f-c": s.FahrenheitToCelsius,
+		"c-k": s.CelsiusToKelvin,
+		"k-c": s.KelvinToCelsius,
+	}
+}
+
+// apiConvertTemperatureHandler converts {value} from {from} to {to} units
+// using the existing bidirectional temperature-conversion pairs exported by
+// convert.Service.
+func apiConvertTemperatureHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := temperatureConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// weightConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func weightConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"lb-kg": s.PoundsToKilograms,
+		"kg-lb": s.KilogramsToPounds,
+		"oz-g":  s.OuncesToGrams,
+		"g-oz":  s.GramsToOunces,
+	}
+}
+
+// apiConvertWeightHandler converts {value} from {from} to {to} units using
+// the existing bidirectional weight-conversion pairs exported by
+// convert.Service.
+func apiConvertWeightHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := weightConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// volumeConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func volumeConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"gal-l": s.GallonsToLiters,
+		"l-gal": s.LitersToGallons,
+	}
+}
+
+// apiConvertVolumeHandler converts {value} from {from} to {to} units using
+// the existing bidirectional volume-conversion pairs exported by
+// convert.Service.
+func apiConvertVolumeHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := volumeConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// timeConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func timeConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"s-min":  s.SecondsToMinutes,
+		"min-s":  s.MinutesToSeconds,
+		"hr-min": s.HoursToMinutes,
+		"min-hr": s.MinutesToHours,
+		"day-hr": s.DaysToHours,
+		"hr-day": s.HoursToDays,
+	}
+}
+
+// apiConvertTimeHandler converts {value} from {from} to {to} units using
+// the existing bidirectional time-conversion pairs exported by
+// convert.Service.
+func apiConvertTimeHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := timeConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
 // apiGenerateQRHandler reports that QR-code generation is not supported.
 // No QR encoder exists anywhere in the codebase (generate, image, or any
 // dependency in go.mod) and authoring one from scratch would be inventing

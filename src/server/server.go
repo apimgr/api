@@ -285,6 +285,10 @@ func New(cfg *config.Config) *http.Server {
 		// Unit Conversion
 		r.Route("/convert", func(r chi.Router) {
 			r.Get("/length/{value}/{from}/{to}", apiConvertLengthHandler)
+			r.Get("/temperature/{value}/{from}/{to}", apiConvertTemperatureHandler)
+			r.Get("/weight/{value}/{from}/{to}", apiConvertWeightHandler)
+			r.Get("/volume/{value}/{from}/{to}", apiConvertVolumeHandler)
+			r.Get("/time/{value}/{from}/{to}", apiConvertTimeHandler)
 		})
 
 		// Generators
@@ -480,6 +484,10 @@ func toolPages() []toolPage {
 		{category: "weather", tool: "current", title: "Current Weather", description: "Get current weather conditions for a location"},
 		{category: "geo", tool: "ip", title: "IP Geolocation", description: "Look up geolocation details for a public IP address"},
 		{category: "convert", tool: "length", title: "Length Converter", description: "Convert a length value between feet, meters, inches, centimeters, miles, and kilometers"},
+		{category: "convert", tool: "temperature", title: "Temperature Converter", description: "Convert a temperature value between Celsius, Fahrenheit, and Kelvin"},
+		{category: "convert", tool: "weight", title: "Weight Converter", description: "Convert a weight value between pounds, kilograms, ounces, and grams"},
+		{category: "convert", tool: "volume", title: "Volume Converter", description: "Convert a volume value between gallons and liters"},
+		{category: "convert", tool: "time", title: "Time Converter", description: "Convert a time value between seconds, minutes, hours, and days"},
 		{category: "math", tool: "calculate", title: "Calculator", description: "Run add/subtract/multiply/divide and other math operations"},
 		{category: "parse", tool: "json", title: "JSON Parser", description: "Parse a raw JSON document and view the decoded structure"},
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
