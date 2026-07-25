@@ -329,6 +329,9 @@ func New(cfg *config.Config) *http.Server {
 		// Testing Tools
 		r.Route("/test", func(r chi.Router) {
 			r.Get("/http", apiTestHTTPHandler)
+			r.Post("/assert", apiTestAssertHandler)
+			r.Get("/fixture/{type}", apiTestFixtureHandler)
+			r.Get("/fake-data", apiTestFakeDataHandler)
 		})
 
 		// OSINT Tools
@@ -544,6 +547,9 @@ func toolPages() []toolPage {
 		{category: "lorem", tool: "address", title: "Fake Address", description: "Generate a fake street address"},
 		{category: "lorem", tool: "company", title: "Fake Company", description: "Generate a fake company name and catchphrase"},
 		{category: "testing", tool: "http", title: "Mock HTTP Response", description: "Generate a mock API response fixture and measure execution time"},
+		{category: "testing", tool: "assertions", title: "Assertion Runner", description: "Run an equal, not_equal, contains, true, or false assertion and get a pass/fail result"},
+		{category: "testing", tool: "fixtures", title: "Test Fixture Generator", description: "Generate a named test fixture (user, api_response, or custom type)"},
+		{category: "testing", tool: "fake-data", title: "Fake Data Generator", description: "Generate a fake test email, username, or mock user"},
 		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
 		{category: "osint", tool: "domain", title: "WHOIS Lookup", description: "Look up registrar, creation/expiry dates, and nameservers for a domain"},
 		{category: "osint", tool: "ip", title: "IP Intelligence", description: "Look up geolocation and ISP information for a public IP address"},

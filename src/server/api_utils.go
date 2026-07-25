@@ -866,6 +866,110 @@ func apiTestHTTPHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// testAssertRequest is the JSON body shape accepted by
+// apiTestAssertHandler. Which fields are read depends on op: equal/
+// not_equal use expected/actual, contains uses haystack/needle, true/
+// false use value.
+type testAssertRequest struct {
+	Op       string      `json:"op"`
+	Expected interface{} `json:"expected,omitempty"`
+	Actual   interface{} `json:"actual,omitempty"`
+	Haystack string      `json:"haystack,omitempty"`
+	Needle   string      `json:"needle,omitempty"`
+	Value    bool        `json:"value,omitempty"`
+}
+
+// apiTestAssertHandler runs one of the five test.Service assertion
+// helpers (equal/not_equal/contains/true/false) against caller-supplied
+// values and returns the resulting pass/fail TestResult. It dispatches
+// to the existing Assert* methods rather than re-implementing the
+// comparison logic, so the CLI/API behavior always matches whatever the
+// underlying assertion helpers do.
+func apiTestAssertHandler(w http.ResponseWriter, r *http.Request) {
+	var body testAssertRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+
+	var result *test.TestResult
+	switch strings.ToLower(body.Op) {
+	case "equal":
+		result = testService.AssertEqual(body.Expected, body.Actual)
+	case "not_equal":
+		result = testService.AssertNotEqual(body.Expected, body.Actual)
+	case "contains":
+		if body.Haystack == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FIELDS", "haystack and needle are required for the contains op", nil)
+			return
+		}
+		result = testService.AssertContains(body.Haystack, body.Needle)
+	case "true":
+		result = testService.AssertTrue(body.Value)
+	case "false":
+		result = testService.AssertFalse(body.Value)
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_OP", "op must be one of: equal, not_equal, contains, true, false", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"op":      body.Op,
+		"passed":  result.Passed,
+		"message": result.Message,
+	})
+}
+
+// apiTestFixtureHandler returns a named test fixture, dispatching to
+// test.Service.GenerateFixture rather than re-implementing per-type
+// fixture shapes here.
+func apiTestFixtureHandler(w http.ResponseWriter, r *http.Request) {
+	fixtureType := chi.URLParam(r, "type")
+	if fixtureType == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TYPE", "fixture type path parameter is required", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"type":    fixtureType,
+		"fixture": testService.GenerateFixture(fixtureType),
+	})
+}
+
+// apiTestFakeDataHandler generates fake test data (email, username, or a
+// full mock user) via the existing test.Service generators, selected by
+// the ?type= query parameter (default "user").
+func apiTestFakeDataHandler(w http.ResponseWriter, r *http.Request) {
+	dataType := r.URL.Query().Get("type")
+	if dataType == "" {
+		dataType = "user"
+	}
+	prefix := r.URL.Query().Get("prefix")
+	if prefix == "" {
+		prefix = "test"
+	}
+
+	switch dataType {
+	case "email":
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"type":  dataType,
+			"email": testService.GenerateTestEmail(prefix),
+		})
+	case "username":
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"type":     dataType,
+			"username": testService.GenerateTestUsername(prefix),
+		})
+	case "user":
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"type": dataType,
+			"user": testService.GenerateMockUser(),
+		})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be one of: email, username, user", nil)
+	}
+}
+
 // apiOsintEmailHandler validates the {email} path parameter's format and
 // checks whether its domain has mail-exchange (MX) records, composing
 // validate.IsEmail, parse.ParseEmail, and osint.DNSLookup — all free,

@@ -428,6 +428,93 @@ func TestAPITestHTTPHandler(t *testing.T) {
 	assert.NotNil(t, data["duration_ms"])
 }
 
+// apiTestAssertHandler must dispatch each op to the matching test.Service
+// Assert* helper and 400 for an unknown op.
+func TestAPITestAssertHandler(t *testing.T) {
+	t.Run("equal pass", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/assert", strings.NewReader(`{"op":"equal","expected":"foo","actual":"foo"}`))
+		w := httptest.NewRecorder()
+		apiTestAssertHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["passed"])
+	})
+
+	t.Run("contains missing fields", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/assert", strings.NewReader(`{"op":"contains"}`))
+		w := httptest.NewRecorder()
+		apiTestAssertHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_FIELDS", env["error"])
+	})
+
+	t.Run("invalid op", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/assert", strings.NewReader(`{"op":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiTestAssertHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_OP", env["error"])
+	})
+}
+
+// apiTestFixtureHandler must return the requested fixture type, dispatching
+// to test.Service.GenerateFixture.
+func TestAPITestFixtureHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/test/fixture/{type}", apiTestFixtureHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test/fixture/user", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "user", data["type"])
+	assert.NotNil(t, data["fixture"])
+}
+
+// apiTestFakeDataHandler must default to type=user and 400 INVALID_TYPE for
+// an unknown type.
+func TestAPITestFakeDataHandler(t *testing.T) {
+	t.Run("default user", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/test/fake-data", nil)
+		w := httptest.NewRecorder()
+		apiTestFakeDataHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "user", data["type"])
+		assert.NotNil(t, data["user"])
+	})
+
+	t.Run("email type", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/test/fake-data?type=email&prefix=qa", nil)
+		w := httptest.NewRecorder()
+		apiTestFakeDataHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["email"], "qa+test")
+	})
+
+	t.Run("invalid type", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/test/fake-data?type=bogus", nil)
+		w := httptest.NewRecorder()
+		apiTestFakeDataHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_TYPE", env["error"])
+	})
+}
+
 // apiOsintEmailHandler must 400 INVALID_EMAIL for a malformed address and
 // 200 for a well-formed one.
 func TestAPIOsintEmailHandler(t *testing.T) {
