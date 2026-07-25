@@ -1,6 +1,7 @@
 package parse
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -31,11 +32,68 @@ func (s *Service) ParseJSONArray(jsonStr string) ([]interface{}, error) {
 	return result, err
 }
 
+// xmlNode is a generic XML element tree used to decode arbitrary XML into a
+// map[string]interface{}. encoding/xml cannot unmarshal directly into a
+// generic map (it only supports structs/known types), so this walks the
+// element tree itself: attributes are keyed as "@name", text content as
+// "#text" (or the bare string when there are no attributes/children), and
+// repeated child element names collapse into a slice.
+type xmlNode struct {
+	XMLName xml.Name
+	Attrs   []xml.Attr `xml:",any,attr"`
+	Content string     `xml:",chardata"`
+	Nodes   []xmlNode  `xml:",any"`
+}
+
+// xmlNodeToValue converts a single xmlNode into its map/string representation.
+func xmlNodeToValue(n xmlNode) interface{} {
+	if len(n.Nodes) == 0 {
+		text := strings.TrimSpace(n.Content)
+		if len(n.Attrs) == 0 {
+			return text
+		}
+		leaf := make(map[string]interface{}, len(n.Attrs)+1)
+		for _, a := range n.Attrs {
+			leaf["@"+a.Name.Local] = a.Value
+		}
+		if text != "" {
+			leaf["#text"] = text
+		}
+		return leaf
+	}
+
+	m := make(map[string]interface{}, len(n.Attrs)+len(n.Nodes))
+	for _, a := range n.Attrs {
+		m["@"+a.Name.Local] = a.Value
+	}
+	for _, child := range n.Nodes {
+		value := xmlNodeToValue(child)
+		key := child.XMLName.Local
+		if existing, ok := m[key]; ok {
+			if arr, ok := existing.([]interface{}); ok {
+				m[key] = append(arr, value)
+			} else {
+				m[key] = []interface{}{existing, value}
+			}
+		} else {
+			m[key] = value
+		}
+	}
+	return m
+}
+
 // XML parsing
 func (s *Service) ParseXML(xmlStr string) (map[string]interface{}, error) {
-	var result map[string]interface{}
-	err := xml.Unmarshal([]byte(xmlStr), &result)
-	return result, err
+	var root xmlNode
+	if err := xml.Unmarshal([]byte(xmlStr), &root); err != nil {
+		return nil, err
+	}
+	value := xmlNodeToValue(root)
+	body, ok := value.(map[string]interface{})
+	if !ok {
+		body = map[string]interface{}{"#text": value}
+	}
+	return map[string]interface{}{root.XMLName.Local: body}, nil
 }
 
 // URL parsing
@@ -147,6 +205,37 @@ func (s *Service) ParseCSVLine(line string) []string {
 
 	result = append(result, current.String())
 	return result
+}
+
+// ParseCSV parses a full RFC 4180 CSV document (via the stdlib encoding/csv
+// reader) using the first row as column headers, returning one map per
+// remaining row keyed by header name.
+func (s *Service) ParseCSV(csvStr string) ([]map[string]string, error) {
+	reader := csv.NewReader(strings.NewReader(csvStr))
+	reader.FieldsPerRecord = -1
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return nil, fmt.Errorf("csv document has no rows")
+	}
+
+	headers := records[0]
+	rows := make([]map[string]string, 0, len(records)-1)
+	for _, record := range records[1:] {
+		row := make(map[string]string, len(headers))
+		for i, header := range headers {
+			if i < len(record) {
+				row[header] = record[i]
+			} else {
+				row[header] = ""
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
 }
 
 // User-Agent parsing (basic)

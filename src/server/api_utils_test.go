@@ -259,6 +259,87 @@ func TestAPIParseJSONHandler(t *testing.T) {
 	})
 }
 
+// apiParseXMLHandler must 400 MISSING_XML for an empty body and 200 for a
+// valid document.
+func TestAPIParseXMLHandler(t *testing.T) {
+	t.Run("missing xml", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/xml", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseXMLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_XML", env["error"])
+	})
+
+	t.Run("valid xml", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/xml", strings.NewReader("<root><item>value</item></root>"))
+		w := httptest.NewRecorder()
+		apiParseXMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, true, env["ok"])
+	})
+}
+
+// apiParseCSVHandler must 400 MISSING_CSV for an empty body and 200 with
+// one decoded row per data line for valid input.
+func TestAPIParseCSVHandler(t *testing.T) {
+	t.Run("missing csv", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/csv", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseCSVHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_CSV", env["error"])
+	})
+
+	t.Run("valid csv", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/csv", strings.NewReader("name,age\nAlice,30\n"))
+		w := httptest.NewRecorder()
+		apiParseCSVHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, data, 1)
+		row, ok := data[0].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Alice", row["name"])
+		assert.Equal(t, "30", row["age"])
+	})
+}
+
+// apiParseJWTHandler must reject a malformed token and decode a well-formed
+// one, reusing the exact same decodeJWTSegment logic already covered by the
+// crypto-category JWT decoder.
+func TestAPIParseJWTHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/parse/jwt/{token}", apiParseJWTHandler)
+
+	t.Run("invalid token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/parse/jwt/not-a-jwt", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_JWT", env["error"])
+	})
+
+	t.Run("valid token", func(t *testing.T) {
+		token := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature"
+		req := httptest.NewRequest(http.MethodGet, "/parse/jwt/"+token, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		payload, ok := data["payload"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "123", payload["sub"])
+	})
+}
+
 // apiLanguageDetectHandler must always report NOT_SUPPORTED — language
 // auto-detection is an IDEA.md non-goal.
 func TestAPILanguageDetectHandler(t *testing.T) {

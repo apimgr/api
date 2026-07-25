@@ -732,6 +732,78 @@ func apiParseJSONHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// apiParseXMLHandler parses the raw XML document supplied in the request
+// body into a generic map, reusing the existing parseService.ParseXML.
+func apiParseXMLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_XML", "request body must contain an XML document", nil)
+		return
+	}
+	parsed, err := parseService.ParseXML(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_XML", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseCSVHandler parses the raw CSV document supplied in the request
+// body (first row treated as headers) via parseService.ParseCSV.
+func apiParseCSVHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CSV", "request body must contain a CSV document", nil)
+		return
+	}
+	parsed, err := parseService.ParseCSV(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CSV", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseJWTHandler decodes (never verifies) the header and payload of a
+// JSON Web Token supplied via the {token} path parameter. This reuses the
+// exact same decodeJWTSegment helper as apiCryptoJWTDecodeHandler in the
+// crypto category — parse and crypto both expose a JWT decode tool over the
+// same underlying logic, matching the established cross-category reuse
+// pattern (e.g. apiOsintIPHandler/apiGeoIPHandler).
+func apiParseJWTHandler(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT", "token must have three dot-separated segments (header.payload.signature)", nil)
+		return
+	}
+
+	header, err := decodeJWTSegment(parts[0])
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_HEADER", err.Error(), nil)
+		return
+	}
+	payload, err := decodeJWTSegment(parts[1])
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_PAYLOAD", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"header":    header,
+		"payload":   payload,
+		"signature": parts[2],
+	})
+}
+
 // apiLanguageDetectHandler reports that language auto-detection is not
 // supported. IDEA.md explicitly lists "language auto-detection" as a
 // non-goal; src/service/language only offers code<->name lookup/listing,

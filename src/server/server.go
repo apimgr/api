@@ -314,6 +314,9 @@ func New(cfg *config.Config) *http.Server {
 		// Parsers
 		r.Route("/parse", func(r chi.Router) {
 			r.Post("/json", apiParseJSONHandler)
+			r.Post("/xml", apiParseXMLHandler)
+			r.Post("/csv", apiParseCSVHandler)
+			r.Get("/jwt/{token}", apiParseJWTHandler)
 		})
 
 		// Language Tools
@@ -528,6 +531,9 @@ func toolPages() []toolPage {
 		{category: "math", tool: "random", title: "Random Number Generator", description: "Generate a random integer within a range"},
 		{category: "math", tool: "stats", title: "Statistics Calculator", description: "Calculate min, max, sum, average, and median of a list of numbers"},
 		{category: "parse", tool: "json", title: "JSON Parser", description: "Parse a raw JSON document and view the decoded structure"},
+		{category: "parse", tool: "xml", title: "XML Parser", description: "Parse a raw XML document and view the decoded structure"},
+		{category: "parse", tool: "csv", title: "CSV Parser", description: "Parse a CSV document (first row as headers) into structured rows"},
+		{category: "parse", tool: "jwt", title: "JWT Parser", description: "Decode and inspect the header, payload, and signature of a JSON Web Token"},
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
 		{category: "fun", tool: "fortune", title: "Random Fortune", description: "Get a single random fortune-cookie style saying"},
 		{category: "lorem", tool: "person", title: "Fake Person", description: "Generate a fake person with a name, email, and phone number"},

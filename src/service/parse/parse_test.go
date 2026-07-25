@@ -40,8 +40,11 @@ func TestParseJSON(t *testing.T) {
 func TestParseXML(t *testing.T) {
 	s := New()
 
-	_, err := s.ParseXML(`<root><a>1</a></root>`)
-	assert.Error(t, err)
+	result, err := s.ParseXML(`<root><a>1</a></root>`)
+	require.NoError(t, err)
+	root, ok := result["root"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "1", root["a"])
 
 	_, err = s.ParseXML(`<root><a>1</a>`)
 	assert.Error(t, err)
