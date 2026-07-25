@@ -253,6 +253,7 @@ func New(cfg *config.Config) *http.Server {
 		// Network utilities
 		r.Route("/network", func(r chi.Router) {
 			r.Get("/ip", apiNetworkCallerHandler)
+			r.Get("/headers", apiNetworkCallerHandler)
 			r.Get("/user-agent", apiNetworkUserAgentHandler)
 			r.Get("/mac/{mac}", apiNetworkMACVendorHandler)
 			r.Get("/subnet", apiNetworkSubnetHandler)
@@ -471,6 +472,7 @@ func toolPages() []toolPage {
 		{category: "crypto", tool: "password", title: "Password Generator", description: "Generate secure random passwords with customizable length and character sets"},
 		{category: "datetime", tool: "now", title: "Current Time", description: "Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable"},
 		{category: "network", tool: "ip", title: "IP Address Lookup", description: "Get detailed information about any IP address including location, ISP, and network details"},
+		{category: "network", tool: "headers", title: "Request Headers", description: "Inspect the caller-identifying headers sent with the request"},
 		{category: "network", tool: "dns", title: "DNS Lookup", description: "Query DNS records for any domain. Supports A, AAAA, CNAME, MX, TXT, and NS"},
 		{category: "text", tool: "uuid", title: "UUID Generator", description: "Generate UUIDs (v1, v3, v4, v5, v6, v7) for use in applications and databases"},
 		{category: "text", tool: "hash", title: "Hash Generator", description: "Generate cryptographic hashes of arbitrary text (MD5, SHA-1, SHA-256, SHA-512, BLAKE3)"},
