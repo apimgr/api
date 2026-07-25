@@ -176,6 +176,36 @@ function executeToolBody(toolId, endpoint) {
     });
 }
 
+// executeToolQueryPost POSTs a form's fields as a query string (rather than a
+// JSON body), for tools backed by POST-only API routes that read their
+// parameters via query string (e.g. /api/v1/validate/email?email=...).
+function executeToolQueryPost(toolId, endpoint) {
+  const form = document.getElementById(toolId);
+  const resultDiv = document.getElementById(`${toolId}-result`);
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const formData = new FormData(form);
+  const params = new URLSearchParams(formData);
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Processing...';
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  fetch(`${endpoint}?${params}`, { method: 'POST' })
+    .then(response => response.text())
+    .then(result => {
+      resultDiv.textContent = result;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Execute';
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Execute';
+      showToast('Request failed', 'danger');
+    });
+}
+
 // ============================================================================
 // Search functionality
 // ============================================================================
@@ -262,6 +292,15 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       executeToolBody(form.id, form.dataset.bodyEndpoint);
+    });
+  });
+
+  // Wire tool forms declared with data-query-post-endpoint (POST-only,
+  // query-string-param endpoints)
+  document.querySelectorAll('form.tool-form[data-query-post-endpoint]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      executeToolQueryPost(form.id, form.dataset.queryPostEndpoint);
     });
   });
 
