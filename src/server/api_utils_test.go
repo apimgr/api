@@ -376,6 +376,51 @@ func TestAPIOsintEmailHandler(t *testing.T) {
 	})
 }
 
+// apiOsintDomainHandler must 400 MISSING_DOMAIN when the {domain} path
+// parameter is empty. A successful-lookup case is intentionally not
+// asserted here (like TestAPIGeoIPHandler) since WHOISLookup performs a
+// live network call that would make CI flaky.
+func TestAPIOsintDomainHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/osint/domain/", nil)
+	w := httptest.NewRecorder()
+
+	apiOsintDomainHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+}
+
+// apiOsintIPHandler must reject an invalid IP address. It reuses the same
+// osintService.IPLookup as apiGeoIPHandler, so it is tested the same way.
+func TestAPIOsintIPHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/osint/ip/{ip}", apiOsintIPHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/osint/ip/not-an-ip", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "IP_LOOKUP_FAILED", env["error"])
+}
+
+// apiOsintCertHandler must 400 MISSING_DOMAIN when the {domain} path
+// parameter is empty. A successful-lookup case is intentionally not
+// asserted here since SSLInfo performs a live TLS handshake that would
+// make CI flaky.
+func TestAPIOsintCertHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/osint/cert/", nil)
+	w := httptest.NewRecorder()
+
+	apiOsintCertHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+}
+
 // apiResearchExtractHandler must always report NOT_SUPPORTED — unstructured
 // citation extraction is a confirmed unimplemented gap.
 func TestAPIResearchExtractHandler(t *testing.T) {

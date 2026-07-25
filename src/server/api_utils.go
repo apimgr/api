@@ -828,6 +828,52 @@ func apiOsintEmailHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// apiOsintDomainHandler performs a free, keyless WHOIS lookup for the
+// {domain} path parameter via osint.WHOISLookup.
+func apiOsintDomainHandler(w http.ResponseWriter, r *http.Request) {
+	domain := chi.URLParam(r, "domain")
+	if domain == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required", nil)
+		return
+	}
+	info, err := osintService.WHOISLookup(domain)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "WHOIS_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
+// apiOsintIPHandler resolves geolocation/ISP intelligence for the {ip}
+// path parameter via the shared osintService.IPLookup (same underlying
+// implementation as apiGeoIPHandler).
+func apiOsintIPHandler(w http.ResponseWriter, r *http.Request) {
+	ip := chi.URLParam(r, "ip")
+	info, err := osintService.IPLookup(ip)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IP_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
+// apiOsintCertHandler connects to the {domain} path parameter (host:443 by
+// default, or host:port if a port is present) and reports the peer TLS
+// certificate's details via osint.SSLInfo.
+func apiOsintCertHandler(w http.ResponseWriter, r *http.Request) {
+	domain := chi.URLParam(r, "domain")
+	if domain == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required", nil)
+		return
+	}
+	info, err := osintService.SSLInfo(domain)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "CERT_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
 // apiResearchExtractHandler reports that citation extraction from
 // unstructured text is not supported. research.go's own source comment
 // documents this as unimplemented ("Full research service could include:

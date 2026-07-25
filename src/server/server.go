@@ -331,6 +331,9 @@ func New(cfg *config.Config) *http.Server {
 		// OSINT Tools
 		r.Route("/osint", func(r chi.Router) {
 			r.Get("/email/{email}", apiOsintEmailHandler)
+			r.Get("/domain/{domain}", apiOsintDomainHandler)
+			r.Get("/ip/{ip}", apiOsintIPHandler)
+			r.Get("/cert/{domain}", apiOsintCertHandler)
 		})
 
 		// Research Tools
@@ -532,6 +535,9 @@ func toolPages() []toolPage {
 		{category: "lorem", tool: "company", title: "Fake Company", description: "Generate a fake company name and catchphrase"},
 		{category: "testing", tool: "http", title: "Mock HTTP Response", description: "Generate a mock API response fixture and measure execution time"},
 		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
+		{category: "osint", tool: "domain", title: "WHOIS Lookup", description: "Look up registrar, creation/expiry dates, and nameservers for a domain"},
+		{category: "osint", tool: "ip", title: "IP Intelligence", description: "Look up geolocation and ISP information for a public IP address"},
+		{category: "osint", tool: "cert", title: "TLS Certificate Lookup", description: "Inspect a domain's TLS certificate details"},
 		{category: "dev", tool: "format-json", title: "Format JSON", description: "Pretty-print and re-indent a raw JSON document"},
 		{category: "dev", tool: "base64", title: "Base64 Encode/Decode", description: "Encode or decode text using standard or URL-safe base64"},
 		{category: "dev", tool: "url-encode", title: "URL Encode/Decode", description: "Encode or decode text for safe use in URLs"},
