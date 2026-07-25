@@ -310,6 +310,13 @@ footer .container {
   word-break: break-all;
 }
 
+.tool-result-image {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--border-radius);
+}
+
 /* Mobile adjustments */
 @media (max-width: 720px) {
   .hero-title {

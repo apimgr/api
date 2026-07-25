@@ -477,6 +477,7 @@ func toolPages() []toolPage {
 		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
 		{category: "dev", tool: "format-json", title: "Format JSON", description: "Pretty-print and re-indent a raw JSON document"},
 		{category: "validate", tool: "email", title: "Validate Email", description: "Check whether an email address is correctly formatted"},
+		{category: "image", tool: "placeholder", title: "Placeholder Image", description: "Generate a placeholder image of any size, format, and background color"},
 	}
 }
 

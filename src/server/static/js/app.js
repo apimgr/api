@@ -176,6 +176,41 @@ function executeToolBody(toolId, endpoint) {
     });
 }
 
+// executeToolImage builds a GET URL by substituting {field} placeholders in
+// a path template (like executeToolTemplate), appends any remaining form
+// fields as query-string params, and renders the response as an <img> rather
+// than text, for tools backed by binary-image API routes
+// (e.g. /api/v1/image/placeholder/{width}/{height}?format=&bg=).
+function executeToolImage(toolId, urlTemplate) {
+  const form = document.getElementById(toolId);
+  const resultDiv = document.getElementById(`${toolId}-result`);
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const formData = new FormData(form);
+  const consumed = new Set();
+
+  const path = urlTemplate.replace(/\{(\w+)\}/g, function(match, field) {
+    const value = formData.get(field);
+    consumed.add(field);
+    return value !== null ? encodeURIComponent(value) : match;
+  });
+
+  const query = new URLSearchParams();
+  formData.forEach(function(value, key) {
+    if (!consumed.has(key) && value !== '') {
+      query.append(key, value);
+    }
+  });
+  const queryString = query.toString();
+  const url = queryString ? `${path}?${queryString}` : path;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Processing...';
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = `<img src="${url}" alt="Generated image" class="tool-result-image">`;
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Execute';
+}
+
 // executeToolQueryPost POSTs a form's fields as a query string (rather than a
 // JSON body), for tools backed by POST-only API routes that read their
 // parameters via query string (e.g. /api/v1/validate/email?email=...).
@@ -301,6 +336,15 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       executeToolQueryPost(form.id, form.dataset.queryPostEndpoint);
+    });
+  });
+
+  // Wire tool forms declared with data-image-template (binary-image GET
+  // endpoints rendered as an <img> rather than text)
+  document.querySelectorAll('form.tool-form[data-image-template]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      executeToolImage(form.id, form.dataset.imageTemplate);
     });
   });
 
