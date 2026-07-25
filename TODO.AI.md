@@ -1,51 +1,97 @@
-## [ ] Wire per-tool detail pages linked from the 21 category pages
+## [x] Wire per-tool detail pages linked from the 21 category pages (READY batch)
 Read: AI.md PART 16 (frontend), src/server/template/page/*.tmpl
-Each of the 21 category pages (text, crypto, datetime, network, convert,
-dev, docker, fun, generate, geo, image, language, lorem, math, osint,
-parse, research, system, testing, validate, weather) links to ~12
-per-tool detail pages (e.g. /crypto/hash, /network/dns, /text/uuid) per
-the PART 16 frontend-route-mirrors-API-route rule. Wired so far, spec-
-compliant (all JS in static/js/app.js, no inline onsubmit/onclick):
-docker/version; network/{subnet,ula,port}; weather/current; geo/ip;
-convert/length; math/calculate; parse/json; fun/joke; lorem/person;
-testing/http (nav category "testing", API route prefix stays /test);
-osint/email; dev/format-json; validate/email; image/placeholder;
-datetime/{convert,unix,add,diff}; crypto/{totp,random}. This batch
-exhausts every sub-tool that maps directly onto an existing, non-stub
-API handler in api_utils.go — five JS executors now cover every request
-shape found: `executeTool` (query-string GET), `executeToolTemplate`
-(path-param GET, also used for query-string-templated GETs like
-crypto/totp), `executeToolBody` (raw-body POST), `executeToolQueryPost`
-(POST-only, query-string params), `executeToolImage` (binary-image GET,
-rendered as `<img>` not text). The pre-existing first batch — the 7 tools
-that already had templates on disk (crypto/{hash,jwt,password},
-datetime/now, network/{ip,dns}, text/uuid) — remains wired via
-`toolPages()`/`toolPageHandler`/composite `pageTemplates` keys in
-server.go. Of that first batch, crypto/hash, crypto/jwt, and network/dns
-were found broken (templates fetched a nonexistent POST endpoint via
-inline `<script>`) and have been fixed: net-new `apiCryptoJWTDecodeHandler`
-and `apiNetworkDNSHandler` (composing existing `osintService.DNSLookup`)
-added to api_utils.go, `/crypto/hash`, `/crypto/jwt/{token}`, and
-`/network/dns/{domain}[/{type}]` API routes registered, and all three
-templates rewritten to the inline-JS-free `data-template` executor
-pattern (dns.tmpl's record-type select also trimmed to the 6 types the
-backend actually supports: A, AAAA, CNAME, MX, TXT, NS). crypto/password
-and crypto/bcrypt/pin/password-strength were already spec-compliant and
-untouched. Most of the ~240 linked sub-tool paths still have neither a
-template nor a route because they need net-new backend services (not
-just a template) — that is a larger, separate body of work: confirm
-which remaining sub-tools need new services vs. are simply unimplemented
-per IDEA.md non-goals, then design/build backend + template +
-`toolPages()` entry together, one commit per tool or small logical
-group. Within the crypto category specifically, 7 linked sub-tools have
-zero backend support and need net-new crypto services before they can be
-wired: encrypt, decrypt (AES-256-GCM), hmac, rsa, ed25519, pgp,
-certificate — scope each as its own commit/finding when picked up.
+Every sub-tool that mapped directly onto an existing, non-stub backend
+service method has now been wired end-to-end (template + `toolPages()`
+entry + frontend route + API route + tool-page test + handler test).
+89 tools are wired as of this pass:
+convert/{length,temperature,time,volume,weight};
+crypto/{bcrypt,hash,jwt,password,password-strength,pin,random,totp};
+datetime/{add,convert,diff,now,timestamp,unix};
+dev/{base64,format-json,url-encode};
+docker/{dockerfile-generate,port-mapping,version,volume-helper};
+fun/{fortune,joke};
+geo/{bearing,distance,ip,midpoint};
+image/{convert,crop,metadata,placeholder,resize};
+language/{phonetic,word-count};
+lorem/{address,company,person};
+math/{calculate,gcd,logarithm,percentage,prime,random,stats,trigonometry};
+network/{dns,headers,ip,mac,port,subnet,ula,user-agent};
+osint/{cert,domain,email,ip};
+parse/{csv,json,jwt,xml};
+research/{citation,doi};
+testing/{assertions,fake-data,fixtures,http};
+text/{case,decode,encode,hash,lorem,uuid};
+validate/{credit-card,domain,email,ip,json,mac,phone,url,uuid};
+weather/{current,forecast}.
+Five JS executors in static/js/app.js cover every request shape used above:
+`executeTool` (query-string GET), `executeToolTemplate` (path-param GET),
+`executeToolBody` (raw-body POST), `executeToolQueryPost` (POST-only,
+query-string params), `executeToolImage` (binary-image GET).
+This READY batch is exhausted — every remaining linked sub-tool below
+needs net-new backend service work (not just a template/route), which is
+scoped as its own body of work in the next section.
+
+## [ ] MISSING sub-tools needing net-new backend service work (151 linked, unwired)
+Read: src/server/template/page/{category}.tmpl for the exact linked path,
+src/service/{category}/ for whatever backend already exists in that area
+None of these have a corresponding template under
+`src/server/template/page/tools/{category}/` yet. Confirm per-tool whether
+it needs a brand-new service method, a new third-party dependency, or is
+out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
+One commit per tool or small logical group when picked up.
+
+- convert (7): area, color, currency, data, energy, pressure, speed
+- crypto (7): certificate, decrypt, ed25519, encrypt, hmac, pgp, rsa
+  (AES-256-GCM encrypt/decrypt, HMAC, RSA, Ed25519, PGP, X.509 cert — zero
+  backend support today; each needs its own net-new crypto service method)
+- datetime (7): calendar, cron, format, moon, parse, sunrise, workdays
+- dev (9): cron, css-format, echo, html-format, js-format, jwt, regex,
+  sql-format, xml-format
+- docker (9): best-practices, compose-to-run, compose-validate,
+  dockerfile-lint, env-parser, network-helper, run-to-compose,
+  security-scan, size-optimizer
+- fun (10): compliment, dad-joke, fact, insult, meme, motivational,
+  programming-joke, quote, riddle, trivia
+- generate (12): api-docs, avatar, barcode, config, dockerfile, gitignore,
+  identicon, license, placeholder, qr, sql, ssh-key
+- geo (8): bbox, country, geocode, geohash, h3, pluscode, reverse, timezone
+- image (7): avatar, barcode, filter, identicon, optimize, qr, watermark
+- language (10): detect, dictionary, grammar, keywords, readability,
+  reading-time, sentiment, spell-check, thesaurus, translate
+- math (4): base, fibonacci, matrix, sequence
+- network (6): ping, ssl, traceroute, url, useragent, whois
+  (`useragent` here is the broken-link duplicate of the already-wired
+  `user-agent` — see bug list below, not a real missing tool)
+- osint (8): breach, company, metadata, phone, social, subdomain,
+  tech-stack, username
+- parse (8): env, html, ini, log, markdown, sql, toml, yaml
+- research (10): arxiv, bibtex, footnotes, isbn, metadata, outline,
+  pdf-extract, readability, scraper, summarize
+- testing (9): api-client, curl-generator, load-test, mock-server,
+  postman, request-inspector, response-generator, status-codes, webhook
+  (mock-server needs a genuinely new configurable dynamic-response
+  backend — no existing `test.Service` method covers it; response-generator
+  may already be covered by testing/http's `GenerateMockAPIResponse` or may
+  need its own distinct implementation — needs a scoping decision before
+  either is picked up)
+- text (6): compress, diff, extract, nanoid, regex, ulid
+- validate (3): iban, isbn, vat
+- weather (10): air-quality, alerts, astronomy, historical, hourly, maps,
+  marine, pollen, radar, uv
+
+## [ ] Known template bugs (tracked, not yet fixed)
+- `network.tmpl` links `/network/useragent` but the wired API/frontend path
+  is `/network/user-agent` — fix the link, do not add a second route.
+- `docker/version.tmpl`'s form has no `image` input field even though
+  `apiDockerVersionHandler` requires `?image=` — form submits with a
+  missing required param.
+- `help.tmpl` links `/server/contact` but the actual wired page is
+  `/contact` (`contact.tmpl`) — `/server/contact` 404s.
 
 ## [ ] Known permanent API gaps needing a future spec/dependency decision
 Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,
 apiResearchExtractHandler doc comments)
-Three of the 16 wired API routes honestly return 501 NOT_SUPPORTED rather
+Three of the wired API routes honestly return 501 NOT_SUPPORTED rather
 than inventing behavior: generate/qr (no QR encoder exists anywhere in the
 codebase or go.mod), language/detect (conflicts with IDEA.md's declared
 non-goal of language auto-detection), and research/extract (research.go's
