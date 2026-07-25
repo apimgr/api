@@ -17,6 +17,7 @@ import (
 	"github.com/apimgr/api/src/service/fun"
 	"github.com/apimgr/api/src/service/geo"
 	"github.com/apimgr/api/src/service/image"
+	"github.com/apimgr/api/src/service/language"
 	"github.com/apimgr/api/src/service/lorem"
 	"github.com/apimgr/api/src/service/math"
 	"github.com/apimgr/api/src/service/osint"
@@ -43,6 +44,7 @@ var (
 	loremService    = lorem.New()
 	devService      = dev.New()
 	imageService    = image.New()
+	languageService = language.New()
 )
 
 // readRequestBody reads and returns the entire request body, capped at
@@ -736,6 +738,42 @@ func apiParseJSONHandler(w http.ResponseWriter, r *http.Request) {
 // which is not detection and would misrepresent the response if reused.
 func apiLanguageDetectHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "language auto-detection is a declared non-goal for this project; only language code/name lookup is supported", nil)
+}
+
+// apiLanguagePhoneticHandler returns the Soundex and Metaphone phonetic
+// codes for a word supplied via ?word=.
+func apiLanguagePhoneticHandler(w http.ResponseWriter, r *http.Request) {
+	word := r.URL.Query().Get("word")
+	if strings.TrimSpace(word) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_WORD", "word query parameter is required", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"word":      word,
+		"soundex":   languageService.Soundex(word),
+		"metaphone": languageService.Metaphone(word),
+	})
+}
+
+// apiLanguageWordCountHandler returns word/character/line/sentence counts
+// for text supplied via ?text= or the raw request body.
+func apiLanguageWordCountHandler(w http.ResponseWriter, r *http.Request) {
+	text := r.URL.Query().Get("text")
+	if text == "" {
+		body, err := readRequestBody(r)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			return
+		}
+		text = string(body)
+	}
+	if strings.TrimSpace(text) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, languageService.WordCount(text))
 }
 
 // apiTestHTTPHandler exercises the mock HTTP response fixture generator

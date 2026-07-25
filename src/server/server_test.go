@@ -122,6 +122,8 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"geo category page", http.MethodGet, "/geo", http.StatusOK},
 		{"image category page", http.MethodGet, "/image", http.StatusOK},
 		{"language category page", http.MethodGet, "/language", http.StatusOK},
+		{"language phonetic tool page", http.MethodGet, "/language/phonetic", http.StatusOK},
+		{"language word-count tool page", http.MethodGet, "/language/word-count", http.StatusOK},
 		{"lorem category page", http.MethodGet, "/lorem", http.StatusOK},
 		{"math category page", http.MethodGet, "/math", http.StatusOK},
 		{"osint category page", http.MethodGet, "/osint", http.StatusOK},

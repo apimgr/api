@@ -272,6 +272,65 @@ func TestAPILanguageDetectHandler(t *testing.T) {
 	assert.Equal(t, "NOT_SUPPORTED", env["error"])
 }
 
+// apiLanguagePhoneticHandler must 400 MISSING_WORD with no ?word= and
+// return the known Soundex/Metaphone codes for "Robert" otherwise.
+func TestAPILanguagePhoneticHandler(t *testing.T) {
+	t.Run("missing word", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/language/phonetic", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguagePhoneticHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_WORD", env["error"])
+	})
+
+	t.Run("valid word", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/language/phonetic?word=Robert", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguagePhoneticHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "R163", data["soundex"])
+		assert.Equal(t, "RBRT", data["metaphone"])
+	})
+}
+
+// apiLanguageWordCountHandler must 400 MISSING_TEXT with no text and return
+// correct word/character/line/sentence counts otherwise.
+func TestAPILanguageWordCountHandler(t *testing.T) {
+	t.Run("missing text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/word-count", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguageWordCountHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_TEXT", env["error"])
+	})
+
+	t.Run("valid text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/word-count", strings.NewReader("Hello world. Foo bar!"))
+		w := httptest.NewRecorder()
+
+		apiLanguageWordCountHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(4), data["words"])
+		assert.Equal(t, float64(1), data["lines"])
+		assert.Equal(t, float64(2), data["sentences"])
+	})
+}
+
 // apiTestHTTPHandler must return 200 with a mock response and a numeric
 // duration_ms field.
 func TestAPITestHTTPHandler(t *testing.T) {

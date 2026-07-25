@@ -319,6 +319,8 @@ func New(cfg *config.Config) *http.Server {
 		// Language Tools
 		r.Route("/language", func(r chi.Router) {
 			r.Post("/detect", apiLanguageDetectHandler)
+			r.Get("/phonetic", apiLanguagePhoneticHandler)
+			r.Post("/word-count", apiLanguageWordCountHandler)
 		})
 
 		// Testing Tools
@@ -539,6 +541,8 @@ func toolPages() []toolPage {
 		{category: "image", tool: "crop", title: "Crop Image", description: "Upload an image and crop a region out of it"},
 		{category: "image", tool: "metadata", title: "Image Metadata", description: "Upload an image and inspect its dimensions, format, and size"},
 		{category: "image", tool: "convert", title: "Convert Image Format", description: "Upload an image and convert it to PNG, JPEG, or GIF"},
+		{category: "language", tool: "phonetic", title: "Phonetic Encoding", description: "Generate the Soundex and Metaphone phonetic codes for a word"},
+		{category: "language", tool: "word-count", title: "Word Count", description: "Count words, characters, lines, and sentences in text"},
 		{category: "text", tool: "encode", title: "Encode", description: "Encode text using base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "decode", title: "Decode", description: "Decode text encoded with base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "case", title: "Case Converter", description: "Convert text between upper, lower, title, camel, snake, kebab, and other case styles"},
