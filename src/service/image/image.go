@@ -118,6 +118,20 @@ func (s *Service) Rotate(degrees int) error {
 	return nil
 }
 
+// Bounds returns the pixel rectangle of the currently loaded image.
+func (s *Service) Bounds() image.Rectangle {
+	if s.img == nil {
+		return image.Rectangle{}
+	}
+	return s.img.Bounds()
+}
+
+// Format returns the format (png, jpeg, gif) the currently loaded image
+// was decoded from.
+func (s *Service) Format() string {
+	return s.format
+}
+
 // GetInfo reads image dimensions, format, and file size from a filesystem
 // path without decoding the full pixel data
 func (s *Service) GetInfo(imagePath string) (*ImageInfo, error) {

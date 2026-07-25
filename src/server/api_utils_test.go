@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,40 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// testPNG renders a small placeholder PNG (via the already-verified
+// placeholder handler) for use as fixture input to the resize/crop/metadata/
+// convert handler tests.
+func testPNG(t *testing.T) []byte {
+	t.Helper()
+	r := chi.NewRouter()
+	r.Get("/image/{width}/{height}", apiImagePlaceholderHandler)
+	req := httptest.NewRequest(http.MethodGet, "/image/20/20", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	return w.Body.Bytes()
+}
+
+// multipartImageRequest builds a multipart/form-data POST request carrying
+// the given image bytes under the "image" field plus any extra scalar form
+// fields, matching the browser tool-page upload forms.
+func multipartImageRequest(t *testing.T, target string, image []byte, fields map[string]string) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	fw, err := mw.CreateFormFile("image", "test.png")
+	require.NoError(t, err)
+	_, err = fw.Write(image)
+	require.NoError(t, err)
+	for k, v := range fields {
+		require.NoError(t, mw.WriteField(k, v))
+	}
+	require.NoError(t, mw.Close())
+	req := httptest.NewRequest(http.MethodPost, target, &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return req
+}
 
 // apiDockerVersionHandler must 400 MISSING_IMAGE with no ?image= and 200
 // with a parsed image breakdown when one is supplied.
@@ -385,5 +420,167 @@ func TestAPIImagePlaceholderHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
 		assert.True(t, bytes.HasPrefix(w.Body.Bytes(), []byte{0x89, 'P', 'N', 'G'}))
+	})
+}
+
+// apiImageResizeHandler must 400 on missing image / bad dimensions and
+// return a resized image on success, for both multipart uploads and raw
+// binary bodies.
+func TestAPIImageResizeHandler(t *testing.T) {
+	png := testPNG(t)
+
+	t.Run("missing image", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/resize?width=10&height=10", nil)
+		w := httptest.NewRecorder()
+
+		apiImageResizeHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid width", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/resize", png, map[string]string{"width": "0", "height": "10"})
+		w := httptest.NewRecorder()
+
+		apiImageResizeHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_WIDTH", env["error"])
+	})
+
+	t.Run("multipart upload", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/resize", png, map[string]string{"width": "10", "height": "10", "format": "png"})
+		w := httptest.NewRecorder()
+
+		apiImageResizeHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		assert.True(t, bytes.HasPrefix(w.Body.Bytes(), []byte{0x89, 'P', 'N', 'G'}))
+	})
+
+	t.Run("raw body upload", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/resize?width=10&height=10", bytes.NewReader(png))
+		w := httptest.NewRecorder()
+
+		apiImageResizeHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.True(t, bytes.HasPrefix(w.Body.Bytes(), []byte{0x89, 'P', 'N', 'G'}))
+	})
+}
+
+// apiImageCropHandler must 400 on missing image / bad region and return a
+// cropped image on success.
+func TestAPIImageCropHandler(t *testing.T) {
+	png := testPNG(t)
+
+	t.Run("missing image", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/crop?x=0&y=0&width=10&height=10", nil)
+		w := httptest.NewRecorder()
+
+		apiImageCropHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid width", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/crop", png, map[string]string{"x": "0", "y": "0", "width": "0", "height": "10"})
+		w := httptest.NewRecorder()
+
+		apiImageCropHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_WIDTH", env["error"])
+	})
+
+	t.Run("multipart upload", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/crop", png, map[string]string{"x": "0", "y": "0", "width": "10", "height": "10", "format": "png"})
+		w := httptest.NewRecorder()
+
+		apiImageCropHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		assert.True(t, bytes.HasPrefix(w.Body.Bytes(), []byte{0x89, 'P', 'N', 'G'}))
+	})
+}
+
+// apiImageMetadataHandler must 400 on missing/undecodable image and return
+// width/height/format/size on success.
+func TestAPIImageMetadataHandler(t *testing.T) {
+	png := testPNG(t)
+
+	t.Run("missing image", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/metadata", nil)
+		w := httptest.NewRecorder()
+
+		apiImageMetadataHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("undecodable image", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/metadata", []byte("not an image"), nil)
+		w := httptest.NewRecorder()
+
+		apiImageMetadataHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "IMAGE_DECODE_FAILED", env["error"])
+	})
+
+	t.Run("valid image", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/metadata", png, nil)
+		w := httptest.NewRecorder()
+
+		apiImageMetadataHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(20), data["width"])
+		assert.Equal(t, float64(20), data["height"])
+		assert.Equal(t, "png", data["format"])
+	})
+}
+
+// apiImageConvertHandler must 400 on missing image / missing format and
+// return the re-encoded image on success.
+func TestAPIImageConvertHandler(t *testing.T) {
+	png := testPNG(t)
+
+	t.Run("missing image", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/convert?format=jpeg", nil)
+		w := httptest.NewRecorder()
+
+		apiImageConvertHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("missing format", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/convert", png, nil)
+		w := httptest.NewRecorder()
+
+		apiImageConvertHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_FORMAT", env["error"])
+	})
+
+	t.Run("convert to jpeg", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/convert", png, map[string]string{"format": "jpeg"})
+		w := httptest.NewRecorder()
+
+		apiImageConvertHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/jpeg", w.Header().Get("Content-Type"))
 	})
 }

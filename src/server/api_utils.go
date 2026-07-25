@@ -991,6 +991,200 @@ func apiImagePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// imageContentType maps a decoded/output format name to its MIME type,
+// defaulting to PNG when the format is empty or unrecognized.
+func imageContentType(format string) string {
+	switch strings.ToLower(format) {
+	case "jpeg", "jpg":
+		return "image/jpeg"
+	case "gif":
+		return "image/gif"
+	default:
+		return "image/png"
+	}
+}
+
+// readUploadedImage reads the source image for the resize/crop/metadata/
+// convert handlers. It accepts either a multipart/form-data upload (field
+// name "image", matching the frontend tool-page forms) or a raw binary
+// request body (curl --data-binary), so the same endpoint serves both the
+// browser form and direct API callers.
+func readUploadedImage(r *http.Request) ([]byte, error) {
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(strings.ToLower(contentType), "multipart/form-data") {
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			return nil, fmt.Errorf("failed to parse uploaded image: %w", err)
+		}
+		file, _, err := r.FormFile("image")
+		if err != nil {
+			return nil, fmt.Errorf("image file is required")
+		}
+		defer file.Close()
+		return io.ReadAll(io.LimitReader(file, 1<<20))
+	}
+	return readRequestBody(r)
+}
+
+// apiImageResizeHandler decodes an uploaded image and returns it resized
+// to the requested width x height, in the requested (or original) format.
+func apiImageResizeHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := readUploadedImage(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		return
+	}
+
+	width, err := strconv.Atoi(r.FormValue("width"))
+	if err != nil || width <= 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
+		return
+	}
+	height, err := strconv.Atoi(r.FormValue("height"))
+	if err != nil || height <= 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+		return
+	}
+
+	svc := image.New()
+	if err := svc.Load(data); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		return
+	}
+	if err := svc.Resize(width, height); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_RESIZE_FAILED", err.Error(), nil)
+		return
+	}
+
+	format := r.FormValue("format")
+	out, err := svc.Bytes(orDefaultOutputFormat(format))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", imageContentType(format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(out)
+}
+
+// apiImageCropHandler decodes an uploaded image and returns the
+// x,y,width,height region cropped from it, in the requested (or original)
+// format.
+func apiImageCropHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := readUploadedImage(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		return
+	}
+
+	x, err := strconv.Atoi(r.FormValue("x"))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_X", "x must be an integer", nil)
+		return
+	}
+	y, err := strconv.Atoi(r.FormValue("y"))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_Y", "y must be an integer", nil)
+		return
+	}
+	width, err := strconv.Atoi(r.FormValue("width"))
+	if err != nil || width <= 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
+		return
+	}
+	height, err := strconv.Atoi(r.FormValue("height"))
+	if err != nil || height <= 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+		return
+	}
+
+	svc := image.New()
+	if err := svc.Load(data); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		return
+	}
+	if err := svc.Crop(x, y, width, height); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_CROP_FAILED", err.Error(), nil)
+		return
+	}
+
+	format := r.FormValue("format")
+	out, err := svc.Bytes(orDefaultOutputFormat(format))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", imageContentType(format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(out)
+}
+
+// apiImageMetadataHandler decodes an uploaded image and reports its
+// dimensions, format, and byte size as JSON.
+func apiImageMetadataHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := readUploadedImage(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		return
+	}
+
+	svc := image.New()
+	if err := svc.Load(data); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	bounds := svc.Bounds()
+	writeEnvelopeOK(w, http.StatusOK, image.ImageInfo{
+		Width:  bounds.Dx(),
+		Height: bounds.Dy(),
+		Format: svc.Format(),
+		Size:   int64(len(data)),
+	})
+}
+
+// apiImageConvertHandler decodes an uploaded image and re-encodes it in
+// the requested output format.
+func apiImageConvertHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := readUploadedImage(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		return
+	}
+
+	format := r.FormValue("format")
+	if format == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FORMAT", "format query parameter is required", nil)
+		return
+	}
+
+	svc := image.New()
+	if err := svc.Load(data); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	out, err := svc.Bytes(format)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", imageContentType(format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(out)
+}
+
+// orDefaultOutputFormat returns format unchanged when set, otherwise "png",
+// matching image.Service.Bytes' supported format set.
+func orDefaultOutputFormat(format string) string {
+	if format == "" {
+		return "png"
+	}
+	return format
+}
+
 // decodeJWTSegment base64url-decodes a single JWT segment (header or
 // payload) and parses it as JSON, tolerating both padded and unpadded
 // base64url encoding as produced by different JWT libraries.

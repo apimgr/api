@@ -359,6 +359,10 @@ func New(cfg *config.Config) *http.Server {
 		// Images
 		r.Route("/image", func(r chi.Router) {
 			r.Get("/placeholder/{width}/{height}", apiImagePlaceholderHandler)
+			r.Post("/resize", apiImageResizeHandler)
+			r.Post("/crop", apiImageCropHandler)
+			r.Post("/metadata", apiImageMetadataHandler)
+			r.Post("/convert", apiImageConvertHandler)
 		})
 	})
 
@@ -531,6 +535,10 @@ func toolPages() []toolPage {
 		{category: "dev", tool: "url-encode", title: "URL Encode/Decode", description: "Encode or decode text for safe use in URLs"},
 		{category: "validate", tool: "email", title: "Validate Email", description: "Check whether an email address is correctly formatted"},
 		{category: "image", tool: "placeholder", title: "Placeholder Image", description: "Generate a placeholder image of any size, format, and background color"},
+		{category: "image", tool: "resize", title: "Resize Image", description: "Upload an image and resize it to a new width and height"},
+		{category: "image", tool: "crop", title: "Crop Image", description: "Upload an image and crop a region out of it"},
+		{category: "image", tool: "metadata", title: "Image Metadata", description: "Upload an image and inspect its dimensions, format, and size"},
+		{category: "image", tool: "convert", title: "Convert Image Format", description: "Upload an image and convert it to PNG, JPEG, or GIF"},
 		{category: "text", tool: "encode", title: "Encode", description: "Encode text using base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "decode", title: "Decode", description: "Decode text encoded with base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "case", title: "Case Converter", description: "Convert text between upper, lower, title, camel, snake, kebab, and other case styles"},
