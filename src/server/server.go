@@ -463,6 +463,10 @@ func toolPages() []toolPage {
 		{category: "network", tool: "user-agent", title: "User-Agent Lookup", description: "Inspect the User-Agent header sent with the request"},
 		{category: "network", tool: "mac", title: "MAC Vendor Lookup", description: "Look up the hardware vendor for a MAC address"},
 		{category: "docker", tool: "version", title: "Docker Version", description: "Look up the latest available Docker Engine version"},
+		{category: "network", tool: "subnet", title: "Subnet Calculator", description: "Calculate network, broadcast, and host range details for a CIDR block"},
+		{category: "network", tool: "ula", title: "ULA Generator", description: "Generate an RFC 4193 IPv6 unique-local-address prefix"},
+		{category: "network", tool: "port", title: "Random Port", description: "Suggest a random unprivileged TCP/UDP port"},
+		{category: "weather", tool: "current", title: "Current Weather", description: "Get current weather conditions for a location"},
 	}
 }
 
