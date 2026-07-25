@@ -441,6 +441,116 @@ func TestAPIValidateUUIDHandler(t *testing.T) {
 	})
 }
 
+func TestAPIValidateIBANHandler(t *testing.T) {
+	t.Run("missing iban", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/iban", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateIBANHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_IBAN", env["error"])
+	})
+
+	t.Run("valid iban", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/iban", strings.NewReader(`{"iban":"GB29NWBK60161331926819"}`))
+		w := httptest.NewRecorder()
+		apiValidateIBANHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+
+	t.Run("invalid iban checksum", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/iban", strings.NewReader(`{"iban":"GB29NWBK60161331926818"}`))
+		w := httptest.NewRecorder()
+		apiValidateIBANHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, false, data["valid"])
+	})
+}
+
+func TestAPIValidateISBNHandler(t *testing.T) {
+	t.Run("missing isbn", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/isbn", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateISBNHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_ISBN", env["error"])
+	})
+
+	t.Run("valid isbn-13", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/isbn", strings.NewReader(`{"isbn":"978-3-16-148410-0"}`))
+		w := httptest.NewRecorder()
+		apiValidateISBNHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+
+	t.Run("valid isbn-10", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/isbn", strings.NewReader(`{"isbn":"0306406152"}`))
+		w := httptest.NewRecorder()
+		apiValidateISBNHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+
+	t.Run("invalid isbn checksum", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/isbn", strings.NewReader(`{"isbn":"978-3-16-148410-1"}`))
+		w := httptest.NewRecorder()
+		apiValidateISBNHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, false, data["valid"])
+	})
+}
+
+func TestAPIValidateVATHandler(t *testing.T) {
+	t.Run("missing vat", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/vat", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateVATHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_VAT", env["error"])
+	})
+
+	t.Run("valid vat format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/vat", strings.NewReader(`{"vat":"GB123456789"}`))
+		w := httptest.NewRecorder()
+		apiValidateVATHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+
+	t.Run("unknown country prefix", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/vat", strings.NewReader(`{"vat":"ZZ123456789"}`))
+		w := httptest.NewRecorder()
+		apiValidateVATHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, false, data["valid"])
+	})
+}
+
 // apiParseJSONHandler must 400 INVALID_JSON for malformed input and 200
 // for a valid document.
 func TestAPIParseJSONHandler(t *testing.T) {

@@ -1,0 +1,48 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+      <a href="/">Home</a> / <a href="/validate">Validators</a> / Validate VAT Number
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">Validate VAT Number</h1>
+        <button class="btn btn-icon" data-favorite="validate-vat" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Check an EU/UK/CH/NO VAT registration number's structural format
+        (2-letter country prefix plus that country's fixed-length body).
+      </p>
+
+      <form id="validate-vat-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/vat">
+        <div class="form-group">
+          <label class="form-label">Validate VAT Number</label>
+          <input type="text" name="vat" class="form-input" required placeholder="GB123456789">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Validate</button>
+      </form>
+
+      <div id="validate-vat-form-result" class="tool-result" style="display:none;"></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">POST Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/vat?vat=GB123456789"</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -873,6 +873,48 @@ func apiValidateUUIDHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// apiValidateIBANHandler validates an IBAN supplied as ?iban= or a JSON
+// {"iban":"..."} body against the ISO 13616 mod-97 checksum.
+func apiValidateIBANHandler(w http.ResponseWriter, r *http.Request) {
+	iban := queryOrJSONField(r, "iban")
+	if iban == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_IBAN", "iban is required (JSON body or ?iban= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"iban":  iban,
+		"valid": validateService.IsIBAN(iban),
+	})
+}
+
+// apiValidateISBNHandler validates an ISBN-10 or ISBN-13 supplied as
+// ?isbn= or a JSON {"isbn":"..."} body.
+func apiValidateISBNHandler(w http.ResponseWriter, r *http.Request) {
+	isbn := queryOrJSONField(r, "isbn")
+	if isbn == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ISBN", "isbn is required (JSON body or ?isbn= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"isbn":  isbn,
+		"valid": validateService.IsISBN(isbn),
+	})
+}
+
+// apiValidateVATHandler validates the structural format of an EU/UK/CH/NO
+// VAT registration number supplied as ?vat= or a JSON {"vat":"..."} body.
+func apiValidateVATHandler(w http.ResponseWriter, r *http.Request) {
+	vat := queryOrJSONField(r, "vat")
+	if vat == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_VAT", "vat is required (JSON body or ?vat= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"vat":   vat,
+		"valid": validateService.IsVAT(vat),
+	})
+}
+
 // apiParseJSONHandler parses the raw JSON document supplied in the
 // request body into a generic map.
 func apiParseJSONHandler(w http.ResponseWriter, r *http.Request) {

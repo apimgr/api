@@ -346,6 +346,9 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/phone", apiValidatePhoneHandler)
 			r.Post("/url", apiValidateURLHandler)
 			r.Post("/uuid", apiValidateUUIDHandler)
+			r.Post("/iban", apiValidateIBANHandler)
+			r.Post("/isbn", apiValidateISBNHandler)
+			r.Post("/vat", apiValidateVATHandler)
 		})
 
 		// Parsers
@@ -611,6 +614,9 @@ func toolPages() []toolPage {
 		{category: "validate", tool: "phone", title: "Validate Phone Number", description: "Check whether a string is a correctly formatted phone number"},
 		{category: "validate", tool: "url", title: "Validate URL", description: "Check whether a string is a correctly formatted URL"},
 		{category: "validate", tool: "uuid", title: "Validate UUID", description: "Check whether a string is a correctly formatted UUID"},
+		{category: "validate", tool: "iban", title: "Validate IBAN", description: "Check an IBAN against the ISO 13616 mod-97 checksum"},
+		{category: "validate", tool: "isbn", title: "Validate ISBN", description: "Check an ISBN-10 or ISBN-13 book number's check digit"},
+		{category: "validate", tool: "vat", title: "Validate VAT Number", description: "Check an EU/UK/CH/NO VAT number's structural format"},
 		{category: "image", tool: "placeholder", title: "Placeholder Image", description: "Generate a placeholder image of any size, format, and background color"},
 		{category: "image", tool: "resize", title: "Resize Image", description: "Upload an image and resize it to a new width and height"},
 		{category: "image", tool: "crop", title: "Crop Image", description: "Upload an image and crop a region out of it"},

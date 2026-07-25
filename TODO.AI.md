@@ -3,7 +3,7 @@ Read: AI.md PART 16 (frontend), src/server/template/page/*.tmpl
 Every sub-tool that mapped directly onto an existing, non-stub backend
 service method has now been wired end-to-end (template + `toolPages()`
 entry + frontend route + API route + tool-page test + handler test).
-100 tools are wired as of this pass:
+103 tools are wired as of this pass:
 convert/{length,temperature,time,volume,weight};
 crypto/{bcrypt,decrypt,encrypt,hash,hmac,jwt,password,password-strength,pin,random,rsa,totp};
 datetime/{add,convert,diff,now,timestamp,unix};
@@ -22,7 +22,7 @@ research/{citation,doi};
 testing/{assertions,fake-data,fixtures,http};
 text/{case,compress,decode,diff,encode,extract,hash,lorem,nanoid,regex,ulid,uuid};
 dev/regex;
-validate/{credit-card,domain,email,ip,json,mac,phone,url,uuid};
+validate/{credit-card,domain,email,iban,ip,isbn,json,mac,phone,url,uuid,vat};
 weather/{current,forecast}.
 Five JS executors in static/js/app.js cover every request shape used above:
 `executeTool` (query-string GET), `executeToolTemplate` (path-param GET),
@@ -32,7 +32,7 @@ This READY batch is exhausted — every remaining linked sub-tool below
 needs net-new backend service work (not just a template/route), which is
 scoped as its own body of work in the next section.
 
-## [ ] MISSING sub-tools needing net-new backend service work (140 linked, unwired)
+## [ ] MISSING sub-tools needing net-new backend service work (137 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -76,7 +76,6 @@ One commit per tool or small logical group when picked up.
   may already be covered by testing/http's `GenerateMockAPIResponse` or may
   need its own distinct implementation — needs a scoping decision before
   either is picked up)
-- validate (3): iban, isbn, vat
 - weather (10): air-quality, alerts, astronomy, historical, hourly, maps,
   marine, pollen, radar, uv
 
