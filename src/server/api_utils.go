@@ -60,6 +60,21 @@ func decodeJSONBody(r *http.Request, dst interface{}) error {
 	return json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(dst)
 }
 
+// queryOrJSONField reads a string field first from the ?{queryKey}= query
+// parameter, falling back to the same-named field in a JSON request body.
+// Shared by the single-value validate/* handlers so each one only needs to
+// know its own field name and validator function.
+func queryOrJSONField(r *http.Request, queryKey string) string {
+	if v := r.URL.Query().Get(queryKey); v != "" {
+		return v
+	}
+	var body map[string]string
+	if err := decodeJSONBody(r, &body); err == nil {
+		return body[queryKey]
+	}
+	return ""
+}
+
 // apiDockerVersionHandler parses a docker image reference passed as
 // ?image= and reports its registry/namespace/repository/tag breakdown.
 // docker.Service has no daemon-version concept; the closest available
@@ -715,6 +730,119 @@ func apiValidateEmailHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
 		"email": email,
 		"valid": validateService.IsEmail(email),
+	})
+}
+
+// apiValidateCreditCardHandler validates a credit card number (Luhn check)
+// supplied as ?number= or a JSON {"number":"..."} body.
+func apiValidateCreditCardHandler(w http.ResponseWriter, r *http.Request) {
+	number := queryOrJSONField(r, "number")
+	if number == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_NUMBER", "number is required (JSON body or ?number= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"number": number,
+		"valid":  validateService.IsCreditCard(number),
+	})
+}
+
+// apiValidateDomainHandler validates a domain name supplied as ?domain= or
+// a JSON {"domain":"..."} body.
+func apiValidateDomainHandler(w http.ResponseWriter, r *http.Request) {
+	domain := queryOrJSONField(r, "domain")
+	if domain == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required (JSON body or ?domain= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"domain": domain,
+		"valid":  validateService.IsDomain(domain),
+	})
+}
+
+// apiValidateIPHandler validates an IPv4 or IPv6 address supplied as ?ip=
+// or a JSON {"ip":"..."} body.
+func apiValidateIPHandler(w http.ResponseWriter, r *http.Request) {
+	ip := queryOrJSONField(r, "ip")
+	if ip == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_IP", "ip is required (JSON body or ?ip= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"ip":      ip,
+		"valid":   validateService.IsIP(ip),
+		"is_ipv4": validateService.IsIPv4(ip),
+		"is_ipv6": validateService.IsIPv6(ip),
+	})
+}
+
+// apiValidateJSONHandler validates that the raw request body is
+// well-formed JSON.
+func apiValidateJSONHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "READ_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"valid": validateService.IsJSON(string(body)),
+	})
+}
+
+// apiValidateMACHandler validates a MAC address supplied as ?mac= or a
+// JSON {"mac":"..."} body.
+func apiValidateMACHandler(w http.ResponseWriter, r *http.Request) {
+	mac := queryOrJSONField(r, "mac")
+	if mac == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MAC", "mac is required (JSON body or ?mac= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"mac":   mac,
+		"valid": validateService.IsMAC(mac),
+	})
+}
+
+// apiValidatePhoneHandler validates a phone number supplied as ?phone= or
+// a JSON {"phone":"..."} body.
+func apiValidatePhoneHandler(w http.ResponseWriter, r *http.Request) {
+	phone := queryOrJSONField(r, "phone")
+	if phone == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PHONE", "phone is required (JSON body or ?phone= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"phone": phone,
+		"valid": validateService.IsPhone(phone),
+	})
+}
+
+// apiValidateURLHandler validates a URL supplied as ?url= or a JSON
+// {"url":"..."} body.
+func apiValidateURLHandler(w http.ResponseWriter, r *http.Request) {
+	rawURL := queryOrJSONField(r, "url")
+	if rawURL == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_URL", "url is required (JSON body or ?url= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"url":   rawURL,
+		"valid": validateService.IsURL(rawURL),
+	})
+}
+
+// apiValidateUUIDHandler validates a UUID supplied as ?uuid= or a JSON
+// {"uuid":"..."} body.
+func apiValidateUUIDHandler(w http.ResponseWriter, r *http.Request) {
+	uuidStr := queryOrJSONField(r, "uuid")
+	if uuidStr == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_UUID", "uuid is required (JSON body or ?uuid= query parameter)", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"uuid":  uuidStr,
+		"valid": validateService.IsUUID(uuidStr),
 	})
 }
 

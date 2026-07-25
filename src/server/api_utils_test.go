@@ -233,6 +233,185 @@ func TestAPIValidateEmailHandler(t *testing.T) {
 	})
 }
 
+func TestAPIValidateCreditCardHandler(t *testing.T) {
+	t.Run("missing number", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/credit-card", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateCreditCardHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_NUMBER", env["error"])
+	})
+
+	t.Run("valid number", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/credit-card", strings.NewReader(`{"number":"4111111111111111"}`))
+		w := httptest.NewRecorder()
+		apiValidateCreditCardHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+}
+
+func TestAPIValidateDomainHandler(t *testing.T) {
+	t.Run("missing domain", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/domain", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateDomainHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DOMAIN", env["error"])
+	})
+
+	t.Run("valid domain via query", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/domain?domain=example.com", nil)
+		w := httptest.NewRecorder()
+		apiValidateDomainHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+}
+
+func TestAPIValidateIPHandler(t *testing.T) {
+	t.Run("missing ip", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/ip", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateIPHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_IP", env["error"])
+	})
+
+	t.Run("valid ipv4", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/ip", strings.NewReader(`{"ip":"192.168.1.1"}`))
+		w := httptest.NewRecorder()
+		apiValidateIPHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+		assert.Equal(t, true, data["is_ipv4"])
+	})
+}
+
+func TestAPIValidateJSONHandler(t *testing.T) {
+	t.Run("valid json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/json", strings.NewReader(`{"a":1}`))
+		w := httptest.NewRecorder()
+		apiValidateJSONHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/json", strings.NewReader(`{not json`))
+		w := httptest.NewRecorder()
+		apiValidateJSONHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, false, data["valid"])
+	})
+}
+
+func TestAPIValidateMACHandler(t *testing.T) {
+	t.Run("missing mac", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/mac", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateMACHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_MAC", env["error"])
+	})
+
+	t.Run("valid mac", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/mac", strings.NewReader(`{"mac":"00:1A:2B:3C:4D:5E"}`))
+		w := httptest.NewRecorder()
+		apiValidateMACHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+}
+
+func TestAPIValidatePhoneHandler(t *testing.T) {
+	t.Run("missing phone", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/phone", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidatePhoneHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PHONE", env["error"])
+	})
+
+	t.Run("valid phone", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/phone", strings.NewReader(`{"phone":"+14155552671"}`))
+		w := httptest.NewRecorder()
+		apiValidatePhoneHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+}
+
+func TestAPIValidateURLHandler(t *testing.T) {
+	t.Run("missing url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/url", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateURLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_URL", env["error"])
+	})
+
+	t.Run("valid url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/url", strings.NewReader(`{"url":"https://example.com"}`))
+		w := httptest.NewRecorder()
+		apiValidateURLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+}
+
+func TestAPIValidateUUIDHandler(t *testing.T) {
+	t.Run("missing uuid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/uuid", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiValidateUUIDHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_UUID", env["error"])
+	})
+
+	t.Run("valid uuid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/validate/uuid", strings.NewReader(`{"uuid":"550e8400-e29b-41d4-a716-446655440000"}`))
+		w := httptest.NewRecorder()
+		apiValidateUUIDHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+}
+
 // apiParseJSONHandler must 400 INVALID_JSON for malformed input and 200
 // for a valid document.
 func TestAPIParseJSONHandler(t *testing.T) {

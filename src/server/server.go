@@ -309,6 +309,14 @@ func New(cfg *config.Config) *http.Server {
 		// Validators
 		r.Route("/validate", func(r chi.Router) {
 			r.Post("/email", apiValidateEmailHandler)
+			r.Post("/credit-card", apiValidateCreditCardHandler)
+			r.Post("/domain", apiValidateDomainHandler)
+			r.Post("/ip", apiValidateIPHandler)
+			r.Post("/json", apiValidateJSONHandler)
+			r.Post("/mac", apiValidateMACHandler)
+			r.Post("/phone", apiValidatePhoneHandler)
+			r.Post("/url", apiValidateURLHandler)
+			r.Post("/uuid", apiValidateUUIDHandler)
 		})
 
 		// Parsers
@@ -558,6 +566,14 @@ func toolPages() []toolPage {
 		{category: "dev", tool: "base64", title: "Base64 Encode/Decode", description: "Encode or decode text using standard or URL-safe base64"},
 		{category: "dev", tool: "url-encode", title: "URL Encode/Decode", description: "Encode or decode text for safe use in URLs"},
 		{category: "validate", tool: "email", title: "Validate Email", description: "Check whether an email address is correctly formatted"},
+		{category: "validate", tool: "credit-card", title: "Validate Credit Card", description: "Check a credit card number against the Luhn algorithm"},
+		{category: "validate", tool: "domain", title: "Validate Domain", description: "Check whether a domain name is correctly formatted"},
+		{category: "validate", tool: "ip", title: "Validate IP Address", description: "Check whether a string is a valid IPv4 or IPv6 address"},
+		{category: "validate", tool: "json", title: "Validate JSON", description: "Check whether a request body is well-formed JSON"},
+		{category: "validate", tool: "mac", title: "Validate MAC Address", description: "Check whether a string is a correctly formatted MAC address"},
+		{category: "validate", tool: "phone", title: "Validate Phone Number", description: "Check whether a string is a correctly formatted phone number"},
+		{category: "validate", tool: "url", title: "Validate URL", description: "Check whether a string is a correctly formatted URL"},
+		{category: "validate", tool: "uuid", title: "Validate UUID", description: "Check whether a string is a correctly formatted UUID"},
 		{category: "image", tool: "placeholder", title: "Placeholder Image", description: "Generate a placeholder image of any size, format, and background color"},
 		{category: "image", tool: "resize", title: "Resize Image", description: "Upload an image and resize it to a new width and height"},
 		{category: "image", tool: "crop", title: "Crop Image", description: "Upload an image and crop a region out of it"},
