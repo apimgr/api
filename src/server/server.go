@@ -345,6 +345,8 @@ func New(cfg *config.Config) *http.Server {
 		// Lorem & Fake Data
 		r.Route("/lorem", func(r chi.Router) {
 			r.Get("/person", apiLoremPersonHandler)
+			r.Get("/address", apiLoremAddressHandler)
+			r.Get("/company", apiLoremCompanyHandler)
 		})
 
 		// Developer Tools
@@ -520,6 +522,8 @@ func toolPages() []toolPage {
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
 		{category: "fun", tool: "fortune", title: "Random Fortune", description: "Get a single random fortune-cookie style saying"},
 		{category: "lorem", tool: "person", title: "Fake Person", description: "Generate a fake person with a name, email, and phone number"},
+		{category: "lorem", tool: "address", title: "Fake Address", description: "Generate a fake street address"},
+		{category: "lorem", tool: "company", title: "Fake Company", description: "Generate a fake company name and catchphrase"},
 		{category: "testing", tool: "http", title: "Mock HTTP Response", description: "Generate a mock API response fixture and measure execution time"},
 		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
 		{category: "dev", tool: "format-json", title: "Format JSON", description: "Pretty-print and re-indent a raw JSON document"},

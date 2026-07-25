@@ -841,6 +841,26 @@ func apiLoremPersonHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, person)
 }
 
+// apiLoremAddressHandler generates a fake street address.
+func apiLoremAddressHandler(w http.ResponseWriter, r *http.Request) {
+	address, err := loremService.Address()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, address)
+}
+
+// apiLoremCompanyHandler generates a fake company name and catchphrase.
+func apiLoremCompanyHandler(w http.ResponseWriter, r *http.Request) {
+	company, err := loremService.Company()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, company)
+}
+
 // apiDevFormatJSONHandler pretty-prints the raw JSON document supplied in
 // the request body.
 // apiDevBase64Handler encodes or decodes the raw request body as base64
