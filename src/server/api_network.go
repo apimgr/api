@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/apimgr/api/src/service/network"
 	"github.com/go-chi/chi/v5"
@@ -75,6 +76,104 @@ func apiNetworkPortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]int{"port": port})
+}
+
+// apiNetworkPingHandler measures TCP connect round-trip latency to ?host=
+// (optionally ?count=, default 4, max 20) using network.Service.Ping.
+func apiNetworkPingHandler(w http.ResponseWriter, r *http.Request) {
+	host := r.URL.Query().Get("host")
+	if host == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_HOST", "host query parameter is required", nil)
+		return
+	}
+
+	count := 4
+	if countParam := r.URL.Query().Get("count"); countParam != "" {
+		parsed, err := strconv.Atoi(countParam)
+		if err != nil || parsed <= 0 {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a positive integer", nil)
+			return
+		}
+		count = parsed
+	}
+
+	result, err := networkService.Ping(host, count)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "PING_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiNetworkSSLHandler reports the leaf TLS certificate details for ?host=
+// using network.Service.SSLInfo.
+func apiNetworkSSLHandler(w http.ResponseWriter, r *http.Request) {
+	host := r.URL.Query().Get("host")
+	if host == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_HOST", "host query parameter is required", nil)
+		return
+	}
+
+	result, err := networkService.SSLInfo(host)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "SSL_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiNetworkURLHandler parses ?url= into its component parts using
+// network.Service.ParseURL.
+func apiNetworkURLHandler(w http.ResponseWriter, r *http.Request) {
+	rawURL := r.URL.Query().Get("url")
+	if rawURL == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_URL", "url query parameter is required", nil)
+		return
+	}
+
+	result, err := networkService.ParseURL(rawURL)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_URL", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiNetworkWhoisHandler looks up WHOIS information for ?domain= using
+// network.Service.Whois.
+func apiNetworkWhoisHandler(w http.ResponseWriter, r *http.Request) {
+	domain := r.URL.Query().Get("domain")
+	if domain == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain query parameter is required", nil)
+		return
+	}
+
+	result, err := networkService.Whois(domain)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "WHOIS_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"domain": domain,
+		"raw":    result,
+	})
+}
+
+// apiNetworkTracerouteHandler honestly reports 501 NOT_SUPPORTED: a real
+// traceroute requires sending TTL-limited probes and receiving ICMP
+// time-exceeded replies, which needs a raw ICMP socket (CAP_NET_RAW or
+// root). This project ships as an unprivileged, non-root, self-contained
+// binary with no guarantee of that capability on the host it runs on, so
+// this honestly reports unsupported rather than shipping a fake
+// TCP-connect approximation mislabeled as "traceroute". See TODO.AI.md
+// "Known permanent API gaps" for the same pattern applied to generate/qr,
+// language/detect, and research/extract.
+func apiNetworkTracerouteHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "traceroute requires a raw ICMP socket (CAP_NET_RAW/root), which this unprivileged self-contained binary cannot assume it has", nil)
 }
 
 // writeEnvelopeOK writes a PART 14 success envelope: {"ok":true,"data":...}.

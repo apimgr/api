@@ -2,11 +2,15 @@ package network
 
 import (
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/apimgr/api/src/service/parse"
 )
@@ -260,4 +264,244 @@ func (s *Service) RandomPort() (int, error) {
 		return 0, fmt.Errorf("failed to generate random port: %w", err)
 	}
 	return unprivilegedPortMin + int(n.Int64()), nil
+}
+
+// PingResult reports round-trip TCP connect latency statistics for a host.
+type PingResult struct {
+	Host              string    `json:"host"`
+	PacketsSent       int       `json:"packets_sent"`
+	PacketsReceived   int       `json:"packets_received"`
+	PacketLossPercent float64   `json:"packet_loss_percent"`
+	MinMs             float64   `json:"min_ms"`
+	MaxMs             float64   `json:"max_ms"`
+	AvgMs             float64   `json:"avg_ms"`
+	TimesMs           []float64 `json:"times_ms"`
+}
+
+// pingDialTimeout bounds a single TCP connect attempt made by Ping.
+const pingDialTimeout = 3 * time.Second
+
+// Ping measures TCP connect round-trip latency to host, count times.
+//
+// A raw ICMP echo (the traditional "ping") requires either a
+// CAP_NET_RAW-privileged raw socket or root, which an unprivileged
+// self-contained binary running as a non-root user cannot assume it has.
+// Measuring the TCP handshake round-trip time to the host (defaulting to
+// port 80 when host has no port of its own) is the closest privilege-free
+// equivalent and needs no elevated capabilities to run anywhere the binary
+// is deployed.
+func (s *Service) Ping(host string, count int) (*PingResult, error) {
+	if host == "" {
+		return nil, fmt.Errorf("host is required")
+	}
+	if count <= 0 {
+		count = 4
+	}
+	if count > 20 {
+		count = 20
+	}
+
+	target := host
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		target = net.JoinHostPort(host, "80")
+	}
+
+	var times []float64
+	received := 0
+	for i := 0; i < count; i++ {
+		start := time.Now()
+		conn, err := net.DialTimeout("tcp", target, pingDialTimeout)
+		if err != nil {
+			continue
+		}
+		times = append(times, float64(time.Since(start).Microseconds())/1000)
+		received++
+		conn.Close()
+	}
+	if received == 0 {
+		return nil, fmt.Errorf("host %q did not respond to any of %d connection attempts", host, count)
+	}
+
+	min, max, sum := times[0], times[0], 0.0
+	for _, t := range times {
+		if t < min {
+			min = t
+		}
+		if t > max {
+			max = t
+		}
+		sum += t
+	}
+
+	return &PingResult{
+		Host:              host,
+		PacketsSent:       count,
+		PacketsReceived:   received,
+		PacketLossPercent: float64(count-received) / float64(count) * 100,
+		MinMs:             min,
+		MaxMs:             max,
+		AvgMs:             sum / float64(len(times)),
+		TimesMs:           times,
+	}, nil
+}
+
+// SSLCertInfo describes the leaf certificate presented by a TLS server.
+type SSLCertInfo struct {
+	Host            string    `json:"host"`
+	Subject         string    `json:"subject"`
+	Issuer          string    `json:"issuer"`
+	NotBefore       time.Time `json:"not_before"`
+	NotAfter        time.Time `json:"not_after"`
+	DNSNames        []string  `json:"dns_names"`
+	SerialNumber    string    `json:"serial_number"`
+	IsExpired       bool      `json:"is_expired"`
+	DaysUntilExpiry int       `json:"days_until_expiry"`
+}
+
+// sslDialTimeout bounds the TLS handshake made by SSLInfo.
+const sslDialTimeout = 5 * time.Second
+
+// SSLInfo connects to host over TLS (defaulting to port 443 when host has
+// no port of its own) and reports the leaf certificate's subject, issuer,
+// validity window, and SANs.
+func (s *Service) SSLInfo(host string) (*SSLCertInfo, error) {
+	if host == "" {
+		return nil, fmt.Errorf("host is required")
+	}
+
+	target := host
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		target = net.JoinHostPort(host, "443")
+	}
+	hostOnly, _, _ := net.SplitHostPort(target)
+
+	dialer := &net.Dialer{Timeout: sslDialTimeout}
+	conn, err := tls.DialWithDialer(dialer, "tcp", target, &tls.Config{ServerName: hostOnly})
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish TLS connection to %q: %w", host, err)
+	}
+	defer conn.Close()
+
+	certs := conn.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return nil, fmt.Errorf("host %q presented no certificate", host)
+	}
+	cert := certs[0]
+	now := time.Now()
+
+	return &SSLCertInfo{
+		Host:            host,
+		Subject:         cert.Subject.String(),
+		Issuer:          cert.Issuer.String(),
+		NotBefore:       cert.NotBefore,
+		NotAfter:        cert.NotAfter,
+		DNSNames:        cert.DNSNames,
+		SerialNumber:    cert.SerialNumber.String(),
+		IsExpired:       now.After(cert.NotAfter),
+		DaysUntilExpiry: int(cert.NotAfter.Sub(now).Hours() / 24),
+	}, nil
+}
+
+// URLInfo breaks a URL down into its component parts.
+type URLInfo struct {
+	Scheme   string              `json:"scheme"`
+	User     string              `json:"user,omitempty"`
+	Host     string              `json:"host"`
+	Hostname string              `json:"hostname"`
+	Port     string              `json:"port,omitempty"`
+	Path     string              `json:"path"`
+	RawQuery string              `json:"raw_query,omitempty"`
+	Query    map[string][]string `json:"query,omitempty"`
+	Fragment string              `json:"fragment,omitempty"`
+}
+
+// ParseURL parses raw into its component parts (scheme, host, path, query,
+// fragment, etc.) using the standard library URL parser. raw must include
+// both a scheme and a host.
+func (s *Service) ParseURL(raw string) (*URLInfo, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return nil, fmt.Errorf("URL must include a scheme and host")
+	}
+
+	username := ""
+	if u.User != nil {
+		username = u.User.Username()
+	}
+
+	return &URLInfo{
+		Scheme:   u.Scheme,
+		User:     username,
+		Host:     u.Host,
+		Hostname: u.Hostname(),
+		Port:     u.Port(),
+		Path:     u.Path,
+		RawQuery: u.RawQuery,
+		Query:    map[string][]string(u.Query()),
+		Fragment: u.Fragment,
+	}, nil
+}
+
+// whoisDialTimeout bounds each TCP connection made by Whois.
+const whoisDialTimeout = 5 * time.Second
+
+// whoisQuery sends a plain WHOIS (RFC 3912) query for domain to server on
+// port 43 and returns the raw text response.
+func whoisQuery(server, domain string) (string, error) {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(server, "43"), whoisDialTimeout)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach whois server %q: %w", server, err)
+	}
+	defer conn.Close()
+
+	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		return "", fmt.Errorf("failed to set connection deadline: %w", err)
+	}
+	if _, err := conn.Write([]byte(domain + "\r\n")); err != nil {
+		return "", fmt.Errorf("failed to send whois query: %w", err)
+	}
+
+	data, err := io.ReadAll(conn)
+	if err != nil && len(data) == 0 {
+		return "", fmt.Errorf("failed to read whois response: %w", err)
+	}
+	return string(data), nil
+}
+
+// Whois looks up WHOIS information for domain. It queries the IANA root
+// whois server first, follows its "refer:" line to the domain's
+// authoritative registry whois server, and returns that server's response
+// (falling back to the IANA response if no referral is given or the
+// referred server cannot be reached).
+func (s *Service) Whois(domain string) (string, error) {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		return "", fmt.Errorf("domain is required")
+	}
+
+	raw, err := whoisQuery("whois.iana.org", domain)
+	if err != nil {
+		return "", err
+	}
+
+	referServer := ""
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToLower(line), "refer:") {
+			referServer = strings.TrimSpace(line[len("refer:"):])
+			break
+		}
+	}
+	if referServer == "" {
+		return raw, nil
+	}
+
+	detailed, err := whoisQuery(referServer, domain)
+	if err != nil {
+		return raw, nil
+	}
+	return detailed, nil
 }

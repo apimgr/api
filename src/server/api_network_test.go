@@ -165,6 +165,121 @@ func TestAPINetworkPortHandler(t *testing.T) {
 	assert.NotNil(t, data["port"])
 }
 
+// apiNetworkPingHandler must 400 with MISSING_HOST when ?host= is absent
+// and 400 with INVALID_COUNT for a non-positive ?count=. The live-network
+// success path is not exercised here to avoid CI flakiness (see
+// TestAPIOsintDomainHandler for the same pattern).
+func TestAPINetworkPingHandler(t *testing.T) {
+	t.Run("missing host", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/network/ping", nil)
+		w := httptest.NewRecorder()
+
+		apiNetworkPingHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_HOST", env["error"])
+	})
+
+	t.Run("invalid count", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/network/ping?host=example.com&count=0", nil)
+		w := httptest.NewRecorder()
+
+		apiNetworkPingHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_COUNT", env["error"])
+	})
+}
+
+// apiNetworkSSLHandler must 400 with MISSING_HOST when ?host= is absent.
+// The live-network success path is not exercised here to avoid CI flakiness.
+func TestAPINetworkSSLHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/network/ssl", nil)
+	w := httptest.NewRecorder()
+
+	apiNetworkSSLHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "MISSING_HOST", env["error"])
+}
+
+// apiNetworkURLHandler must 400 with MISSING_URL when ?url= is absent, 400
+// with INVALID_URL for a URL missing a scheme/host, and 200 with the parsed
+// components for a well-formed URL. url.Parse has no network dependency, so
+// the success path is safe to test deterministically.
+func TestAPINetworkURLHandler(t *testing.T) {
+	t.Run("missing url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/network/url", nil)
+		w := httptest.NewRecorder()
+
+		apiNetworkURLHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_URL", env["error"])
+	})
+
+	t.Run("invalid url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/network/url?url=%2Fjust%2Fa%2Fpath", nil)
+		w := httptest.NewRecorder()
+
+		apiNetworkURLHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_URL", env["error"])
+	})
+
+	t.Run("valid url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/network/url?url=https%3A%2F%2Fuser%40example.com%3A8443%2Fpath%3Fa%3D1%23frag", nil)
+		w := httptest.NewRecorder()
+
+		apiNetworkURLHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, true, env["ok"])
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "https", data["scheme"])
+		assert.Equal(t, "example.com", data["hostname"])
+		assert.Equal(t, "8443", data["port"])
+		assert.Equal(t, "/path", data["path"])
+		assert.Equal(t, "frag", data["fragment"])
+	})
+}
+
+// apiNetworkWhoisHandler must 400 with MISSING_DOMAIN when ?domain= is
+// absent. The live-network success path is not exercised here to avoid CI
+// flakiness.
+func TestAPINetworkWhoisHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/network/whois", nil)
+	w := httptest.NewRecorder()
+
+	apiNetworkWhoisHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+}
+
+// apiNetworkTracerouteHandler honestly reports 501 NOT_SUPPORTED, matching
+// the same pattern as apiGenerateQRHandler/apiLanguageDetectHandler.
+func TestAPINetworkTracerouteHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/network/traceroute", nil)
+	w := httptest.NewRecorder()
+
+	apiNetworkTracerouteHandler(w, req)
+
+	assert.Equal(t, http.StatusNotImplemented, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, false, env["ok"])
+	assert.Equal(t, "NOT_SUPPORTED", env["error"])
+}
+
 // writeEnvelopeOK/writeEnvelopeError must emit the PART 14 envelope shape
 // exactly, and writeEnvelopeError must only include "details" when non-nil.
 func TestWriteEnvelopeHelpers(t *testing.T) {

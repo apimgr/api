@@ -289,6 +289,11 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/port", apiNetworkPortHandler)
 			r.Get("/dns/{domain}", apiNetworkDNSHandler)
 			r.Get("/dns/{domain}/{type}", apiNetworkDNSHandler)
+			r.Get("/ping", apiNetworkPingHandler)
+			r.Get("/ssl", apiNetworkSSLHandler)
+			r.Get("/url", apiNetworkURLHandler)
+			r.Get("/whois", apiNetworkWhoisHandler)
+			r.Get("/traceroute", apiNetworkTracerouteHandler)
 		})
 
 		// Docker utilities
@@ -568,6 +573,10 @@ func toolPages() []toolPage {
 		{category: "network", tool: "subnet", title: "Subnet Calculator", description: "Calculate network, broadcast, and host range details for a CIDR block"},
 		{category: "network", tool: "ula", title: "ULA Generator", description: "Generate an RFC 4193 IPv6 unique-local-address prefix"},
 		{category: "network", tool: "port", title: "Random Port", description: "Suggest a random unprivileged TCP/UDP port"},
+		{category: "network", tool: "ping", title: "Ping Tool", description: "Measure TCP connect round-trip latency to a host"},
+		{category: "network", tool: "ssl", title: "SSL Certificate Info", description: "Check SSL certificate subject, issuer, and validity for a host"},
+		{category: "network", tool: "url", title: "URL Parser", description: "Parse and analyze a URL into its component parts"},
+		{category: "network", tool: "whois", title: "WHOIS Lookup", description: "Look up domain and IP WHOIS registration information"},
 		{category: "weather", tool: "current", title: "Current Weather", description: "Get current weather conditions for a location"},
 		{category: "weather", tool: "forecast", title: "Weather Forecast", description: "Get a 1-16 day weather forecast for a location"},
 		{category: "geo", tool: "ip", title: "IP Geolocation", description: "Look up geolocation details for a public IP address"},

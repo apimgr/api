@@ -32,7 +32,16 @@ This READY batch is exhausted — every remaining linked sub-tool below
 needs net-new backend service work (not just a template/route), which is
 scoped as its own body of work in the next section.
 
-## [ ] MISSING sub-tools needing net-new backend service work (133 linked, unwired)
+network/{ping,ssl,url,whois} were wired in a follow-up batch (net-new
+`network.Service` methods: TCP-connect `Ping`, TLS-handshake `SSLInfo`,
+stdlib `ParseURL`, RFC 3912 two-hop `Whois`), bringing the wired total to
+111. `network/traceroute` was found to be a genuine permanent API gap (see
+"Known permanent API gaps" below) rather than a wireable tool, and
+`network/useragent` remains the known broken-link duplicate of the
+already-wired `user-agent` (see "Known template bugs" below) — so the
+MISSING network line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (129 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -60,9 +69,6 @@ One commit per tool or small logical group when picked up.
 - image (7): avatar, barcode, filter, identicon, optimize, qr, watermark
 - language (10): detect, dictionary, grammar, keywords, readability,
   reading-time, sentiment, spell-check, thesaurus, translate
-- network (6): ping, ssl, traceroute, url, useragent, whois
-  (`useragent` here is the broken-link duplicate of the already-wired
-  `user-agent` — see bug list below, not a real missing tool)
 - osint (8): breach, company, metadata, phone, social, subdomain,
   tech-stack, username
 - parse (8): env, html, ini, log, markdown, sql, toml, yaml
@@ -87,13 +93,22 @@ One commit per tool or small logical group when picked up.
 
 ## [ ] Known permanent API gaps needing a future spec/dependency decision
 Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,
-apiResearchExtractHandler doc comments)
-Three of the wired API routes honestly return 501 NOT_SUPPORTED rather
+apiResearchExtractHandler doc comments), src/server/api_network.go
+(apiNetworkTracerouteHandler doc comment)
+Four of the wired API routes honestly return 501 NOT_SUPPORTED rather
 than inventing behavior: generate/qr (no QR encoder exists anywhere in the
 codebase or go.mod), language/detect (conflicts with IDEA.md's declared
-non-goal of language auto-detection), and research/extract (research.go's
+non-goal of language auto-detection), research/extract (research.go's
 own source comment documents citation extraction from unstructured text as
-unimplemented). Resolving these requires a user/spec decision — either add
-a QR-encoding dependency, confirm language/detect should stay unsupported
-per IDEA.md, or scope what "extraction" means for research/extract — not
-further code guessing.
+unimplemented), and network/traceroute (a real traceroute needs TTL-limited
+probes and ICMP time-exceeded replies, which requires a raw ICMP socket —
+CAP_NET_RAW or root — that this unprivileged self-contained binary cannot
+assume it has on the host it runs on). Resolving these requires a
+user/spec decision — either add a QR-encoding dependency, confirm
+language/detect should stay unsupported per IDEA.md, scope what
+"extraction" means for research/extract, or decide whether
+network/traceroute should ship as a root-only opt-in feature instead of a
+permanent gap — not further code guessing. `network/traceroute` has no
+`toolPages()` entry or frontend template, matching the pattern already
+used for generate/qr and language/detect (API-only, no dead frontend link
+to a page that doesn't exist).
