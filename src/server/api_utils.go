@@ -730,6 +730,17 @@ func apiFunJokeHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// apiFunFortuneHandler returns a single random fortune-cookie style saying
+// from funService.Fortune, independent of the joke-type composite endpoint.
+func apiFunFortuneHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.Fortune()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "FORTUNE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
 // apiLoremPersonHandler generates a fake person (name/email/phone).
 func apiLoremPersonHandler(w http.ResponseWriter, r *http.Request) {
 	person, err := loremService.Person()
