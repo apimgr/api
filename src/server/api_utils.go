@@ -221,6 +221,89 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// apiMathPrimeHandler reports whether the {n} path parameter is a prime
+// number, using math.Service.IsPrime.
+func apiMathPrimeHandler(w http.ResponseWriter, r *http.Request) {
+	nParam := chi.URLParam(r, "n")
+	n, err := strconv.ParseInt(nParam, 10, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "n must be an integer", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"n":        n,
+		"is_prime": mathService.IsPrime(n),
+	})
+}
+
+// apiMathRandomHandler returns a random integer in the inclusive range
+// [{min}, {max}] using math.Service.RandomInt.
+func apiMathRandomHandler(w http.ResponseWriter, r *http.Request) {
+	minParam := chi.URLParam(r, "min")
+	maxParam := chi.URLParam(r, "max")
+
+	minVal, err := strconv.ParseInt(minParam, 10, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "min must be an integer", nil)
+		return
+	}
+	maxVal, err := strconv.ParseInt(maxParam, 10, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "max must be an integer", nil)
+		return
+	}
+	if minVal > maxVal {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_RANGE", "min must be less than or equal to max", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"min":    minVal,
+		"max":    maxVal,
+		"result": mathService.RandomInt(minVal, maxVal),
+	})
+}
+
+// apiMathStatsHandler computes min/max/sum/average/median over the
+// comma-separated ?numbers= query parameter, using the corresponding
+// math.Service methods.
+func apiMathStatsHandler(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("numbers")
+	if raw == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_NUMBERS", "numbers query parameter is required (comma-separated)", nil)
+		return
+	}
+
+	parts := strings.Split(raw, ",")
+	numbers := make([]float64, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		v, err := strconv.ParseFloat(trimmed, 64)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_NUMBER", "numbers must be a comma-separated list of numeric values", nil)
+			return
+		}
+		numbers = append(numbers, v)
+	}
+	if len(numbers) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_NUMBERS", "numbers query parameter is required (comma-separated)", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"count":   len(numbers),
+		"min":     mathService.Min(numbers),
+		"max":     mathService.Max(numbers),
+		"sum":     mathService.Sum(numbers),
+		"average": mathService.Average(numbers),
+		"median":  mathService.Median(numbers),
+	})
+}
+
 // lengthConversions maps a "from-to" unit pair to the convert.Service
 // bidirectional function that implements it. Only pairs actually
 // exported by convert.Service are listed; unlisted pairs return

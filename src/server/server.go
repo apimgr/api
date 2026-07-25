@@ -280,6 +280,9 @@ func New(cfg *config.Config) *http.Server {
 		// Math
 		r.Route("/math", func(r chi.Router) {
 			r.Get("/calculate", apiMathCalculateHandler)
+			r.Get("/prime/{n}", apiMathPrimeHandler)
+			r.Get("/random/{min}/{max}", apiMathRandomHandler)
+			r.Get("/stats", apiMathStatsHandler)
 		})
 
 		// Unit Conversion
@@ -489,6 +492,13 @@ func toolPages() []toolPage {
 		{category: "convert", tool: "volume", title: "Volume Converter", description: "Convert a volume value between gallons and liters"},
 		{category: "convert", tool: "time", title: "Time Converter", description: "Convert a time value between seconds, minutes, hours, and days"},
 		{category: "math", tool: "calculate", title: "Calculator", description: "Run add/subtract/multiply/divide and other math operations"},
+		{category: "math", tool: "gcd", title: "GCD Calculator", description: "Find the greatest common divisor of two integers"},
+		{category: "math", tool: "percentage", title: "Percentage Calculator", description: "Calculate a percentage of a value or the percentage change between two values"},
+		{category: "math", tool: "logarithm", title: "Logarithm Calculator", description: "Calculate natural, base-10, or base-2 logarithms"},
+		{category: "math", tool: "trigonometry", title: "Trigonometry Calculator", description: "Calculate sine, cosine, and tangent of an angle in radians"},
+		{category: "math", tool: "prime", title: "Prime Checker", description: "Check whether a number is prime"},
+		{category: "math", tool: "random", title: "Random Number Generator", description: "Generate a random integer within a range"},
+		{category: "math", tool: "stats", title: "Statistics Calculator", description: "Calculate min, max, sum, average, and median of a list of numbers"},
 		{category: "parse", tool: "json", title: "JSON Parser", description: "Parse a raw JSON document and view the decoded structure"},
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
 		{category: "lorem", tool: "person", title: "Fake Person", description: "Generate a fake person with a name, email, and phone number"},
