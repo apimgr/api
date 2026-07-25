@@ -139,6 +139,9 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"network dns tool page", http.MethodGet, "/network/dns", http.StatusOK},
 		{"text uuid tool page", http.MethodGet, "/text/uuid", http.StatusOK},
 		{"text hash tool page", http.MethodGet, "/text/hash", http.StatusOK},
+		{"crypto bcrypt tool page", http.MethodGet, "/crypto/bcrypt", http.StatusOK},
+		{"crypto pin tool page", http.MethodGet, "/crypto/pin", http.StatusOK},
+		{"crypto password-strength tool page", http.MethodGet, "/crypto/password-strength", http.StatusOK},
 	}
 
 	for _, tt := range tests {
