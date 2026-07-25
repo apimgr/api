@@ -1,0 +1,71 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+      <a href="/">Home</a> / <a href="/docker">Docker</a> / Port Mapping Helper
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">Port Mapping Helper</h1>
+        <button class="btn btn-icon" data-favorite="docker-port-mapping" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Format a host/container/protocol triple into a Docker port mapping
+        string, or parse an existing mapping back into its parts.
+      </p>
+
+      <form id="port-mapping-form" class="tool-form" data-endpoint="/api/v1/docker/port-mapping">
+        <div class="form-group">
+          <label class="form-label">Action</label>
+          <select name="action" class="form-input">
+            <option value="format">Format</option>
+            <option value="parse">Parse</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Host Port (format)</label>
+          <input type="number" name="host" class="form-input" value="8080">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Container Port (format)</label>
+          <input type="number" name="container" class="form-input" value="80">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Protocol (format)</label>
+          <input type="text" name="protocol" class="form-input" value="tcp">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Mapping String (parse)</label>
+          <input type="text" name="mapping" class="form-input" placeholder="8080:80/tcp">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Run</button>
+      </form>
+
+      <div id="port-mapping-form-result" class="tool-result" style="display:none;"></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">GET Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl "{{.BaseURL}}/api/v1/docker/port-mapping?action=format&host=8080&container=80&protocol=tcp"</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

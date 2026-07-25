@@ -69,21 +69,21 @@ func (s *Service) GenerateDockerfile(config DockerfileConfig) string {
 }
 
 type DockerfileConfig struct {
-	BaseImage        string
-	Maintainer       string
-	WorkDir          string
-	CopyInstructions []CopyInstruction
-	RunCommands      []string
-	Environment      map[string]string
-	ExposePorts      []int
-	Volumes          []string
-	Cmd              string
-	Entrypoint       string
+	BaseImage        string            `json:"base_image"`
+	Maintainer       string            `json:"maintainer"`
+	WorkDir          string            `json:"work_dir"`
+	CopyInstructions []CopyInstruction `json:"copy_instructions"`
+	RunCommands      []string          `json:"run_commands"`
+	Environment      map[string]string `json:"environment"`
+	ExposePorts      []int             `json:"expose_ports"`
+	Volumes          []string          `json:"volumes"`
+	Cmd              string            `json:"cmd"`
+	Entrypoint       string            `json:"entrypoint"`
 }
 
 type CopyInstruction struct {
-	Source string
-	Dest   string
+	Source string `json:"source"`
+	Dest   string `json:"dest"`
 }
 
 // Docker compose helpers

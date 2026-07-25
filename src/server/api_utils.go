@@ -67,6 +67,87 @@ func apiDockerVersionHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, info)
 }
 
+// apiDockerPortMappingHandler formats a host/container/protocol triple into
+// a "host:container/protocol" string (?action=format, the default) or
+// parses an existing mapping string back into its parts
+// (?action=parse&mapping=), using docker.Service's Format/ParsePortMapping.
+func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	action := q.Get("action")
+	if action == "" {
+		action = "format"
+	}
+
+	switch action {
+	case "format":
+		hostPort, err := strconv.Atoi(q.Get("host"))
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HOST_PORT", "host query parameter must be an integer", nil)
+			return
+		}
+		containerPort, err := strconv.Atoi(q.Get("container"))
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CONTAINER_PORT", "container query parameter must be an integer", nil)
+			return
+		}
+		mapping := dockerService.FormatPortMapping(hostPort, containerPort, q.Get("protocol"))
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"mapping": mapping})
+	case "parse":
+		mapping := q.Get("mapping")
+		if mapping == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MAPPING", "mapping query parameter is required", nil)
+			return
+		}
+		hostPort, containerPort, protocol, err := dockerService.ParsePortMapping(mapping)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MAPPING", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"host_port":      hostPort,
+			"container_port": containerPort,
+			"protocol":       protocol,
+		})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ACTION", "action must be format or parse", nil)
+	}
+}
+
+// apiDockerVolumeHandler formats a host/container path pair into a
+// "host:container[:ro]" volume mount string, using
+// docker.Service.FormatVolumeMount.
+func apiDockerVolumeHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	hostPath := q.Get("host")
+	containerPath := q.Get("container")
+	if hostPath == "" || containerPath == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PATH", "host and container query parameters are required", nil)
+		return
+	}
+	readOnly := config.IsTruthy(q.Get("readonly"))
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"mount": dockerService.FormatVolumeMount(hostPath, containerPath, readOnly),
+	})
+}
+
+// apiDockerfileGenerateHandler decodes a JSON docker.DockerfileConfig from
+// the request body and returns the generated Dockerfile text, using
+// docker.Service.GenerateDockerfile.
+func apiDockerfileGenerateHandler(w http.ResponseWriter, r *http.Request) {
+	var cfg docker.DockerfileConfig
+	if err := decodeJSONBody(r, &cfg); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if cfg.BaseImage == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_BASE_IMAGE", "base_image is required", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"dockerfile": dockerService.GenerateDockerfile(cfg),
+	})
+}
+
 // apiWeatherCurrentHandler returns current weather for the {location}
 // path parameter.
 func apiWeatherCurrentHandler(w http.ResponseWriter, r *http.Request) {
