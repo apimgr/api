@@ -482,6 +482,10 @@ func toolPages() []toolPage {
 		{category: "text", tool: "decode", title: "Decode", description: "Decode text encoded with base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "case", title: "Case Converter", description: "Convert text between upper, lower, title, camel, snake, kebab, and other case styles"},
 		{category: "text", tool: "lorem", title: "Lorem Ipsum", description: "Generate placeholder Lorem Ipsum text by word, sentence, or paragraph"},
+		{category: "datetime", tool: "convert", title: "Convert Timestamp", description: "Convert a Unix timestamp to a human-readable date/time in any timezone"},
+		{category: "datetime", tool: "unix", title: "To Unix Timestamp", description: "Convert a human-readable date/time string to a Unix timestamp"},
+		{category: "datetime", tool: "add", title: "Add Duration", description: "Add a duration to a Unix timestamp"},
+		{category: "datetime", tool: "diff", title: "Timestamp Diff", description: "Compute the difference between two Unix timestamps"},
 	}
 }
 

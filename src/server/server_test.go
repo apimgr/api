@@ -165,6 +165,10 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"text decode tool page", http.MethodGet, "/text/decode", http.StatusOK},
 		{"text case tool page", http.MethodGet, "/text/case", http.StatusOK},
 		{"text lorem tool page", http.MethodGet, "/text/lorem", http.StatusOK},
+		{"datetime convert tool page", http.MethodGet, "/datetime/convert", http.StatusOK},
+		{"datetime unix tool page", http.MethodGet, "/datetime/unix", http.StatusOK},
+		{"datetime add tool page", http.MethodGet, "/datetime/add", http.StatusOK},
+		{"datetime diff tool page", http.MethodGet, "/datetime/diff", http.StatusOK},
 	}
 
 	for _, tt := range tests {
