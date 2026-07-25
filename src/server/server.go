@@ -337,6 +337,13 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/weight/{value}/{from}/{to}", apiConvertWeightHandler)
 			r.Get("/volume/{value}/{from}/{to}", apiConvertVolumeHandler)
 			r.Get("/time/{value}/{from}/{to}", apiConvertTimeHandler)
+			r.Get("/area/{value}/{from}/{to}", apiConvertAreaHandler)
+			r.Get("/data/{value}/{from}/{to}", apiConvertDataHandler)
+			r.Get("/energy/{value}/{from}/{to}", apiConvertEnergyHandler)
+			r.Get("/pressure/{value}/{from}/{to}", apiConvertPressureHandler)
+			r.Get("/speed/{value}/{from}/{to}", apiConvertSpeedHandler)
+			r.Get("/color", apiConvertColorHandler)
+			r.Get("/currency", apiConvertCurrencyHandler)
 		})
 
 		// Generators
@@ -588,6 +595,13 @@ func toolPages() []toolPage {
 		{category: "convert", tool: "weight", title: "Weight Converter", description: "Convert a weight value between pounds, kilograms, ounces, and grams"},
 		{category: "convert", tool: "volume", title: "Volume Converter", description: "Convert a volume value between gallons and liters"},
 		{category: "convert", tool: "time", title: "Time Converter", description: "Convert a time value between seconds, minutes, hours, and days"},
+		{category: "convert", tool: "area", title: "Area Converter", description: "Convert an area value between square meters, square feet, acres, and hectares"},
+		{category: "convert", tool: "data", title: "Data Size Converter", description: "Convert a data size value between bytes, kilobytes, megabytes, gigabytes, and terabytes"},
+		{category: "convert", tool: "energy", title: "Energy Converter", description: "Convert an energy value between joules, calories, and kilowatt-hours"},
+		{category: "convert", tool: "pressure", title: "Pressure Converter", description: "Convert a pressure value between pascals, bar, PSI, and atmospheres"},
+		{category: "convert", tool: "speed", title: "Speed Converter", description: "Convert a speed value between mph, km/h, m/s, and knots"},
+		{category: "convert", tool: "color", title: "Color Converter", description: "Convert a color between hex, RGB, and HSL representations"},
+		{category: "convert", tool: "currency", title: "Currency Converter", description: "Convert an amount between currencies using live ECB reference rates"},
 		{category: "math", tool: "calculate", title: "Calculator", description: "Run add/subtract/multiply/divide and other math operations"},
 		{category: "math", tool: "gcd", title: "GCD Calculator", description: "Find the greatest common divisor of two integers"},
 		{category: "math", tool: "percentage", title: "Percentage Calculator", description: "Calculate a percentage of a value or the percentage change between two values"},

@@ -409,6 +409,263 @@ func TestAPIConvertLengthHandler(t *testing.T) {
 	})
 }
 
+func TestAPIConvertAreaHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/convert/{value}/{from}/{to}", apiConvertAreaHandler)
+
+	t.Run("supported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/sqm/sqft", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["result"])
+	})
+
+	t.Run("unsupported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/sqm/kg", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "UNSUPPORTED_UNITS", env["error"])
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/notanumber/sqm/sqft", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_VALUE", env["error"])
+	})
+}
+
+func TestAPIConvertDataHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/convert/{value}/{from}/{to}", apiConvertDataHandler)
+
+	t.Run("supported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1024/b/kb", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["result"])
+	})
+
+	t.Run("unsupported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/b/sqm", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "UNSUPPORTED_UNITS", env["error"])
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/notanumber/b/kb", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_VALUE", env["error"])
+	})
+}
+
+func TestAPIConvertEnergyHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/convert/{value}/{from}/{to}", apiConvertEnergyHandler)
+
+	t.Run("supported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/j/cal", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["result"])
+	})
+
+	t.Run("unsupported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/j/sqm", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "UNSUPPORTED_UNITS", env["error"])
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/notanumber/j/cal", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_VALUE", env["error"])
+	})
+}
+
+func TestAPIConvertPressureHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/convert/{value}/{from}/{to}", apiConvertPressureHandler)
+
+	t.Run("supported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/pa/bar", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["result"])
+	})
+
+	t.Run("unsupported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/pa/sqm", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "UNSUPPORTED_UNITS", env["error"])
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/notanumber/pa/bar", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_VALUE", env["error"])
+	})
+}
+
+func TestAPIConvertSpeedHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/convert/{value}/{from}/{to}", apiConvertSpeedHandler)
+
+	t.Run("supported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/mph/kmh", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["result"])
+	})
+
+	t.Run("unsupported pair", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/1/mph/sqm", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "UNSUPPORTED_UNITS", env["error"])
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/notanumber/mph/kmh", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_VALUE", env["error"])
+	})
+}
+
+func TestAPIConvertColorHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/convert/color", apiConvertColorHandler)
+
+	t.Run("hex to rgb", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/color?value=%23ff0000&from=hex&to=rgb", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "255,0,0", data["result"])
+	})
+
+	t.Run("missing value", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/color?from=hex&to=rgb", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_VALUE", env["error"])
+	})
+
+	t.Run("missing format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/color?value=%23ff0000", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_FORMAT", env["error"])
+	})
+
+	t.Run("invalid color", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/color?value=notacolor&from=hex&to=rgb", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_COLOR", env["error"])
+	})
+}
+
+func TestAPIConvertCurrencyHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/convert/currency", apiConvertCurrencyHandler)
+
+	t.Run("missing currency codes", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/currency?amount=1", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_CURRENCY", env["error"])
+	})
+
+	t.Run("invalid amount", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/convert/currency?amount=notanumber&from=USD&to=EUR", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_AMOUNT", env["error"])
+	})
+}
+
 // apiGenerateQRHandler must always report NOT_SUPPORTED — no QR encoder
 // exists anywhere in the codebase.
 func TestAPIGenerateQRHandler(t *testing.T) {

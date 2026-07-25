@@ -892,6 +892,345 @@ func apiConvertTimeHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// areaConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func areaConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"sqm-sqft": s.SquareMetersToSquareFeet,
+		"sqft-sqm": s.SquareFeetToSquareMeters,
+		"acre-ha":  s.AcresToHectares,
+		"ha-acre":  s.HectaresToAcres,
+	}
+}
+
+// apiConvertAreaHandler converts {value} from {from} to {to} units using
+// the existing bidirectional area-conversion pairs exported by
+// convert.Service.
+func apiConvertAreaHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := areaConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// dataConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func dataConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"b-kb":  s.BytesToKilobytes,
+		"kb-b":  s.KilobytesToBytes,
+		"kb-mb": s.KilobytesToMegabytes,
+		"mb-kb": s.MegabytesToKilobytes,
+		"mb-gb": s.MegabytesToGigabytes,
+		"gb-mb": s.GigabytesToMegabytes,
+		"gb-tb": s.GigabytesToTerabytes,
+		"tb-gb": s.TerabytesToGigabytes,
+	}
+}
+
+// apiConvertDataHandler converts {value} from {from} to {to} units using
+// the existing bidirectional data-size-conversion pairs exported by
+// convert.Service.
+func apiConvertDataHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := dataConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// energyConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func energyConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"j-cal": s.JoulesToCalories,
+		"cal-j": s.CaloriesToJoules,
+		"j-kwh": s.JoulesToKilowattHours,
+		"kwh-j": s.KilowattHoursToJoules,
+	}
+}
+
+// apiConvertEnergyHandler converts {value} from {from} to {to} units using
+// the existing bidirectional energy-conversion pairs exported by
+// convert.Service.
+func apiConvertEnergyHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := energyConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// pressureConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func pressureConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"pa-bar": s.PascalsToBar,
+		"bar-pa": s.BarToPascals,
+		"pa-psi": s.PascalsToPSI,
+		"psi-pa": s.PSIToPascals,
+		"pa-atm": s.PascalsToAtmospheres,
+		"atm-pa": s.AtmospheresToPascals,
+	}
+}
+
+// apiConvertPressureHandler converts {value} from {from} to {to} units
+// using the existing bidirectional pressure-conversion pairs exported by
+// convert.Service.
+func apiConvertPressureHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := pressureConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// speedConversions maps a "from-to" unit pair to the convert.Service
+// bidirectional function that implements it. Only pairs actually exported
+// by convert.Service are listed; unlisted pairs return UNSUPPORTED_UNITS
+// rather than inventing new conversion math.
+func speedConversions(s *convert.Service) map[string]func(float64) float64 {
+	return map[string]func(float64) float64{
+		"mph-kmh":  s.MphToKmh,
+		"kmh-mph":  s.KmhToMph,
+		"ms-kmh":   s.MsToKmh,
+		"kmh-ms":   s.KmhToMs,
+		"knot-kmh": s.KnotsToKmh,
+		"kmh-knot": s.KmhToKnots,
+	}
+}
+
+// apiConvertSpeedHandler converts {value} from {from} to {to} units using
+// the existing bidirectional speed-conversion pairs exported by
+// convert.Service.
+func apiConvertSpeedHandler(w http.ResponseWriter, r *http.Request) {
+	valueParam := chi.URLParam(r, "value")
+	from := strings.ToLower(chi.URLParam(r, "from"))
+	to := strings.ToLower(chi.URLParam(r, "to"))
+
+	value, err := strconv.ParseFloat(valueParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		return
+	}
+
+	fn, ok := speedConversions(convertService)[from+"-"+to]
+	if !ok {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": fn(value),
+	})
+}
+
+// apiConvertColorHandler converts a color value between hex, RGB
+// ("r,g,b"), and HSL ("h,s,l") representations using ?value=&from=&to=.
+func apiConvertColorHandler(w http.ResponseWriter, r *http.Request) {
+	value := r.URL.Query().Get("value")
+	from := strings.ToLower(r.URL.Query().Get("from"))
+	to := strings.ToLower(r.URL.Query().Get("to"))
+
+	if value == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_VALUE", "value is required", nil)
+		return
+	}
+	if from == "" || to == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FORMAT", "from and to are required (hex, rgb, hsl)", nil)
+		return
+	}
+
+	rgb, err := colorToRGB(convertService, value, from)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COLOR", err.Error(), nil)
+		return
+	}
+
+	result, err := rgbToColor(convertService, rgb, to)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_FORMAT", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"value":  value,
+		"from":   from,
+		"to":     to,
+		"result": result,
+	})
+}
+
+// colorToRGB parses value in the given format ("hex", "rgb", or "hsl")
+// into RGB components.
+func colorToRGB(s *convert.Service, value, format string) (convert.RGB, error) {
+	switch format {
+	case "hex":
+		return s.HexToRGB(value)
+	case "rgb":
+		r, g, b, err := parseTriple(value)
+		if err != nil {
+			return convert.RGB{}, fmt.Errorf("rgb value must be \"r,g,b\": %w", err)
+		}
+		return convert.RGB{R: int(r), G: int(g), B: int(b)}, nil
+	case "hsl":
+		h, sVal, l, err := parseTriple(value)
+		if err != nil {
+			return convert.RGB{}, fmt.Errorf("hsl value must be \"h,s,l\": %w", err)
+		}
+		return s.HSLToRGB(convert.HSL{H: h, S: sVal, L: l})
+	default:
+		return convert.RGB{}, fmt.Errorf("unsupported color format: %s (use hex, rgb, or hsl)", format)
+	}
+}
+
+// rgbToColor formats RGB components into the given output format ("hex",
+// "rgb", or "hsl").
+func rgbToColor(s *convert.Service, rgb convert.RGB, format string) (string, error) {
+	switch format {
+	case "hex":
+		return s.RGBToHex(rgb)
+	case "rgb":
+		return fmt.Sprintf("%d,%d,%d", rgb.R, rgb.G, rgb.B), nil
+	case "hsl":
+		hsl, err := s.RGBToHSL(rgb)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%g,%g,%g", hsl.H, hsl.S, hsl.L), nil
+	default:
+		return "", fmt.Errorf("unsupported color format: %s (use hex, rgb, or hsl)", format)
+	}
+}
+
+// parseTriple parses a "a,b,c" comma-separated triple of floats.
+func parseTriple(value string) (float64, float64, float64, error) {
+	parts := strings.Split(value, ",")
+	if len(parts) != 3 {
+		return 0, 0, 0, fmt.Errorf("expected 3 comma-separated components, got %d", len(parts))
+	}
+	nums := make([]float64, 3)
+	for i, p := range parts {
+		n, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
+		if err != nil {
+			return 0, 0, 0, fmt.Errorf("component %d is not numeric: %w", i+1, err)
+		}
+		nums[i] = n
+	}
+	return nums[0], nums[1], nums[2], nil
+}
+
+// apiConvertCurrencyHandler converts ?amount= from ?from= to ?to= using
+// live ECB reference rates from the free, keyless Frankfurter API.
+func apiConvertCurrencyHandler(w http.ResponseWriter, r *http.Request) {
+	amountParam := r.URL.Query().Get("amount")
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+
+	if from == "" || to == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CURRENCY", "from and to currency codes are required", nil)
+		return
+	}
+
+	amount := 1.0
+	if amountParam != "" {
+		var err error
+		amount, err = strconv.ParseFloat(amountParam, 64)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_AMOUNT", "amount must be numeric", nil)
+			return
+		}
+	}
+
+	result, err := convertService.ConvertCurrency(amount, from, to)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "CURRENCY_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
 // apiGenerateQRHandler reports that QR-code generation is not supported.
 // No QR encoder exists anywhere in the codebase (generate, image, or any
 // dependency in go.mod) and authoring one from scratch would be inventing

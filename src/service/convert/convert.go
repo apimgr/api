@@ -210,3 +210,121 @@ func (s *Service) DaysToHours(days float64) float64 {
 func (s *Service) HoursToDays(hours float64) float64 {
 	return hours / 24
 }
+
+// Area conversions
+func (s *Service) SquareMetersToSquareFeet(sqm float64) float64 {
+	return sqm * 10.7639104167
+}
+
+func (s *Service) SquareFeetToSquareMeters(sqft float64) float64 {
+	return sqft / 10.7639104167
+}
+
+func (s *Service) AcresToHectares(acres float64) float64 {
+	return acres * 0.404685642
+}
+
+func (s *Service) HectaresToAcres(hectares float64) float64 {
+	return hectares / 0.404685642
+}
+
+// Data size conversions (decimal SI units, 1000-based, matching common
+// network/disk vendor marketing units rather than 1024-based KiB/MiB)
+func (s *Service) BytesToKilobytes(bytes float64) float64 {
+	return bytes / 1000
+}
+
+func (s *Service) KilobytesToBytes(kb float64) float64 {
+	return kb * 1000
+}
+
+func (s *Service) KilobytesToMegabytes(kb float64) float64 {
+	return kb / 1000
+}
+
+func (s *Service) MegabytesToKilobytes(mb float64) float64 {
+	return mb * 1000
+}
+
+func (s *Service) MegabytesToGigabytes(mb float64) float64 {
+	return mb / 1000
+}
+
+func (s *Service) GigabytesToMegabytes(gb float64) float64 {
+	return gb * 1000
+}
+
+func (s *Service) GigabytesToTerabytes(gb float64) float64 {
+	return gb / 1000
+}
+
+func (s *Service) TerabytesToGigabytes(tb float64) float64 {
+	return tb * 1000
+}
+
+// Energy conversions
+func (s *Service) JoulesToCalories(joules float64) float64 {
+	return joules / 4.184
+}
+
+func (s *Service) CaloriesToJoules(calories float64) float64 {
+	return calories * 4.184
+}
+
+func (s *Service) JoulesToKilowattHours(joules float64) float64 {
+	return joules / 3600000
+}
+
+func (s *Service) KilowattHoursToJoules(kwh float64) float64 {
+	return kwh * 3600000
+}
+
+// Pressure conversions
+func (s *Service) PascalsToBar(pascals float64) float64 {
+	return pascals / 100000
+}
+
+func (s *Service) BarToPascals(bar float64) float64 {
+	return bar * 100000
+}
+
+func (s *Service) PascalsToPSI(pascals float64) float64 {
+	return pascals / 6894.757293168
+}
+
+func (s *Service) PSIToPascals(psi float64) float64 {
+	return psi * 6894.757293168
+}
+
+func (s *Service) PascalsToAtmospheres(pascals float64) float64 {
+	return pascals / 101325
+}
+
+func (s *Service) AtmospheresToPascals(atm float64) float64 {
+	return atm * 101325
+}
+
+// Speed conversions
+func (s *Service) MphToKmh(mph float64) float64 {
+	return mph * 1.609344
+}
+
+func (s *Service) KmhToMph(kmh float64) float64 {
+	return kmh / 1.609344
+}
+
+func (s *Service) MsToKmh(ms float64) float64 {
+	return ms * 3.6
+}
+
+func (s *Service) KmhToMs(kmh float64) float64 {
+	return kmh / 3.6
+}
+
+func (s *Service) KnotsToKmh(knots float64) float64 {
+	return knots * 1.852
+}
+
+func (s *Service) KmhToKnots(kmh float64) float64 {
+	return kmh / 1.852
+}

@@ -41,7 +41,16 @@ stdlib `ParseURL`, RFC 3912 two-hop `Whois`), bringing the wired total to
 already-wired `user-agent` (see "Known template bugs" below) — so the
 MISSING network line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (129 linked, unwired)
+convert/{area,color,currency,data,energy,pressure,speed} were wired in a
+follow-up batch (net-new paired `convert.Service` methods for area/data/
+energy/pressure/speed following the existing length/temperature/weight/
+volume/time unit-pair pattern; net-new `color.go` hex/RGB/HSL conversion
+methods; net-new `currency.go` calling the free, keyless Frankfurter API
+for live ECB reference rates, mirroring the `weather.go` external-API
+pattern), bringing the wired total to 118. The MISSING convert line is now
+fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (122 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -50,7 +59,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- convert (7): area, color, currency, data, energy, pressure, speed
 - crypto (3): certificate, ed25519, pgp
   (X.509 cert, Ed25519, PGP — zero backend support today; each needs its own
   net-new crypto service method. encrypt/decrypt/rsa/hmac were wired this
