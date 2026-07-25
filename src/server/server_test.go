@@ -142,6 +142,10 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"crypto bcrypt tool page", http.MethodGet, "/crypto/bcrypt", http.StatusOK},
 		{"crypto pin tool page", http.MethodGet, "/crypto/pin", http.StatusOK},
 		{"crypto password-strength tool page", http.MethodGet, "/crypto/password-strength", http.StatusOK},
+		{"datetime timestamp tool page", http.MethodGet, "/datetime/timestamp", http.StatusOK},
+		{"network user-agent tool page", http.MethodGet, "/network/user-agent", http.StatusOK},
+		{"network mac tool page", http.MethodGet, "/network/mac", http.StatusOK},
+		{"docker version tool page", http.MethodGet, "/docker/version", http.StatusOK},
 	}
 
 	for _, tt := range tests {

@@ -459,6 +459,10 @@ func toolPages() []toolPage {
 		{category: "crypto", tool: "bcrypt", title: "Bcrypt Hash", description: "Hash a password using bcrypt with a configurable cost factor"},
 		{category: "crypto", tool: "pin", title: "PIN Generator", description: "Generate a random numeric PIN of a given length"},
 		{category: "crypto", tool: "password-strength", title: "Password Strength Checker", description: "Check the estimated strength of a password"},
+		{category: "datetime", tool: "timestamp", title: "Unix Timestamp", description: "Get the current Unix timestamp"},
+		{category: "network", tool: "user-agent", title: "User-Agent Lookup", description: "Inspect the User-Agent header sent with the request"},
+		{category: "network", tool: "mac", title: "MAC Vendor Lookup", description: "Look up the hardware vendor for a MAC address"},
+		{category: "docker", tool: "version", title: "Docker Version", description: "Look up the latest available Docker Engine version"},
 	}
 }
 
