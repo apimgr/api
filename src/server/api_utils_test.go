@@ -88,6 +88,34 @@ func TestAPIWeatherCurrentHandler(t *testing.T) {
 	assert.Equal(t, true, env["ok"])
 }
 
+func TestAPIWeatherForecastHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherForecastHandler)
+
+	t.Run("default days", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/weather/London", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, true, env["ok"])
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(5), data["days"])
+	})
+
+	t.Run("invalid days", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/weather/London?days=notanumber", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_DAYS", env["error"])
+	})
+}
+
 // apiGeoIPHandler must 400 IP_LOOKUP_FAILED for an invalid/private IP.
 func TestAPIGeoIPHandler(t *testing.T) {
 	r := chi.NewRouter()

@@ -182,6 +182,32 @@ func apiWeatherCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, weatherData)
 }
 
+// apiWeatherForecastHandler returns a daily weather forecast for the
+// {location} path parameter. The number of days (1-16) is read from the
+// ?days= query parameter, defaulting to 5.
+func apiWeatherForecastHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	days := 5
+	if raw := r.URL.Query().Get("days"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DAYS", "days must be an integer between 1 and 16", nil)
+			return
+		}
+		days = parsed
+	}
+	forecast, err := weatherService.GetForecast(location, days)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"location": location,
+		"days":     days,
+		"forecast": forecast,
+	})
+}
+
 // apiGeoIPHandler resolves geolocation for the {ip} path parameter. The
 // geo service package only implements coordinate math (distance, bearing,
 // midpoint) with no IP capability, so this deliberately reuses

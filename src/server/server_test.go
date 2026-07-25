@@ -158,6 +158,7 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"network ula tool page", http.MethodGet, "/network/ula", http.StatusOK},
 		{"network port tool page", http.MethodGet, "/network/port", http.StatusOK},
 		{"weather current tool page", http.MethodGet, "/weather/current", http.StatusOK},
+		{"weather forecast tool page", http.MethodGet, "/weather/forecast", http.StatusOK},
 		{"geo ip tool page", http.MethodGet, "/geo/ip", http.StatusOK},
 		{"geo distance tool page", http.MethodGet, "/geo/distance", http.StatusOK},
 		{"geo bearing tool page", http.MethodGet, "/geo/bearing", http.StatusOK},

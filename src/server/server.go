@@ -274,6 +274,7 @@ func New(cfg *config.Config) *http.Server {
 		// Weather
 		r.Route("/weather", func(r chi.Router) {
 			r.Get("/current/{location}", apiWeatherCurrentHandler)
+			r.Get("/forecast/{location}", apiWeatherForecastHandler)
 		})
 
 		// Geolocation
@@ -526,6 +527,7 @@ func toolPages() []toolPage {
 		{category: "network", tool: "ula", title: "ULA Generator", description: "Generate an RFC 4193 IPv6 unique-local-address prefix"},
 		{category: "network", tool: "port", title: "Random Port", description: "Suggest a random unprivileged TCP/UDP port"},
 		{category: "weather", tool: "current", title: "Current Weather", description: "Get current weather conditions for a location"},
+		{category: "weather", tool: "forecast", title: "Weather Forecast", description: "Get a 1-16 day weather forecast for a location"},
 		{category: "geo", tool: "ip", title: "IP Geolocation", description: "Look up geolocation details for a public IP address"},
 		{category: "geo", tool: "distance", title: "Distance Calculator", description: "Calculate the great-circle distance between two coordinates"},
 		{category: "geo", tool: "bearing", title: "Bearing Calculator", description: "Calculate the initial compass bearing from one coordinate to another"},
