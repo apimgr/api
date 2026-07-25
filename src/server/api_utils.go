@@ -22,6 +22,7 @@ import (
 	"github.com/apimgr/api/src/service/math"
 	"github.com/apimgr/api/src/service/osint"
 	"github.com/apimgr/api/src/service/parse"
+	"github.com/apimgr/api/src/service/research"
 	"github.com/apimgr/api/src/service/test"
 	"github.com/apimgr/api/src/service/text"
 	"github.com/apimgr/api/src/service/validate"
@@ -45,6 +46,7 @@ var (
 	devService      = dev.New()
 	imageService    = image.New()
 	languageService = language.New()
+	researchService = research.New()
 )
 
 // readRequestBody reads and returns the entire request body, capped at
@@ -944,6 +946,70 @@ func apiOsintCertHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
+// researchCitationRequest is the JSON body shape accepted by
+// apiResearchCitationHandler: the four fields every research.Reference
+// needs, plus the desired output style.
+type researchCitationRequest struct {
+	Title  string `json:"title"`
+	Author string `json:"author"`
+	Year   string `json:"year"`
+	Source string `json:"source"`
+	Style  string `json:"style"`
+}
+
+// apiResearchCitationHandler formats a single caller-supplied reference
+// into a citation string. It reuses research.Service.GenerateBibliography
+// with a one-element slice rather than re-implementing the APA/MLA/Chicago
+// style switch, so the single-citation and bibliography code paths can
+// never drift apart.
+func apiResearchCitationHandler(w http.ResponseWriter, r *http.Request) {
+	var body researchCitationRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Title == "" || body.Author == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FIELDS", "title and author are required", nil)
+		return
+	}
+	if body.Style == "" {
+		body.Style = "APA"
+	}
+
+	citations := researchService.GenerateBibliography([]research.Reference{
+		{Title: body.Title, Author: body.Author, Year: body.Year, Source: body.Source},
+	}, body.Style)
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"style":    body.Style,
+		"citation": citations[0],
+	})
+}
+
+// apiResearchDOIHandler validates the wildcard path suffix as a DOI and
+// returns its canonical resolver URL, using
+// research.Service.ValidateDOI/FormatDOI. A wildcard route (rather than a
+// {doi} chi.URLParam) is required because DOIs always contain at least one
+// "/" (prefix/suffix, e.g. "10.1000/182"), which a single path segment
+// parameter cannot capture.
+func apiResearchDOIHandler(w http.ResponseWriter, r *http.Request) {
+	doi := chi.URLParam(r, "*")
+	if doi == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOI", "doi is required", nil)
+		return
+	}
+	valid := researchService.ValidateDOI(doi)
+	if !valid {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DOI", "doi must start with \"10.\" and be at least 8 characters", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"doi":   doi,
+		"valid": valid,
+		"url":   researchService.FormatDOI(doi),
+	})
 }
 
 // apiResearchExtractHandler reports that citation extraction from

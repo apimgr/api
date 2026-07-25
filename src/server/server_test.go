@@ -179,6 +179,8 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"parse xml tool page", http.MethodGet, "/parse/xml", http.StatusOK},
 		{"parse csv tool page", http.MethodGet, "/parse/csv", http.StatusOK},
 		{"parse jwt tool page", http.MethodGet, "/parse/jwt", http.StatusOK},
+		{"research citation tool page", http.MethodGet, "/research/citation", http.StatusOK},
+		{"research doi tool page", http.MethodGet, "/research/doi", http.StatusOK},
 		{"fun joke tool page", http.MethodGet, "/fun/joke", http.StatusOK},
 		{"fun fortune tool page", http.MethodGet, "/fun/fortune", http.StatusOK},
 		{"lorem person tool page", http.MethodGet, "/lorem/person", http.StatusOK},

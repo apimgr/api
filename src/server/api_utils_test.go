@@ -515,6 +515,75 @@ func TestAPIResearchExtractHandler(t *testing.T) {
 	assert.Equal(t, "NOT_SUPPORTED", env["error"])
 }
 
+// apiResearchCitationHandler must 400 MISSING_FIELDS when title/author are
+// absent, default to APA style when none is given, and honor an explicit
+// style.
+func TestAPIResearchCitationHandler(t *testing.T) {
+	t.Run("missing fields", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/research/citation", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiResearchCitationHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_FIELDS", env["error"])
+	})
+
+	t.Run("default style", func(t *testing.T) {
+		body := `{"title":"On the Origin of Species","author":"Darwin, C.","year":"1859","source":"John Murray"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/research/citation", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		apiResearchCitationHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "APA", data["style"])
+		assert.Contains(t, data["citation"], "Darwin, C.")
+	})
+
+	t.Run("mla style", func(t *testing.T) {
+		body := `{"title":"On the Origin of Species","author":"Darwin, C.","year":"1859","source":"John Murray","style":"MLA"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/research/citation", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		apiResearchCitationHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "MLA", data["style"])
+		assert.Contains(t, data["citation"], "\"On the Origin of Species.\"")
+	})
+}
+
+// apiResearchDOIHandler must 400 INVALID_DOI for a malformed DOI and 200
+// with the canonical resolver URL for a well-formed one, including a DOI
+// containing a "/" (the normal case, requiring the wildcard route).
+func TestAPIResearchDOIHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/research/doi/*", apiResearchDOIHandler)
+
+	t.Run("invalid doi", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/research/doi/not-a-doi", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_DOI", env["error"])
+	})
+
+	t.Run("valid doi", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/research/doi/10.1000/182", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "10.1000/182", data["doi"])
+		assert.Equal(t, "https://doi.org/10.1000/182", data["url"])
+	})
+}
+
 // apiFunJokeHandler must return 200 with type and text fields.
 func TestAPIFunJokeHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/joke", nil)

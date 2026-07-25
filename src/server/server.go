@@ -341,6 +341,8 @@ func New(cfg *config.Config) *http.Server {
 
 		// Research Tools
 		r.Route("/research", func(r chi.Router) {
+			r.Post("/citation", apiResearchCitationHandler)
+			r.Get("/doi/*", apiResearchDOIHandler)
 			r.Post("/extract", apiResearchExtractHandler)
 		})
 
@@ -534,6 +536,8 @@ func toolPages() []toolPage {
 		{category: "parse", tool: "xml", title: "XML Parser", description: "Parse a raw XML document and view the decoded structure"},
 		{category: "parse", tool: "csv", title: "CSV Parser", description: "Parse a CSV document (first row as headers) into structured rows"},
 		{category: "parse", tool: "jwt", title: "JWT Parser", description: "Decode and inspect the header, payload, and signature of a JSON Web Token"},
+		{category: "research", tool: "citation", title: "Citation Formatter", description: "Format a reference into an APA, MLA, or Chicago style citation"},
+		{category: "research", tool: "doi", title: "DOI Validator", description: "Validate a DOI and get its canonical https://doi.org resolver URL"},
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
 		{category: "fun", tool: "fortune", title: "Random Fortune", description: "Get a single random fortune-cookie style saying"},
 		{category: "lorem", tool: "person", title: "Fake Person", description: "Generate a fake person with a name, email, and phone number"},
