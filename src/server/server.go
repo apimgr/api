@@ -459,6 +459,8 @@ func toolPages() []toolPage {
 	return []toolPage{
 		{category: "crypto", tool: "hash", title: "Hash Generator", description: "Generate cryptographic hashes using various algorithms (MD5, SHA-1, SHA-256, SHA-512, BLAKE3)"},
 		{category: "crypto", tool: "jwt", title: "JWT Decoder", description: "Decode and inspect JSON Web Tokens (JWT). View header, payload, and signature details"},
+		{category: "crypto", tool: "totp", title: "TOTP Generator", description: "Generate a time-based one-time password secret, provisioning URI, and current code"},
+		{category: "crypto", tool: "random", title: "Random Bytes", description: "Generate cryptographically secure random bytes as raw values and hex encoding"},
 		{category: "crypto", tool: "password", title: "Password Generator", description: "Generate secure random passwords with customizable length and character sets"},
 		{category: "datetime", tool: "now", title: "Current Time", description: "Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable"},
 		{category: "network", tool: "ip", title: "IP Address Lookup", description: "Get detailed information about any IP address including location, ISP, and network details"},

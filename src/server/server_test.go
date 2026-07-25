@@ -133,6 +133,8 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"weather category page", http.MethodGet, "/weather", http.StatusOK},
 		{"crypto hash tool page", http.MethodGet, "/crypto/hash", http.StatusOK},
 		{"crypto jwt tool page", http.MethodGet, "/crypto/jwt", http.StatusOK},
+		{"crypto totp tool page", http.MethodGet, "/crypto/totp", http.StatusOK},
+		{"crypto random tool page", http.MethodGet, "/crypto/random", http.StatusOK},
 		{"crypto password tool page", http.MethodGet, "/crypto/password", http.StatusOK},
 		{"datetime now tool page", http.MethodGet, "/datetime/now", http.StatusOK},
 		{"network ip tool page", http.MethodGet, "/network/ip", http.StatusOK},
