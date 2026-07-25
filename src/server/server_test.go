@@ -158,6 +158,7 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"lorem person tool page", http.MethodGet, "/lorem/person", http.StatusOK},
 		{"testing http tool page", http.MethodGet, "/testing/http", http.StatusOK},
 		{"osint email tool page", http.MethodGet, "/osint/email", http.StatusOK},
+		{"dev format json tool page", http.MethodGet, "/dev/format-json", http.StatusOK},
 	}
 
 	for _, tt := range tests {

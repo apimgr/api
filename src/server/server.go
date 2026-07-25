@@ -475,6 +475,7 @@ func toolPages() []toolPage {
 		{category: "lorem", tool: "person", title: "Fake Person", description: "Generate a fake person with a name, email, and phone number"},
 		{category: "testing", tool: "http", title: "Mock HTTP Response", description: "Generate a mock API response fixture and measure execution time"},
 		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
+		{category: "dev", tool: "format-json", title: "Format JSON", description: "Pretty-print and re-indent a raw JSON document"},
 	}
 }
 
