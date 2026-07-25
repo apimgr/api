@@ -161,6 +161,10 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"dev format json tool page", http.MethodGet, "/dev/format-json", http.StatusOK},
 		{"validate email tool page", http.MethodGet, "/validate/email", http.StatusOK},
 		{"image placeholder tool page", http.MethodGet, "/image/placeholder", http.StatusOK},
+		{"text encode tool page", http.MethodGet, "/text/encode", http.StatusOK},
+		{"text decode tool page", http.MethodGet, "/text/decode", http.StatusOK},
+		{"text case tool page", http.MethodGet, "/text/case", http.StatusOK},
+		{"text lorem tool page", http.MethodGet, "/text/lorem", http.StatusOK},
 	}
 
 	for _, tt := range tests {

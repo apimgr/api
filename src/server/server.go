@@ -478,6 +478,10 @@ func toolPages() []toolPage {
 		{category: "dev", tool: "format-json", title: "Format JSON", description: "Pretty-print and re-indent a raw JSON document"},
 		{category: "validate", tool: "email", title: "Validate Email", description: "Check whether an email address is correctly formatted"},
 		{category: "image", tool: "placeholder", title: "Placeholder Image", description: "Generate a placeholder image of any size, format, and background color"},
+		{category: "text", tool: "encode", title: "Encode", description: "Encode text using base64, base32, hex, URL, or HTML encoding"},
+		{category: "text", tool: "decode", title: "Decode", description: "Decode text encoded with base64, base32, hex, URL, or HTML encoding"},
+		{category: "text", tool: "case", title: "Case Converter", description: "Convert text between upper, lower, title, camel, snake, kebab, and other case styles"},
+		{category: "text", tool: "lorem", title: "Lorem Ipsum", description: "Generate placeholder Lorem Ipsum text by word, sentence, or paragraph"},
 	}
 }
 
