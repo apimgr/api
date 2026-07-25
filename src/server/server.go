@@ -215,6 +215,13 @@ func New(cfg *config.Config) *http.Server {
 			// Password strength
 			r.Get("/password/strength/{password}", apiPasswordStrengthHandler)
 			r.Post("/password/strength", apiPasswordStrengthPostHandler)
+
+			// Hash (alias of /text/hash for the crypto tool page)
+			r.Get("/hash/{algorithm}/{input}", apiHashHandler)
+			r.Get("/hash/{algorithm}/{input}.txt", apiHashTextHandler)
+
+			// JWT decode (header/payload only, no signature verification)
+			r.Get("/jwt/{token}", apiCryptoJWTDecodeHandler)
 		})
 
 		// DateTime utilities
@@ -251,6 +258,8 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/subnet", apiNetworkSubnetHandler)
 			r.Get("/ula", apiNetworkULAHandler)
 			r.Get("/port", apiNetworkPortHandler)
+			r.Get("/dns/{domain}", apiNetworkDNSHandler)
+			r.Get("/dns/{domain}/{type}", apiNetworkDNSHandler)
 		})
 
 		// Docker utilities
@@ -453,7 +462,7 @@ func toolPages() []toolPage {
 		{category: "crypto", tool: "password", title: "Password Generator", description: "Generate secure random passwords with customizable length and character sets"},
 		{category: "datetime", tool: "now", title: "Current Time", description: "Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable"},
 		{category: "network", tool: "ip", title: "IP Address Lookup", description: "Get detailed information about any IP address including location, ISP, and network details"},
-		{category: "network", tool: "dns", title: "DNS Lookup", description: "Query DNS records for any domain. Supports A, AAAA, CNAME, MX, TXT, NS, SOA, and more"},
+		{category: "network", tool: "dns", title: "DNS Lookup", description: "Query DNS records for any domain. Supports A, AAAA, CNAME, MX, TXT, and NS"},
 		{category: "text", tool: "uuid", title: "UUID Generator", description: "Generate UUIDs (v1, v3, v4, v5, v6, v7) for use in applications and databases"},
 		{category: "text", tool: "hash", title: "Hash Generator", description: "Generate cryptographic hashes of arbitrary text (MD5, SHA-1, SHA-256, SHA-512, BLAKE3)"},
 		{category: "crypto", tool: "bcrypt", title: "Bcrypt Hash", description: "Hash a password using bcrypt with a configurable cost factor"},

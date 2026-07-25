@@ -1,7 +1,9 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -465,4 +467,75 @@ func apiImagePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
+}
+
+// decodeJWTSegment base64url-decodes a single JWT segment (header or
+// payload) and parses it as JSON, tolerating both padded and unpadded
+// base64url encoding as produced by different JWT libraries.
+func decodeJWTSegment(segment string) (map[string]interface{}, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(segment)
+	if err != nil {
+		raw, err = base64.URLEncoding.DecodeString(segment)
+		if err != nil {
+			return nil, fmt.Errorf("invalid base64url encoding")
+		}
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("invalid JSON in segment")
+	}
+	return decoded, nil
+}
+
+// apiCryptoJWTDecodeHandler decodes (never verifies) the header and payload
+// of a JSON Web Token. No signature verification is performed — this is a
+// read-only inspection tool, matching the JWT decoder's stated purpose of
+// viewing header/payload/signature details, not validating trust.
+func apiCryptoJWTDecodeHandler(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT", "token must have three dot-separated segments (header.payload.signature)", nil)
+		return
+	}
+
+	header, err := decodeJWTSegment(parts[0])
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_HEADER", err.Error(), nil)
+		return
+	}
+	payload, err := decodeJWTSegment(parts[1])
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_PAYLOAD", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"header":    header,
+		"payload":   payload,
+		"signature": parts[2],
+	})
+}
+
+// apiNetworkDNSHandler queries DNS records for a domain via the system
+// resolver, composing the existing free/keyless osint.DNSLookup function.
+// Defaults to an A-record lookup when no record type is given.
+func apiNetworkDNSHandler(w http.ResponseWriter, r *http.Request) {
+	domain := chi.URLParam(r, "domain")
+	recordType := chi.URLParam(r, "type")
+	if recordType == "" {
+		recordType = "A"
+	}
+
+	records, err := osintService.DNSLookup(domain, recordType)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "DNS_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"domain":  domain,
+		"type":    strings.ToUpper(recordType),
+		"records": records,
+	})
 }
