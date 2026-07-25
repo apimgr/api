@@ -178,6 +178,24 @@ func New(cfg *config.Config) *http.Server {
 			// Reverse
 			r.Get("/reverse/{input}", apiReverseHandler)
 			r.Get("/reverse/{input}.txt", apiReverseTextHandler)
+
+			// Compress/decompress
+			r.Post("/compress", apiTextCompressHandler)
+
+			// Diff
+			r.Post("/diff", apiTextDiffHandler)
+
+			// Extract
+			r.Post("/extract", apiTextExtractHandler)
+
+			// NanoID
+			r.Get("/nanoid", apiTextNanoIDHandler)
+
+			// ULID
+			r.Get("/ulid", apiTextULIDHandler)
+
+			// Regex
+			r.Post("/regex", apiTextRegexHandler)
 		})
 
 		// Crypto utilities
@@ -376,6 +394,9 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/format/json", apiDevFormatJSONHandler)
 			r.Post("/base64", apiDevBase64Handler)
 			r.Post("/url-encode", apiDevURLEncodeHandler)
+
+			// Regex (shared with /text/regex)
+			r.Post("/regex", apiTextRegexHandler)
 		})
 
 		// Images
@@ -591,6 +612,13 @@ func toolPages() []toolPage {
 		{category: "datetime", tool: "unix", title: "To Unix Timestamp", description: "Convert a human-readable date/time string to a Unix timestamp"},
 		{category: "datetime", tool: "add", title: "Add Duration", description: "Add a duration to a Unix timestamp"},
 		{category: "datetime", tool: "diff", title: "Timestamp Diff", description: "Compute the difference between two Unix timestamps"},
+		{category: "text", tool: "compress", title: "Compress/Decompress", description: "Compress or decompress text using gzip, zlib, or flate/deflate"},
+		{category: "text", tool: "diff", title: "Text Diff", description: "Compare two blocks of text and show the differences"},
+		{category: "text", tool: "extract", title: "Extract", description: "Extract emails, URLs, IP addresses, or phone numbers from text"},
+		{category: "text", tool: "nanoid", title: "NanoID Generator", description: "Generate a compact, URL-friendly unique ID"},
+		{category: "text", tool: "ulid", title: "ULID Generator", description: "Generate a sortable, timestamp-based unique ID"},
+		{category: "text", tool: "regex", title: "Regex Tester", description: "Test a regular expression against text: match, replace, or explain"},
+		{category: "dev", tool: "regex", title: "Regex Tester", description: "Test a regular expression against text: match, replace, or explain"},
 	}
 }
 

@@ -3,7 +3,7 @@ Read: AI.md PART 16 (frontend), src/server/template/page/*.tmpl
 Every sub-tool that mapped directly onto an existing, non-stub backend
 service method has now been wired end-to-end (template + `toolPages()`
 entry + frontend route + API route + tool-page test + handler test).
-89 tools are wired as of this pass:
+96 tools are wired as of this pass:
 convert/{length,temperature,time,volume,weight};
 crypto/{bcrypt,hash,jwt,password,password-strength,pin,random,totp};
 datetime/{add,convert,diff,now,timestamp,unix};
@@ -20,7 +20,8 @@ osint/{cert,domain,email,ip};
 parse/{csv,json,jwt,xml};
 research/{citation,doi};
 testing/{assertions,fake-data,fixtures,http};
-text/{case,decode,encode,hash,lorem,uuid};
+text/{case,compress,decode,diff,encode,extract,hash,lorem,nanoid,regex,ulid,uuid};
+dev/regex;
 validate/{credit-card,domain,email,ip,json,mac,phone,url,uuid};
 weather/{current,forecast}.
 Five JS executors in static/js/app.js cover every request shape used above:
@@ -31,7 +32,7 @@ This READY batch is exhausted — every remaining linked sub-tool below
 needs net-new backend service work (not just a template/route), which is
 scoped as its own body of work in the next section.
 
-## [ ] MISSING sub-tools needing net-new backend service work (151 linked, unwired)
+## [ ] MISSING sub-tools needing net-new backend service work (144 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -45,7 +46,7 @@ One commit per tool or small logical group when picked up.
   (AES-256-GCM encrypt/decrypt, HMAC, RSA, Ed25519, PGP, X.509 cert — zero
   backend support today; each needs its own net-new crypto service method)
 - datetime (7): calendar, cron, format, moon, parse, sunrise, workdays
-- dev (9): cron, css-format, echo, html-format, js-format, jwt, regex,
+- dev (8): cron, css-format, echo, html-format, js-format, jwt,
   sql-format, xml-format
 - docker (9): best-practices, compose-to-run, compose-validate,
   dockerfile-lint, env-parser, network-helper, run-to-compose,
@@ -74,7 +75,6 @@ One commit per tool or small logical group when picked up.
   may already be covered by testing/http's `GenerateMockAPIResponse` or may
   need its own distinct implementation — needs a scoping decision before
   either is picked up)
-- text (6): compress, diff, extract, nanoid, regex, ulid
 - validate (3): iban, isbn, vat
 - weather (10): air-quality, alerts, astronomy, historical, hourly, maps,
   marine, pollen, radar, uv
@@ -85,8 +85,6 @@ One commit per tool or small logical group when picked up.
 - `docker/version.tmpl`'s form has no `image` input field even though
   `apiDockerVersionHandler` requires `?image=` — form submits with a
   missing required param.
-- `help.tmpl` links `/server/contact` but the actual wired page is
-  `/contact` (`contact.tmpl`) — `/server/contact` 404s.
 
 ## [ ] Known permanent API gaps needing a future spec/dependency decision
 Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,

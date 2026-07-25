@@ -87,6 +87,11 @@ func newTestServer(t *testing.T, cfg *config.Config) *http.Server {
 // health/version, and a nested API route registration all at once.
 func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 	cfg := newTestConfig(t)
+	// This test exercises route registration/wiring across every tool page,
+	// not rate-limiting behavior (that is covered by ratelimit_test.go), so
+	// raise the read-class ceiling well above the table size to avoid a
+	// false 429 as more tool pages are added over time.
+	cfg.Server.RateLimit.Read.Requests = 10000
 	srv := newTestServer(t, cfg)
 	require.NotNil(t, srv)
 	require.NotNil(t, srv.Handler)
@@ -220,6 +225,15 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"datetime unix tool page", http.MethodGet, "/datetime/unix", http.StatusOK},
 		{"datetime add tool page", http.MethodGet, "/datetime/add", http.StatusOK},
 		{"datetime diff tool page", http.MethodGet, "/datetime/diff", http.StatusOK},
+		{"text compress tool page", http.MethodGet, "/text/compress", http.StatusOK},
+		{"text diff tool page", http.MethodGet, "/text/diff", http.StatusOK},
+		{"text extract tool page", http.MethodGet, "/text/extract", http.StatusOK},
+		{"text nanoid tool page", http.MethodGet, "/text/nanoid", http.StatusOK},
+		{"text ulid tool page", http.MethodGet, "/text/ulid", http.StatusOK},
+		{"text regex tool page", http.MethodGet, "/text/regex", http.StatusOK},
+		{"dev regex tool page", http.MethodGet, "/dev/regex", http.StatusOK},
+		{"api v1 text nanoid", http.MethodGet, "/api/v1/text/nanoid", http.StatusOK},
+		{"api v1 text ulid", http.MethodGet, "/api/v1/text/ulid", http.StatusOK},
 	}
 
 	for _, tt := range tests {

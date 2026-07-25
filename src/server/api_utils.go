@@ -1735,3 +1735,190 @@ func apiNetworkDNSHandler(w http.ResponseWriter, r *http.Request) {
 		"records": records,
 	})
 }
+
+// textCompressRequest is the JSON body shape accepted by
+// apiTextCompressHandler: the input data, the algorithm (gzip, zlib, or
+// flate/deflate), and the direction (compress or decompress).
+type textCompressRequest struct {
+	Data      string `json:"data"`
+	Algorithm string `json:"algorithm"`
+	Mode      string `json:"mode"`
+}
+
+// apiTextCompressHandler compresses or decompresses data using
+// text.Compress/text.Decompress, both base64-encoded on the wire so the
+// result is always safe JSON. Mode defaults to "compress"; Algorithm
+// defaults to "gzip" (zlib and flate/deflate are also supported by the
+// underlying service — brotli/zstd are not implemented).
+func apiTextCompressHandler(w http.ResponseWriter, r *http.Request) {
+	var body textCompressRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Data == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data is required", nil)
+		return
+	}
+	if body.Algorithm == "" {
+		body.Algorithm = "gzip"
+	}
+	if body.Mode == "" {
+		body.Mode = "compress"
+	}
+
+	var result string
+	var err error
+	switch strings.ToLower(body.Mode) {
+	case "compress":
+		result, err = text.Compress(body.Data, body.Algorithm)
+	case "decompress":
+		result, err = text.Decompress(body.Data, body.Algorithm)
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be compress or decompress", nil)
+		return
+	}
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "COMPRESS_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"mode":      body.Mode,
+		"algorithm": body.Algorithm,
+		"result":    result,
+	})
+}
+
+// textDiffRequest is the JSON body shape accepted by apiTextDiffHandler.
+type textDiffRequest struct {
+	Text1 string `json:"text1"`
+	Text2 string `json:"text2"`
+}
+
+// apiTextDiffHandler returns a unified line diff between two texts using
+// text.Diff.
+func apiTextDiffHandler(w http.ResponseWriter, r *http.Request) {
+	var body textDiffRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"diff": text.Diff(body.Text1, body.Text2),
+	})
+}
+
+// textExtractRequest is the JSON body shape accepted by
+// apiTextExtractHandler: the source text and which kind of token to pull
+// out of it.
+type textExtractRequest struct {
+	Text string `json:"text"`
+	Type string `json:"type"`
+}
+
+// apiTextExtractHandler pulls emails, URLs, IPs, or phone numbers out of
+// free-form text using the matching text.Extract* function.
+func apiTextExtractHandler(w http.ResponseWriter, r *http.Request) {
+	var body textExtractRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Type == "" {
+		body.Type = "emails"
+	}
+
+	var matches []string
+	switch strings.ToLower(body.Type) {
+	case "emails", "email":
+		matches = text.ExtractEmails(body.Text)
+	case "urls", "url":
+		matches = text.ExtractURLs(body.Text)
+	case "ips", "ip":
+		matches = text.ExtractIPs(body.Text)
+	case "phones", "phone":
+		matches = text.ExtractPhones(body.Text)
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be emails, urls, ips, or phones", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"type":    body.Type,
+		"matches": matches,
+	})
+}
+
+// apiTextNanoIDHandler returns a newly generated NanoID via text.NanoID.
+func apiTextNanoIDHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"nanoid": text.NanoID(),
+	})
+}
+
+// apiTextULIDHandler returns a newly generated ULID via text.ULID.
+func apiTextULIDHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"ulid": text.ULID(),
+	})
+}
+
+// textRegexRequest is the JSON body shape accepted by apiTextRegexHandler,
+// shared by both the /text/regex and /dev/regex tool pages.
+type textRegexRequest struct {
+	Pattern     string `json:"pattern"`
+	Text        string `json:"text"`
+	Replacement string `json:"replacement"`
+	Mode        string `json:"mode"`
+}
+
+// apiTextRegexHandler tests a regular expression against input text. Mode
+// "match" (the default) returns every match via text.RegexMatch; mode
+// "replace" substitutes Replacement via text.RegexReplace; mode "explain"
+// returns a human-readable breakdown via text.RegexExplain.
+func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
+	var body textRegexRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Pattern == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PATTERN", "pattern is required", nil)
+		return
+	}
+	if body.Mode == "" {
+		body.Mode = "match"
+	}
+
+	switch strings.ToLower(body.Mode) {
+	case "match":
+		matches, err := text.RegexMatch(body.Pattern, body.Text)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PATTERN", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":    body.Mode,
+			"matches": matches,
+		})
+	case "replace":
+		result, err := text.RegexReplace(body.Pattern, body.Text, body.Replacement)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PATTERN", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":   body.Mode,
+			"result": result,
+		})
+	case "explain":
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":        body.Mode,
+			"explanation": text.RegexExplain(body.Pattern),
+		})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be match, replace, or explain", nil)
+	}
+}

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -1130,5 +1131,187 @@ func TestAPIImageConvertHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "image/jpeg", w.Header().Get("Content-Type"))
+	})
+}
+
+// apiTextCompressHandler must 400 MISSING_DATA when data is absent, default
+// to gzip compress mode, and round-trip through decompress.
+func TestAPITextCompressHandler(t *testing.T) {
+	t.Run("missing data", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/compress", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiTextCompressHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DATA", env["error"])
+	})
+
+	t.Run("round trip gzip", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/compress", strings.NewReader(`{"data":"hello world"}`))
+		w := httptest.NewRecorder()
+		apiTextCompressHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		compressed := data["result"].(string)
+
+		body, err := json.Marshal(map[string]string{"data": compressed, "mode": "decompress"})
+		require.NoError(t, err)
+		req2 := httptest.NewRequest(http.MethodPost, "/api/v1/text/compress", bytes.NewReader(body))
+		w2 := httptest.NewRecorder()
+		apiTextCompressHandler(w2, req2)
+		assert.Equal(t, http.StatusOK, w2.Code)
+		env2 := decodeEnvelope(t, w2.Body.Bytes())
+		data2 := env2["data"].(map[string]interface{})
+		assert.Equal(t, "hello world", data2["result"])
+	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/compress", strings.NewReader(`{"data":"x","mode":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiTextCompressHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MODE", env["error"])
+	})
+}
+
+// apiTextDiffHandler must return a non-empty diff for differing inputs.
+func TestAPITextDiffHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/text/diff", strings.NewReader(`{"text1":"a\nb","text2":"a\nc"}`))
+	w := httptest.NewRecorder()
+
+	apiTextDiffHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["diff"])
+}
+
+// apiTextExtractHandler must default to emails and support the other three
+// extraction types, and 400 on an unknown type.
+func TestAPITextExtractHandler(t *testing.T) {
+	t.Run("default emails", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/extract", strings.NewReader(`{"text":"reach me at a@example.com"}`))
+		w := httptest.NewRecorder()
+		apiTextExtractHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		matches, ok := data["matches"].([]interface{})
+		require.True(t, ok)
+		assert.Contains(t, matches, "a@example.com")
+	})
+
+	t.Run("urls", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/extract", strings.NewReader(`{"text":"visit https://example.com now","type":"urls"}`))
+		w := httptest.NewRecorder()
+		apiTextExtractHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("invalid type", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/extract", strings.NewReader(`{"text":"x","type":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiTextExtractHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_TYPE", env["error"])
+	})
+}
+
+// apiTextNanoIDHandler and apiTextULIDHandler must return non-empty
+// generated IDs.
+func TestAPITextNanoIDAndULIDHandlers(t *testing.T) {
+	t.Run("nanoid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/text/nanoid", nil)
+		w := httptest.NewRecorder()
+		apiTextNanoIDHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["nanoid"])
+	})
+
+	t.Run("ulid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/text/ulid", nil)
+		w := httptest.NewRecorder()
+		apiTextULIDHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["ulid"])
+	})
+}
+
+// apiTextRegexHandler must 400 MISSING_PATTERN when pattern is absent, and
+// support match, replace, and explain modes.
+func TestAPITextRegexHandler(t *testing.T) {
+	t.Run("missing pattern", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/regex", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiTextRegexHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PATTERN", env["error"])
+	})
+
+	t.Run("match", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/regex", strings.NewReader(`{"pattern":"[a-z]+","text":"Hello World"}`))
+		w := httptest.NewRecorder()
+		apiTextRegexHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		matches, ok := data["matches"].([]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, matches)
+	})
+
+	t.Run("replace", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/regex", strings.NewReader(`{"pattern":"o","text":"foo","mode":"replace","replacement":"0"}`))
+		w := httptest.NewRecorder()
+		apiTextRegexHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "f00", data["result"])
+	})
+
+	t.Run("explain", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/regex", strings.NewReader(`{"pattern":"[a-z]+","mode":"explain"}`))
+		w := httptest.NewRecorder()
+		apiTextRegexHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["explanation"])
+	})
+
+	t.Run("invalid pattern", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/regex", strings.NewReader(`{"pattern":"[","text":"x"}`))
+		w := httptest.NewRecorder()
+		apiTextRegexHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_PATTERN", env["error"])
+	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/text/regex", strings.NewReader(`{"pattern":"x","mode":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiTextRegexHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MODE", env["error"])
 	})
 }
