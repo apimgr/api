@@ -1,0 +1,89 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+      <a href="/">Home</a> / <a href="/math">Math &amp; Numbers</a> / Calculator
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">Calculator</h1>
+        <button class="btn btn-icon" data-favorite="math-calculate" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Run a math operation. Operations using two operands need
+        <strong>a</strong> and <strong>b</strong>; single-operand operations
+        (including factorial) need only <strong>n</strong>.
+      </p>
+
+      <form id="calculate-form" class="tool-form" data-endpoint="/api/v1/math/calculate">
+        <div class="form-group">
+          <label class="form-label">Operation</label>
+          <select name="operation" class="form-input">
+            <option value="add">Add (a + b)</option>
+            <option value="subtract">Subtract (a - b)</option>
+            <option value="multiply">Multiply (a * b)</option>
+            <option value="divide">Divide (a / b)</option>
+            <option value="power">Power (a ^ b)</option>
+            <option value="percentage_of">Percentage of (a% of b)</option>
+            <option value="percentage_change">Percentage change (a to b)</option>
+            <option value="modulo">Modulo (a % b)</option>
+            <option value="gcd">GCD (a, b)</option>
+            <option value="lcm">LCM (a, b)</option>
+            <option value="sqrt">Square root (n)</option>
+            <option value="cbrt">Cube root (n)</option>
+            <option value="abs">Absolute value (n)</option>
+            <option value="round">Round (n)</option>
+            <option value="floor">Floor (n)</option>
+            <option value="ceil">Ceiling (n)</option>
+            <option value="log">Natural log (n)</option>
+            <option value="log10">Log base 10 (n)</option>
+            <option value="log2">Log base 2 (n)</option>
+            <option value="exp">Exponential (n)</option>
+            <option value="sin">Sine (n)</option>
+            <option value="cos">Cosine (n)</option>
+            <option value="tan">Tangent (n)</option>
+            <option value="factorial">Factorial (n)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">a (two-operand ops)</label>
+          <input type="number" name="a" class="form-input" step="any">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">b (two-operand ops)</label>
+          <input type="number" name="b" class="form-input" step="any">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">n (single-operand ops)</label>
+          <input type="number" name="n" class="form-input" step="any">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Calculate</button>
+      </form>
+
+      <div id="calculate-form-result" class="tool-result" style="display:none;"></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">GET Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl "{{.BaseURL}}/api/v1/math/calculate?operation=add&a=2&b=3"</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -150,6 +150,10 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"network ula tool page", http.MethodGet, "/network/ula", http.StatusOK},
 		{"network port tool page", http.MethodGet, "/network/port", http.StatusOK},
 		{"weather current tool page", http.MethodGet, "/weather/current", http.StatusOK},
+		{"geo ip tool page", http.MethodGet, "/geo/ip", http.StatusOK},
+		{"convert length tool page", http.MethodGet, "/convert/length", http.StatusOK},
+		{"math calculate tool page", http.MethodGet, "/math/calculate", http.StatusOK},
+		{"parse json tool page", http.MethodGet, "/parse/json", http.StatusOK},
 	}
 
 	for _, tt := range tests {

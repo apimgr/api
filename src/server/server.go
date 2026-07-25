@@ -467,6 +467,10 @@ func toolPages() []toolPage {
 		{category: "network", tool: "ula", title: "ULA Generator", description: "Generate an RFC 4193 IPv6 unique-local-address prefix"},
 		{category: "network", tool: "port", title: "Random Port", description: "Suggest a random unprivileged TCP/UDP port"},
 		{category: "weather", tool: "current", title: "Current Weather", description: "Get current weather conditions for a location"},
+		{category: "geo", tool: "ip", title: "IP Geolocation", description: "Look up geolocation details for a public IP address"},
+		{category: "convert", tool: "length", title: "Length Converter", description: "Convert a length value between feet, meters, inches, centimeters, miles, and kilometers"},
+		{category: "math", tool: "calculate", title: "Calculator", description: "Run add/subtract/multiply/divide and other math operations"},
+		{category: "parse", tool: "json", title: "JSON Parser", description: "Parse a raw JSON document and view the decoded structure"},
 	}
 }
 
