@@ -471,6 +471,10 @@ func toolPages() []toolPage {
 		{category: "convert", tool: "length", title: "Length Converter", description: "Convert a length value between feet, meters, inches, centimeters, miles, and kilometers"},
 		{category: "math", tool: "calculate", title: "Calculator", description: "Run add/subtract/multiply/divide and other math operations"},
 		{category: "parse", tool: "json", title: "JSON Parser", description: "Parse a raw JSON document and view the decoded structure"},
+		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
+		{category: "lorem", tool: "person", title: "Fake Person", description: "Generate a fake person with a name, email, and phone number"},
+		{category: "testing", tool: "http", title: "Mock HTTP Response", description: "Generate a mock API response fixture and measure execution time"},
+		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
 	}
 }
 
