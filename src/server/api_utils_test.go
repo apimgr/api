@@ -1315,3 +1315,221 @@ func TestAPITextRegexHandler(t *testing.T) {
 		assert.Equal(t, "INVALID_MODE", env["error"])
 	})
 }
+
+func TestAPICryptoEncryptDecryptHandlers(t *testing.T) {
+	t.Run("encrypt missing plaintext", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/encrypt", strings.NewReader(`{"key":"secret"}`))
+		w := httptest.NewRecorder()
+		apiCryptoEncryptHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PLAINTEXT", env["error"])
+	})
+
+	t.Run("encrypt missing key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/encrypt", strings.NewReader(`{"plaintext":"hello"}`))
+		w := httptest.NewRecorder()
+		apiCryptoEncryptHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_KEY", env["error"])
+	})
+
+	t.Run("decrypt missing ciphertext", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/decrypt", strings.NewReader(`{"key":"secret"}`))
+		w := httptest.NewRecorder()
+		apiCryptoDecryptHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_CIPHERTEXT", env["error"])
+	})
+
+	t.Run("decrypt missing key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/decrypt", strings.NewReader(`{"ciphertext":"abc"}`))
+		w := httptest.NewRecorder()
+		apiCryptoDecryptHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_KEY", env["error"])
+	})
+
+	t.Run("decrypt with wrong key fails", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/decrypt", strings.NewReader(`{"ciphertext":"bm90LXJlYWwtY2lwaGVydGV4dA==","key":"wrong"}`))
+		w := httptest.NewRecorder()
+		apiCryptoDecryptHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "DECRYPT_FAILED", env["error"])
+	})
+
+	t.Run("round trip", func(t *testing.T) {
+		encReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/encrypt", strings.NewReader(`{"plaintext":"Hello World","key":"correct horse battery staple"}`))
+		encW := httptest.NewRecorder()
+		apiCryptoEncryptHandler(encW, encReq)
+		assert.Equal(t, http.StatusOK, encW.Code)
+		encEnv := decodeEnvelope(t, encW.Body.Bytes())
+		encData, ok := encEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		ciphertext, ok := encData["ciphertext"].(string)
+		require.True(t, ok)
+		require.NotEmpty(t, ciphertext)
+
+		decReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/decrypt", strings.NewReader(`{"ciphertext":"`+ciphertext+`","key":"correct horse battery staple"}`))
+		decW := httptest.NewRecorder()
+		apiCryptoDecryptHandler(decW, decReq)
+		assert.Equal(t, http.StatusOK, decW.Code)
+		decEnv := decodeEnvelope(t, decW.Body.Bytes())
+		decData, ok := decEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Hello World", decData["plaintext"])
+	})
+}
+
+func TestAPICryptoRSAHandler(t *testing.T) {
+	t.Run("generate default bits", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(`{"mode":"generate"}`))
+		w := httptest.NewRecorder()
+		apiCryptoRSAHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["private_key"])
+		assert.NotEmpty(t, data["public_key"])
+	})
+
+	t.Run("encrypt missing plaintext", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(`{"mode":"encrypt","public_key":"x"}`))
+		w := httptest.NewRecorder()
+		apiCryptoRSAHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PLAINTEXT", env["error"])
+	})
+
+	t.Run("encrypt missing public key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(`{"mode":"encrypt","plaintext":"hi"}`))
+		w := httptest.NewRecorder()
+		apiCryptoRSAHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PUBLIC_KEY", env["error"])
+	})
+
+	t.Run("decrypt missing ciphertext", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(`{"mode":"decrypt","private_key":"x"}`))
+		w := httptest.NewRecorder()
+		apiCryptoRSAHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_CIPHERTEXT", env["error"])
+	})
+
+	t.Run("decrypt missing private key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(`{"mode":"decrypt","ciphertext":"x"}`))
+		w := httptest.NewRecorder()
+		apiCryptoRSAHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_PRIVATE_KEY", env["error"])
+	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(`{"mode":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiCryptoRSAHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MODE", env["error"])
+	})
+
+	t.Run("round trip", func(t *testing.T) {
+		genReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(`{"mode":"generate","bits":2048}`))
+		genW := httptest.NewRecorder()
+		apiCryptoRSAHandler(genW, genReq)
+		require.Equal(t, http.StatusOK, genW.Code)
+		genEnv := decodeEnvelope(t, genW.Body.Bytes())
+		genData, ok := genEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		privateKey, ok := genData["private_key"].(string)
+		require.True(t, ok)
+		publicKey, ok := genData["public_key"].(string)
+		require.True(t, ok)
+
+		encBody, err := json.Marshal(map[string]string{
+			"mode":       "encrypt",
+			"plaintext":  "Hello World",
+			"public_key": publicKey,
+		})
+		require.NoError(t, err)
+		encReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(string(encBody)))
+		encW := httptest.NewRecorder()
+		apiCryptoRSAHandler(encW, encReq)
+		require.Equal(t, http.StatusOK, encW.Code)
+		encEnv := decodeEnvelope(t, encW.Body.Bytes())
+		encData, ok := encEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		ciphertext, ok := encData["ciphertext"].(string)
+		require.True(t, ok)
+		require.NotEmpty(t, ciphertext)
+
+		decBody, err := json.Marshal(map[string]string{
+			"mode":        "decrypt",
+			"ciphertext":  ciphertext,
+			"private_key": privateKey,
+		})
+		require.NoError(t, err)
+		decReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(string(decBody)))
+		decW := httptest.NewRecorder()
+		apiCryptoRSAHandler(decW, decReq)
+		require.Equal(t, http.StatusOK, decW.Code)
+		decEnv := decodeEnvelope(t, decW.Body.Bytes())
+		decData, ok := decEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Hello World", decData["plaintext"])
+	})
+}
+
+func TestAPICryptoHMACHandler(t *testing.T) {
+	t.Run("missing key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/hmac", strings.NewReader(`{"message":"hi"}`))
+		w := httptest.NewRecorder()
+		apiCryptoHMACHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_KEY", env["error"])
+	})
+
+	t.Run("default algorithm sha256", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/hmac", strings.NewReader(`{"key":"secret","message":"Hello World"}`))
+		w := httptest.NewRecorder()
+		apiCryptoHMACHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "sha256", data["algorithm"])
+		assert.NotEmpty(t, data["hmac"])
+	})
+
+	t.Run("explicit sha1", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/hmac", strings.NewReader(`{"algorithm":"sha1","key":"secret","message":"Hello World"}`))
+		w := httptest.NewRecorder()
+		apiCryptoHMACHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "sha1", data["algorithm"])
+		assert.NotEmpty(t, data["hmac"])
+	})
+
+	t.Run("invalid algorithm", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/hmac", strings.NewReader(`{"algorithm":"md5","key":"secret","message":"hi"}`))
+		w := httptest.NewRecorder()
+		apiCryptoHMACHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_ALGORITHM", env["error"])
+	})
+}

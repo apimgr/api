@@ -12,6 +12,7 @@ import (
 
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/service/convert"
+	"github.com/apimgr/api/src/service/crypto"
 	"github.com/apimgr/api/src/service/dev"
 	"github.com/apimgr/api/src/service/docker"
 	"github.com/apimgr/api/src/service/fun"
@@ -1921,4 +1922,187 @@ func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be match, replace, or explain", nil)
 	}
+}
+
+// cryptoEncryptRequest is the JSON body shape accepted by
+// apiCryptoEncryptHandler and apiCryptoDecryptHandler.
+type cryptoEncryptRequest struct {
+	Plaintext  string `json:"plaintext"`
+	Ciphertext string `json:"ciphertext"`
+	Key        string `json:"key"`
+}
+
+// apiCryptoEncryptHandler encrypts plaintext with AES-256-GCM using a key
+// derived from the supplied passphrase via Argon2id, composing
+// crypto.AESEncrypt.
+func apiCryptoEncryptHandler(w http.ResponseWriter, r *http.Request) {
+	var body cryptoEncryptRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Plaintext == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PLAINTEXT", "plaintext is required", nil)
+		return
+	}
+	if body.Key == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_KEY", "key is required", nil)
+		return
+	}
+
+	ciphertext, err := crypto.AESEncrypt(body.Plaintext, body.Key)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "ENCRYPT_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"ciphertext": ciphertext,
+		"algorithm":  "AES-256-GCM",
+	})
+}
+
+// apiCryptoDecryptHandler decrypts a base64-encoded AES-256-GCM payload
+// produced by apiCryptoEncryptHandler, composing crypto.AESDecrypt.
+func apiCryptoDecryptHandler(w http.ResponseWriter, r *http.Request) {
+	var body cryptoEncryptRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Ciphertext == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CIPHERTEXT", "ciphertext is required", nil)
+		return
+	}
+	if body.Key == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_KEY", "key is required", nil)
+		return
+	}
+
+	plaintext, err := crypto.AESDecrypt(body.Ciphertext, body.Key)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"plaintext": plaintext,
+	})
+}
+
+// cryptoRSARequest is the JSON body shape accepted by apiCryptoRSAHandler.
+type cryptoRSARequest struct {
+	Mode       string `json:"mode"`
+	Plaintext  string `json:"plaintext"`
+	Ciphertext string `json:"ciphertext"`
+	PublicKey  string `json:"public_key"`
+	PrivateKey string `json:"private_key"`
+	Bits       int    `json:"bits"`
+}
+
+// apiCryptoRSAHandler handles RSA keypair generation, RSA-OAEP encryption,
+// and RSA-OAEP decryption in one endpoint, selected by Mode. Composes
+// crypto.GenerateRSAKeys, crypto.RSAEncrypt, and crypto.RSADecrypt.
+func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
+	var body cryptoRSARequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Mode == "" {
+		body.Mode = "generate"
+	}
+
+	switch strings.ToLower(body.Mode) {
+	case "generate":
+		bits := body.Bits
+		if bits == 0 {
+			bits = 2048
+		}
+		privateKey, publicKey, err := crypto.GenerateRSAKeys(bits)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusInternalServerError, "GENERATE_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":        body.Mode,
+			"private_key": privateKey,
+			"public_key":  publicKey,
+			"bits":        bits,
+		})
+	case "encrypt":
+		if body.Plaintext == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PLAINTEXT", "plaintext is required", nil)
+			return
+		}
+		if body.PublicKey == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PUBLIC_KEY", "public_key is required", nil)
+			return
+		}
+		ciphertext, err := crypto.RSAEncrypt(body.Plaintext, body.PublicKey)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "ENCRYPT_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":       body.Mode,
+			"ciphertext": ciphertext,
+		})
+	case "decrypt":
+		if body.Ciphertext == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CIPHERTEXT", "ciphertext is required", nil)
+			return
+		}
+		if body.PrivateKey == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PRIVATE_KEY", "private_key is required", nil)
+			return
+		}
+		plaintext, err := crypto.RSADecrypt(body.Ciphertext, body.PrivateKey)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":      body.Mode,
+			"plaintext": plaintext,
+		})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate, encrypt, or decrypt", nil)
+	}
+}
+
+// cryptoHMACRequest is the JSON body shape accepted by apiCryptoHMACHandler.
+type cryptoHMACRequest struct {
+	Algorithm string `json:"algorithm"`
+	Key       string `json:"key"`
+	Message   string `json:"message"`
+}
+
+// apiCryptoHMACHandler computes an HMAC of Message using Key, composing
+// crypto.HMACGenerate. Algorithm defaults to sha256; sha1 is also
+// supported.
+func apiCryptoHMACHandler(w http.ResponseWriter, r *http.Request) {
+	var body cryptoHMACRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Key == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_KEY", "key is required", nil)
+		return
+	}
+	if body.Algorithm == "" {
+		body.Algorithm = "sha256"
+	}
+
+	mac, err := crypto.HMACGenerate(body.Algorithm, body.Key, body.Message)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ALGORITHM", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"algorithm": strings.ToLower(body.Algorithm),
+		"hmac":      mac,
+	})
 }

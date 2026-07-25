@@ -240,6 +240,16 @@ func New(cfg *config.Config) *http.Server {
 
 			// JWT decode (header/payload only, no signature verification)
 			r.Get("/jwt/{token}", apiCryptoJWTDecodeHandler)
+
+			// AES-256-GCM encrypt/decrypt
+			r.Post("/encrypt", apiCryptoEncryptHandler)
+			r.Post("/decrypt", apiCryptoDecryptHandler)
+
+			// RSA keypair generation / RSA-OAEP encrypt / decrypt
+			r.Post("/rsa", apiCryptoRSAHandler)
+
+			// HMAC
+			r.Post("/hmac", apiCryptoHMACHandler)
 		})
 
 		// DateTime utilities
@@ -528,6 +538,10 @@ func toolPages() []toolPage {
 		{category: "crypto", tool: "totp", title: "TOTP Generator", description: "Generate a time-based one-time password secret, provisioning URI, and current code"},
 		{category: "crypto", tool: "random", title: "Random Bytes", description: "Generate cryptographically secure random bytes as raw values and hex encoding"},
 		{category: "crypto", tool: "password", title: "Password Generator", description: "Generate secure random passwords with customizable length and character sets"},
+		{category: "crypto", tool: "encrypt", title: "AES Encrypt", description: "Encrypt text with AES-256-GCM using a passphrase-derived key"},
+		{category: "crypto", tool: "decrypt", title: "AES Decrypt", description: "Decrypt AES-256-GCM ciphertext using the original passphrase"},
+		{category: "crypto", tool: "rsa", title: "RSA Encrypt/Decrypt", description: "Generate an RSA keypair, or encrypt/decrypt text with RSA-OAEP (SHA-256)"},
+		{category: "crypto", tool: "hmac", title: "HMAC Generator", description: "Compute an HMAC (SHA-1 or SHA-256) of a message using a secret key"},
 		{category: "datetime", tool: "now", title: "Current Time", description: "Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable"},
 		{category: "network", tool: "ip", title: "IP Address Lookup", description: "Get detailed information about any IP address including location, ISP, and network details"},
 		{category: "network", tool: "headers", title: "Request Headers", description: "Inspect the caller-identifying headers sent with the request"},

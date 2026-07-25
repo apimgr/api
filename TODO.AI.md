@@ -3,9 +3,9 @@ Read: AI.md PART 16 (frontend), src/server/template/page/*.tmpl
 Every sub-tool that mapped directly onto an existing, non-stub backend
 service method has now been wired end-to-end (template + `toolPages()`
 entry + frontend route + API route + tool-page test + handler test).
-96 tools are wired as of this pass:
+100 tools are wired as of this pass:
 convert/{length,temperature,time,volume,weight};
-crypto/{bcrypt,hash,jwt,password,password-strength,pin,random,totp};
+crypto/{bcrypt,decrypt,encrypt,hash,hmac,jwt,password,password-strength,pin,random,rsa,totp};
 datetime/{add,convert,diff,now,timestamp,unix};
 dev/{base64,format-json,url-encode};
 docker/{dockerfile-generate,port-mapping,version,volume-helper};
@@ -32,7 +32,7 @@ This READY batch is exhausted — every remaining linked sub-tool below
 needs net-new backend service work (not just a template/route), which is
 scoped as its own body of work in the next section.
 
-## [ ] MISSING sub-tools needing net-new backend service work (144 linked, unwired)
+## [ ] MISSING sub-tools needing net-new backend service work (140 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -42,9 +42,10 @@ out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
 - convert (7): area, color, currency, data, energy, pressure, speed
-- crypto (7): certificate, decrypt, ed25519, encrypt, hmac, pgp, rsa
-  (AES-256-GCM encrypt/decrypt, HMAC, RSA, Ed25519, PGP, X.509 cert — zero
-  backend support today; each needs its own net-new crypto service method)
+- crypto (3): certificate, ed25519, pgp
+  (X.509 cert, Ed25519, PGP — zero backend support today; each needs its own
+  net-new crypto service method. encrypt/decrypt/rsa/hmac were wired this
+  pass onto pre-existing crypto_extended.go/crypto.go functions)
 - datetime (7): calendar, cron, format, moon, parse, sunrise, workdays
 - dev (8): cron, css-format, echo, html-format, js-format, jwt,
   sql-format, xml-format
