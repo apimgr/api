@@ -129,6 +129,10 @@ func (s *Service) GenerateComposeService(name string, config ComposeServiceConfi
 		lines = append(lines, fmt.Sprintf("    restart: %s", config.Restart))
 	}
 
+	if len(config.Command) > 0 {
+		lines = append(lines, fmt.Sprintf("    command: %s", strings.Join(config.Command, " ")))
+	}
+
 	if len(config.DependsOn) > 0 {
 		lines = append(lines, "    depends_on:")
 		for _, dep := range config.DependsOn {
@@ -148,6 +152,7 @@ type ComposeServiceConfig struct {
 	Environment   map[string]string
 	Restart       string
 	DependsOn     []string
+	Command       []string
 }
 
 // Image name parsing

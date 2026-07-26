@@ -507,6 +507,7 @@ func (s *Service) RunCommandToCompose(cmdLine string) (string, error) {
 		return "", fmt.Errorf("no image found in command")
 	}
 	cfg.Image = image
+	cfg.Command = trailing
 
 	name := cfg.ContainerName
 	if name == "" {
