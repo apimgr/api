@@ -2064,6 +2064,40 @@ func apiLanguageDetectHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "language auto-detection is a declared non-goal for this project; only language code/name lookup is supported", nil)
 }
 
+// apiLanguageDictionaryHandler reports that dictionary lookups are not
+// supported. IDEA.md's trust-boundary table states outbound calls exist
+// only for the OSINT and weather tool families; a real dictionary lookup
+// would require a new outbound integration outside that boundary.
+func apiLanguageDictionaryHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "dictionary lookup requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+}
+
+// apiLanguageThesaurusHandler reports that synonym/antonym lookups are not
+// supported, for the same trust-boundary reason as apiLanguageDictionaryHandler.
+func apiLanguageThesaurusHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "thesaurus lookup requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+}
+
+// apiLanguageSpellCheckHandler reports that spell-checking against an
+// external corpus is not supported, for the same trust-boundary reason as
+// apiLanguageDictionaryHandler.
+func apiLanguageSpellCheckHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "spell-check requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+}
+
+// apiLanguageGrammarHandler reports that grammar checking is not supported,
+// for the same trust-boundary reason as apiLanguageDictionaryHandler.
+func apiLanguageGrammarHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "grammar checking requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+}
+
+// apiLanguageTranslateHandler reports that machine translation is not
+// supported. IDEA.md explicitly excludes "machine translation" as a
+// non-goal and forbids commercial translation among outbound integrations.
+func apiLanguageTranslateHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "machine translation is a declared non-goal for this project", nil)
+}
+
 // apiLanguagePhoneticHandler returns the Soundex and Metaphone phonetic
 // codes for a word supplied via ?word=.
 func apiLanguagePhoneticHandler(w http.ResponseWriter, r *http.Request) {
@@ -2098,6 +2132,112 @@ func apiLanguageWordCountHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeEnvelopeOK(w, http.StatusOK, languageService.WordCount(text))
+}
+
+// apiLanguageKeywordsHandler returns the most frequent non-stopword words in
+// text supplied via ?text= or the raw request body, optionally limited via
+// ?limit=.
+func apiLanguageKeywordsHandler(w http.ResponseWriter, r *http.Request) {
+	text := r.URL.Query().Get("text")
+	if text == "" {
+		body, err := readRequestBody(r)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			return
+		}
+		text = string(body)
+	}
+	if strings.TrimSpace(text) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+		return
+	}
+
+	limit := 10
+	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
+		parsed, err := strconv.Atoi(limitParam)
+		if err != nil || parsed <= 0 {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LIMIT", "limit query parameter must be a positive integer", nil)
+			return
+		}
+		limit = parsed
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"keywords": languageService.Keywords(text, limit),
+	})
+}
+
+// apiLanguageReadabilityHandler returns Flesch Reading Ease, Flesch-Kincaid
+// Grade Level, and Gunning Fog Index scores for text supplied via ?text= or
+// the raw request body.
+func apiLanguageReadabilityHandler(w http.ResponseWriter, r *http.Request) {
+	text := r.URL.Query().Get("text")
+	if text == "" {
+		body, err := readRequestBody(r)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			return
+		}
+		text = string(body)
+	}
+	if strings.TrimSpace(text) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, languageService.Readability(text))
+}
+
+// apiLanguageReadingTimeHandler estimates reading time for text supplied via
+// ?text= or the raw request body, at an optional ?wpm= words-per-minute rate
+// (default 200).
+func apiLanguageReadingTimeHandler(w http.ResponseWriter, r *http.Request) {
+	text := r.URL.Query().Get("text")
+	if text == "" {
+		body, err := readRequestBody(r)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			return
+		}
+		text = string(body)
+	}
+	if strings.TrimSpace(text) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+		return
+	}
+
+	wpm := 0
+	if wpmParam := r.URL.Query().Get("wpm"); wpmParam != "" {
+		parsed, err := strconv.Atoi(wpmParam)
+		if err != nil || parsed <= 0 {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WPM", "wpm query parameter must be a positive integer", nil)
+			return
+		}
+		wpm = parsed
+	}
+
+	wordCount := len(strings.Fields(text))
+	writeEnvelopeOK(w, http.StatusOK, languageService.ReadingTime(wordCount, wpm))
+}
+
+// apiLanguageSentimentHandler scores text supplied via ?text= or the raw
+// request body using a small lexicon-based positive/negative heuristic.
+func apiLanguageSentimentHandler(w http.ResponseWriter, r *http.Request) {
+	text := r.URL.Query().Get("text")
+	if text == "" {
+		body, err := readRequestBody(r)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			return
+		}
+		text = string(body)
+	}
+	if strings.TrimSpace(text) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, languageService.Sentiment(text))
 }
 
 // apiTestHTTPHandler exercises the mock HTTP response fixture generator

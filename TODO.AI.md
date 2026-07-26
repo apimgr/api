@@ -243,7 +243,35 @@ independently (gofmt/build/vet/staticcheck/test clean in
 tidy` produced no `go.mod`/`go.sum` diff — no new dependency introduced).
 The MISSING image line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (56 linked, unwired)
+## [x] language (4, +1 already-gapped detect, +5 newly-gapped dictionary/grammar/spell-check/thesaurus/translate): keywords, readability, reading-time, sentiment
+keywords, readability, reading-time, and sentiment are wired as
+fully local/stdlib heuristics in `src/service/language/language.go`
+(frequency-based keyword extraction excluding a hand-authored stopword
+list; Flesch Reading Ease/Flesch-Kincaid Grade/Gunning Fog via a
+syllable-counting heuristic; reading-time estimate at a configurable
+words-per-minute; lexicon-based positive/negative sentiment scoring) —
+each documented in-source as an honest heuristic, not a trained model.
+`detect` was already a permanent gap (IDEA.md non-goal of language
+auto-detection). Research (subagent) plus direct IDEA.md inspection
+(lines 35, 39, 55, 94) confirmed dictionary, grammar, spell-check,
+and thesaurus would each require a new outbound integration outside
+this project's declared trust boundary (outbound calls are restricted
+to only the OSINT and weather tool families), and translate is an
+explicit non-goal ("machine translation" excluded, commercial
+translation forbidden among outbound integrations) — so all five got
+an `apiLanguage*Handler` returning 501 NOT_SUPPORTED, following the
+exact `apiLanguageDetectHandler` precedent: no `toolPages()` entry, no
+frontend template, no smoke-test row, matching the established
+permanent-gap pattern. New table-driven test `TestAPILanguageGapHandlers`
+covers all five gap handlers; `TestAPILanguageKeywordsHandler`,
+`TestAPILanguageReadabilityHandler`, `TestAPILanguageReadingTimeHandler`,
+`TestAPILanguageSentimentHandler` cover the four wired tools. Verified
+independently (gofmt/build/vet/staticcheck/test clean in
+`casjaysdev/go:latest`, caches mounted outside the project tree; `go mod
+tidy` produced no `go.mod`/`go.sum` diff — no new dependency introduced).
+The MISSING language line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (52 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -252,8 +280,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- language (10): detect, dictionary, grammar, keywords, readability,
-  reading-time, sentiment, spell-check, thesaurus, translate
 - osint (8): breach, company, metadata, phone, social, subdomain,
   tech-stack, username
 - parse (8): env, html, ini, log, markdown, sql, toml, yaml
@@ -278,22 +304,29 @@ One commit per tool or small logical group when picked up.
 
 ## [ ] Known permanent API gaps needing a future spec/dependency decision
 Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,
-apiResearchExtractHandler doc comments), src/server/api_network.go
-(apiNetworkTracerouteHandler doc comment)
-Four of the wired API routes honestly return 501 NOT_SUPPORTED rather
+apiLanguageDictionaryHandler, apiLanguageGrammarHandler,
+apiLanguageSpellCheckHandler, apiLanguageThesaurusHandler,
+apiLanguageTranslateHandler, apiResearchExtractHandler doc comments),
+src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
+Nine of the wired API routes honestly return 501 NOT_SUPPORTED rather
 than inventing behavior: generate/qr (no QR encoder exists anywhere in the
 codebase or go.mod), language/detect (conflicts with IDEA.md's declared
-non-goal of language auto-detection), research/extract (research.go's
-own source comment documents citation extraction from unstructured text as
+non-goal of language auto-detection), language/dictionary,
+language/grammar, language/spell-check, and language/thesaurus (each
+would require a new outbound integration outside IDEA.md's declared
+trust boundary — outbound calls are restricted to only the OSINT and
+weather tool families), language/translate (IDEA.md explicitly excludes
+machine translation as a non-goal and forbids commercial translation
+among outbound integrations), research/extract (research.go's own
+source comment documents citation extraction from unstructured text as
 unimplemented), and network/traceroute (a real traceroute needs TTL-limited
 probes and ICMP time-exceeded replies, which requires a raw ICMP socket —
 CAP_NET_RAW or root — that this unprivileged self-contained binary cannot
 assume it has on the host it runs on). Resolving these requires a
 user/spec decision — either add a QR-encoding dependency, confirm
-language/detect should stay unsupported per IDEA.md, scope what
-"extraction" means for research/extract, or decide whether
-network/traceroute should ship as a root-only opt-in feature instead of a
-permanent gap — not further code guessing. `network/traceroute` has no
-`toolPages()` entry or frontend template, matching the pattern already
-used for generate/qr and language/detect (API-only, no dead frontend link
-to a page that doesn't exist).
+language/detect and the four other language gaps should stay unsupported
+per IDEA.md, scope what "extraction" means for research/extract, or
+decide whether network/traceroute should ship as a root-only opt-in
+feature instead of a permanent gap — not further code guessing. None of
+the nine gap routes have a `toolPages()` entry or frontend template
+(API-only, no dead frontend link to a page that doesn't exist).

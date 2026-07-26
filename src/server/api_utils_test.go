@@ -1307,6 +1307,38 @@ func TestAPILanguageDetectHandler(t *testing.T) {
 	assert.Equal(t, "NOT_SUPPORTED", env["error"])
 }
 
+// apiLanguageDictionaryHandler, apiLanguageThesaurusHandler,
+// apiLanguageSpellCheckHandler, apiLanguageGrammarHandler, and
+// apiLanguageTranslateHandler must always report NOT_SUPPORTED — each
+// requires an outbound integration outside IDEA.md's declared trust
+// boundary (OSINT and weather only), or is an explicit non-goal.
+func TestAPILanguageGapHandlers(t *testing.T) {
+	cases := []struct {
+		name    string
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"dictionary", "/api/v1/language/dictionary", apiLanguageDictionaryHandler},
+		{"thesaurus", "/api/v1/language/thesaurus", apiLanguageThesaurusHandler},
+		{"spell-check", "/api/v1/language/spell-check", apiLanguageSpellCheckHandler},
+		{"grammar", "/api/v1/language/grammar", apiLanguageGrammarHandler},
+		{"translate", "/api/v1/language/translate", apiLanguageTranslateHandler},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, nil)
+			w := httptest.NewRecorder()
+
+			tc.handler(w, req)
+
+			assert.Equal(t, http.StatusNotImplemented, w.Code)
+			env := decodeEnvelope(t, w.Body.Bytes())
+			assert.Equal(t, "NOT_SUPPORTED", env["error"])
+		})
+	}
+}
+
 // apiLanguagePhoneticHandler must 400 MISSING_WORD with no ?word= and
 // return the known Soundex/Metaphone codes for "Robert" otherwise.
 func TestAPILanguagePhoneticHandler(t *testing.T) {
@@ -1363,6 +1395,151 @@ func TestAPILanguageWordCountHandler(t *testing.T) {
 		assert.Equal(t, float64(4), data["words"])
 		assert.Equal(t, float64(1), data["lines"])
 		assert.Equal(t, float64(2), data["sentences"])
+	})
+}
+
+// apiLanguageKeywordsHandler must 400 MISSING_TEXT with no text and return
+// the top non-stopword keywords, most frequent first, otherwise.
+func TestAPILanguageKeywordsHandler(t *testing.T) {
+	t.Run("missing text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/keywords", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguageKeywordsHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_TEXT", env["error"])
+	})
+
+	t.Run("valid text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/keywords", strings.NewReader("the cat sat on the mat the cat ran"))
+		w := httptest.NewRecorder()
+
+		apiLanguageKeywordsHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		keywords, ok := data["keywords"].([]interface{})
+		require.True(t, ok)
+		require.NotEmpty(t, keywords)
+		top, ok := keywords[0].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "cat", top["word"])
+		assert.Equal(t, float64(2), top["count"])
+	})
+
+	t.Run("invalid limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/keywords?limit=notanumber", strings.NewReader("some text"))
+		w := httptest.NewRecorder()
+
+		apiLanguageKeywordsHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_LIMIT", env["error"])
+	})
+}
+
+// apiLanguageReadabilityHandler must 400 MISSING_TEXT with no text and
+// return computed readability scores otherwise.
+func TestAPILanguageReadabilityHandler(t *testing.T) {
+	t.Run("missing text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/readability", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguageReadabilityHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_TEXT", env["error"])
+	})
+
+	t.Run("valid text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/readability", strings.NewReader("The cat sat on the mat. The dog ran fast."))
+		w := httptest.NewRecorder()
+
+		apiLanguageReadabilityHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(2), data["sentences"])
+		assert.NotNil(t, data["flesch_reading_ease"])
+		assert.NotNil(t, data["flesch_kincaid_grade"])
+		assert.NotNil(t, data["gunning_fog"])
+	})
+}
+
+// apiLanguageReadingTimeHandler must 400 MISSING_TEXT with no text and
+// return an estimated reading time otherwise, honoring ?wpm=.
+func TestAPILanguageReadingTimeHandler(t *testing.T) {
+	t.Run("missing text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/reading-time", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguageReadingTimeHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_TEXT", env["error"])
+	})
+
+	t.Run("valid text with wpm override", func(t *testing.T) {
+		text := strings.Repeat("word ", 100)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/reading-time?wpm=50", strings.NewReader(text))
+		w := httptest.NewRecorder()
+
+		apiLanguageReadingTimeHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(100), data["words"])
+		assert.Equal(t, float64(2), data["minutes"])
+	})
+
+	t.Run("invalid wpm", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/reading-time?wpm=notanumber", strings.NewReader("some text"))
+		w := httptest.NewRecorder()
+
+		apiLanguageReadingTimeHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_WPM", env["error"])
+	})
+}
+
+// apiLanguageSentimentHandler must 400 MISSING_TEXT with no text and return
+// a positive/negative/neutral label otherwise.
+func TestAPILanguageSentimentHandler(t *testing.T) {
+	t.Run("missing text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/sentiment", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguageSentimentHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_TEXT", env["error"])
+	})
+
+	t.Run("positive text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/language/sentiment", strings.NewReader("This is a good and wonderful day"))
+		w := httptest.NewRecorder()
+
+		apiLanguageSentimentHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "positive", data["label"])
 	})
 }
 

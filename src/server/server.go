@@ -436,6 +436,15 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/detect", apiLanguageDetectHandler)
 			r.Get("/phonetic", apiLanguagePhoneticHandler)
 			r.Post("/word-count", apiLanguageWordCountHandler)
+			r.Post("/keywords", apiLanguageKeywordsHandler)
+			r.Post("/readability", apiLanguageReadabilityHandler)
+			r.Post("/reading-time", apiLanguageReadingTimeHandler)
+			r.Post("/sentiment", apiLanguageSentimentHandler)
+			r.Post("/dictionary", apiLanguageDictionaryHandler)
+			r.Post("/thesaurus", apiLanguageThesaurusHandler)
+			r.Post("/spell-check", apiLanguageSpellCheckHandler)
+			r.Post("/grammar", apiLanguageGrammarHandler)
+			r.Post("/translate", apiLanguageTranslateHandler)
 		})
 
 		// Testing Tools
@@ -772,6 +781,10 @@ func toolPages() []toolPage {
 		{category: "image", tool: "watermark", title: "Watermark Image", description: "Upload an image and tile a text watermark across it"},
 		{category: "language", tool: "phonetic", title: "Phonetic Encoding", description: "Generate the Soundex and Metaphone phonetic codes for a word"},
 		{category: "language", tool: "word-count", title: "Word Count", description: "Count words, characters, lines, and sentences in text"},
+		{category: "language", tool: "keywords", title: "Keyword Extraction", description: "Extract the most frequent non-stopword keywords from text"},
+		{category: "language", tool: "readability", title: "Readability Scores", description: "Compute Flesch Reading Ease, Flesch-Kincaid Grade, and Gunning Fog scores for text"},
+		{category: "language", tool: "reading-time", title: "Reading Time", description: "Estimate reading time for text at a given words-per-minute rate"},
+		{category: "language", tool: "sentiment", title: "Sentiment Analysis", description: "Score text as positive, negative, or neutral using a lexicon-based heuristic"},
 		{category: "text", tool: "encode", title: "Encode", description: "Encode text using base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "decode", title: "Decode", description: "Decode text encoded with base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "case", title: "Case Converter", description: "Convert text between upper, lower, title, camel, snake, kebab, and other case styles"},
