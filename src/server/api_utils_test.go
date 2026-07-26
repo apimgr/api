@@ -1639,6 +1639,148 @@ func TestAPIFunJokeHandler(t *testing.T) {
 	assert.NotEmpty(t, data["text"])
 }
 
+// apiFunDadJokeHandler must return 200 with a non-empty text field.
+func TestAPIFunDadJokeHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/dad-joke", nil)
+	w := httptest.NewRecorder()
+
+	apiFunDadJokeHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunProgrammingJokeHandler must return 200 with a non-empty text field.
+func TestAPIFunProgrammingJokeHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/programming-joke", nil)
+	w := httptest.NewRecorder()
+
+	apiFunProgrammingJokeHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunQuoteHandler must return 200 with a non-empty text field.
+func TestAPIFunQuoteHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/quote", nil)
+	w := httptest.NewRecorder()
+
+	apiFunQuoteHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunFactHandler must return 200 with a non-empty text field.
+func TestAPIFunFactHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/fact", nil)
+	w := httptest.NewRecorder()
+
+	apiFunFactHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunMotivationalHandler must return 200 with a non-empty text field.
+func TestAPIFunMotivationalHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/motivational", nil)
+	w := httptest.NewRecorder()
+
+	apiFunMotivationalHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunInsultHandler must return 200 with a non-empty text field.
+func TestAPIFunInsultHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/insult", nil)
+	w := httptest.NewRecorder()
+
+	apiFunInsultHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunComplimentHandler must return 200 with a non-empty text field.
+func TestAPIFunComplimentHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/compliment", nil)
+	w := httptest.NewRecorder()
+
+	apiFunComplimentHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunMemeHandler must return 200 with a non-empty text field.
+func TestAPIFunMemeHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/meme", nil)
+	w := httptest.NewRecorder()
+
+	apiFunMemeHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["text"])
+}
+
+// apiFunRiddleHandler must return 200 with non-empty question and answer fields.
+func TestAPIFunRiddleHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/riddle", nil)
+	w := httptest.NewRecorder()
+
+	apiFunRiddleHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["question"])
+	assert.NotEmpty(t, data["answer"])
+}
+
+// apiFunTriviaHandler must return 200 with non-empty question and answer fields.
+func TestAPIFunTriviaHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fun/trivia", nil)
+	w := httptest.NewRecorder()
+
+	apiFunTriviaHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["question"])
+	assert.NotEmpty(t, data["answer"])
+}
+
 // apiLoremPersonHandler must return 200 with a generated person.
 func TestAPILoremPersonHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/lorem/person", nil)

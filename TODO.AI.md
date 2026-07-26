@@ -134,7 +134,28 @@ in `api_utils_test.go`, tool-page smoke tests in `server_test.go`,
 service-layer unit tests in `src/service/docker/docker_test.go`. The MISSING
 docker line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (95 linked, unwired)
+## [x] fun (10): compliment, dad-joke, fact, insult, meme, motivational, programming-joke, quote, riddle, trivia
+All 10 wired: 155 tools now wired total (up from 145). Every tool is a
+self-contained, offline, curated static string-slice list (`var xxx =
+[]string{...}` in `src/service/fun/fun.go`, 20-30+ entries each) selected via
+the existing `s.RandomChoice(list)` / `crypto/rand`-backed helper — no
+external HTTP APIs, matching the project's dependency-free, self-contained-
+binary constraint. `riddle` and `trivia` return a `Question`/`Answer` pair via
+a new shared `QAPair{Question, Answer string}` struct (no other Q&A-shaped
+precedent existed in the codebase). `insult`/`compliment` are playful and
+harmless, not actually offensive; `meme` is text-only caption generation (no
+image/template rendering, which is out of scope). Handlers added to
+`src/server/api_utils.go` (`apiFunDadJokeHandler`, etc.), routes registered
+under `/api/v1/fun/*` in `src/server/server.go`, and `toolPages()` entries
+added with title/description copied verbatim from `fun.tmpl`'s existing
+category cards. Templates added at
+`src/server/template/page/tools/fun/{tool}.tmpl` following the
+joke.tmpl/fortune.tmpl structure. Tests added: handler tests in
+`api_utils_test.go`, tool-page smoke tests in `server_test.go`,
+service-layer unit tests in `src/service/fun/fun_test.go`. The MISSING fun
+line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (85 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -143,8 +164,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- fun (10): compliment, dad-joke, fact, insult, meme, motivational,
-  programming-joke, quote, riddle, trivia
 - generate (12): api-docs, avatar, barcode, config, dockerfile, gitignore,
   identicon, license, placeholder, qr, sql, ssh-key
 - geo (8): bbox, country, geocode, geohash, h3, pluscode, reverse, timezone

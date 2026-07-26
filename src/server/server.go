@@ -446,6 +446,16 @@ func New(cfg *config.Config) *http.Server {
 		r.Route("/fun", func(r chi.Router) {
 			r.Get("/joke", apiFunJokeHandler)
 			r.Get("/fortune", apiFunFortuneHandler)
+			r.Get("/dad-joke", apiFunDadJokeHandler)
+			r.Get("/programming-joke", apiFunProgrammingJokeHandler)
+			r.Get("/quote", apiFunQuoteHandler)
+			r.Get("/fact", apiFunFactHandler)
+			r.Get("/riddle", apiFunRiddleHandler)
+			r.Get("/trivia", apiFunTriviaHandler)
+			r.Get("/motivational", apiFunMotivationalHandler)
+			r.Get("/insult", apiFunInsultHandler)
+			r.Get("/compliment", apiFunComplimentHandler)
+			r.Get("/meme", apiFunMemeHandler)
 		})
 
 		// Lorem & Fake Data
@@ -679,6 +689,16 @@ func toolPages() []toolPage {
 		{category: "research", tool: "doi", title: "DOI Validator", description: "Validate a DOI and get its canonical https://doi.org resolver URL"},
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
 		{category: "fun", tool: "fortune", title: "Random Fortune", description: "Get a single random fortune-cookie style saying"},
+		{category: "fun", tool: "dad-joke", title: "Dad Jokes", description: "Classic dad jokes"},
+		{category: "fun", tool: "programming-joke", title: "Programming Jokes", description: "Jokes for developers"},
+		{category: "fun", tool: "quote", title: "Random Quote", description: "Inspirational quotes"},
+		{category: "fun", tool: "fact", title: "Random Fact", description: "Interesting facts"},
+		{category: "fun", tool: "riddle", title: "Riddles", description: "Brain teasers and riddles"},
+		{category: "fun", tool: "trivia", title: "Trivia Questions", description: "Random trivia"},
+		{category: "fun", tool: "motivational", title: "Motivational Quote", description: "Get motivated"},
+		{category: "fun", tool: "insult", title: "Insult Generator", description: "Playful, harmless roasts and mock insults"},
+		{category: "fun", tool: "compliment", title: "Compliment Generator", description: "Random compliments"},
+		{category: "fun", tool: "meme", title: "Meme Generator", description: "Classic meme caption text"},
 		{category: "lorem", tool: "person", title: "Fake Person", description: "Generate a fake person with a name, email, and phone number"},
 		{category: "lorem", tool: "address", title: "Fake Address", description: "Generate a fake street address"},
 		{category: "lorem", tool: "company", title: "Fake Company", description: "Generate a fake company name and catchphrase"},

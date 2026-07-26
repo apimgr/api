@@ -2140,6 +2140,116 @@ func apiFunFortuneHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
 }
 
+// apiFunDadJokeHandler returns a single random dad joke from the curated
+// built-in list in funService.DadJoke.
+func apiFunDadJokeHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.DadJoke()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "DAD_JOKE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// apiFunProgrammingJokeHandler returns a single random programming joke from
+// the curated built-in list in funService.ProgrammingJoke.
+func apiFunProgrammingJokeHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.ProgrammingJoke()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "PROGRAMMING_JOKE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// apiFunQuoteHandler returns a single random inspirational quote from the
+// curated built-in list in funService.Quote.
+func apiFunQuoteHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.Quote()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "QUOTE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// apiFunFactHandler returns a single random fact from the curated built-in
+// list in funService.Fact.
+func apiFunFactHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.Fact()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "FACT_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// apiFunRiddleHandler returns a single random riddle question/answer pair
+// from the curated built-in list in funService.Riddle.
+func apiFunRiddleHandler(w http.ResponseWriter, r *http.Request) {
+	riddle, err := funService.Riddle()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "RIDDLE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, riddle)
+}
+
+// apiFunTriviaHandler returns a single random trivia question/answer pair
+// from the curated built-in list in funService.Trivia.
+func apiFunTriviaHandler(w http.ResponseWriter, r *http.Request) {
+	fact, err := funService.Trivia()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "TRIVIA_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, fact)
+}
+
+// apiFunMotivationalHandler returns a single random motivational quote from
+// the curated built-in list in funService.Motivational.
+func apiFunMotivationalHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.Motivational()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "MOTIVATIONAL_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// apiFunInsultHandler returns a single random playful mock-insult from the
+// curated built-in list in funService.Insult.
+func apiFunInsultHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.Insult()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "INSULT_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// apiFunComplimentHandler returns a single random compliment from the
+// curated built-in list in funService.Compliment.
+func apiFunComplimentHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.Compliment()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "COMPLIMENT_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// apiFunMemeHandler returns a single random text-only meme caption from the
+// curated built-in list in funService.Meme (no image generation).
+func apiFunMemeHandler(w http.ResponseWriter, r *http.Request) {
+	text, err := funService.Meme()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "MEME_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+}
+
 // apiLoremPersonHandler generates a fake person (name/email/phone).
 func apiLoremPersonHandler(w http.ResponseWriter, r *http.Request) {
 	person, err := loremService.Person()

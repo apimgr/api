@@ -95,6 +95,56 @@ func TestMagic8BallFortuneYesOrNoEmojiJokeType(t *testing.T) {
 	assert.NotEmpty(t, jokeType)
 }
 
+func TestDadJokeProgrammingJokeQuoteFactMotivationalInsultCompliment(t *testing.T) {
+	s := New()
+
+	dadJoke, err := s.DadJoke()
+	require.NoError(t, err)
+	assert.NotEmpty(t, dadJoke)
+
+	programmingJoke, err := s.ProgrammingJoke()
+	require.NoError(t, err)
+	assert.NotEmpty(t, programmingJoke)
+
+	quote, err := s.Quote()
+	require.NoError(t, err)
+	assert.NotEmpty(t, quote)
+
+	fact, err := s.Fact()
+	require.NoError(t, err)
+	assert.NotEmpty(t, fact)
+
+	motivational, err := s.Motivational()
+	require.NoError(t, err)
+	assert.NotEmpty(t, motivational)
+
+	insult, err := s.Insult()
+	require.NoError(t, err)
+	assert.NotEmpty(t, insult)
+
+	compliment, err := s.Compliment()
+	require.NoError(t, err)
+	assert.NotEmpty(t, compliment)
+
+	meme, err := s.Meme()
+	require.NoError(t, err)
+	assert.NotEmpty(t, meme)
+}
+
+func TestRiddleAndTrivia(t *testing.T) {
+	s := New()
+
+	riddle, err := s.Riddle()
+	require.NoError(t, err)
+	assert.NotEmpty(t, riddle.Question)
+	assert.NotEmpty(t, riddle.Answer)
+
+	trivia, err := s.Trivia()
+	require.NoError(t, err)
+	assert.NotEmpty(t, trivia.Question)
+	assert.NotEmpty(t, trivia.Answer)
+}
+
 func TestShuffle(t *testing.T) {
 	s := New()
 
