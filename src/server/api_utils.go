@@ -2442,6 +2442,100 @@ func apiOsintCertHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, info)
 }
 
+// apiOsintSubdomainHandler discovers subdomains of the {domain} path
+// parameter by resolving a small fixed wordlist of common subdomain labels
+// via the system DNS resolver (osint.SubdomainEnum) — the same trust
+// boundary already used by osint.DNSLookup.
+func apiOsintSubdomainHandler(w http.ResponseWriter, r *http.Request) {
+	domain := chi.URLParam(r, "domain")
+	if domain == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required", nil)
+		return
+	}
+	found, err := osintService.SubdomainEnum(domain)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "SUBDOMAIN_ENUM_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"domain":     domain,
+		"subdomains": found,
+	})
+}
+
+// apiOsintTechStackHandler performs a single direct HTTP GET to the ?url=
+// query parameter and reports technology signatures observed in the
+// response headers/cookies/HTML via osint.TechStack — analogous in shape to
+// apiOsintCertHandler's direct TLS handshake, one direct user-directed
+// connection only.
+func apiOsintTechStackHandler(w http.ResponseWriter, r *http.Request) {
+	target := r.URL.Query().Get("url")
+	if strings.TrimSpace(target) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_URL", "url query parameter is required", nil)
+		return
+	}
+	info, err := osintService.TechStack(target)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "TECH_STACK_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
+// apiOsintBreachHandler reports that breach-database checking is not
+// supported. Free breach-check services (e.g. HaveIBeenPwned) require an
+// API key for domain/bulk search, which is outside IDEA.md's declared
+// free-and-keyless OSINT trust boundary (IDEA.md line 34: OSINT is scoped
+// to IP geolocation, WHOIS, DNS, and TLS certificate inspection only).
+func apiOsintBreachHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "breach-database checking requires a keyed third-party API, outside this project's declared free/keyless OSINT trust boundary; not supported", nil)
+}
+
+// apiOsintCompanyHandler reports that company-data lookup is not supported.
+// Company enrichment (e.g. Clearbit-style lookups) is a commercial, keyed
+// service — outside IDEA.md's declared free-and-keyless OSINT scope
+// (IP geolocation, WHOIS, DNS, TLS cert only) and forbidden by the
+// non-goals list's ban on paid/keyed third-party APIs.
+func apiOsintCompanyHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "company-data lookup requires a commercial keyed API, outside this project's declared free/keyless OSINT trust boundary; not supported", nil)
+}
+
+// apiOsintMetadataHandler reports that generic file-metadata extraction is
+// not supported as an OSINT tool. IDEA.md scopes OSINT to IP geolocation,
+// WHOIS, DNS, and TLS certificate inspection only — file-metadata
+// extraction is not one of those mechanisms, and image/document metadata
+// extraction already exists as its own tool (apiImageMetadataHandler);
+// duplicating it here would invent behavior IDEA.md does not scope to OSINT.
+func apiOsintMetadataHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "generic file-metadata extraction is outside this project's declared OSINT scope (IP geolocation, WHOIS, DNS, TLS cert only); see the image/metadata tool for file-metadata inspection", nil)
+}
+
+// apiOsintPhoneHandler reports that phone-number intelligence lookup is not
+// supported. Carrier/line-type/reputation lookup services are commercial
+// and keyed — outside IDEA.md's declared free-and-keyless OSINT scope; basic
+// phone-number format validation is already covered by validate/phone.
+func apiOsintPhoneHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "phone-number intelligence requires a commercial keyed API, outside this project's declared free/keyless OSINT trust boundary; see validate/phone for format validation", nil)
+}
+
+// apiOsintSocialHandler reports that social-media profile discovery is not
+// supported. Finding a person's social profiles means firing off requests
+// to dozens of third-party platforms — a much larger and fundamentally
+// different outbound surface than IDEA.md's four narrowly-scoped OSINT
+// mechanisms (IP geolocation, WHOIS, DNS, TLS cert), and not user-directed
+// to a single target the caller names.
+func apiOsintSocialHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "social-media profile discovery requires probing many third-party platforms, outside this project's declared OSINT trust boundary; not supported", nil)
+}
+
+// apiOsintUsernameHandler reports that cross-platform username enumeration
+// is not supported, for the same reason as apiOsintSocialHandler: checking
+// a username against dozens of third-party sites is a much larger and
+// different outbound surface than IDEA.md's four declared OSINT mechanisms.
+func apiOsintUsernameHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "cross-platform username enumeration requires probing many third-party sites, outside this project's declared OSINT trust boundary; not supported", nil)
+}
+
 // researchCitationRequest is the JSON body shape accepted by
 // apiResearchCitationHandler: the four fields every research.Reference
 // needs, plus the desired output style.

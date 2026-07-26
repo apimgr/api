@@ -1720,6 +1720,69 @@ func TestAPIOsintCertHandler(t *testing.T) {
 	assert.Equal(t, "MISSING_DOMAIN", env["error"])
 }
 
+// apiOsintSubdomainHandler must 400 MISSING_DOMAIN when the {domain} path
+// parameter is empty. A successful-lookup case is intentionally not
+// asserted here since SubdomainEnum performs live DNS resolution that would
+// make CI flaky (same reasoning as TestAPIOsintCertHandler).
+func TestAPIOsintSubdomainHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/osint/subdomain/", nil)
+	w := httptest.NewRecorder()
+
+	apiOsintSubdomainHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+}
+
+// apiOsintTechStackHandler must 400 MISSING_URL when ?url= is absent. A
+// successful-lookup case is intentionally not asserted here since TechStack
+// performs a live HTTP request that would make CI flaky (same reasoning as
+// TestAPIOsintCertHandler).
+func TestAPIOsintTechStackHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/osint/tech-stack", nil)
+	w := httptest.NewRecorder()
+
+	apiOsintTechStackHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "MISSING_URL", env["error"])
+}
+
+// apiOsintBreachHandler, apiOsintCompanyHandler, apiOsintMetadataHandler,
+// apiOsintPhoneHandler, apiOsintSocialHandler, and apiOsintUsernameHandler
+// all require either a keyed/paid third-party API or a much larger outbound
+// surface than IDEA.md's declared free/keyless OSINT scope — they must
+// always report NOT_SUPPORTED.
+func TestAPIOsintGapHandlers(t *testing.T) {
+	cases := []struct {
+		name    string
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"breach", "/api/v1/osint/breach/user@example.com", apiOsintBreachHandler},
+		{"company", "/api/v1/osint/company/example", apiOsintCompanyHandler},
+		{"metadata", "/api/v1/osint/metadata/file", apiOsintMetadataHandler},
+		{"phone", "/api/v1/osint/phone/+15555550100", apiOsintPhoneHandler},
+		{"social", "/api/v1/osint/social/example", apiOsintSocialHandler},
+		{"username", "/api/v1/osint/username/example", apiOsintUsernameHandler},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			w := httptest.NewRecorder()
+
+			tc.handler(w, req)
+
+			assert.Equal(t, http.StatusNotImplemented, w.Code)
+			env := decodeEnvelope(t, w.Body.Bytes())
+			assert.Equal(t, "NOT_SUPPORTED", env["error"])
+		})
+	}
+}
+
 // apiResearchExtractHandler must always report NOT_SUPPORTED — unstructured
 // citation extraction is a confirmed unimplemented gap.
 func TestAPIResearchExtractHandler(t *testing.T) {

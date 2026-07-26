@@ -264,6 +264,8 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"osint domain tool page", http.MethodGet, "/osint/domain", http.StatusOK},
 		{"osint ip tool page", http.MethodGet, "/osint/ip", http.StatusOK},
 		{"osint cert tool page", http.MethodGet, "/osint/cert", http.StatusOK},
+		{"osint subdomain tool page", http.MethodGet, "/osint/subdomain", http.StatusOK},
+		{"osint tech-stack tool page", http.MethodGet, "/osint/tech-stack", http.StatusOK},
 		{"dev format json tool page", http.MethodGet, "/dev/format-json", http.StatusOK},
 		{"dev base64 tool page", http.MethodGet, "/dev/base64", http.StatusOK},
 		{"dev url-encode tool page", http.MethodGet, "/dev/url-encode", http.StatusOK},

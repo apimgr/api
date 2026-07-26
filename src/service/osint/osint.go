@@ -5,7 +5,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -319,4 +323,216 @@ func (s *Service) SSLInfo(domain string) (map[string]interface{}, error) {
 		"signature_algorithm": cert.SignatureAlgorithm.String(),
 		"is_expired":          time.Now().After(cert.NotAfter),
 	}, nil
+}
+
+// commonSubdomainLabels is a small, fixed wordlist of frequently-used
+// subdomain labels used for subdomain enumeration via the system DNS
+// resolver — the same "System DNS resolver" trust boundary already used by
+// DNSLookup. This is not a brute-force scan: it is a bounded, fixed set of
+// well-known labels resolved one at a time.
+var commonSubdomainLabels = []string{
+	"www", "mail", "webmail", "smtp", "pop", "imap", "ftp",
+	"ns1", "ns2", "dns", "api", "dev", "staging", "test",
+	"admin", "portal", "blog", "shop", "store", "vpn", "cdn",
+	"m", "mobile", "secure", "app", "cpanel", "autodiscover",
+}
+
+// Subdomain describes a discovered subdomain and the IPv4 addresses it
+// resolves to
+type Subdomain struct {
+	Name string   `json:"name"`
+	IPs  []string `json:"ips"`
+}
+
+// SubdomainEnum discovers subdomains of domain by resolving a small fixed
+// wordlist of common subdomain labels through the system DNS resolver. Only
+// labels that successfully resolve are returned. Same trust boundary and
+// SSRF posture as DNSLookup: no connection is made to any resolved address,
+// only the DNS answer is reported.
+func (s *Service) SubdomainEnum(domain string) ([]Subdomain, error) {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		return nil, fmt.Errorf("domain is required")
+	}
+	if ip := net.ParseIP(domain); ip != nil {
+		return nil, fmt.Errorf("subdomain enumeration requires a domain name, not an IP address")
+	}
+
+	resolver := net.Resolver{}
+	var found []Subdomain
+	for _, label := range commonSubdomainLabels {
+		host := label + "." + domain
+		ctx, cancel := context.WithTimeout(context.Background(), resolveTimeout)
+		ips, err := resolver.LookupIP(ctx, "ip4", host)
+		cancel()
+		if err != nil || len(ips) == 0 {
+			continue
+		}
+		addrs := make([]string, 0, len(ips))
+		for _, ip := range ips {
+			addrs = append(addrs, ip.String())
+		}
+		found = append(found, Subdomain{Name: host, IPs: addrs})
+	}
+	if found == nil {
+		found = []Subdomain{}
+	}
+	return found, nil
+}
+
+const techStackDialTimeout = 8 * time.Second
+
+// generatorMetaRe extracts the content of a <meta name="generator"> tag
+var generatorMetaRe = regexp.MustCompile(`(?i)<meta\s+name=["']generator["']\s+content=["']([^"']+)["']`)
+
+// TechStackInfo summarizes technology signals observed in a single HTTP
+// response
+type TechStackInfo struct {
+	URL        string   `json:"url"`
+	StatusCode int      `json:"status_code"`
+	Server     string   `json:"server,omitempty"`
+	PoweredBy  string   `json:"x_powered_by,omitempty"`
+	Generator  string   `json:"generator,omitempty"`
+	Cookies    []string `json:"cookie_names,omitempty"`
+	Detected   []string `json:"detected"`
+}
+
+// TechStack performs a single direct HTTP GET to a user-supplied URL and
+// inspects the response headers, cookies, and HTML <meta name="generator">
+// tag for common technology signatures. Analogous in shape to SSLInfo: one
+// direct, user-directed connection, no data sent beyond the HTTP request
+// line and standard headers, redirects are not followed. The target is
+// validated (loopback/link-local/private blocked) before any connection.
+func (s *Service) TechStack(rawURL string) (*TechStackInfo, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil, fmt.Errorf("url is required")
+	}
+	if !strings.Contains(rawURL, "://") {
+		rawURL = "https://" + rawURL
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("url scheme must be http or https")
+	}
+	if parsed.Hostname() == "" {
+		return nil, fmt.Errorf("url must include a host")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), techStackDialTimeout)
+	defer cancel()
+	if err := validateTarget(ctx, parsed.Hostname()); err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{
+		Timeout: techStackDialTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request to %s failed: %w", parsed.String(), err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	info := &TechStackInfo{
+		URL:        parsed.String(),
+		StatusCode: resp.StatusCode,
+		Server:     resp.Header.Get("Server"),
+		PoweredBy:  resp.Header.Get("X-Powered-By"),
+	}
+	for _, c := range resp.Cookies() {
+		info.Cookies = append(info.Cookies, c.Name)
+	}
+	if m := generatorMetaRe.FindSubmatch(body); m != nil {
+		info.Generator = string(m[1])
+	}
+
+	info.Detected = detectTechnologies(info, body)
+	return info, nil
+}
+
+// detectTechnologies applies a small set of header/cookie/body heuristics
+// to guess commonly-used technologies from the single response already
+// fetched by TechStack — no additional outbound calls are made.
+func detectTechnologies(info *TechStackInfo, body []byte) []string {
+	var detected []string
+	add := func(name string) {
+		for _, d := range detected {
+			if d == name {
+				return
+			}
+		}
+		detected = append(detected, name)
+	}
+
+	server := strings.ToLower(info.Server)
+	switch {
+	case strings.Contains(server, "nginx"):
+		add("Nginx")
+	case strings.Contains(server, "apache"):
+		add("Apache")
+	case strings.Contains(server, "cloudflare"):
+		add("Cloudflare")
+	case strings.Contains(server, "iis"):
+		add("Microsoft IIS")
+	}
+
+	if info.PoweredBy != "" {
+		add(info.PoweredBy)
+	}
+	if info.Generator != "" {
+		add(info.Generator)
+	}
+
+	html := string(body)
+	signatures := map[string]string{
+		"wp-content":       "WordPress",
+		"wp-includes":      "WordPress",
+		"/sites/default/":  "Drupal",
+		"Joomla!":          "Joomla",
+		"__NEXT_DATA__":    "Next.js",
+		"ng-version":       "Angular",
+		"data-vue-":        "Vue.js",
+		"cdn.shopify.com":  "Shopify",
+		"cdn.jsdelivr.net": "jsDelivr CDN",
+	}
+	for needle, name := range signatures {
+		if strings.Contains(html, needle) {
+			add(name)
+		}
+	}
+
+	for _, c := range info.Cookies {
+		switch {
+		case strings.HasPrefix(c, "PHPSESSID"):
+			add("PHP")
+		case strings.HasPrefix(c, "JSESSIONID"):
+			add("Java")
+		case strings.HasPrefix(c, "ASP.NET_SessionId"):
+			add("ASP.NET")
+		}
+	}
+
+	if detected == nil {
+		detected = []string{}
+	}
+	return detected
 }

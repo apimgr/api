@@ -461,6 +461,14 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/domain/{domain}", apiOsintDomainHandler)
 			r.Get("/ip/{ip}", apiOsintIPHandler)
 			r.Get("/cert/{domain}", apiOsintCertHandler)
+			r.Get("/subdomain/{domain}", apiOsintSubdomainHandler)
+			r.Get("/tech-stack", apiOsintTechStackHandler)
+			r.Get("/breach/{email}", apiOsintBreachHandler)
+			r.Get("/company/{name}", apiOsintCompanyHandler)
+			r.Get("/metadata/{target}", apiOsintMetadataHandler)
+			r.Get("/phone/{number}", apiOsintPhoneHandler)
+			r.Get("/social/{username}", apiOsintSocialHandler)
+			r.Get("/username/{username}", apiOsintUsernameHandler)
 		})
 
 		// Research Tools
@@ -753,6 +761,8 @@ func toolPages() []toolPage {
 		{category: "osint", tool: "domain", title: "WHOIS Lookup", description: "Look up registrar, creation/expiry dates, and nameservers for a domain"},
 		{category: "osint", tool: "ip", title: "IP Intelligence", description: "Look up geolocation and ISP information for a public IP address"},
 		{category: "osint", tool: "cert", title: "TLS Certificate Lookup", description: "Inspect a domain's TLS certificate details"},
+		{category: "osint", tool: "subdomain", title: "Subdomain Discovery", description: "Discover subdomains of a domain by resolving common subdomain labels"},
+		{category: "osint", tool: "tech-stack", title: "Tech Stack Detection", description: "Detect web server, framework, and CMS signatures from a site's HTTP response"},
 		{category: "dev", tool: "format-json", title: "Format JSON", description: "Pretty-print and re-indent a raw JSON document"},
 		{category: "dev", tool: "base64", title: "Base64 Encode/Decode", description: "Encode or decode text using standard or URL-safe base64"},
 		{category: "dev", tool: "url-encode", title: "URL Encode/Decode", description: "Encode or decode text for safe use in URLs"},

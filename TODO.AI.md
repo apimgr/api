@@ -271,7 +271,43 @@ independently (gofmt/build/vet/staticcheck/test clean in
 tidy` produced no `go.mod`/`go.sum` diff — no new dependency introduced).
 The MISSING language line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (52 linked, unwired)
+## [x] osint (2, +6 newly-gapped breach/company/metadata/phone/social/username): subdomain, tech-stack
+osint/subdomain is wired via a fixed-wordlist DNS-label enumeration
+(`SubdomainEnum` in `src/service/osint/osint.go`) resolving ~25 common
+subdomain labels through the system resolver, reusing the pre-existing
+SSRF `validateTarget`/`resolveTimeout` guards from `src/service/osint/
+ssrf.go` — matching IDEA.md's declared DNS-lookup scope. osint/tech-stack
+is wired via a single direct HTTP GET to the caller-supplied URL
+(`TechStack`), inspecting response headers, cookie names, and HTML
+signatures for server/framework/CMS detection, reusing the same
+`validateTarget` SSRF guard — analogous to the existing TLS-handshake-based
+cert tool: one user-directed outbound connection, no third-party service
+contacted. The other six requested tools were confirmed via IDEA.md
+line 34 (OSINT scope: IP geolocation, WHOIS, DNS, TLS cert only, via free
+keyless mechanisms) and line 55 (non-goals ban paid/keyed third-party
+APIs) to be out of scope: breach (breach-database checking requires a
+keyed third-party API), company (company-data lookup requires a
+commercial keyed API), metadata (generic file-metadata extraction
+duplicates the existing image/metadata tool and is outside OSINT's
+declared 4-mechanism scope), phone (phone-number intelligence requires a
+commercial keyed API — validate/phone already covers format validation),
+social and username (cross-platform profile/username discovery would
+require probing dozens of third-party platforms, not a single
+user-named target). Each of the six got an `apiOsint*Handler` returning
+501 NOT_SUPPORTED, following the exact `apiLanguageDetectHandler`
+precedent: no `toolPages()` entry, no frontend template, no smoke-test
+row. New table-driven test `TestAPIOsintGapHandlers` covers all six gap
+handlers; `TestAPIOsintSubdomainHandler` and `TestAPIOsintTechStackHandler`
+cover the two wired tools' missing-param 400 case only — a
+successful-lookup case is intentionally not asserted since both perform
+live DNS/HTTP calls that would make CI flaky (same reasoning as the
+pre-existing `TestAPIOsintCertHandler`). Verified independently (gofmt/
+build/vet/staticcheck/test clean in `casjaysdev/go:latest`, caches
+mounted outside the project tree; `git diff --stat -- go.mod go.sum`
+empty — no new dependency introduced). The MISSING osint line is now
+fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (50 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -280,8 +316,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- osint (8): breach, company, metadata, phone, social, subdomain,
-  tech-stack, username
 - parse (8): env, html, ini, log, markdown, sql, toml, yaml
 - research (10): arxiv, bibtex, footnotes, isbn, metadata, outline,
   pdf-extract, readability, scraper, summarize
@@ -306,9 +340,11 @@ One commit per tool or small logical group when picked up.
 Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,
 apiLanguageDictionaryHandler, apiLanguageGrammarHandler,
 apiLanguageSpellCheckHandler, apiLanguageThesaurusHandler,
-apiLanguageTranslateHandler, apiResearchExtractHandler doc comments),
-src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
-Nine of the wired API routes honestly return 501 NOT_SUPPORTED rather
+apiLanguageTranslateHandler, apiResearchExtractHandler,
+apiOsintBreachHandler, apiOsintCompanyHandler, apiOsintMetadataHandler,
+apiOsintPhoneHandler, apiOsintSocialHandler, apiOsintUsernameHandler doc
+comments), src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
+Fifteen of the wired API routes honestly return 501 NOT_SUPPORTED rather
 than inventing behavior: generate/qr (no QR encoder exists anywhere in the
 codebase or go.mod), language/detect (conflicts with IDEA.md's declared
 non-goal of language auto-detection), language/dictionary,
@@ -319,14 +355,24 @@ weather tool families), language/translate (IDEA.md explicitly excludes
 machine translation as a non-goal and forbids commercial translation
 among outbound integrations), research/extract (research.go's own
 source comment documents citation extraction from unstructured text as
-unimplemented), and network/traceroute (a real traceroute needs TTL-limited
+unimplemented), network/traceroute (a real traceroute needs TTL-limited
 probes and ICMP time-exceeded replies, which requires a raw ICMP socket —
 CAP_NET_RAW or root — that this unprivileged self-contained binary cannot
-assume it has on the host it runs on). Resolving these requires a
-user/spec decision — either add a QR-encoding dependency, confirm
-language/detect and the four other language gaps should stay unsupported
-per IDEA.md, scope what "extraction" means for research/extract, or
-decide whether network/traceroute should ship as a root-only opt-in
-feature instead of a permanent gap — not further code guessing. None of
-the nine gap routes have a `toolPages()` entry or frontend template
-(API-only, no dead frontend link to a page that doesn't exist).
+assume it has on the host it runs on), osint/breach and osint/company
+(each requires a commercial keyed third-party API, outside IDEA.md's
+declared free/keyless OSINT trust boundary), osint/metadata (generic
+file-metadata extraction duplicates the existing image/metadata tool and
+is outside OSINT's declared 4-mechanism scope of IP geolocation/WHOIS/
+DNS/TLS cert), osint/phone (phone-number intelligence requires a
+commercial keyed API — validate/phone already covers format validation),
+and osint/social and osint/username (cross-platform profile/username
+discovery would require probing dozens of third-party platforms rather
+than a single user-named target). Resolving these requires a user/spec
+decision — either add a QR-encoding dependency, confirm language/detect
+and the four other language gaps should stay unsupported per IDEA.md,
+scope what "extraction" means for research/extract, decide whether
+network/traceroute should ship as a root-only opt-in feature instead of
+a permanent gap, or decide whether any of the six osint gaps should be
+promoted to a keyed-API-optional feature — not further code guessing.
+None of the fifteen gap routes have a `toolPages()` entry or frontend
+template (API-only, no dead frontend link to a page that doesn't exist).
