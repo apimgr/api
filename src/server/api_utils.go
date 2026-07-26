@@ -2108,6 +2108,158 @@ func apiDevFormatJSONHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
 }
 
+// apiDevCronHandler parses a 5-field cron expression, reusing the same
+// datetime.ParseCron helper as apiDatetimeCronHandler.
+func apiDevCronHandler(w http.ResponseWriter, r *http.Request) {
+	expression := r.URL.Query().Get("expression")
+	result, err := datetime.ParseCron(expression)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CRON", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDevJWTHandler decodes (never verifies) the header and payload of a
+// JSON Web Token, reusing the same decodeJWTSegment helper as
+// apiParseJWTHandler and apiCryptoJWTDecodeHandler. No signature
+// verification is performed — this is a read-only debug/inspection tool.
+func apiDevJWTHandler(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT", "token must have three dot-separated segments (header.payload.signature)", nil)
+		return
+	}
+	header, err := decodeJWTSegment(parts[0])
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_HEADER", err.Error(), nil)
+		return
+	}
+	payload, err := decodeJWTSegment(parts[1])
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_PAYLOAD", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"header":    header,
+		"payload":   payload,
+		"signature": parts[2],
+	})
+}
+
+// apiDevEchoHandler reflects the caller's own request details back as
+// JSON: method, path, query parameters, headers, remote address, and raw
+// body. This is a genuinely new debug tool with no service dependency.
+func apiDevEchoHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+
+	headers := make(map[string]string, len(r.Header))
+	for name, values := range r.Header {
+		headers[name] = strings.Join(values, ", ")
+	}
+
+	query := make(map[string]string, len(r.URL.Query()))
+	for name, values := range r.URL.Query() {
+		query[name] = strings.Join(values, ", ")
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"method":      r.Method,
+		"path":        r.URL.Path,
+		"query":       query,
+		"headers":     headers,
+		"remote_addr": r.RemoteAddr,
+		"body":        string(body),
+	})
+}
+
+// apiDevFormatCSSHandler formats (or, with ?minify=true, minifies) the raw
+// CSS document supplied in the request body.
+func apiDevFormatCSSHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if config.IsTruthy(r.URL.Query().Get("minify")) {
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.MinifyCSS(string(raw))})
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatCSS(string(raw))})
+}
+
+// apiDevFormatHTMLHandler formats (or, with ?minify=true, minifies) the raw
+// HTML document supplied in the request body.
+func apiDevFormatHTMLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if config.IsTruthy(r.URL.Query().Get("minify")) {
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.MinifyHTML(string(raw))})
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatHTML(string(raw))})
+}
+
+// apiDevFormatJSHandler formats (or, with ?minify=true, minifies) the raw
+// JavaScript source supplied in the request body.
+func apiDevFormatJSHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if config.IsTruthy(r.URL.Query().Get("minify")) {
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.MinifyJS(string(raw))})
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatJS(string(raw))})
+}
+
+// apiDevFormatSQLHandler formats the raw SQL query supplied in the request
+// body by breaking it onto multiple lines by clause keyword. There is no
+// minify variant — a formatted SQL query is the tool's only mode.
+func apiDevFormatSQLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatSQL(string(raw))})
+}
+
+// apiDevFormatXMLHandler formats (or, with ?minify=true, minifies) the raw
+// XML document supplied in the request body.
+func apiDevFormatXMLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if config.IsTruthy(r.URL.Query().Get("minify")) {
+		formatted, err := devService.MinifyXML(string(raw))
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_XML", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
+		return
+	}
+	formatted, err := devService.FormatXML(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_XML", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
+}
+
 // apiImagePlaceholderHandler generates a placeholder image of
 // {width}x{height} and writes it as raw binary content. PART 14's JSON
 // envelope is scoped to application/json bodies; a binary image payload

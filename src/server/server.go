@@ -449,8 +449,16 @@ func New(cfg *config.Config) *http.Server {
 		// Developer Tools
 		r.Route("/dev", func(r chi.Router) {
 			r.Post("/format/json", apiDevFormatJSONHandler)
+			r.Post("/format/css", apiDevFormatCSSHandler)
+			r.Post("/format/html", apiDevFormatHTMLHandler)
+			r.Post("/format/js", apiDevFormatJSHandler)
+			r.Post("/format/sql", apiDevFormatSQLHandler)
+			r.Post("/format/xml", apiDevFormatXMLHandler)
 			r.Post("/base64", apiDevBase64Handler)
 			r.Post("/url-encode", apiDevURLEncodeHandler)
+			r.Get("/cron", apiDevCronHandler)
+			r.Get("/jwt/{token}", apiDevJWTHandler)
+			r.Get("/echo", apiDevEchoHandler)
 
 			// Regex (shared with /text/regex)
 			r.Post("/regex", apiTextRegexHandler)
@@ -708,6 +716,14 @@ func toolPages() []toolPage {
 		{category: "text", tool: "ulid", title: "ULID Generator", description: "Generate a sortable, timestamp-based unique ID"},
 		{category: "text", tool: "regex", title: "Regex Tester", description: "Test a regular expression against text: match, replace, or explain"},
 		{category: "dev", tool: "regex", title: "Regex Tester", description: "Test a regular expression against text: match, replace, or explain"},
+		{category: "dev", tool: "echo", title: "HTTP Echo", description: "Echo back request details"},
+		{category: "dev", tool: "xml-format", title: "XML Formatter", description: "Format/minify XML"},
+		{category: "dev", tool: "html-format", title: "HTML Formatter", description: "Format/minify HTML"},
+		{category: "dev", tool: "css-format", title: "CSS Formatter", description: "Format/minify CSS"},
+		{category: "dev", tool: "js-format", title: "JavaScript Formatter", description: "Format/minify JavaScript"},
+		{category: "dev", tool: "sql-format", title: "SQL Formatter", description: "Format SQL queries"},
+		{category: "dev", tool: "cron", title: "Cron Tester", description: "Test cron expressions"},
+		{category: "dev", tool: "jwt", title: "JWT Debugger", description: "Debug JSON Web Tokens"},
 	}
 }
 

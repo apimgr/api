@@ -1679,6 +1679,216 @@ func TestAPIDevFormatJSONHandler(t *testing.T) {
 	})
 }
 
+// apiDevCronHandler reuses datetime.ParseCron and must behave identically
+// to apiDatetimeCronHandler.
+func TestAPIDevCronHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/dev/cron", apiDevCronHandler)
+
+	t.Run("valid expression", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/dev/cron?expression="+url.QueryEscape("*/15 9-17 * * 1-5"), nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["next_runs"])
+	})
+
+	t.Run("invalid expression", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/dev/cron?expression=bogus", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_CRON", env["error"])
+	})
+}
+
+// apiDevJWTHandler reuses decodeJWTSegment and must decode (never verify)
+// the header and payload of a JWT, matching apiParseJWTHandler's behavior.
+func TestAPIDevJWTHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/dev/jwt/{token}", apiDevJWTHandler)
+
+	t.Run("invalid token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/dev/jwt/not-a-jwt", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_JWT", env["error"])
+	})
+
+	t.Run("valid token", func(t *testing.T) {
+		token := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature"
+		req := httptest.NewRequest(http.MethodGet, "/dev/jwt/"+token, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "signature", data["signature"])
+		header, ok := data["header"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "HS256", header["alg"])
+	})
+}
+
+// apiDevEchoHandler must reflect back method, path, query, headers,
+// remote address, and body with no external service dependency.
+func TestAPIDevEchoHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dev/echo?foo=bar", strings.NewReader("hello"))
+	req.Header.Set("X-Custom-Header", "test-value")
+	w := httptest.NewRecorder()
+
+	apiDevEchoHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, http.MethodGet, data["method"])
+	assert.Equal(t, "/api/v1/dev/echo", data["path"])
+	assert.Equal(t, "hello", data["body"])
+	query, ok := data["query"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "bar", query["foo"])
+	headers, ok := data["headers"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "test-value", headers["X-Custom-Header"])
+}
+
+// apiDevFormatCSSHandler must format by default and minify with
+// ?minify=true.
+func TestAPIDevFormatCSSHandler(t *testing.T) {
+	t.Run("format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/css", strings.NewReader("body{color:red;}"))
+		w := httptest.NewRecorder()
+		apiDevFormatCSSHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["formatted"], "\n")
+	})
+
+	t.Run("minify", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/css?minify=true", strings.NewReader("body {\n  color: red;\n}"))
+		w := httptest.NewRecorder()
+		apiDevFormatCSSHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "body{color:red;}", data["formatted"])
+	})
+}
+
+// apiDevFormatHTMLHandler must format by default and minify with
+// ?minify=true.
+func TestAPIDevFormatHTMLHandler(t *testing.T) {
+	t.Run("format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/html", strings.NewReader("<div><p>Hello</p></div>"))
+		w := httptest.NewRecorder()
+		apiDevFormatHTMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["formatted"], "\n")
+	})
+
+	t.Run("minify", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/html?minify=true", strings.NewReader("<div>\n  <p>Hello</p>\n</div>"))
+		w := httptest.NewRecorder()
+		apiDevFormatHTMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "<div><p>Hello</p></div>", data["formatted"])
+	})
+}
+
+// apiDevFormatJSHandler must format by default and minify with
+// ?minify=true.
+func TestAPIDevFormatJSHandler(t *testing.T) {
+	t.Run("format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/js", strings.NewReader("function greet(){console.log('hi');}"))
+		w := httptest.NewRecorder()
+		apiDevFormatJSHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["formatted"], "\n")
+	})
+
+	t.Run("minify", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/js?minify=true", strings.NewReader("function greet() {\n  console.log('hi');\n}"))
+		w := httptest.NewRecorder()
+		apiDevFormatJSHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotContains(t, data["formatted"], "\n")
+	})
+}
+
+// apiDevFormatSQLHandler has no minify variant — a formatted SQL query is
+// the tool's only mode.
+func TestAPIDevFormatSQLHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/sql", strings.NewReader("select * from users where id=1 and active=1"))
+	w := httptest.NewRecorder()
+	apiDevFormatSQLHandler(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Contains(t, data["formatted"], "\nWHERE")
+}
+
+// apiDevFormatXMLHandler must format by default, minify with
+// ?minify=true, and 400 INVALID_XML on malformed input.
+func TestAPIDevFormatXMLHandler(t *testing.T) {
+	t.Run("format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/xml", strings.NewReader("<root><item>value</item></root>"))
+		w := httptest.NewRecorder()
+		apiDevFormatXMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["formatted"], "\n")
+	})
+
+	t.Run("minify", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/xml?minify=true", strings.NewReader("<root>\n  <item>value</item>\n</root>"))
+		w := httptest.NewRecorder()
+		apiDevFormatXMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "<root><item>value</item></root>", data["formatted"])
+	})
+
+	t.Run("invalid xml", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/dev/format/xml", strings.NewReader("<root><item></root>"))
+		w := httptest.NewRecorder()
+		apiDevFormatXMLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_XML", env["error"])
+	})
+}
+
 // apiImagePlaceholderHandler must 400 INVALID_WIDTH/INVALID_HEIGHT for
 // non-positive dimensions and return raw binary image bytes with the
 // matching Content-Type on success.

@@ -151,3 +151,69 @@ func TestLineOperations(t *testing.T) {
 	numbered := s.NumberLines("a\nb")
 	assert.Equal(t, "   1 | a\n   2 | b", numbered)
 }
+
+// FormatCSS/MinifyCSS cover re-indenting by brace depth and collapsing
+// whitespace around structural punctuation, respectively.
+func TestFormatAndMinifyCSS(t *testing.T) {
+	s := New()
+
+	formatted := s.FormatCSS("body{color:red;}")
+	assert.Equal(t, "body {\n  color:red;\n}\n", formatted)
+
+	minified := s.MinifyCSS("body {\n  color: red;\n}")
+	assert.Equal(t, "body{color:red;}", minified)
+}
+
+// FormatHTML/MinifyHTML cover re-indenting by tag depth and collapsing
+// whitespace between/within tags, respectively.
+func TestFormatAndMinifyHTML(t *testing.T) {
+	s := New()
+
+	formatted := s.FormatHTML("<div><p>Hello</p></div>")
+	assert.Equal(t, "<div>\n  <p>\n    Hello\n  </p>\n</div>\n", formatted)
+
+	minified := s.MinifyHTML("<div>\n  <p>Hello</p>\n</div>")
+	assert.Equal(t, "<div><p>Hello</p></div>", minified)
+}
+
+// FormatJS/MinifyJS cover re-indenting by brace depth (preserving string
+// literals) and collapsing whitespace/stripping comments, respectively.
+func TestFormatAndMinifyJS(t *testing.T) {
+	s := New()
+
+	formatted := s.FormatJS("function greet(){console.log('hi');}")
+	assert.Contains(t, formatted, "\n")
+	assert.Contains(t, formatted, "console.log('hi');")
+
+	minified := s.MinifyJS("function greet() {\n  console.log('hi');\n}")
+	assert.NotContains(t, minified, "\n")
+	assert.Contains(t, minified, "console.log('hi');")
+}
+
+// FormatSQL breaks a query onto multiple lines by clause keyword, with
+// AND/OR conditions indented under their clause.
+func TestFormatSQL(t *testing.T) {
+	s := New()
+
+	formatted := s.FormatSQL("select * from users where id=1 and active=1")
+	assert.Equal(t, "SELECT *\nFROM users\nWHERE id=1\n  AND active=1\n", formatted)
+}
+
+// FormatXML/MinifyXML cover a decode/re-encode round trip that drops the
+// original document's whitespace-only text nodes, and error on malformed
+// XML.
+func TestFormatAndMinifyXML(t *testing.T) {
+	s := New()
+
+	formatted, err := s.FormatXML("<root><item>value</item></root>")
+	assert.NoError(t, err)
+	assert.Contains(t, formatted, "\n")
+	assert.Contains(t, formatted, "<item>value</item>")
+
+	minified, err := s.MinifyXML("<root>\n  <item>value</item>\n</root>")
+	assert.NoError(t, err)
+	assert.Equal(t, "<root><item>value</item></root>", minified)
+
+	_, err = s.FormatXML("<root><item></root>")
+	assert.Error(t, err)
+}

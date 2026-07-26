@@ -86,7 +86,28 @@ GO-2026-4550). All three tools follow the mode-dispatch single-POST-
 endpoint pattern established by `apiCryptoRSAHandler`. This brings the
 wired total to 128. The MISSING crypto line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (112 linked, unwired)
+## [x] dev (8): cron, css-format, echo, html-format, js-format, jwt, sql-format, xml-format
+All 8 wired: 136 tools now wired total (up from 128). `cron` reuses
+`datetime.ParseCron` (same helper as the already-wired `/datetime/cron`
+tool). `jwt` reuses the shared `decodeJWTSegment` helper (same as
+`/parse/jwt`) — no signature verification, decode-only debug tool. `echo`
+is genuinely new — reflects method/path/query/headers/remote-addr/body as
+JSON with no service dependency. `css-format`, `html-format`, `js-format`,
+`sql-format`, `xml-format` are genuinely new pragmatic, dependency-free
+formatters added to `src/service/dev/dev.go`
+(`FormatCSS`/`MinifyCSS`/`FormatHTML`/`MinifyHTML`/`FormatJS`/`MinifyJS`/
+`FormatSQL`/`FormatXML`/`MinifyXML`) — whitespace/brace-depth-based
+formatters, not full parsers (SQL has no minify variant). Routes added
+under `/api/v1/dev/*` in `src/server/server.go`; frontend pages under
+`src/server/template/page/tools/dev/*.tmpl`; `css-format`/`html-format`/
+`js-format`/`xml-format` reuse the existing `data-body-endpoint` JS
+executor with an added `minify` checkbox (excluded from the query string
+by `FormData` when unchecked — no JS changes needed); `cron` uses
+`data-endpoint`; `jwt`/`echo` use `data-template`. Tests added: handler
+tests in `api_utils_test.go`, tool-page smoke tests in `server_test.go`,
+service-layer unit tests in `src/service/dev/dev_test.go`.
+
+## [ ] MISSING sub-tools needing net-new backend service work (104 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -95,8 +116,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- dev (8): cron, css-format, echo, html-format, js-format, jwt,
-  sql-format, xml-format
 - docker (9): best-practices, compose-to-run, compose-validate,
   dockerfile-lint, env-parser, network-helper, run-to-compose,
   security-scan, size-optimizer
