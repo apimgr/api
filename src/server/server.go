@@ -276,6 +276,25 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/timezones", apiTimezonesHandler)
 			r.Get("/timezone/{timezone}", apiTimezoneInfoHandler)
 			r.Get("/timezone/convert/{timestamp}/{from}/{to}", apiConvertTimezoneHandler)
+
+			// Format/Parse
+			r.Get("/format/{timestamp}/{format}", apiDatetimeFormatHandler)
+			r.Get("/parse/{value}", apiDatetimeParseHandler)
+
+			// Cron
+			r.Get("/cron", apiDatetimeCronHandler)
+
+			// Calendar
+			r.Get("/calendar/{year}/{month}", apiDatetimeCalendarHandler)
+
+			// Workdays
+			r.Get("/workdays/{start}/{end}", apiDatetimeWorkdaysHandler)
+
+			// Sun/Moon
+			r.Get("/sunrise/{lat}/{lon}", apiDatetimeSunriseHandler)
+			r.Get("/sunrise/{lat}/{lon}/{date}", apiDatetimeSunriseHandler)
+			r.Get("/moon", apiDatetimeMoonHandler)
+			r.Get("/moon/{date}", apiDatetimeMoonHandler)
 		})
 
 		// Network utilities
@@ -663,6 +682,13 @@ func toolPages() []toolPage {
 		{category: "datetime", tool: "unix", title: "To Unix Timestamp", description: "Convert a human-readable date/time string to a Unix timestamp"},
 		{category: "datetime", tool: "add", title: "Add Duration", description: "Add a duration to a Unix timestamp"},
 		{category: "datetime", tool: "diff", title: "Timestamp Diff", description: "Compute the difference between two Unix timestamps"},
+		{category: "datetime", tool: "format", title: "Date Formatter", description: "Format dates in various styles"},
+		{category: "datetime", tool: "parse", title: "Date Parser", description: "Parse date strings to timestamps"},
+		{category: "datetime", tool: "cron", title: "Cron Parser", description: "Parse and explain cron expressions"},
+		{category: "datetime", tool: "calendar", title: "Calendar", description: "View calendar for any month/year"},
+		{category: "datetime", tool: "workdays", title: "Business Days", description: "Calculate working days between dates"},
+		{category: "datetime", tool: "sunrise", title: "Sunrise/Sunset", description: "Calculate sunrise and sunset times"},
+		{category: "datetime", tool: "moon", title: "Moon Phase", description: "Calculate current moon phase"},
 		{category: "text", tool: "compress", title: "Compress/Decompress", description: "Compress or decompress text using gzip, zlib, or flate/deflate"},
 		{category: "text", tool: "diff", title: "Text Diff", description: "Compare two blocks of text and show the differences"},
 		{category: "text", tool: "extract", title: "Extract", description: "Extract emails, URLs, IP addresses, or phone numbers from text"},

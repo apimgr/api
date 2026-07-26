@@ -13,6 +13,7 @@ import (
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/service/convert"
 	"github.com/apimgr/api/src/service/crypto"
+	"github.com/apimgr/api/src/service/datetime"
 	"github.com/apimgr/api/src/service/dev"
 	"github.com/apimgr/api/src/service/docker"
 	"github.com/apimgr/api/src/service/fun"
@@ -1225,6 +1226,141 @@ func apiConvertCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 	result, err := convertService.ConvertCurrency(amount, from, to)
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadGateway, "CURRENCY_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDatetimeFormatHandler formats a Unix timestamp using a named format
+// (iso8601, rfc3339, rfc1123, rfc822, kitchen, date, time, datetime) or a
+// literal Go reference-time layout, via datetime.FormatDatetime.
+func apiDatetimeFormatHandler(w http.ResponseWriter, r *http.Request) {
+	timestampParam := chi.URLParam(r, "timestamp")
+	format := chi.URLParam(r, "format")
+
+	timestamp, err := strconv.ParseInt(timestampParam, 10, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TIMESTAMP", "timestamp must be a unix integer", nil)
+		return
+	}
+
+	result, err := datetime.FormatDatetime(timestamp, format)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_FORMAT", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDatetimeParseHandler parses a free-form date/time string against a
+// list of common layouts via datetime.ParseDateString.
+func apiDatetimeParseHandler(w http.ResponseWriter, r *http.Request) {
+	value := chi.URLParam(r, "value")
+
+	result, err := datetime.ParseDateString(value)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "UNPARSEABLE_DATE", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDatetimeCronHandler parses a standard 5-field cron expression and
+// returns a breakdown plus next scheduled run times via datetime.ParseCron.
+func apiDatetimeCronHandler(w http.ResponseWriter, r *http.Request) {
+	expression := r.URL.Query().Get("expression")
+
+	result, err := datetime.ParseCron(expression)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CRON", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDatetimeCalendarHandler builds a week-grid calendar for a given
+// year/month via datetime.GenerateCalendar.
+func apiDatetimeCalendarHandler(w http.ResponseWriter, r *http.Request) {
+	yearParam := chi.URLParam(r, "year")
+	monthParam := chi.URLParam(r, "month")
+
+	year, err := strconv.Atoi(yearParam)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_YEAR", "year must be an integer", nil)
+		return
+	}
+
+	month, err := strconv.Atoi(monthParam)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MONTH", "month must be an integer", nil)
+		return
+	}
+
+	result, err := datetime.GenerateCalendar(year, month)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MONTH", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDatetimeWorkdaysHandler counts weekdays (Mon-Fri) between two
+// YYYY-MM-DD dates inclusive via datetime.WorkdaysBetween.
+func apiDatetimeWorkdaysHandler(w http.ResponseWriter, r *http.Request) {
+	start := chi.URLParam(r, "start")
+	end := chi.URLParam(r, "end")
+
+	result, err := datetime.WorkdaysBetween(start, end)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDatetimeSunriseHandler computes sunrise/sunset UTC times for a given
+// latitude, longitude, and optional YYYY-MM-DD date via
+// datetime.SunriseSunset (Almanac for Computers, 1990 algorithm).
+func apiDatetimeSunriseHandler(w http.ResponseWriter, r *http.Request) {
+	latParam := chi.URLParam(r, "lat")
+	lonParam := chi.URLParam(r, "lon")
+	date := chi.URLParam(r, "date")
+
+	lat, err := strconv.ParseFloat(latParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LATITUDE", "lat must be numeric", nil)
+		return
+	}
+
+	lon, err := strconv.ParseFloat(lonParam, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LONGITUDE", "lon must be numeric", nil)
+		return
+	}
+
+	result, err := datetime.SunriseSunset(lat, lon, date)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDatetimeMoonHandler computes the current lunar phase for an optional
+// YYYY-MM-DD date via datetime.MoonPhase (synodic-month method).
+func apiDatetimeMoonHandler(w http.ResponseWriter, r *http.Request) {
+	date := chi.URLParam(r, "date")
+
+	result, err := datetime.MoonPhase(date)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error(), nil)
 		return
 	}
 

@@ -50,7 +50,25 @@ for live ECB reference rates, mirroring the `weather.go` external-API
 pattern), bringing the wired total to 118. The MISSING convert line is now
 fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (122 linked, unwired)
+datetime/{calendar,cron,format,moon,parse,sunrise,workdays} were wired in a
+follow-up batch (net-new `src/service/datetime/extended.go`: named/literal
+`FormatDatetime`, multi-layout `ParseDateString`, Sunday-start
+`GenerateCalendar` reusing the existing package-private `daysInMonth`/
+`isLeapYear` helpers, Mon-Fri `WorkdaysBetween`, U.S. Naval Observatory
+"Almanac for Computers, 1990" `SunriseSunset`, synodic-month `MoonPhase`,
+and a standard 5-field POSIX `ParseCron` with brute-force next-run
+lookahead — no new dependencies). `cron` required a routing design
+deviation from the other six: a cron expression contains literal spaces
+and `/` characters and cannot safely round-trip as a single chi path
+segment, so `/api/v1/datetime/cron` takes `?expression=` as a query
+parameter (`executeTool` JS convention, matching `convert/currency`)
+instead of the `{param}` path-template convention (`executeToolTemplate`)
+used by the other six new tools. `sunrise` and `moon` each register two
+routes (with and without a trailing `/{date}` segment) since date is
+optional. This brings the wired total to 125. The MISSING datetime line is
+now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (115 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -63,7 +81,6 @@ One commit per tool or small logical group when picked up.
   (X.509 cert, Ed25519, PGP — zero backend support today; each needs its own
   net-new crypto service method. encrypt/decrypt/rsa/hmac were wired this
   pass onto pre-existing crypto_extended.go/crypto.go functions)
-- datetime (7): calendar, cron, format, moon, parse, sunrise, workdays
 - dev (8): cron, css-format, echo, html-format, js-format, jwt,
   sql-format, xml-format
 - docker (9): best-practices, compose-to-run, compose-validate,

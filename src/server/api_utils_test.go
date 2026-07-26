@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -663,6 +664,195 @@ func TestAPIConvertCurrencyHandler(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
 		assert.Equal(t, "INVALID_AMOUNT", env["error"])
+	})
+}
+
+func TestAPIDatetimeFormatHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/datetime/format/{timestamp}/{format}", apiDatetimeFormatHandler)
+
+	t.Run("valid named format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/format/1700000000/iso8601", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["result"])
+	})
+
+	t.Run("invalid timestamp", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/format/notanumber/iso8601", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_TIMESTAMP", env["error"])
+	})
+}
+
+func TestAPIDatetimeParseHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/datetime/parse/{value}", apiDatetimeParseHandler)
+
+	t.Run("valid date string", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/parse/2024-01-15T10:30:00Z", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["matched_layout"])
+	})
+
+	t.Run("unparseable date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/parse/not-a-date-at-all", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "UNPARSEABLE_DATE", env["error"])
+	})
+}
+
+func TestAPIDatetimeCronHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/datetime/cron", apiDatetimeCronHandler)
+
+	t.Run("valid expression", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/cron?expression="+url.QueryEscape("*/15 9-17 * * 1-5"), nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["next_runs"])
+	})
+
+	t.Run("invalid expression", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/cron?expression=bogus", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_CRON", env["error"])
+	})
+}
+
+func TestAPIDatetimeCalendarHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/datetime/calendar/{year}/{month}", apiDatetimeCalendarHandler)
+
+	t.Run("valid month", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/calendar/2024/1", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["weeks"])
+	})
+
+	t.Run("invalid month", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/calendar/2024/13", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MONTH", env["error"])
+	})
+}
+
+func TestAPIDatetimeWorkdaysHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/datetime/workdays/{start}/{end}", apiDatetimeWorkdaysHandler)
+
+	t.Run("valid range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/workdays/2024-01-01/2024-01-31", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["workdays"])
+	})
+
+	t.Run("invalid date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/workdays/not-a-date/2024-01-31", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_DATE", env["error"])
+	})
+}
+
+func TestAPIDatetimeSunriseHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/datetime/sunrise/{lat}/{lon}", apiDatetimeSunriseHandler)
+	r.Get("/datetime/sunrise/{lat}/{lon}/{date}", apiDatetimeSunriseHandler)
+
+	t.Run("valid coordinates with date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/sunrise/40.7128/-74.0060/2024-06-21", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["sunrise_utc"])
+	})
+
+	t.Run("invalid latitude", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/sunrise/notanumber/-74.0060/2024-06-21", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_LATITUDE", env["error"])
+	})
+}
+
+func TestAPIDatetimeMoonHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/datetime/moon", apiDatetimeMoonHandler)
+	r.Get("/datetime/moon/{date}", apiDatetimeMoonHandler)
+
+	t.Run("valid date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/moon/2024-06-21", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["phase"])
+	})
+
+	t.Run("default no date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/datetime/moon", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
 
