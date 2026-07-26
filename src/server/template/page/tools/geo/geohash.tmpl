@@ -1,0 +1,65 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+      <a href="/">Home</a> / <a href="/geo">Geolocation</a> / Geohash Encoder
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">Geohash Encoder</h1>
+        <button class="btn btn-icon" data-favorite="geo-geohash" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Encode a pair of coordinates into a geohash, or decode a geohash
+        back into coordinates. Fill in coordinates to encode, or a geohash
+        to decode.
+      </p>
+
+      <form id="geohash-form" class="tool-form" data-endpoint="/api/v1/geo/geohash">
+        <div class="form-group">
+          <label class="form-label">Latitude</label>
+          <input type="text" name="lat" class="form-input" value="40.7128">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Longitude</label>
+          <input type="text" name="lon" class="form-input" value="-74.0060">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Precision (1-20)</label>
+          <input type="number" name="precision" class="form-input" min="1" max="20" value="9">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Geohash (to decode instead)</label>
+          <input type="text" name="hash" class="form-input" placeholder="dr5regw3p">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Run</button>
+      </form>
+
+      <div id="geohash-form-result" class="tool-result" style="display:none;"></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">GET Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl "{{.BaseURL}}/api/v1/geo/geohash?lat=40.7128&lon=-74.0060&precision=9"
+curl "{{.BaseURL}}/api/v1/geo/geohash?hash=dr5regw3p"</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

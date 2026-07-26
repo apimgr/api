@@ -3297,3 +3297,176 @@ func TestAPIGeneratePlaceholderHandler(t *testing.T) {
 		assert.Equal(t, "INVALID_WIDTH", env["error"])
 	})
 }
+
+// apiGeoCountryHandler must resolve a known country and reject a missing or
+// unknown query. Network-independent: no live geocoding/timezone calls are
+// exercised at the handler layer here (covered by the geo package's own
+// mocked service-layer tests instead).
+func TestAPIGeoCountryHandler(t *testing.T) {
+	t.Run("missing query", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/country", nil)
+		w := httptest.NewRecorder()
+		apiGeoCountryHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "QUERY_REQUIRED", env["error"])
+	})
+
+	t.Run("valid country", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/country?q=US", nil)
+		w := httptest.NewRecorder()
+		apiGeoCountryHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "US", data["alpha2"])
+	})
+
+	t.Run("unknown country", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/country?q=NotACountry", nil)
+		w := httptest.NewRecorder()
+		apiGeoCountryHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "COUNTRY_NOT_FOUND", env["error"])
+	})
+}
+
+// apiGeoGeohashHandler must encode and decode correctly, and reject invalid
+// input for both modes.
+func TestAPIGeoGeohashHandler(t *testing.T) {
+	t.Run("encode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/geohash?lat=40.7128&lon=-74.0060&precision=9", nil)
+		w := httptest.NewRecorder()
+		apiGeoGeohashHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["geohash"])
+	})
+
+	t.Run("decode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/geohash?hash=dr5regw3p", nil)
+		w := httptest.NewRecorder()
+		apiGeoGeohashHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "dr5regw3p", data["geohash"])
+	})
+
+	t.Run("invalid coordinates", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/geohash", nil)
+		w := httptest.NewRecorder()
+		apiGeoGeohashHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_COORDINATES", env["error"])
+	})
+}
+
+// apiGeoH3Handler must encode a valid coordinate and reject a missing
+// coordinate.
+func TestAPIGeoH3Handler(t *testing.T) {
+	t.Run("valid encode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/h3?lat=40.7128&lon=-74.0060&resolution=9", nil)
+		w := httptest.NewRecorder()
+		apiGeoH3Handler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["index"])
+	})
+
+	t.Run("invalid coordinates", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/h3", nil)
+		w := httptest.NewRecorder()
+		apiGeoH3Handler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_COORDINATES", env["error"])
+	})
+}
+
+// apiGeoPlusCodeHandler must encode a valid coordinate and decode a valid
+// plus code.
+func TestAPIGeoPlusCodeHandler(t *testing.T) {
+	t.Run("encode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/pluscode?lat=40.7128&lon=-74.0060", nil)
+		w := httptest.NewRecorder()
+		apiGeoPlusCodeHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["code"])
+	})
+
+	t.Run("decode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/pluscode?code=87G7PX7V%2B3F", nil)
+		w := httptest.NewRecorder()
+		apiGeoPlusCodeHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "87G7PX7V+3F", data["code"])
+	})
+
+	t.Run("invalid code", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/pluscode?code=not-a-code", nil)
+		w := httptest.NewRecorder()
+		apiGeoPlusCodeHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_PLUS_CODE", env["error"])
+	})
+}
+
+// apiGeoBBoxHandler must compute a box from center+radius, compute a box
+// from a coordinate list, and reject missing/invalid input for both modes.
+func TestAPIGeoBBoxHandler(t *testing.T) {
+	t.Run("radius mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/bbox?lat=40.7128&lon=-74.0060&radius=10", nil)
+		w := httptest.NewRecorder()
+		apiGeoBBoxHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["min_latitude"])
+	})
+
+	t.Run("radius required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/bbox?lat=40.7128&lon=-74.0060", nil)
+		w := httptest.NewRecorder()
+		apiGeoBBoxHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "RADIUS_REQUIRED", env["error"])
+	})
+
+	t.Run("coords list mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/bbox?coords=40.7128,-74.0060|34.0522,-118.2437", nil)
+		w := httptest.NewRecorder()
+		apiGeoBBoxHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotNil(t, data["max_latitude"])
+	})
+
+	t.Run("invalid coords entry", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/geo/bbox?coords=notacoord", nil)
+		w := httptest.NewRecorder()
+		apiGeoBBoxHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_COORDS", env["error"])
+	})
+}

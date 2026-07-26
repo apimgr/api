@@ -353,6 +353,14 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/distance", apiGeoDistanceHandler)
 			r.Get("/bearing", apiGeoBearingHandler)
 			r.Get("/midpoint", apiGeoMidpointHandler)
+			r.Get("/geocode", apiGeoGeocodeHandler)
+			r.Get("/reverse", apiGeoReverseHandler)
+			r.Get("/timezone", apiGeoTimezoneHandler)
+			r.Get("/country", apiGeoCountryHandler)
+			r.Get("/geohash", apiGeoGeohashHandler)
+			r.Get("/h3", apiGeoH3Handler)
+			r.Get("/pluscode", apiGeoPlusCodeHandler)
+			r.Get("/bbox", apiGeoBBoxHandler)
 		})
 
 		// Math
@@ -668,6 +676,14 @@ func toolPages() []toolPage {
 		{category: "geo", tool: "distance", title: "Distance Calculator", description: "Calculate the great-circle distance between two coordinates"},
 		{category: "geo", tool: "bearing", title: "Bearing Calculator", description: "Calculate the initial compass bearing from one coordinate to another"},
 		{category: "geo", tool: "midpoint", title: "Midpoint Calculator", description: "Calculate the geographic midpoint between two coordinates"},
+		{category: "geo", tool: "geocode", title: "Geocode Address", description: "Convert address to coordinates"},
+		{category: "geo", tool: "reverse", title: "Reverse Geocode", description: "Get address from coordinates"},
+		{category: "geo", tool: "timezone", title: "Timezone Lookup", description: "Get timezone from coordinates"},
+		{category: "geo", tool: "country", title: "Country Info", description: "Get country information and codes"},
+		{category: "geo", tool: "geohash", title: "Geohash Encoder", description: "Encode coordinates to geohash"},
+		{category: "geo", tool: "h3", title: "H3 Encoder", description: "Uber H3 hexagonal indexing"},
+		{category: "geo", tool: "pluscode", title: "Plus Codes", description: "Google Plus Codes encoding"},
+		{category: "geo", tool: "bbox", title: "Bounding Box", description: "Calculate bounding boxes"},
 		{category: "convert", tool: "length", title: "Length Converter", description: "Convert a length value between feet, meters, inches, centimeters, miles, and kilometers"},
 		{category: "convert", tool: "temperature", title: "Temperature Converter", description: "Convert a temperature value between Celsius, Fahrenheit, and Kelvin"},
 		{category: "convert", tool: "weight", title: "Weight Converter", description: "Convert a weight value between pounds, kilograms, ounces, and grams"},

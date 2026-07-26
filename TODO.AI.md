@@ -197,7 +197,30 @@ Tests added: service-layer unit tests in
 `api_utils_test.go`, and tool-page smoke tests in `server_test.go`. The
 MISSING generate line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (70 linked, unwired)
+## [x] geo (8): bbox, country, geocode, geohash, h3, pluscode, reverse, timezone
+Backend: `src/service/geo/{bbox,country,geocode,geohash,h3,pluscode,reverse,
+timezone}.go`. geocode/reverse call Nominatim (OpenStreetMap) with a
+descriptive User-Agent, 10s timeout, and full error wrapping; timezone
+reuses the existing open-meteo forecast endpoint (`timezone=auto`); country
+uses `github.com/biter777/countries`; geohash is a native base32
+bit-interleaving implementation; h3 uses `github.com/ziprecruiter/h3-go`
+(pure Go, no cgo — `uber/h3-go` was rejected as it requires CGO_ENABLED=1);
+pluscode uses `github.com/google/open-location-code/go`; bbox is native
+math reusing the existing `Destination` helper for the radius variant.
+Handlers added in `api_utils.go` (8 new `apiGeo*Handler` functions plus a
+shared `parseGeoSingleCoordinateParams` helper), routes + toolPages entries
+in `server.go`, smoke-test rows in `server_test.go`, and 8 new
+`src/server/template/page/tools/geo/*.tmpl` files matching the existing
+tool-page pattern. Tests added per file in `src/service/geo/*_test.go`;
+geocode/reverse/timezone tests mock all HTTP calls via a redirecting
+`httptest.Server` transport — no live network calls. Verified independently
+(gofmt/build/vet/test clean in casjaysdev/go:latest, caches mounted outside
+the project tree) and via `go mod tidy` (fixed a `go.mod` bug where the
+three new dependencies were misplaced in the `// indirect` block despite
+being directly imported by our own source). The MISSING geo line is now
+fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (62 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -206,7 +229,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- geo (8): bbox, country, geocode, geohash, h3, pluscode, reverse, timezone
 - image (7): avatar, barcode, filter, identicon, optimize, qr, watermark
 - language (10): detect, dictionary, grammar, keywords, readability,
   reading-time, sentiment, spell-check, thesaurus, translate

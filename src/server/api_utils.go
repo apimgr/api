@@ -463,6 +463,271 @@ func apiGeoMidpointHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, geoService.Midpoint(lat1, lon1, lat2, lon2))
 }
 
+// parseGeoSingleCoordinateParams parses the lat/lon query parameters shared
+// by the single-point geo.Service operations (reverse, timezone, geohash,
+// h3, plus code), returning a descriptive error if either is missing or
+// invalid.
+func parseGeoSingleCoordinateParams(q url.Values) (lat, lon float64, err error) {
+	parse := func(name string) (float64, error) {
+		raw := q.Get(name)
+		if raw == "" {
+			return 0, fmt.Errorf("%s query parameter is required", name)
+		}
+		v, parseErr := strconv.ParseFloat(raw, 64)
+		if parseErr != nil {
+			return 0, fmt.Errorf("%s must be a number", name)
+		}
+		return v, nil
+	}
+
+	if lat, err = parse("lat"); err != nil {
+		return
+	}
+	if lon, err = parse("lon"); err != nil {
+		return
+	}
+	return
+}
+
+// apiGeoGeocodeHandler converts an address or place name to coordinates
+// using the free, keyless Nominatim (OpenStreetMap) search API.
+func apiGeoGeocodeHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "QUERY_REQUIRED", "q query parameter is required", nil)
+		return
+	}
+
+	results, err := geoService.Geocode(query)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "UPSTREAM_ERROR", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"query":   query,
+		"results": results,
+	})
+}
+
+// apiGeoReverseHandler converts coordinates to a human-readable address
+// using the free, keyless Nominatim (OpenStreetMap) reverse geocoding API.
+func apiGeoReverseHandler(w http.ResponseWriter, r *http.Request) {
+	lat, lon, err := parseGeoSingleCoordinateParams(r.URL.Query())
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+
+	result, err := geoService.ReverseGeocode(lat, lon)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "UPSTREAM_ERROR", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiGeoTimezoneHandler resolves the IANA timezone name for a coordinate
+// using the free, keyless Open-Meteo forecast API's timezone=auto
+// resolution.
+func apiGeoTimezoneHandler(w http.ResponseWriter, r *http.Request) {
+	lat, lon, err := parseGeoSingleCoordinateParams(r.URL.Query())
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+
+	result, err := geoService.Timezone(lat, lon)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "UPSTREAM_ERROR", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiGeoCountryHandler resolves country reference data (name, alpha-2/
+// alpha-3/numeric codes, capital, currency, calling code, TLD, region) from
+// a country name, alpha-2 code, or alpha-3 code.
+func apiGeoCountryHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "QUERY_REQUIRED", "q query parameter is required", nil)
+		return
+	}
+
+	info, err := geoService.Country(query)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "COUNTRY_NOT_FOUND", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
+// apiGeoGeohashHandler encodes a coordinate to a base32 geohash (?lat/?lon,
+// optional ?precision, default 9), or decodes a geohash back to a
+// coordinate (?hash).
+func apiGeoGeohashHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	if hash := q.Get("hash"); hash != "" {
+		coord, err := geoService.GeohashDecode(hash)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_GEOHASH", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"geohash":    hash,
+			"coordinate": coord,
+		})
+		return
+	}
+
+	lat, lon, err := parseGeoSingleCoordinateParams(q)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+
+	precision := 9
+	if raw := q.Get("precision"); raw != "" {
+		v, convErr := strconv.Atoi(raw)
+		if convErr != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PRECISION", "precision must be an integer", nil)
+			return
+		}
+		precision = v
+	}
+
+	hash, err := geoService.GeohashEncode(lat, lon, precision)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"geohash":   hash,
+		"latitude":  lat,
+		"longitude": lon,
+		"precision": precision,
+	})
+}
+
+// apiGeoH3Handler encodes a coordinate to an Uber H3 hexagonal cell index
+// (?lat/?lon, optional ?resolution, default 9).
+func apiGeoH3Handler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	lat, lon, err := parseGeoSingleCoordinateParams(q)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+
+	resolution := 9
+	if raw := q.Get("resolution"); raw != "" {
+		v, convErr := strconv.Atoi(raw)
+		if convErr != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_RESOLUTION", "resolution must be an integer", nil)
+			return
+		}
+		resolution = v
+	}
+
+	result, err := geoService.H3Encode(lat, lon, resolution)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiGeoPlusCodeHandler encodes a coordinate to a Google Open Location Code
+// (?lat/?lon), or decodes a plus code back to a coordinate (?code).
+func apiGeoPlusCodeHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	if code := q.Get("code"); code != "" {
+		coord, err := geoService.PlusCodeDecode(code)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PLUS_CODE", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"code":       code,
+			"coordinate": coord,
+		})
+		return
+	}
+
+	lat, lon, err := parseGeoSingleCoordinateParams(q)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+
+	result, err := geoService.PlusCodeEncode(lat, lon)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiGeoBBoxHandler computes a bounding box either from a center coordinate
+// plus radius in kilometers (?lat/?lon/?radius) or from a list of
+// coordinates (?coords=lat1,lon1|lat2,lon2|...).
+func apiGeoBBoxHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	if coordsParam := q.Get("coords"); coordsParam != "" {
+		pairs := strings.Split(coordsParam, "|")
+		coords := make([]geo.Coordinate, 0, len(pairs))
+		for _, pair := range pairs {
+			parts := strings.Split(pair, ",")
+			if len(parts) != 2 {
+				writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDS", "each coords entry must be lat,lon", nil)
+				return
+			}
+			lat, latErr := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+			lon, lonErr := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+			if latErr != nil || lonErr != nil {
+				writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDS", "each coords entry must be numeric lat,lon", nil)
+				return
+			}
+			coords = append(coords, geo.Coordinate{Latitude: lat, Longitude: lon})
+		}
+
+		box, err := geoService.BoundingBoxFromCoordinates(coords)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, box)
+		return
+	}
+
+	lat, lon, err := parseGeoSingleCoordinateParams(q)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		return
+	}
+
+	radiusRaw := q.Get("radius")
+	if radiusRaw == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "RADIUS_REQUIRED", "radius query parameter is required", nil)
+		return
+	}
+	radius, err := strconv.ParseFloat(radiusRaw, 64)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_RADIUS", "radius must be a number", nil)
+		return
+	}
+
+	box, err := geoService.BoundingBoxFromRadius(lat, lon, radius)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, box)
+}
+
 // apiMathCalculateHandler dispatches to a math.Service operation selected
 // by ?operation=, composing the existing named methods rather than
 // evaluating a generic expression (no expression evaluator exists or may
