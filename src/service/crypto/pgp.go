@@ -6,19 +6,14 @@ import (
 	"fmt"
 	"io"
 
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/armor"
-	"golang.org/x/crypto/openpgp/packet"
-	// Registers RIPEMD160 as an available hash.Hash so that legacy PGP keys
-	// with no PreferredHash subpacket (the default emitted by this
-	// package's own NewEntity, see openpgp/keys.go) can still be used to
-	// encrypt, matching the library's own fallback default.
-	_ "golang.org/x/crypto/ripemd160"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
 
 // pgpConfig pins the self-signature and session-key hash to SHA-256 so
-// generated keys never advertise a hash algorithm (e.g. RIPEMD160) that
-// this binary's crypto build does not compile in.
+// generated keys always advertise a modern, universally-compiled-in hash
+// algorithm.
 func pgpConfig() *packet.Config {
 	return &packet.Config{DefaultHash: stdcrypto.SHA256}
 }

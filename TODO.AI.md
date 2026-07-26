@@ -71,12 +71,20 @@ now fully resolved.
 crypto/{certificate,ed25519,pgp} were wired in a follow-up batch (all
 genuinely net-new — zero prior backend support, matching the MISSING
 annotation below). `certificate.go` and `ed25519.go` are stdlib-only
-(`crypto/x509`, `crypto/x509/pkix`, `crypto/ed25519`, `encoding/pem`);
-`pgp.go` uses the `openpgp`/`openpgp/armor` subpackages already bundled
-with the existing `golang.org/x/crypto` dependency — no new go.mod entry
-was needed. All three follow the mode-dispatch single-POST-endpoint
-pattern established by `apiCryptoRSAHandler`. This brings the wired total
-to 128. The MISSING crypto line is now fully resolved.
+(`crypto/x509`, `crypto/x509/pkix`, `crypto/ed25519`, `encoding/pem`).
+`pgp.go` initially used the `openpgp`/`openpgp/armor` subpackages bundled
+with the existing `golang.org/x/crypto` dependency, but CI's `govulncheck`
+gate flagged `golang.org/x/crypto/openpgp` as GO-2026-5932 (unmaintained,
+"Fixed in: N/A" — no version bump can ever clear it), so `pgp.go` was
+switched to the maintained fork `github.com/ProtonMail/go-crypto/openpgp`
+per AI.md's Forbidden Libraries precedent (unmaintained/vulnerable
+dependency swapped for a maintained drop-in, matching the
+`dgrijalva/jwt-go` → `golang-jwt/jwt/v5` pattern). This added
+`github.com/ProtonMail/go-crypto` and its `github.com/cloudflare/circl`
+transitive dependency to go.mod (circl pinned to v1.6.3 to also clear
+GO-2026-4550). All three tools follow the mode-dispatch single-POST-
+endpoint pattern established by `apiCryptoRSAHandler`. This brings the
+wired total to 128. The MISSING crypto line is now fully resolved.
 
 ## [ ] MISSING sub-tools needing net-new backend service work (112 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
