@@ -107,7 +107,34 @@ by `FormData` when unchecked — no JS changes needed); `cron` uses
 tests in `api_utils_test.go`, tool-page smoke tests in `server_test.go`,
 service-layer unit tests in `src/service/dev/dev_test.go`.
 
-## [ ] MISSING sub-tools needing net-new backend service work (104 linked, unwired)
+## [x] docker (9): best-practices, compose-to-run, compose-validate, dockerfile-lint, env-parser, network-helper, run-to-compose, security-scan, size-optimizer
+All 9 wired: 145 tools now wired total (up from 136). `compose-to-run` and
+`run-to-compose` reuse the same `ComposeServiceConfig`/port-mapping-string
+plumbing already established for the wired `port-mapping`/`volume-helper`
+tools. Everything else is genuinely net-new, added to
+`src/service/docker/tools.go`: `LintDockerfile` (rule-based static checks —
+missing `USER`, `latest` tag, missing `WORKDIR`, etc.), `BestPracticesGuide`
+(static tips list, no input), `ValidateCompose` (YAML syntax + structural
+checks via `gopkg.in/yaml.v3`, including a `yaml.Node`-based duplicate-key
+detection technique since the stdlib map decode silently drops dupes),
+`ParseEnvFile` (`.env` KEY=VALUE parser with quoting/comment handling),
+`GenerateNetworkConfig` (docker network create command + compose `networks:`
+block), `ScanSecurity` (static Dockerfile/compose anti-pattern scan — root
+user, curl-pipe-to-sh, privileged mode, exposed secrets in `ENV`), and
+`OptimizeSize` (static suggestions — layer-squashing opportunities,
+`apt-get clean`, multi-stage build hints). `security-scan` and
+`size-optimizer` are honest static analyzers only (no image is ever built or
+pulled) — this matches the project's dependency-free, self-contained-binary
+constraint and is not a gap: nothing in AI.md PART 26 requires runtime image
+inspection. Routes added under `/api/v1/docker/*` in `src/server/server.go`;
+`network-helper` uses `data-endpoint` (query-string GET); `security-scan`
+and `size-optimizer` use `data-body-endpoint` (raw-body POST), matching the
+other 6 tools' established GET/POST conventions. Tests added: handler tests
+in `api_utils_test.go`, tool-page smoke tests in `server_test.go`,
+service-layer unit tests in `src/service/docker/docker_test.go`. The MISSING
+docker line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (95 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -116,9 +143,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- docker (9): best-practices, compose-to-run, compose-validate,
-  dockerfile-lint, env-parser, network-helper, run-to-compose,
-  security-scan, size-optimizer
 - fun (10): compliment, dad-joke, fact, insult, meme, motivational,
   programming-joke, quote, riddle, trivia
 - generate (12): api-docs, avatar, barcode, config, dockerfile, gitignore,

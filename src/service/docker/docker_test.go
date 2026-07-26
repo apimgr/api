@@ -200,3 +200,226 @@ func TestFormatVolumeMount(t *testing.T) {
 	assert.Equal(t, "/host:/container", s.FormatVolumeMount("/host", "/container", false))
 	assert.Equal(t, "/host:/container:ro", s.FormatVolumeMount("/host", "/container", true))
 }
+
+// LintDockerfile covers a clean-ish Dockerfile (still flags missing
+// HEALTHCHECK) and a Dockerfile that trips every rule at once.
+func TestLintDockerfile(t *testing.T) {
+	s := New()
+
+	clean := "FROM alpine:3.18\nUSER app\nHEALTHCHECK CMD true\nRUN echo hi\n"
+	out := s.LintDockerfile(clean)
+	assert.True(t, out.Passed)
+	assert.Empty(t, out.Issues)
+
+	bad := "FROM ubuntu\n" +
+		"ADD app.tar.gz /app\n" +
+		"ADD local.txt /app\n" +
+		"ENV API_KEY=abc123\n" +
+		"RUN apt-get install foo\n" +
+		"RUN echo one\n" +
+		"RUN echo two\n" +
+		"RUN echo three\n" +
+		"RUN echo four\n" +
+		"USER root\n"
+	out = s.LintDockerfile(bad)
+	assert.False(t, out.Passed)
+
+	rules := make(map[string]bool)
+	for _, issue := range out.Issues {
+		rules[issue.Rule] = true
+	}
+	assert.True(t, rules["unpinned-base-image"])
+	assert.True(t, rules["prefer-copy"])
+	assert.True(t, rules["hardcoded-secret"])
+	assert.True(t, rules["apt-recommends"])
+	assert.True(t, rules["root-user"])
+	assert.True(t, rules["missing-healthcheck"])
+	assert.True(t, rules["merge-run-layers"])
+	assert.False(t, rules["missing-user"])
+}
+
+// BestPracticesGuide just verifies the static guide is non-empty and each
+// entry has both fields populated.
+func TestBestPracticesGuide(t *testing.T) {
+	s := New()
+
+	guide := s.BestPracticesGuide()
+	require.NotEmpty(t, guide)
+	for _, tip := range guide {
+		assert.NotEmpty(t, tip.Category)
+		assert.NotEmpty(t, tip.Tip)
+	}
+}
+
+// ValidateCompose covers a valid file, a YAML syntax error, a missing
+// services key, a duplicate service name, and a service with an invalid
+// port mapping.
+func TestValidateCompose(t *testing.T) {
+	s := New()
+
+	valid := "services:\n  web:\n    image: nginx:latest\n    ports:\n      - \"80:80\"\n"
+	out := s.ValidateCompose(valid)
+	assert.True(t, out.Valid)
+	assert.Empty(t, out.Errors)
+
+	out = s.ValidateCompose("services: [")
+	assert.False(t, out.Valid)
+	assert.NotEmpty(t, out.Errors)
+
+	out = s.ValidateCompose("version: \"3\"\n")
+	assert.False(t, out.Valid)
+	assert.Contains(t, strings.Join(out.Errors, " "), "services")
+
+	dupe := "services:\n  web:\n    image: a\n  web:\n    image: b\n"
+	out = s.ValidateCompose(dupe)
+	assert.False(t, out.Valid)
+	assert.Contains(t, strings.Join(out.Errors, " "), "duplicate")
+
+	badPort := "services:\n  web:\n    image: nginx\n    ports:\n      - \"notaport\"\n"
+	out = s.ValidateCompose(badPort)
+	assert.False(t, out.Valid)
+}
+
+// ComposeToRunCommand covers a single-service file (implicit selection),
+// a named-service lookup, and error cases (no services, unknown service
+// name, ambiguous multi-service file with no name given).
+func TestComposeToRunCommand(t *testing.T) {
+	s := New()
+
+	single := "services:\n  web:\n    image: nginx:latest\n    ports:\n      - \"80:80\"\n    restart: always\n"
+	out, err := s.ComposeToRunCommand(single, "")
+	require.NoError(t, err)
+	assert.Contains(t, out, "docker run -d --name web")
+	assert.Contains(t, out, "--restart always")
+	assert.Contains(t, out, "-p 80:80")
+	assert.Contains(t, out, "nginx:latest")
+
+	multi := "services:\n  web:\n    image: nginx\n  db:\n    image: postgres\n"
+	_, err = s.ComposeToRunCommand(multi, "")
+	assert.Error(t, err)
+
+	out, err = s.ComposeToRunCommand(multi, "db")
+	require.NoError(t, err)
+	assert.Contains(t, out, "postgres")
+
+	_, err = s.ComposeToRunCommand(multi, "cache")
+	assert.Error(t, err)
+
+	_, err = s.ComposeToRunCommand("services: {}\n", "")
+	assert.Error(t, err)
+}
+
+// RunCommandToCompose covers a typical docker run invocation with
+// multiple flag types and error cases (empty command, no image found).
+func TestRunCommandToCompose(t *testing.T) {
+	s := New()
+
+	cmd := `docker run -d --name web -p 8080:80 -v /data:/data -e FOO=bar --restart always nginx:latest`
+	out, err := s.RunCommandToCompose(cmd)
+	require.NoError(t, err)
+	assert.Contains(t, out, "services:")
+	assert.Contains(t, out, "web:")
+	assert.Contains(t, out, "image: nginx:latest")
+	assert.Contains(t, out, "8080:80")
+	assert.Contains(t, out, "/data:/data")
+	assert.Contains(t, out, "FOO: bar")
+	assert.Contains(t, out, "restart: always")
+
+	_, err = s.RunCommandToCompose("")
+	assert.Error(t, err)
+
+	_, err = s.RunCommandToCompose("docker run -d")
+	assert.Error(t, err)
+}
+
+// ParseEnvFile covers comments/blank lines, quoted values, a malformed
+// line, an empty key, and a duplicate key warning.
+func TestParseEnvFile(t *testing.T) {
+	s := New()
+
+	content := "# comment\n\nexport FOO=bar\nBAZ=\"quoted value\"\nBAD_LINE\n=novalue\nFOO=again\n"
+	out := s.ParseEnvFile(content)
+
+	vars := make(map[string]string)
+	for _, v := range out.Variables {
+		vars[v.Key] = v.Value
+	}
+	assert.Equal(t, "again", vars["FOO"])
+	assert.Equal(t, "quoted value", vars["BAZ"])
+	assert.NotEmpty(t, out.Errors)
+	assert.NotEmpty(t, out.Warnings)
+}
+
+// GenerateNetworkConfig covers a fully specified network, an invalid
+// subnet, a gateway outside the subnet, and a missing name.
+func TestGenerateNetworkConfig(t *testing.T) {
+	s := New()
+
+	out, err := s.GenerateNetworkConfig(NetworkHelperConfig{
+		Name: "mynet", Driver: "bridge", Subnet: "172.20.0.0/16", Gateway: "172.20.0.1",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, out.RunCommand, "docker network create --driver bridge --subnet 172.20.0.0/16 --gateway 172.20.0.1 mynet")
+	assert.Contains(t, out.ComposeBlock, "networks:")
+	assert.Contains(t, out.ComposeBlock, "subnet: 172.20.0.0/16")
+
+	_, err = s.GenerateNetworkConfig(NetworkHelperConfig{Name: "bad", Subnet: "not-a-cidr"})
+	assert.Error(t, err)
+
+	_, err = s.GenerateNetworkConfig(NetworkHelperConfig{Name: "bad", Subnet: "10.0.0.0/24", Gateway: "192.168.1.1"})
+	assert.Error(t, err)
+
+	_, err = s.GenerateNetworkConfig(NetworkHelperConfig{})
+	assert.Error(t, err)
+}
+
+// ScanSecurity covers a clean input and one that trips every rule.
+func TestScanSecurity(t *testing.T) {
+	s := New()
+
+	out := s.ScanSecurity("FROM alpine\nUSER app\n")
+	assert.True(t, out.Passed)
+
+	bad := "FROM alpine\n" +
+		"ENV DB_PASSWORD=hunter2\n" +
+		"USER root\n" +
+		"privileged: true\n" +
+		"network_mode: host\n" +
+		"- /var/run/docker.sock:/var/run/docker.sock\n" +
+		"cap_add:\n  - ALL\n"
+	out = s.ScanSecurity(bad)
+	assert.False(t, out.Passed)
+
+	rules := make(map[string]bool)
+	for _, issue := range out.Issues {
+		rules[issue.Rule] = true
+	}
+	assert.True(t, rules["privileged-mode"])
+	assert.True(t, rules["host-network"])
+	assert.True(t, rules["docker-socket-mount"])
+	assert.True(t, rules["broad-capabilities"])
+	assert.True(t, rules["root-user"])
+	assert.True(t, rules["hardcoded-secret"])
+}
+
+// OptimizeSize covers a heavy-base-image, multi-RUN, build-tools
+// Dockerfile and confirms suggestions are produced for each concern.
+func TestOptimizeSize(t *testing.T) {
+	s := New()
+
+	content := "FROM ubuntu:20.04\n" +
+		"RUN apt-get install -y build-essential\n" +
+		"RUN echo one\n" +
+		"RUN echo two\n" +
+		"RUN echo three\n" +
+		"RUN echo four\n"
+	out := s.OptimizeSize(content)
+	assert.NotEmpty(t, out.Suggestions)
+
+	joined := strings.Join(out.Suggestions, " ")
+	assert.Contains(t, joined, "full-size distro")
+	assert.Contains(t, joined, "multi-stage")
+	assert.Contains(t, joined, "RUN instructions")
+	assert.Contains(t, joined, "cache cleanup")
+	assert.Contains(t, joined, "dockerignore")
+}

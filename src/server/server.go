@@ -330,6 +330,15 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/port-mapping", apiDockerPortMappingHandler)
 			r.Get("/volume-helper", apiDockerVolumeHandler)
 			r.Post("/dockerfile-generate", apiDockerfileGenerateHandler)
+			r.Post("/dockerfile-lint", apiDockerLintHandler)
+			r.Get("/best-practices", apiDockerBestPracticesHandler)
+			r.Post("/compose-validate", apiDockerComposeValidateHandler)
+			r.Post("/compose-to-run", apiDockerComposeToRunHandler)
+			r.Post("/run-to-compose", apiDockerRunToComposeHandler)
+			r.Post("/env-parser", apiDockerEnvParserHandler)
+			r.Get("/network-helper", apiDockerNetworkHelperHandler)
+			r.Post("/security-scan", apiDockerSecurityScanHandler)
+			r.Post("/size-optimizer", apiDockerSizeOptimizerHandler)
 		})
 
 		// Weather
@@ -616,6 +625,15 @@ func toolPages() []toolPage {
 		{category: "docker", tool: "port-mapping", title: "Port Mapping Helper", description: "Format or parse a Docker host:container port mapping"},
 		{category: "docker", tool: "volume-helper", title: "Volume Mount Helper", description: "Format a Docker host:container volume mount string"},
 		{category: "docker", tool: "dockerfile-generate", title: "Dockerfile Generator", description: "Generate a Dockerfile from a structured configuration"},
+		{category: "docker", tool: "run-to-compose", title: "Run to Compose", description: "Convert docker run to docker-compose"},
+		{category: "docker", tool: "compose-to-run", title: "Compose to Run", description: "Convert docker-compose to docker run"},
+		{category: "docker", tool: "dockerfile-lint", title: "Dockerfile Linter", description: "Lint and validate Dockerfiles"},
+		{category: "docker", tool: "compose-validate", title: "Compose Validator", description: "Validate docker-compose files"},
+		{category: "docker", tool: "env-parser", title: "ENV Parser", description: "Parse environment variables"},
+		{category: "docker", tool: "network-helper", title: "Network Helper", description: "Generate network configurations"},
+		{category: "docker", tool: "best-practices", title: "Best Practices", description: "Docker best practices guide"},
+		{category: "docker", tool: "security-scan", title: "Security Scanner", description: "Scan for security issues"},
+		{category: "docker", tool: "size-optimizer", title: "Size Optimizer", description: "Optimize image size"},
 		{category: "network", tool: "subnet", title: "Subnet Calculator", description: "Calculate network, broadcast, and host range details for a CIDR block"},
 		{category: "network", tool: "ula", title: "ULA Generator", description: "Generate an RFC 4193 IPv6 unique-local-address prefix"},
 		{category: "network", tool: "port", title: "Random Port", description: "Suggest a random unprivileged TCP/UDP port"},

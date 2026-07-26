@@ -172,6 +172,155 @@ func apiDockerfileGenerateHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// apiDockerLintHandler lints the Dockerfile text supplied in the request
+// body for common anti-patterns, using docker.Service.LintDockerfile.
+func apiDockerLintHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOCKERFILE", "request body must contain Dockerfile content", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, dockerService.LintDockerfile(string(raw)))
+}
+
+// apiDockerBestPracticesHandler returns the static curated Docker best
+// practices guide, using docker.Service.BestPracticesGuide.
+func apiDockerBestPracticesHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"tips": dockerService.BestPracticesGuide(),
+	})
+}
+
+// apiDockerComposeValidateHandler validates the docker-compose YAML text
+// supplied in the request body, using docker.Service.ValidateCompose.
+func apiDockerComposeValidateHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMPOSE", "request body must contain docker-compose YAML content", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, dockerService.ValidateCompose(string(raw)))
+}
+
+// apiDockerComposeToRunHandler converts the docker-compose YAML text
+// supplied in the request body into an equivalent docker run command for
+// the service named by ?service= (or the file's only service when
+// omitted), using docker.Service.ComposeToRunCommand.
+func apiDockerComposeToRunHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMPOSE", "request body must contain docker-compose YAML content", nil)
+		return
+	}
+	cmd, err := dockerService.ComposeToRunCommand(string(raw), r.URL.Query().Get("service"))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COMPOSE", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"command": cmd})
+}
+
+// apiDockerRunToComposeHandler converts the docker run command line
+// supplied in the request body into an equivalent docker-compose service
+// block, using docker.Service.RunCommandToCompose.
+func apiDockerRunToComposeHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMMAND", "request body must contain a docker run command", nil)
+		return
+	}
+	compose, err := dockerService.RunCommandToCompose(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COMMAND", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{"compose": compose})
+}
+
+// apiDockerEnvParserHandler parses the .env file text supplied in the
+// request body into structured key/value entries, using
+// docker.Service.ParseEnvFile.
+func apiDockerEnvParserHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ENV", "request body must contain .env file content", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, dockerService.ParseEnvFile(string(raw)))
+}
+
+// apiDockerNetworkHelperHandler generates a docker network create command
+// and a matching compose networks: block from query-string parameters,
+// using docker.Service.GenerateNetworkConfig.
+func apiDockerNetworkHelperHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	cfg := docker.NetworkHelperConfig{
+		Name:     q.Get("name"),
+		Driver:   q.Get("driver"),
+		Subnet:   q.Get("subnet"),
+		Gateway:  q.Get("gateway"),
+		Internal: config.IsTruthy(q.Get("internal")),
+	}
+	result, err := dockerService.GenerateNetworkConfig(cfg)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_NETWORK_CONFIG", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, result)
+}
+
+// apiDockerSecurityScanHandler statically scans the Dockerfile or compose
+// text supplied in the request body for common security anti-patterns,
+// using docker.Service.ScanSecurity.
+func apiDockerSecurityScanHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CONTENT", "request body must contain Dockerfile or compose content", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, dockerService.ScanSecurity(string(raw)))
+}
+
+// apiDockerSizeOptimizerHandler statically analyzes the Dockerfile text
+// supplied in the request body and suggests image-size reduction changes,
+// using docker.Service.OptimizeSize.
+func apiDockerSizeOptimizerHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOCKERFILE", "request body must contain Dockerfile content", nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, dockerService.OptimizeSize(string(raw)))
+}
+
 // apiWeatherCurrentHandler returns current weather for the {location}
 // path parameter.
 func apiWeatherCurrentHandler(w http.ResponseWriter, r *http.Request) {

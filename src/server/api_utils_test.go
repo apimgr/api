@@ -2682,3 +2682,220 @@ func TestAPICryptoPGPHandler(t *testing.T) {
 		assert.Equal(t, "Hello World", decData["plaintext"])
 	})
 }
+
+// apiDockerLintHandler must 400 MISSING_DOCKERFILE for an empty body and 200
+// with a lint result for valid Dockerfile content.
+func TestAPIDockerLintHandler(t *testing.T) {
+	t.Run("missing dockerfile", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/dockerfile-lint", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiDockerLintHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DOCKERFILE", env["error"])
+	})
+
+	t.Run("valid dockerfile", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/dockerfile-lint", strings.NewReader("FROM ubuntu:latest\nRUN apt-get update"))
+		w := httptest.NewRecorder()
+		apiDockerLintHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, true, env["ok"])
+	})
+}
+
+// apiDockerBestPracticesHandler must always return 200 with a non-empty
+// tips list.
+func TestAPIDockerBestPracticesHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/docker/best-practices", nil)
+	w := httptest.NewRecorder()
+	apiDockerBestPracticesHandler(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	tips, ok := data["tips"].([]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, tips)
+}
+
+// apiDockerComposeValidateHandler must 400 MISSING_COMPOSE for an empty body
+// and 200 with a validation result for valid compose YAML.
+func TestAPIDockerComposeValidateHandler(t *testing.T) {
+	t.Run("missing compose", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/compose-validate", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiDockerComposeValidateHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_COMPOSE", env["error"])
+	})
+
+	t.Run("valid compose", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/compose-validate", strings.NewReader("services:\n  web:\n    image: nginx:latest\n"))
+		w := httptest.NewRecorder()
+		apiDockerComposeValidateHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["valid"])
+	})
+}
+
+// apiDockerComposeToRunHandler must 400 MISSING_COMPOSE for an empty body,
+// 400 INVALID_COMPOSE for unparseable YAML, and 200 with a generated docker
+// run command for valid single-service compose YAML.
+func TestAPIDockerComposeToRunHandler(t *testing.T) {
+	t.Run("missing compose", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/compose-to-run", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiDockerComposeToRunHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_COMPOSE", env["error"])
+	})
+
+	t.Run("invalid compose", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/compose-to-run", strings.NewReader("not: [valid"))
+		w := httptest.NewRecorder()
+		apiDockerComposeToRunHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_COMPOSE", env["error"])
+	})
+
+	t.Run("valid compose", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/compose-to-run?service=web", strings.NewReader("services:\n  web:\n    image: nginx:latest\n"))
+		w := httptest.NewRecorder()
+		apiDockerComposeToRunHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["command"], "nginx:latest")
+	})
+}
+
+// apiDockerRunToComposeHandler must 400 MISSING_COMMAND for an empty body
+// and 200 with a generated compose block for a valid docker run command.
+func TestAPIDockerRunToComposeHandler(t *testing.T) {
+	t.Run("missing command", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/run-to-compose", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiDockerRunToComposeHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_COMMAND", env["error"])
+	})
+
+	t.Run("valid command", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/run-to-compose", strings.NewReader("docker run -d --name web -p 8080:80 nginx:latest"))
+		w := httptest.NewRecorder()
+		apiDockerRunToComposeHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["compose"], "nginx:latest")
+	})
+}
+
+// apiDockerEnvParserHandler must 400 MISSING_ENV for an empty body and 200
+// with parsed variables for a valid .env body.
+func TestAPIDockerEnvParserHandler(t *testing.T) {
+	t.Run("missing env", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/env-parser", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiDockerEnvParserHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_ENV", env["error"])
+	})
+
+	t.Run("valid env", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/env-parser", strings.NewReader("PORT=8080\nDEBUG=true\n"))
+		w := httptest.NewRecorder()
+		apiDockerEnvParserHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		vars, ok := data["variables"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, vars, 2)
+	})
+}
+
+// apiDockerNetworkHelperHandler must 400 INVALID_NETWORK_CONFIG for a
+// missing name and 200 with a generated command/compose block otherwise.
+func TestAPIDockerNetworkHelperHandler(t *testing.T) {
+	t.Run("missing name", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/docker/network-helper", nil)
+		w := httptest.NewRecorder()
+		apiDockerNetworkHelperHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_NETWORK_CONFIG", env["error"])
+	})
+
+	t.Run("valid config", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/docker/network-helper?name=app-net&driver=bridge", nil)
+		w := httptest.NewRecorder()
+		apiDockerNetworkHelperHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["run_command"], "app-net")
+	})
+}
+
+// apiDockerSecurityScanHandler must 400 MISSING_CONTENT for an empty body
+// and 200 with a scan result for valid Dockerfile content.
+func TestAPIDockerSecurityScanHandler(t *testing.T) {
+	t.Run("missing content", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/security-scan", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiDockerSecurityScanHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_CONTENT", env["error"])
+	})
+
+	t.Run("valid content", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/security-scan", strings.NewReader("FROM ubuntu:latest\nUSER root\n"))
+		w := httptest.NewRecorder()
+		apiDockerSecurityScanHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, true, env["ok"])
+	})
+}
+
+// apiDockerSizeOptimizerHandler must 400 MISSING_DOCKERFILE for an empty
+// body and 200 with suggestions for valid Dockerfile content.
+func TestAPIDockerSizeOptimizerHandler(t *testing.T) {
+	t.Run("missing dockerfile", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/size-optimizer", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiDockerSizeOptimizerHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DOCKERFILE", env["error"])
+	})
+
+	t.Run("valid dockerfile", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/docker/size-optimizer", strings.NewReader("FROM golang:latest\nRUN apt-get update && apt-get install -y curl\n"))
+		w := httptest.NewRecorder()
+		apiDockerSizeOptimizerHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		suggestions, ok := data["suggestions"].([]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, suggestions)
+	})
+}
