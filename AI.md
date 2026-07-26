@@ -33064,7 +33064,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: go build -buildvcs=false ./...
 
-  vuln-check:
+  vuln-scan:
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
@@ -33717,6 +33717,7 @@ For self-hosted runners, change `runs-on: ubuntu-latest` to your runner label.
 
 | File | Trigger | Purpose |
 |------|---------|---------|
+| `ci.yml` | Push and pull requests; weekly schedule for security jobs | Build, test, lint, coverage, security jobs |
 | `release.yml` | Tag push (`v*`, `*.*.*`) | Production releases |
 | `beta.yml` | Push to `beta` branch | Beta releases |
 | `daily.yml` | Daily at 3am UTC + push to main/master | Daily builds |
