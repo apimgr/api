@@ -2024,6 +2024,168 @@ func apiParseCSVHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// apiParseEnvHandler parses the raw .env-style document supplied in the
+// request body via parseService.ParseEnv.
+func apiParseEnvHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ENV", "request body must contain a .env document", nil)
+		return
+	}
+	parsed, err := parseService.ParseEnv(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ENV", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseHTMLHandler parses the raw HTML document supplied in the request
+// body into a structural summary via parseService.ParseHTML.
+func apiParseHTMLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_HTML", "request body must contain an HTML document", nil)
+		return
+	}
+	parsed, err := parseService.ParseHTML(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HTML", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseINIHandler parses the raw INI document supplied in the request
+// body via parseService.ParseINI.
+func apiParseINIHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_INI", "request body must contain an INI document", nil)
+		return
+	}
+	parsed, err := parseService.ParseINI(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_INI", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseLogHandler parses the raw log document supplied in the request
+// body, one best-effort entry per line, via parseService.ParseLogLines.
+func apiParseLogHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_LOG", "request body must contain log lines", nil)
+		return
+	}
+	parsed, err := parseService.ParseLogLines(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LOG", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseMarkdownHandler parses the raw Markdown document supplied in the
+// request body into a structure summary via
+// parseService.ParseMarkdownStructure.
+func apiParseMarkdownHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MARKDOWN", "request body must contain a Markdown document", nil)
+		return
+	}
+	parsed, err := parseService.ParseMarkdownStructure(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MARKDOWN", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseSQLHandler parses the raw SQL statement supplied in the request
+// body into a best-effort structure summary via
+// parseService.ParseSQLStructure.
+func apiParseSQLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SQL", "request body must contain a SQL statement", nil)
+		return
+	}
+	parsed, err := parseService.ParseSQLStructure(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_SQL", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseTOMLHandler parses the raw TOML document supplied in the request
+// body via parseService.ParseTOML.
+func apiParseTOMLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TOML", "request body must contain a TOML document", nil)
+		return
+	}
+	parsed, err := parseService.ParseTOML(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TOML", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// apiParseYAMLHandler parses the raw YAML document supplied in the request
+// body via parseService.ParseYAML.
+func apiParseYAMLHandler(w http.ResponseWriter, r *http.Request) {
+	raw, err := readRequestBody(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_YAML", "request body must contain a YAML document", nil)
+		return
+	}
+	parsed, err := parseService.ParseYAML(string(raw))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_YAML", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
 // apiParseJWTHandler decodes (never verifies) the header and payload of a
 // JSON Web Token supplied via the {token} path parameter. This reuses the
 // exact same decodeJWTSegment helper as apiCryptoJWTDecodeHandler in the

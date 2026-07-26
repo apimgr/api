@@ -1294,6 +1294,221 @@ func TestAPIParseJWTHandler(t *testing.T) {
 	})
 }
 
+// apiParseEnvHandler must 400 MISSING_ENV for an empty body and 200 with
+// decoded key/value pairs for valid input.
+func TestAPIParseEnvHandler(t *testing.T) {
+	t.Run("missing env", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/env", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseEnvHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_ENV", env["error"])
+	})
+
+	t.Run("valid env", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/env", strings.NewReader("# comment\nexport FOO=bar\nBAZ=\"qux\"\n"))
+		w := httptest.NewRecorder()
+		apiParseEnvHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "bar", data["FOO"])
+		assert.Equal(t, "qux", data["BAZ"])
+	})
+}
+
+// apiParseHTMLHandler must 400 MISSING_HTML for an empty body and 200 with
+// a structural summary for valid input.
+func TestAPIParseHTMLHandler(t *testing.T) {
+	t.Run("missing html", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/html", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseHTMLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_HTML", env["error"])
+	})
+
+	t.Run("valid html", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/html", strings.NewReader("<html><head><title>Example</title></head><body><h1>Hi</h1><a href=\"/x\">x</a></body></html>"))
+		w := httptest.NewRecorder()
+		apiParseHTMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Example", data["title"])
+	})
+}
+
+// apiParseINIHandler must 400 MISSING_INI for an empty body and 200 with
+// sectioned key/value pairs for valid input.
+func TestAPIParseINIHandler(t *testing.T) {
+	t.Run("missing ini", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/ini", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseINIHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_INI", env["error"])
+	})
+
+	t.Run("valid ini", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/ini", strings.NewReader("[section]\nkey=value\n"))
+		w := httptest.NewRecorder()
+		apiParseINIHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		section, ok := data["section"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "value", section["key"])
+	})
+}
+
+// apiParseLogHandler must 400 MISSING_LOG for an empty body and 200 with
+// one entry per non-blank line for valid input.
+func TestAPIParseLogHandler(t *testing.T) {
+	t.Run("missing log", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/log", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseLogHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_LOG", env["error"])
+	})
+
+	t.Run("valid log", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/log", strings.NewReader("2024-01-02 15:04:05 ERROR something failed\n"))
+		w := httptest.NewRecorder()
+		apiParseLogHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, data, 1)
+		entry, ok := data[0].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "ERROR", entry["level"])
+	})
+}
+
+// apiParseMarkdownHandler must 400 MISSING_MARKDOWN for an empty body and
+// 200 with extracted headings/links/code blocks for valid input.
+func TestAPIParseMarkdownHandler(t *testing.T) {
+	t.Run("missing markdown", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/markdown", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseMarkdownHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_MARKDOWN", env["error"])
+	})
+
+	t.Run("valid markdown", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/markdown", strings.NewReader("# Title\n\n[link](https://example.com)\n\n```go\nfmt.Println(1)\n```\n"))
+		w := httptest.NewRecorder()
+		apiParseMarkdownHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		headings, ok := data["headings"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, headings, 1)
+		links, ok := data["links"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, links, 1)
+		codeBlocks, ok := data["code_blocks"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, codeBlocks, 1)
+	})
+}
+
+// apiParseSQLHandler must 400 MISSING_SQL for an empty body and 200 with a
+// best-effort structure summary for valid input; it never rejects on
+// invalid SQL syntax.
+func TestAPIParseSQLHandler(t *testing.T) {
+	t.Run("missing sql", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/sql", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseSQLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_SQL", env["error"])
+	})
+
+	t.Run("valid sql", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/sql", strings.NewReader("SELECT id, name FROM users WHERE id = 1"))
+		w := httptest.NewRecorder()
+		apiParseSQLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "SELECT", data["statement_type"])
+		tables, ok := data["tables"].([]interface{})
+		require.True(t, ok)
+		require.Contains(t, tables, "users")
+	})
+}
+
+// apiParseTOMLHandler must 400 MISSING_TOML for an empty body and 200 with
+// a decoded nested structure for valid input.
+func TestAPIParseTOMLHandler(t *testing.T) {
+	t.Run("missing toml", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/toml", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseTOMLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_TOML", env["error"])
+	})
+
+	t.Run("valid toml", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/toml", strings.NewReader("[table]\nkey = \"value\"\n"))
+		w := httptest.NewRecorder()
+		apiParseTOMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		table, ok := data["table"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "value", table["key"])
+	})
+}
+
+// apiParseYAMLHandler must 400 MISSING_YAML for an empty body and 200 with
+// a decoded nested structure for valid input.
+func TestAPIParseYAMLHandler(t *testing.T) {
+	t.Run("missing yaml", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/yaml", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		apiParseYAMLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_YAML", env["error"])
+	})
+
+	t.Run("valid yaml", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/yaml", strings.NewReader("key: value\nlist:\n  - one\n  - two\n"))
+		w := httptest.NewRecorder()
+		apiParseYAMLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "value", data["key"])
+		list, ok := data["list"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, list, 2)
+	})
+}
+
 // apiLanguageDetectHandler must always report NOT_SUPPORTED — language
 // auto-detection is an IDEA.md non-goal.
 func TestAPILanguageDetectHandler(t *testing.T) {

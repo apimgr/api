@@ -307,7 +307,51 @@ mounted outside the project tree; `git diff --stat -- go.mod go.sum`
 empty — no new dependency introduced). The MISSING osint line is now
 fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (50 linked, unwired)
+## [x] parse (8): env, html, ini, log, markdown, sql, toml, yaml
+All 8 tools are pure in-process parsers with no outbound calls, added to
+`src/service/parse/parse.go`. env (`ParseEnv`/`unquoteEnvValue`) splits
+KEY=VALUE lines, strips an optional `export ` prefix and surrounding
+quotes. html (`ParseHTML`, using the already-indirect `golang.org/x/net/
+html` promoted to a direct import) walks the parsed DOM tree into a
+`HTMLSummary` (title, meta, headings, links, images, form count). ini
+(`ParseINI`) splits into sections of key/value maps, extending the same
+"error only when result is empty but input isn't" convention from
+`ParseEnv` for consistency across sibling tools. log (`ParseLogLines`)
+is an explicitly best-effort heuristic: an optional leading timestamp
+against a small set of common layouts, then the first whole-word level
+token, remaining text as message — never rejects a non-blank line, only
+an entirely empty input errors. markdown (`ParseMarkdownStructure`)
+extracts ATX headings, inline `[text](url)` links, and fenced ``` code
+blocks as structured data (distinct from the pre-existing `text.
+MarkdownToHTML`/`MarkdownTOC` renderers). sql (`ParseSQLStructure`) is
+explicitly documented as NOT a real SQL parser/validator — best-effort
+statement-type/table/column extraction via regex, unrecognized syntax
+yields "UNKNOWN" rather than an error. toml (`ParseTOML`) supports the
+common subset confirmed in scope by IDEA.md line 25 (strings, booleans,
+integers, floats, single-line arrays, dotted `[table.subtable]`
+headers); multi-line strings, inline tables, dates, and arrays-of-tables
+are explicitly documented as unsupported. yaml (`ParseYAML`) uses the
+already-direct `gopkg.in/yaml.v3` dependency (decodes mappings into
+`map[string]interface{}` natively, unlike yaml.v2). No new third-party
+module was introduced: `golang.org/x/net` moved from `// indirect` to
+direct in `go.mod` with zero `go.sum` diff (it was already transitively
+present), and `gopkg.in/yaml.v3` was already a direct dependency. All 8
+got `apiParse*Handler`s in `src/server/api_utils.go` following the exact
+`apiParseJSONHandler` POST-with-body pattern, routes/`toolPages()`
+entries in `src/server/server.go`, table-driven tests (missing-body 400
++ valid-input 200, no live network calls needed since none of the 8 do
+I/O) in `src/server/api_utils_test.go`, smoke-test rows in
+`src/server/server_test.go`, and templates under `src/server/template/
+page/tools/parse/{env,html,ini,log,markdown,sql,toml,yaml}.tmpl`
+following the `json.tmpl` sibling's `data-body-endpoint` form pattern.
+Verified independently line-by-line against the sibling precedents (not
+just the implementing subagent's self-report), including confirming its
+self-caught `a.Value`→`a.Val` `html.Attribute` field-name fix is correct,
+and independently re-run in `casjaysdev/go:latest` (gofmt/build/vet/
+staticcheck/test all clean, caches mounted outside the project tree).
+The MISSING parse line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (42 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under

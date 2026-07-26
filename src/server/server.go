@@ -429,6 +429,14 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/xml", apiParseXMLHandler)
 			r.Post("/csv", apiParseCSVHandler)
 			r.Get("/jwt/{token}", apiParseJWTHandler)
+			r.Post("/env", apiParseEnvHandler)
+			r.Post("/html", apiParseHTMLHandler)
+			r.Post("/ini", apiParseINIHandler)
+			r.Post("/log", apiParseLogHandler)
+			r.Post("/markdown", apiParseMarkdownHandler)
+			r.Post("/sql", apiParseSQLHandler)
+			r.Post("/toml", apiParseTOMLHandler)
+			r.Post("/yaml", apiParseYAMLHandler)
 		})
 
 		// Language Tools
@@ -736,6 +744,14 @@ func toolPages() []toolPage {
 		{category: "parse", tool: "xml", title: "XML Parser", description: "Parse a raw XML document and view the decoded structure"},
 		{category: "parse", tool: "csv", title: "CSV Parser", description: "Parse a CSV document (first row as headers) into structured rows"},
 		{category: "parse", tool: "jwt", title: "JWT Parser", description: "Decode and inspect the header, payload, and signature of a JSON Web Token"},
+		{category: "parse", tool: "env", title: "Env Parser", description: "Parse .env-style KEY=VALUE documents into a key/value map"},
+		{category: "parse", tool: "html", title: "HTML Parser", description: "Parse an HTML document into a structural summary (title, meta, headings, links, images, forms)"},
+		{category: "parse", tool: "ini", title: "INI Parser", description: "Parse an INI document into sections of key/value pairs"},
+		{category: "parse", tool: "log", title: "Log Parser", description: "Best-effort parse of log lines into timestamp, level, and message"},
+		{category: "parse", tool: "markdown", title: "Markdown Structure Parser", description: "Extract headings, links, and code blocks from a Markdown document"},
+		{category: "parse", tool: "sql", title: "SQL Structure Parser", description: "Best-effort extraction of statement type, tables, and columns from a SQL statement"},
+		{category: "parse", tool: "toml", title: "TOML Parser", description: "Parse a TOML document into a structured map"},
+		{category: "parse", tool: "yaml", title: "YAML Parser", description: "Parse a YAML document into a structured map"},
 		{category: "research", tool: "citation", title: "Citation Formatter", description: "Format a reference into an APA, MLA, or Chicago style citation"},
 		{category: "research", tool: "doi", title: "DOI Validator", description: "Validate a DOI and get its canonical https://doi.org resolver URL"},
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
