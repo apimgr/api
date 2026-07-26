@@ -509,6 +509,13 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/crop", apiImageCropHandler)
 			r.Post("/metadata", apiImageMetadataHandler)
 			r.Post("/convert", apiImageConvertHandler)
+			r.Get("/avatar", apiImageAvatarHandler)
+			r.Get("/barcode", apiImageBarcodeHandler)
+			r.Get("/identicon", apiImageIdenticonHandler)
+			r.Get("/qr", apiImageQRHandler)
+			r.Post("/filter", apiImageFilterHandler)
+			r.Post("/optimize", apiImageOptimizeHandler)
+			r.Post("/watermark", apiImageWatermarkHandler)
 		})
 	})
 
@@ -757,6 +764,12 @@ func toolPages() []toolPage {
 		{category: "image", tool: "crop", title: "Crop Image", description: "Upload an image and crop a region out of it"},
 		{category: "image", tool: "metadata", title: "Image Metadata", description: "Upload an image and inspect its dimensions, format, and size"},
 		{category: "image", tool: "convert", title: "Convert Image Format", description: "Upload an image and convert it to PNG, JPEG, or GIF"},
+		{category: "image", tool: "avatar", title: "Generate Avatar", description: "Generate an initials-based avatar image"},
+		{category: "image", tool: "barcode", title: "Generate Barcode", description: "Generate a 1D barcode image from text data"},
+		{category: "image", tool: "identicon", title: "Generate Identicon", description: "Generate a deterministic identicon image from a seed"},
+		{category: "image", tool: "filter", title: "Apply Image Filter", description: "Upload an image and apply a grayscale, sepia, invert, blur, brighten, or darken filter"},
+		{category: "image", tool: "optimize", title: "Optimize Image", description: "Upload an image and re-encode it to reduce file size"},
+		{category: "image", tool: "watermark", title: "Watermark Image", description: "Upload an image and tile a text watermark across it"},
 		{category: "language", tool: "phonetic", title: "Phonetic Encoding", description: "Generate the Soundex and Metaphone phonetic codes for a word"},
 		{category: "language", tool: "word-count", title: "Word Count", description: "Count words, characters, lines, and sentences in text"},
 		{category: "text", tool: "encode", title: "Encode", description: "Encode text using base64, base32, hex, URL, or HTML encoding"},

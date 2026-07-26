@@ -2232,6 +2232,221 @@ func TestAPIImageConvertHandler(t *testing.T) {
 	})
 }
 
+// apiImageAvatarHandler is a thin wrapper around generateService.Avatar; it
+// must behave identically to apiGenerateAvatarHandler.
+func TestAPIImageAvatarHandler(t *testing.T) {
+	t.Run("missing initials", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/avatar", nil)
+		w := httptest.NewRecorder()
+		apiImageAvatarHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_INITIALS", env["error"])
+	})
+
+	t.Run("valid initials", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/avatar?initials=AB&size=64", nil)
+		w := httptest.NewRecorder()
+		apiImageAvatarHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		img, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+		assert.Equal(t, 64, img.Bounds().Dx())
+	})
+}
+
+// apiImageBarcodeHandler is a thin wrapper around generateService.Barcode;
+// it must behave identically to apiGenerateBarcodeHandler.
+func TestAPIImageBarcodeHandler(t *testing.T) {
+	t.Run("missing data", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/barcode?format=code128", nil)
+		w := httptest.NewRecorder()
+		apiImageBarcodeHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DATA", env["error"])
+	})
+
+	t.Run("valid code128", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/barcode?format=code128&data=Hello123", nil)
+		w := httptest.NewRecorder()
+		apiImageBarcodeHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		_, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+	})
+
+	t.Run("unsupported format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/barcode?format=nope&data=abc", nil)
+		w := httptest.NewRecorder()
+		apiImageBarcodeHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "BARCODE_GENERATION_FAILED", env["error"])
+	})
+}
+
+// apiImageIdenticonHandler is a thin wrapper around generateService.Identicon;
+// it must behave identically to apiGenerateIdenticonHandler.
+func TestAPIImageIdenticonHandler(t *testing.T) {
+	t.Run("missing seed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/identicon", nil)
+		w := httptest.NewRecorder()
+		apiImageIdenticonHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_SEED", env["error"])
+	})
+
+	t.Run("valid seed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/identicon?seed=user@example.com", nil)
+		w := httptest.NewRecorder()
+		apiImageIdenticonHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		_, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+	})
+}
+
+// apiImageQRHandler is a permanent API gap: no QR encoder exists anywhere
+// in the codebase, so it must always report the same honest 501 as
+// apiGenerateQRHandler.
+func TestAPIImageQRHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/image/qr", nil)
+	w := httptest.NewRecorder()
+	apiImageQRHandler(w, req)
+	assert.Equal(t, http.StatusNotImplemented, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "NOT_SUPPORTED", env["error"])
+}
+
+// apiImageFilterHandler must 400 on missing image / missing filter name,
+// error on an unknown filter name, and return the filtered image on
+// success.
+func TestAPIImageFilterHandler(t *testing.T) {
+	fixture := testPNG(t)
+
+	t.Run("missing image", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/filter?name=grayscale", nil)
+		w := httptest.NewRecorder()
+
+		apiImageFilterHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("missing filter name", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/filter", fixture, nil)
+		w := httptest.NewRecorder()
+
+		apiImageFilterHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_FILTER", env["error"])
+	})
+
+	t.Run("unknown filter", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/filter", fixture, map[string]string{"name": "does-not-exist"})
+		w := httptest.NewRecorder()
+
+		apiImageFilterHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "IMAGE_FILTER_FAILED", env["error"])
+	})
+
+	t.Run("grayscale filter", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/filter", fixture, map[string]string{"name": "grayscale"})
+		w := httptest.NewRecorder()
+
+		apiImageFilterHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		_, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+	})
+}
+
+// apiImageOptimizeHandler must 400 on missing image, fall back to a
+// default JPEG quality, and report original/optimized sizes via headers.
+func TestAPIImageOptimizeHandler(t *testing.T) {
+	fixture := testPNG(t)
+
+	t.Run("missing image", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/optimize?format=jpeg", nil)
+		w := httptest.NewRecorder()
+
+		apiImageOptimizeHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("optimize to jpeg", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/optimize", fixture, map[string]string{"format": "jpeg", "quality": "40"})
+		w := httptest.NewRecorder()
+
+		apiImageOptimizeHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/jpeg", w.Header().Get("Content-Type"))
+		assert.NotEmpty(t, w.Header().Get("X-Original-Size"))
+		assert.NotEmpty(t, w.Header().Get("X-Optimized-Size"))
+	})
+
+	t.Run("invalid quality falls back to default", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/optimize", fixture, map[string]string{"format": "jpeg", "quality": "0"})
+		w := httptest.NewRecorder()
+
+		apiImageOptimizeHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+// apiImageWatermarkHandler must 400 on missing image / missing text and
+// return the watermarked image on success.
+func TestAPIImageWatermarkHandler(t *testing.T) {
+	fixture := testPNG(t)
+
+	t.Run("missing image", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/image/watermark?text=hello", nil)
+		w := httptest.NewRecorder()
+
+		apiImageWatermarkHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("missing text", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/watermark", fixture, nil)
+		w := httptest.NewRecorder()
+
+		apiImageWatermarkHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_TEXT", env["error"])
+	})
+
+	t.Run("valid text", func(t *testing.T) {
+		req := multipartImageRequest(t, "/api/v1/image/watermark", fixture, map[string]string{"text": "hello", "opacity": "0.5"})
+		w := httptest.NewRecorder()
+
+		apiImageWatermarkHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		_, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+	})
+}
+
 // apiTextCompressHandler must 400 MISSING_DATA when data is absent, default
 // to gzip compress mode, and round-trip through decompress.
 func TestAPITextCompressHandler(t *testing.T) {

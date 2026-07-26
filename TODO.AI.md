@@ -220,7 +220,30 @@ three new dependencies were misplaced in the `// indirect` block despite
 being directly imported by our own source). The MISSING geo line is now
 fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (62 linked, unwired)
+## [x] image (6, +1 already-gapped qr): avatar, barcode, filter, identicon, optimize, watermark
+All 6 wired (the 7th listed tool, `qr`, is intentionally untouched — same
+501 `NOT_SUPPORTED` gap as `generate/qr`, documented under "Known permanent
+API gaps"; no route, `toolPages()` entry, or template was added for it).
+`avatar`, `barcode`, and `identicon` are thin new HTTP handlers reusing the
+existing `generate.Service.{Avatar,Barcode,Identicon}` methods verbatim —
+no duplicated drawing logic. `filter` (grayscale/sepia/invert/blur/
+brighten/darken), `optimize` (re-encode with JPEG quality control; PNG/GIF
+have no lossy knob in the stdlib so they use fixed lossless compression),
+and `watermark` (diagonally tiled text, alpha-blended) are genuinely new
+`src/service/image` methods, pure Go stdlib (`image`, `image/color`,
+`image/draw`, `image/jpeg`, `image/png`, `image/gif`, `math`) — no cgo, no
+new third-party image or font dependency; `watermark`'s text rendering
+hand-authors a minimal 5x7 bitmap font matching the same no-font-dependency
+constraint already established in `generate/avatar.go`. Service-layer table
+-driven tests added in `filter_test.go`/`optimize_test.go`/`watermark_test.go`
+plus handler tests in `api_utils_test.go` and 6 new smoke-test rows in
+`server_test.go` (no row for `/image/qr`, matching the gap). Verified
+independently (gofmt/build/vet/staticcheck/test clean in
+`casjaysdev/go:latest`, caches mounted outside the project tree; `go mod
+tidy` produced no `go.mod`/`go.sum` diff — no new dependency introduced).
+The MISSING image line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (56 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -229,7 +252,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- image (7): avatar, barcode, filter, identicon, optimize, qr, watermark
 - language (10): detect, dictionary, grammar, keywords, readability,
   reading-time, sentiment, spell-check, thesaurus, translate
 - osint (8): breach, company, metadata, phone, social, subdomain,

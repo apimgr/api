@@ -3023,6 +3023,220 @@ func orDefaultOutputFormat(format string) string {
 	return format
 }
 
+// apiImageAvatarHandler renders an initials-based avatar as a PNG image
+// under the image/ tool category. It is a thin wrapper around the same
+// generateService.Avatar used by apiGenerateAvatarHandler — no duplicated
+// logic.
+func apiImageAvatarHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	initials := q.Get("initials")
+	if initials == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_INITIALS", "initials is required", nil)
+		return
+	}
+	size, err := strconv.Atoi(q.Get("size"))
+	if err != nil || size <= 0 {
+		size = 128
+	}
+
+	png, err := generateService.Avatar(initials, size)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "AVATAR_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
+}
+
+// apiImageBarcodeHandler renders a 1D barcode (ean13, upca, code128, or
+// code39) as a PNG image under the image/ tool category. It is a thin
+// wrapper around the same generateService.Barcode used by
+// apiGenerateBarcodeHandler — no duplicated logic.
+func apiImageBarcodeHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	format := q.Get("format")
+	data := q.Get("data")
+	if data == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data is required", nil)
+		return
+	}
+	width, err := strconv.Atoi(q.Get("width"))
+	if err != nil || width <= 0 {
+		width = 300
+	}
+	height, err := strconv.Atoi(q.Get("height"))
+	if err != nil || height <= 0 {
+		height = 100
+	}
+
+	png, err := generateService.Barcode(format, data, width, height)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "BARCODE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
+}
+
+// apiImageIdenticonHandler renders a deterministic sha256-derived
+// identicon as a PNG image under the image/ tool category. It is a thin
+// wrapper around the same generateService.Identicon used by
+// apiGenerateIdenticonHandler — no duplicated logic.
+func apiImageIdenticonHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	seed := q.Get("seed")
+	if seed == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SEED", "seed is required", nil)
+		return
+	}
+	size, err := strconv.Atoi(q.Get("size"))
+	if err != nil || size <= 0 {
+		size = 256
+	}
+
+	png, err := generateService.Identicon(seed, size)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IDENTICON_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
+}
+
+// apiImageQRHandler reports that QR-code generation is not supported.
+// No QR encoder exists anywhere in the codebase (generate, image, or any
+// dependency in go.mod) and authoring one from scratch would be inventing
+// new business logic, which is explicitly forbidden. This mirrors
+// apiGenerateQRHandler exactly; it exists only so the /api/v1/image/qr
+// path returns the same honest error as /api/v1/generate/qr rather than
+// a 404.
+func apiImageQRHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "QR code generation is not implemented: no QR encoder exists in src/service/generate or any dependency", nil)
+}
+
+// apiImageFilterHandler decodes an uploaded image and applies a named
+// filter (grayscale, sepia, invert, blur, brighten, darken) to it.
+func apiImageFilterHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := readUploadedImage(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		return
+	}
+
+	name := r.FormValue("name")
+	if name == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FILTER", "name is required", nil)
+		return
+	}
+	amount, err := strconv.ParseFloat(r.FormValue("amount"), 64)
+	if err != nil {
+		amount = 0
+	}
+
+	svc := image.New()
+	if err := svc.Load(data); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		return
+	}
+	if err := svc.ApplyFilter(name, amount); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_FILTER_FAILED", err.Error(), nil)
+		return
+	}
+
+	format := r.FormValue("format")
+	out, err := svc.Bytes(orDefaultOutputFormat(format))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", imageContentType(format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(out)
+}
+
+// apiImageOptimizeHandler decodes an uploaded image and re-encodes it in
+// the requested format, reporting the original and optimized byte sizes
+// via response headers. quality only affects JPEG output — Go's standard
+// library has no lossy quality knob for PNG or GIF, so those always use
+// the encoder's fixed lossless compression; this endpoint does not invent
+// a fake compression ratio for them.
+func apiImageOptimizeHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := readUploadedImage(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		return
+	}
+
+	quality, err := strconv.Atoi(r.FormValue("quality"))
+	if err != nil || quality <= 0 {
+		quality = 75
+	}
+
+	svc := image.New()
+	if err := svc.Load(data); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	format := r.FormValue("format")
+	out, err := svc.Optimize(orDefaultOutputFormat(format), quality)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_OPTIMIZE_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("X-Original-Size", strconv.Itoa(len(data)))
+	w.Header().Set("X-Optimized-Size", strconv.Itoa(len(out)))
+	w.Header().Set("Content-Type", imageContentType(format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(out)
+}
+
+// apiImageWatermarkHandler decodes an uploaded image and tiles the given
+// text across it as a semi-transparent watermark.
+func apiImageWatermarkHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := readUploadedImage(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		return
+	}
+
+	text := r.FormValue("text")
+	if text == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text is required", nil)
+		return
+	}
+	opacity, err := strconv.ParseFloat(r.FormValue("opacity"), 64)
+	if err != nil {
+		opacity = 0
+	}
+
+	svc := image.New()
+	if err := svc.Load(data); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		return
+	}
+	if err := svc.Watermark(text, opacity); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_WATERMARK_FAILED", err.Error(), nil)
+		return
+	}
+
+	format := r.FormValue("format")
+	out, err := svc.Bytes(orDefaultOutputFormat(format))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", imageContentType(format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(out)
+}
+
 // decodeJWTSegment base64url-decodes a single JWT segment (header or
 // payload) and parses it as JSON, tolerating both padded and unpadded
 // base64url encoding as produced by different JWT libraries.
