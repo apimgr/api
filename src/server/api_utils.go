@@ -2785,3 +2785,219 @@ func apiCryptoHMACHandler(w http.ResponseWriter, r *http.Request) {
 		"hmac":      mac,
 	})
 }
+
+// cryptoCertificateRequest is the JSON body shape accepted by
+// apiCryptoCertificateHandler.
+type cryptoCertificateRequest struct {
+	Mode        string `json:"mode"`
+	CommonName  string `json:"common_name"`
+	ValidDays   int    `json:"valid_days"`
+	Certificate string `json:"certificate"`
+}
+
+// apiCryptoCertificateHandler handles self-signed X.509 certificate
+// generation and PEM certificate parsing in one endpoint, selected by Mode.
+// Composes crypto.GenerateCertificate and crypto.ParseCertificate.
+func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
+	var body cryptoCertificateRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Mode == "" {
+		body.Mode = "generate"
+	}
+
+	switch strings.ToLower(body.Mode) {
+	case "generate":
+		if body.CommonName == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMMON_NAME", "common_name is required", nil)
+			return
+		}
+		certPEM, keyPEM, err := crypto.GenerateCertificate(body.CommonName, body.ValidDays)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "GENERATE_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":        body.Mode,
+			"certificate": certPEM,
+			"private_key": keyPEM,
+		})
+	case "parse":
+		if body.Certificate == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CERTIFICATE", "certificate is required", nil)
+			return
+		}
+		details, err := crypto.ParseCertificate(body.Certificate)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "PARSE_FAILED", err.Error(), nil)
+			return
+		}
+		details["mode"] = body.Mode
+		writeEnvelopeOK(w, http.StatusOK, details)
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate or parse", nil)
+	}
+}
+
+// cryptoEd25519Request is the JSON body shape accepted by
+// apiCryptoEd25519Handler.
+type cryptoEd25519Request struct {
+	Mode       string `json:"mode"`
+	Message    string `json:"message"`
+	Signature  string `json:"signature"`
+	PublicKey  string `json:"public_key"`
+	PrivateKey string `json:"private_key"`
+}
+
+// apiCryptoEd25519Handler handles Ed25519 keypair generation, signing, and
+// signature verification in one endpoint, selected by Mode. Composes
+// crypto.GenerateEd25519Keys, crypto.Ed25519Sign, and crypto.Ed25519Verify.
+func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
+	var body cryptoEd25519Request
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Mode == "" {
+		body.Mode = "generate"
+	}
+
+	switch strings.ToLower(body.Mode) {
+	case "generate":
+		privateKey, publicKey, err := crypto.GenerateEd25519Keys()
+		if err != nil {
+			writeEnvelopeError(w, http.StatusInternalServerError, "GENERATE_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":        body.Mode,
+			"private_key": privateKey,
+			"public_key":  publicKey,
+		})
+	case "sign":
+		if body.Message == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MESSAGE", "message is required", nil)
+			return
+		}
+		if body.PrivateKey == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PRIVATE_KEY", "private_key is required", nil)
+			return
+		}
+		signature, err := crypto.Ed25519Sign(body.Message, body.PrivateKey)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "SIGN_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":      body.Mode,
+			"signature": signature,
+		})
+	case "verify":
+		if body.Message == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MESSAGE", "message is required", nil)
+			return
+		}
+		if body.Signature == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SIGNATURE", "signature is required", nil)
+			return
+		}
+		if body.PublicKey == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PUBLIC_KEY", "public_key is required", nil)
+			return
+		}
+		valid, err := crypto.Ed25519Verify(body.Message, body.Signature, body.PublicKey)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "VERIFY_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":  body.Mode,
+			"valid": valid,
+		})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate, sign, or verify", nil)
+	}
+}
+
+// cryptoPGPRequest is the JSON body shape accepted by apiCryptoPGPHandler.
+type cryptoPGPRequest struct {
+	Mode       string `json:"mode"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	Plaintext  string `json:"plaintext"`
+	Ciphertext string `json:"ciphertext"`
+	PublicKey  string `json:"public_key"`
+	PrivateKey string `json:"private_key"`
+}
+
+// apiCryptoPGPHandler handles PGP keypair generation, encryption, and
+// decryption in one endpoint, selected by Mode. Composes
+// crypto.GeneratePGPKeys, crypto.PGPEncrypt, and crypto.PGPDecrypt.
+func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
+	var body cryptoPGPRequest
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	if body.Mode == "" {
+		body.Mode = "generate"
+	}
+
+	switch strings.ToLower(body.Mode) {
+	case "generate":
+		if body.Name == "" || body.Email == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_IDENTITY", "name and email are required", nil)
+			return
+		}
+		publicKey, privateKey, err := crypto.GeneratePGPKeys(body.Name, body.Email)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "GENERATE_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":        body.Mode,
+			"public_key":  publicKey,
+			"private_key": privateKey,
+		})
+	case "encrypt":
+		if body.Plaintext == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PLAINTEXT", "plaintext is required", nil)
+			return
+		}
+		if body.PublicKey == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PUBLIC_KEY", "public_key is required", nil)
+			return
+		}
+		ciphertext, err := crypto.PGPEncrypt(body.Plaintext, body.PublicKey)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "ENCRYPT_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":       body.Mode,
+			"ciphertext": ciphertext,
+		})
+	case "decrypt":
+		if body.Ciphertext == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CIPHERTEXT", "ciphertext is required", nil)
+			return
+		}
+		if body.PrivateKey == "" {
+			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PRIVATE_KEY", "private_key is required", nil)
+			return
+		}
+		plaintext, err := crypto.PGPDecrypt(body.Ciphertext, body.PrivateKey)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
+			return
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"mode":      body.Mode,
+			"plaintext": plaintext,
+		})
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate, encrypt, or decrypt", nil)
+	}
+}

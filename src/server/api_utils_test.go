@@ -2278,3 +2278,197 @@ func TestAPICryptoHMACHandler(t *testing.T) {
 		assert.Equal(t, "INVALID_ALGORITHM", env["error"])
 	})
 }
+
+func TestAPICryptoCertificateHandler(t *testing.T) {
+	t.Run("generate missing common name", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/certificate", strings.NewReader(`{"mode":"generate"}`))
+		w := httptest.NewRecorder()
+		apiCryptoCertificateHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_COMMON_NAME", env["error"])
+	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/certificate", strings.NewReader(`{"mode":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiCryptoCertificateHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MODE", env["error"])
+	})
+
+	t.Run("generate then parse round trip", func(t *testing.T) {
+		genReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/certificate", strings.NewReader(`{"mode":"generate","common_name":"example.com","valid_days":30}`))
+		genW := httptest.NewRecorder()
+		apiCryptoCertificateHandler(genW, genReq)
+		require.Equal(t, http.StatusOK, genW.Code)
+		genEnv := decodeEnvelope(t, genW.Body.Bytes())
+		genData, ok := genEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		certPEM, ok := genData["certificate"].(string)
+		require.True(t, ok)
+		require.NotEmpty(t, certPEM)
+
+		parseBody, err := json.Marshal(map[string]string{
+			"mode":        "parse",
+			"certificate": certPEM,
+		})
+		require.NoError(t, err)
+		parseReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/certificate", strings.NewReader(string(parseBody)))
+		parseW := httptest.NewRecorder()
+		apiCryptoCertificateHandler(parseW, parseReq)
+		require.Equal(t, http.StatusOK, parseW.Code)
+		parseEnv := decodeEnvelope(t, parseW.Body.Bytes())
+		parseData, ok := parseEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, parseData["subject"], "example.com")
+	})
+
+	t.Run("parse invalid pem", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/certificate", strings.NewReader(`{"mode":"parse","certificate":"not a cert"}`))
+		w := httptest.NewRecorder()
+		apiCryptoCertificateHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "PARSE_FAILED", env["error"])
+	})
+}
+
+func TestAPICryptoEd25519Handler(t *testing.T) {
+	t.Run("generate", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/ed25519", strings.NewReader(`{"mode":"generate"}`))
+		w := httptest.NewRecorder()
+		apiCryptoEd25519Handler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, data["private_key"])
+		assert.NotEmpty(t, data["public_key"])
+	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/ed25519", strings.NewReader(`{"mode":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiCryptoEd25519Handler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MODE", env["error"])
+	})
+
+	t.Run("sign then verify round trip", func(t *testing.T) {
+		genReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/ed25519", strings.NewReader(`{"mode":"generate"}`))
+		genW := httptest.NewRecorder()
+		apiCryptoEd25519Handler(genW, genReq)
+		require.Equal(t, http.StatusOK, genW.Code)
+		genEnv := decodeEnvelope(t, genW.Body.Bytes())
+		genData, ok := genEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		privateKey, ok := genData["private_key"].(string)
+		require.True(t, ok)
+		publicKey, ok := genData["public_key"].(string)
+		require.True(t, ok)
+
+		signBody, err := json.Marshal(map[string]string{
+			"mode":        "sign",
+			"message":     "Hello World",
+			"private_key": privateKey,
+		})
+		require.NoError(t, err)
+		signReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/ed25519", strings.NewReader(string(signBody)))
+		signW := httptest.NewRecorder()
+		apiCryptoEd25519Handler(signW, signReq)
+		require.Equal(t, http.StatusOK, signW.Code)
+		signEnv := decodeEnvelope(t, signW.Body.Bytes())
+		signData, ok := signEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		signature, ok := signData["signature"].(string)
+		require.True(t, ok)
+		require.NotEmpty(t, signature)
+
+		verifyBody, err := json.Marshal(map[string]string{
+			"mode":       "verify",
+			"message":    "Hello World",
+			"signature":  signature,
+			"public_key": publicKey,
+		})
+		require.NoError(t, err)
+		verifyReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/ed25519", strings.NewReader(string(verifyBody)))
+		verifyW := httptest.NewRecorder()
+		apiCryptoEd25519Handler(verifyW, verifyReq)
+		require.Equal(t, http.StatusOK, verifyW.Code)
+		verifyEnv := decodeEnvelope(t, verifyW.Body.Bytes())
+		verifyData, ok := verifyEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, verifyData["valid"])
+	})
+}
+
+func TestAPICryptoPGPHandler(t *testing.T) {
+	t.Run("generate missing identity", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/pgp", strings.NewReader(`{"mode":"generate"}`))
+		w := httptest.NewRecorder()
+		apiCryptoPGPHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_IDENTITY", env["error"])
+	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/pgp", strings.NewReader(`{"mode":"bogus"}`))
+		w := httptest.NewRecorder()
+		apiCryptoPGPHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_MODE", env["error"])
+	})
+
+	t.Run("generate encrypt decrypt round trip", func(t *testing.T) {
+		genReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/pgp", strings.NewReader(`{"mode":"generate","name":"Jane Doe","email":"jane@example.com"}`))
+		genW := httptest.NewRecorder()
+		apiCryptoPGPHandler(genW, genReq)
+		require.Equal(t, http.StatusOK, genW.Code)
+		genEnv := decodeEnvelope(t, genW.Body.Bytes())
+		genData, ok := genEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		publicKey, ok := genData["public_key"].(string)
+		require.True(t, ok)
+		privateKey, ok := genData["private_key"].(string)
+		require.True(t, ok)
+		require.NotEmpty(t, publicKey)
+		require.NotEmpty(t, privateKey)
+
+		encBody, err := json.Marshal(map[string]string{
+			"mode":       "encrypt",
+			"plaintext":  "Hello World",
+			"public_key": publicKey,
+		})
+		require.NoError(t, err)
+		encReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/pgp", strings.NewReader(string(encBody)))
+		encW := httptest.NewRecorder()
+		apiCryptoPGPHandler(encW, encReq)
+		require.Equal(t, http.StatusOK, encW.Code)
+		encEnv := decodeEnvelope(t, encW.Body.Bytes())
+		encData, ok := encEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		ciphertext, ok := encData["ciphertext"].(string)
+		require.True(t, ok)
+		require.NotEmpty(t, ciphertext)
+
+		decBody, err := json.Marshal(map[string]string{
+			"mode":        "decrypt",
+			"ciphertext":  ciphertext,
+			"private_key": privateKey,
+		})
+		require.NoError(t, err)
+		decReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/pgp", strings.NewReader(string(decBody)))
+		decW := httptest.NewRecorder()
+		apiCryptoPGPHandler(decW, decReq)
+		require.Equal(t, http.StatusOK, decW.Code)
+		decEnv := decodeEnvelope(t, decW.Body.Bytes())
+		decData, ok := decEnv["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Hello World", decData["plaintext"])
+	})
+}

@@ -250,6 +250,15 @@ func New(cfg *config.Config) *http.Server {
 
 			// HMAC
 			r.Post("/hmac", apiCryptoHMACHandler)
+
+			// X.509 certificate generation (self-signed) / parse
+			r.Post("/certificate", apiCryptoCertificateHandler)
+
+			// Ed25519 keypair generation / sign / verify
+			r.Post("/ed25519", apiCryptoEd25519Handler)
+
+			// PGP keypair generation / encrypt / decrypt
+			r.Post("/pgp", apiCryptoPGPHandler)
 		})
 
 		// DateTime utilities
@@ -580,6 +589,9 @@ func toolPages() []toolPage {
 		{category: "crypto", tool: "decrypt", title: "AES Decrypt", description: "Decrypt AES-256-GCM ciphertext using the original passphrase"},
 		{category: "crypto", tool: "rsa", title: "RSA Encrypt/Decrypt", description: "Generate an RSA keypair, or encrypt/decrypt text with RSA-OAEP (SHA-256)"},
 		{category: "crypto", tool: "hmac", title: "HMAC Generator", description: "Compute an HMAC (SHA-1 or SHA-256) of a message using a secret key"},
+		{category: "crypto", tool: "certificate", title: "X.509 Certificate", description: "Generate a self-signed X.509 certificate, or parse an existing PEM certificate's details"},
+		{category: "crypto", tool: "ed25519", title: "Ed25519 Sign/Verify", description: "Generate an Ed25519 keypair, sign a message, or verify a signature"},
+		{category: "crypto", tool: "pgp", title: "PGP Encrypt/Decrypt", description: "Generate a PGP keypair, or encrypt/decrypt a message with PGP"},
 		{category: "datetime", tool: "now", title: "Current Time", description: "Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable"},
 		{category: "network", tool: "ip", title: "IP Address Lookup", description: "Get detailed information about any IP address including location, ISP, and network details"},
 		{category: "network", tool: "headers", title: "Request Headers", description: "Inspect the caller-identifying headers sent with the request"},

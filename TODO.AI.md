@@ -68,7 +68,17 @@ routes (with and without a trailing `/{date}` segment) since date is
 optional. This brings the wired total to 125. The MISSING datetime line is
 now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (115 linked, unwired)
+crypto/{certificate,ed25519,pgp} were wired in a follow-up batch (all
+genuinely net-new — zero prior backend support, matching the MISSING
+annotation below). `certificate.go` and `ed25519.go` are stdlib-only
+(`crypto/x509`, `crypto/x509/pkix`, `crypto/ed25519`, `encoding/pem`);
+`pgp.go` uses the `openpgp`/`openpgp/armor` subpackages already bundled
+with the existing `golang.org/x/crypto` dependency — no new go.mod entry
+was needed. All three follow the mode-dispatch single-POST-endpoint
+pattern established by `apiCryptoRSAHandler`. This brings the wired total
+to 128. The MISSING crypto line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (112 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -77,10 +87,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- crypto (3): certificate, ed25519, pgp
-  (X.509 cert, Ed25519, PGP — zero backend support today; each needs its own
-  net-new crypto service method. encrypt/decrypt/rsa/hmac were wired this
-  pass onto pre-existing crypto_extended.go/crypto.go functions)
 - dev (8): cron, css-format, echo, html-format, js-format, jwt,
   sql-format, xml-format
 - docker (9): best-practices, compose-to-run, compose-validate,
