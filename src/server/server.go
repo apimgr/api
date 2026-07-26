@@ -386,6 +386,17 @@ func New(cfg *config.Config) *http.Server {
 		// Generators
 		r.Route("/generate", func(r chi.Router) {
 			r.Get("/qr", apiGenerateQRHandler)
+			r.Get("/barcode", apiGenerateBarcodeHandler)
+			r.Get("/avatar", apiGenerateAvatarHandler)
+			r.Get("/identicon", apiGenerateIdenticonHandler)
+			r.Get("/dockerfile", apiGenerateDockerfileHandler)
+			r.Get("/gitignore", apiGenerateGitignoreHandler)
+			r.Get("/license", apiGenerateLicenseHandler)
+			r.Get("/config", apiGenerateConfigHandler)
+			r.Post("/sql", apiGenerateSQLHandler)
+			r.Get("/ssh-key", apiGenerateSSHKeyHandler)
+			r.Get("/api-docs", apiGenerateAPIDocsHandler)
+			r.Get("/placeholder/{width}/{height}", apiGeneratePlaceholderHandler)
 		})
 
 		// Validators
@@ -762,6 +773,17 @@ func toolPages() []toolPage {
 		{category: "dev", tool: "sql-format", title: "SQL Formatter", description: "Format SQL queries"},
 		{category: "dev", tool: "cron", title: "Cron Tester", description: "Test cron expressions"},
 		{category: "dev", tool: "jwt", title: "JWT Debugger", description: "Debug JSON Web Tokens"},
+		{category: "generate", tool: "barcode", title: "Barcode", description: "EAN, UPC, Code128, Code39"},
+		{category: "generate", tool: "avatar", title: "Avatar", description: "Generate avatars from initials"},
+		{category: "generate", tool: "config", title: "Config Files", description: "Generate configuration templates"},
+		{category: "generate", tool: "sql", title: "SQL Schema", description: "Generate SQL database schemas"},
+		{category: "generate", tool: "api-docs", title: "API Documentation", description: "Generate API documentation"},
+		{category: "generate", tool: "license", title: "License File", description: "Generate license files"},
+		{category: "generate", tool: "gitignore", title: ".gitignore", description: "Generate .gitignore files"},
+		{category: "generate", tool: "dockerfile", title: "Dockerfile", description: "Generate Dockerfile templates"},
+		{category: "generate", tool: "ssh-key", title: "SSH Key", description: "Generate SSH key pairs"},
+		{category: "generate", tool: "identicon", title: "Identicon", description: "Generate identicons from hashes"},
+		{category: "generate", tool: "placeholder", title: "Placeholder Image", description: "Generate placeholder images"},
 	}
 }
 

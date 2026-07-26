@@ -155,7 +155,49 @@ joke.tmpl/fortune.tmpl structure. Tests added: handler tests in
 service-layer unit tests in `src/service/fun/fun_test.go`. The MISSING fun
 line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (85 linked, unwired)
+## [x] generate (11, +1 already-gapped qr): api-docs, avatar, barcode, config, dockerfile, gitignore, identicon, license, placeholder, sql, ssh-key
+All 11 wired (the 12th listed tool, `qr`, is intentionally untouched — it
+already has a deliberate, correct 501 `NOT_SUPPORTED` handler
+(`apiGenerateQRHandler`) documented under "Known permanent API gaps"; no
+dependency, route, `toolPages()` entry, or template was added for it).
+`barcode` implements all four listed formats (EAN-13, UPC-A, Code128,
+Code39) via the real `github.com/boombuler/barcode` encoder (added as a
+direct dependency) rather than a subset — the category description says
+"EAN, UPC, Code128, Code39" and all four are genuine standard-compliant
+encodings, not a stub. `avatar` renders a colored-background image with a
+hash-derived deterministic geometric block pattern rather than rendered
+initials text — `golang.org/x/image`/font-drawing is not in `go.mod` and
+adding it purely for text rasterization was judged out of proportion to
+this one sub-tool; this is a deliberate scope substitution, not a missing
+feature (the endpoint still returns a valid, deterministic, per-initials
+PNG). `identicon` uses sha256(seed) to build a symmetric grid with a
+deterministic derived color. `ssh-key` generates a stateless Ed25519
+keypair (stdlib `crypto/ed25519` + existing `golang.org/x/crypto/ssh` for
+OpenSSH-format marshaling) — nothing is persisted server-side. `sql` emits
+`CREATE TABLE` DDL only from a JSON `{table, columns}` body. `config`
+supports yaml/json/env/toml output from arbitrary key=value query params.
+`dockerfile` and `gitignore` are curated static-template generators
+(go/node/python/rust/generic; go/node/python/rust/java/macos/linux/
+windows/vscode/jetbrains respectively). `license` covers
+mit/apache-2.0/gpl-3.0/bsd-3-clause/isc with correct canonical license
+text. `api-docs` reuses the existing `src/swagger` package
+(`?format=markdown|json`) — no duplicated OpenAPI generation logic.
+`placeholder` is a thin wrapper: `/api/v1/generate/placeholder/{w}/{h}`
+calls the exact same `imageService.GeneratePlaceholder` used by
+`/api/v1/image/placeholder/...` — confirmed no duplicated logic between
+the two routes. Service methods added in
+`src/service/generate/generate.go`; handlers added to
+`src/server/api_utils.go` (`apiGenerate<Tool>Handler`); routes registered
+under `/api/v1/generate/*` in `src/server/server.go`; `toolPages()` entries
+added with title/description copied verbatim from `generate.tmpl`'s
+existing category-description text. Templates added at
+`src/server/template/page/tools/generate/<tool>.tmpl` (kebab-case).
+Tests added: service-layer unit tests in
+`src/service/generate/generate_tools_test.go`, handler tests in
+`api_utils_test.go`, and tool-page smoke tests in `server_test.go`. The
+MISSING generate line is now fully resolved.
+
+## [ ] MISSING sub-tools needing net-new backend service work (70 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -164,8 +206,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- generate (12): api-docs, avatar, barcode, config, dockerfile, gitignore,
-  identicon, license, placeholder, qr, sql, ssh-key
 - geo (8): bbox, country, geocode, geohash, h3, pluscode, reverse, timezone
 - image (7): avatar, barcode, filter, identicon, optimize, qr, watermark
 - language (10): detect, dictionary, grammar, keywords, readability,

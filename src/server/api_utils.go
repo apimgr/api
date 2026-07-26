@@ -17,6 +17,7 @@ import (
 	"github.com/apimgr/api/src/service/dev"
 	"github.com/apimgr/api/src/service/docker"
 	"github.com/apimgr/api/src/service/fun"
+	"github.com/apimgr/api/src/service/generate"
 	"github.com/apimgr/api/src/service/geo"
 	"github.com/apimgr/api/src/service/image"
 	"github.com/apimgr/api/src/service/language"
@@ -43,6 +44,7 @@ var (
 	testService     = test.New()
 	osintService    = osint.New()
 	funService      = fun.New()
+	generateService = generate.New()
 	geoService      = geo.New()
 	loremService    = lorem.New()
 	devService      = dev.New()
@@ -3411,4 +3413,262 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate, encrypt, or decrypt", nil)
 	}
+}
+
+// apiGenerateBarcodeHandler renders a 1D barcode (ean13, upca, code128, or
+// code39) as a PNG image using generateService.Barcode.
+func apiGenerateBarcodeHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	format := q.Get("format")
+	data := q.Get("data")
+	if data == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data is required", nil)
+		return
+	}
+	width, err := strconv.Atoi(q.Get("width"))
+	if err != nil || width <= 0 {
+		width = 300
+	}
+	height, err := strconv.Atoi(q.Get("height"))
+	if err != nil || height <= 0 {
+		height = 100
+	}
+
+	png, err := generateService.Barcode(format, data, width, height)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "BARCODE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
+}
+
+// apiGenerateAvatarHandler renders an initials-based avatar as a PNG image
+// using generateService.Avatar.
+func apiGenerateAvatarHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	initials := q.Get("initials")
+	if initials == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_INITIALS", "initials is required", nil)
+		return
+	}
+	size, err := strconv.Atoi(q.Get("size"))
+	if err != nil || size <= 0 {
+		size = 128
+	}
+
+	png, err := generateService.Avatar(initials, size)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "AVATAR_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
+}
+
+// apiGenerateIdenticonHandler renders a deterministic sha256-derived
+// identicon as a PNG image using generateService.Identicon.
+func apiGenerateIdenticonHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	seed := q.Get("seed")
+	if seed == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SEED", "seed is required", nil)
+		return
+	}
+	size, err := strconv.Atoi(q.Get("size"))
+	if err != nil || size <= 0 {
+		size = 256
+	}
+
+	png, err := generateService.Identicon(seed, size)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IDENTICON_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
+}
+
+// apiGenerateDockerfileHandler renders a minimal idiomatic multi-stage
+// Dockerfile for the requested language using generateService.Dockerfile.
+func apiGenerateDockerfileHandler(w http.ResponseWriter, r *http.Request) {
+	lang := r.URL.Query().Get("lang")
+	dockerfile, err := generateService.Dockerfile(lang)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "DOCKERFILE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"dockerfile": dockerfile,
+	})
+}
+
+// apiGenerateGitignoreHandler renders a union of curated .gitignore
+// boilerplate for the comma-separated languages/tools in ?lang= using
+// generateService.Gitignore.
+func apiGenerateGitignoreHandler(w http.ResponseWriter, r *http.Request) {
+	langs := r.URL.Query().Get("lang")
+	gitignore, err := generateService.Gitignore(langs)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "GITIGNORE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"gitignore": gitignore,
+	})
+}
+
+// apiGenerateLicenseHandler renders canonical license text for ?type=
+// (mit, apache-2.0, gpl-3.0, bsd-3-clause, isc), optionally substituting
+// ?author=/?year=, using generateService.License.
+func apiGenerateLicenseHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	licenseType := q.Get("type")
+	author := q.Get("author")
+	year := q.Get("year")
+
+	license, err := generateService.License(licenseType, author, year)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "LICENSE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"license": license,
+	})
+}
+
+// apiGenerateConfigHandler renders a configuration-file scaffold in the
+// requested format (yaml, json, env, toml) from the request's query
+// parameters (excluding "format") as key=value pairs, using
+// generateService.Config.
+func apiGenerateConfigHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	format := q.Get("format")
+
+	values := make(map[string]string)
+	for key, vals := range q {
+		if key == "format" || len(vals) == 0 {
+			continue
+		}
+		values[key] = vals[0]
+	}
+
+	config, err := generateService.Config(format, values)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "CONFIG_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"config": config,
+	})
+}
+
+// apiGenerateSQLHandler decodes a JSON {"table": "...", "columns": [...]}
+// body and returns the generated CREATE TABLE statement, using
+// generateService.SQL. Scope is limited to CREATE TABLE generation only.
+func apiGenerateSQLHandler(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Table   string               `json:"table"`
+		Columns []generate.SQLColumn `json:"columns"`
+	}
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+
+	sql, err := generateService.SQL(body.Table, body.Columns)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "SQL_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"sql": sql,
+	})
+}
+
+// apiGenerateSSHKeyHandler generates a stateless Ed25519 SSH key pair and
+// returns both keys in the JSON envelope; nothing is persisted, so the
+// private key is returned in full (this is the only time it is available).
+func apiGenerateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
+	keyPair, err := generateService.SSHKey()
+	if err != nil {
+		writeEnvelopeError(w, http.StatusInternalServerError, "SSH_KEY_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"private_key": keyPair.PrivateKey,
+		"public_key":  keyPair.PublicKey,
+	})
+}
+
+// requestBaseURL builds a request-derived base URL ("scheme://host") using
+// the same TLS/X-Forwarded-Proto detection as securityHeadersMiddleware,
+// since api_utils.go handlers have no *config.Config to call getBaseURL with.
+func requestBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s", scheme, r.Host)
+}
+
+// apiGenerateAPIDocsHandler renders API documentation for ?format=
+// (markdown, default, or json — which duplicates /openapi.json's structure)
+// and ?version=, using generateService.APIDocs against the shared
+// swagger.GenerateSpec output.
+func apiGenerateAPIDocsHandler(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	format := q.Get("format")
+	version := q.Get("version")
+	if version == "" {
+		version = "v1"
+	}
+
+	docs, err := generateService.APIDocs(format, version, requestBaseURL(r))
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "API_DOCS_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]string{
+		"docs": docs,
+	})
+}
+
+// apiGeneratePlaceholderHandler generates a placeholder image of
+// {width}x{height} under the generate/ tool category. It is a thin wrapper
+// around the same imageService.GeneratePlaceholder used by
+// apiImagePlaceholderHandler — no duplicated logic.
+func apiGeneratePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
+	widthParam := chi.URLParam(r, "width")
+	heightParam := chi.URLParam(r, "height")
+
+	width, err := strconv.Atoi(widthParam)
+	if err != nil || width <= 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
+		return
+	}
+	height, err := strconv.Atoi(heightParam)
+	if err != nil || height <= 0 {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+		return
+	}
+
+	format := r.URL.Query().Get("format")
+	bgColor := r.URL.Query().Get("bg")
+	if bgColor == "" {
+		bgColor = "#CCCCCC"
+	}
+
+	data, err := imageService.GeneratePlaceholder(width, height, format, bgColor)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", imageContentType(format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
 }

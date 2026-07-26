@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -3039,5 +3040,260 @@ func TestAPIDockerSizeOptimizerHandler(t *testing.T) {
 		suggestions, ok := data["suggestions"].([]interface{})
 		require.True(t, ok)
 		assert.NotEmpty(t, suggestions)
+	})
+}
+
+func TestAPIGenerateBarcodeHandler(t *testing.T) {
+	t.Run("missing data", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/barcode?format=code128", nil)
+		w := httptest.NewRecorder()
+		apiGenerateBarcodeHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DATA", env["error"])
+	})
+
+	t.Run("valid code128", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/barcode?format=code128&data=Hello123", nil)
+		w := httptest.NewRecorder()
+		apiGenerateBarcodeHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		_, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+	})
+
+	t.Run("unsupported format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/barcode?format=nope&data=abc", nil)
+		w := httptest.NewRecorder()
+		apiGenerateBarcodeHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "BARCODE_GENERATION_FAILED", env["error"])
+	})
+}
+
+func TestAPIGenerateAvatarHandler(t *testing.T) {
+	t.Run("missing initials", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/avatar", nil)
+		w := httptest.NewRecorder()
+		apiGenerateAvatarHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_INITIALS", env["error"])
+	})
+
+	t.Run("valid initials", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/avatar?initials=AB&size=64", nil)
+		w := httptest.NewRecorder()
+		apiGenerateAvatarHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		img, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+		assert.Equal(t, 64, img.Bounds().Dx())
+	})
+}
+
+func TestAPIGenerateIdenticonHandler(t *testing.T) {
+	t.Run("missing seed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/identicon", nil)
+		w := httptest.NewRecorder()
+		apiGenerateIdenticonHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_SEED", env["error"])
+	})
+
+	t.Run("valid seed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/identicon?seed=user@example.com", nil)
+		w := httptest.NewRecorder()
+		apiGenerateIdenticonHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		_, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+	})
+}
+
+func TestAPIGenerateDockerfileHandler(t *testing.T) {
+	t.Run("default generic", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/dockerfile", nil)
+		w := httptest.NewRecorder()
+		apiGenerateDockerfileHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["dockerfile"], "FROM alpine")
+	})
+
+	t.Run("unsupported lang", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/dockerfile?lang=cobol", nil)
+		w := httptest.NewRecorder()
+		apiGenerateDockerfileHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "DOCKERFILE_GENERATION_FAILED", env["error"])
+	})
+}
+
+func TestAPIGenerateGitignoreHandler(t *testing.T) {
+	t.Run("valid langs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/gitignore?lang=go,vscode", nil)
+		w := httptest.NewRecorder()
+		apiGenerateGitignoreHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["gitignore"], "# Go")
+	})
+
+	t.Run("missing lang", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/gitignore", nil)
+		w := httptest.NewRecorder()
+		apiGenerateGitignoreHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "GITIGNORE_GENERATION_FAILED", env["error"])
+	})
+}
+
+func TestAPIGenerateLicenseHandler(t *testing.T) {
+	t.Run("mit with author/year", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/license?type=mit&author=Jane+Doe&year=2026", nil)
+		w := httptest.NewRecorder()
+		apiGenerateLicenseHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["license"], "Copyright (c) 2026 Jane Doe")
+	})
+
+	t.Run("unsupported type", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/license?type=wtfpl", nil)
+		w := httptest.NewRecorder()
+		apiGenerateLicenseHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "LICENSE_GENERATION_FAILED", env["error"])
+	})
+}
+
+func TestAPIGenerateConfigHandler(t *testing.T) {
+	t.Run("yaml with values", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/config?format=yaml&host=localhost&port=8080", nil)
+		w := httptest.NewRecorder()
+		apiGenerateConfigHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["config"], "host: localhost")
+	})
+
+	t.Run("no values", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/config?format=yaml", nil)
+		w := httptest.NewRecorder()
+		apiGenerateConfigHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "CONFIG_GENERATION_FAILED", env["error"])
+	})
+}
+
+func TestAPIGenerateSQLHandler(t *testing.T) {
+	t.Run("valid table", func(t *testing.T) {
+		body := `{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true}]}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/generate/sql", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		apiGenerateSQLHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["sql"], "CREATE TABLE users (")
+	})
+
+	t.Run("missing table", func(t *testing.T) {
+		body := `{"columns":[{"name":"id","type":"integer"}]}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/generate/sql", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		apiGenerateSQLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "SQL_GENERATION_FAILED", env["error"])
+	})
+
+	t.Run("invalid body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/generate/sql", strings.NewReader("not json"))
+		w := httptest.NewRecorder()
+		apiGenerateSQLHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_BODY", env["error"])
+	})
+}
+
+func TestAPIGenerateSSHKeyHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/ssh-key", nil)
+	w := httptest.NewRecorder()
+	apiGenerateSSHKeyHandler(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Contains(t, data["private_key"], "BEGIN OPENSSH PRIVATE KEY")
+	assert.Contains(t, data["public_key"], "ssh-ed25519")
+}
+
+func TestAPIGenerateAPIDocsHandler(t *testing.T) {
+	t.Run("default markdown", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/api-docs", nil)
+		w := httptest.NewRecorder()
+		apiGenerateAPIDocsHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["docs"], "Version: v1")
+	})
+
+	t.Run("json format", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/api-docs?format=json", nil)
+		w := httptest.NewRecorder()
+		apiGenerateAPIDocsHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["docs"], "paths")
+	})
+}
+
+func TestAPIGeneratePlaceholderHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/generate/placeholder/{width}/{height}", apiGeneratePlaceholderHandler)
+
+	t.Run("valid dimensions", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/generate/placeholder/100/50", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		img, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+		require.NoError(t, err)
+		assert.Equal(t, 100, img.Bounds().Dx())
+		assert.Equal(t, 50, img.Bounds().Dy())
+	})
+
+	t.Run("invalid width", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/generate/placeholder/notanumber/50", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_WIDTH", env["error"])
 	})
 }
