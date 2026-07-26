@@ -360,7 +360,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- parse (8): env, html, ini, log, markdown, sql, toml, yaml
 - research (10): arxiv, bibtex, footnotes, isbn, metadata, outline,
   pdf-extract, readability, scraper, summarize
 - testing (9): api-client, curl-generator, load-test, mock-server,
