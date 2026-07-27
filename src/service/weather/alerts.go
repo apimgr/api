@@ -138,7 +138,7 @@ func fetchECCCAlerts(ctx context.Context, loc *Location) ([]*Alert, error) {
 
 	var result ecccAlertsResponse
 	if err := fetchJSON(ctx, endpoint, &result); err != nil {
-		return nil, fmt.Errorf("Environment Canada alerts lookup failed: %w", err)
+		return nil, fmt.Errorf("environment Canada alerts lookup failed: %w", err)
 	}
 
 	alerts := make([]*Alert, 0, len(result.Features))
