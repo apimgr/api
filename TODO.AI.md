@@ -610,3 +610,27 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   a 404. Config-driven per-project header tightening
   (`web.headers`/`web.csp`/`web.permissions_policy`) is also not wired into
   `config.go`/`server.yml` yet.
+
+## [ ] Revert `.github/workflows/ci.yml` lint job to `casjaysdev/go:latest`
+Read: .github/workflows/ci.yml (lint job), AI.md PART 27 (CI Workflow)
+CI run 30292994784 for commit 3b28e987e6b6 failed: the `lint` job's
+`staticcheck ./...` step hit `staticcheck: command not found` (exit 127).
+Confirmed by pulling the image locally: `casjaysdev/go:latest`
+(digest `8ac3a35db8ad`, pushed 2026-07-27T16:54Z, same digest also tagged
+`2607`) has no `staticcheck` binary anywhere in the image, contradicting its
+own documented tool list (Docker Hub description still lists staticcheck).
+The prior tag `casjaysdev/go:2606` (pushed 2026-06-29) does have
+`/usr/local/bin/staticcheck` — this is a fresh upstream build regression,
+not caused by any change in this repo. Rerunning the failed job on the same
+commit reproduced the identical failure, ruling out a one-off flake.
+Could not locate a `casjaysdev/go` source repo under the `casjaysdev` or
+`casjaysdevdocker` GitHub orgs to file an upstream issue/PR.
+Workaround applied: pinned the `lint` job's container to
+`casjaysdev/go:2606` (last known-good digest with staticcheck present) so
+CI stays green; `test`, `vuln-check`, `secret-scan`, and `release.yml` still
+reference the floating `:latest` tag per AI.md PART 27 and were unaffected
+by this regression at push time.
+Action needed: periodically re-check whether a newer `casjaysdev/go:latest`
+tag has staticcheck restored (`docker run --rm --entrypoint sh
+casjaysdev/go:latest -c 'which staticcheck'`), then switch the `lint` job's
+`image:` back to `casjaysdev/go:latest` and remove this pin comment.
