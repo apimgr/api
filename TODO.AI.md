@@ -531,3 +531,18 @@ testing's load-test/mock-server pair, and weather's maps/radar pair still
 have pre-existing nav cards on their category listing page linking to a
 per-tool page that returns 404 (documented dead links, not newly added
 here).
+
+## [ ] CI secret-scan false-positive history on src/config/config_test.go
+CI run 30255631519's `secret-scan` job (TruffleHog) failed against harmless
+hardcoded test connection strings in `src/config/config_test.go`. The job
+is diff-scoped (`.github/workflows/ci.yml` passes `base`/`head` from
+`github.event.before`/`.after` and `extra_args: --results=verified,unknown`),
+so ordinary pushes only re-scan their own diff and this has not recurred on
+any run since (confirmed green through run 30284413533). Not currently
+blocking. If it recurs — e.g. a future PR/rebase re-includes those lines in
+its diff, or a `schedule`-triggered full-history scan (which passes empty
+`base`/`head`) flags them — the fix is to replace the offending literal
+connection-string test fixtures in `config_test.go` with obviously-fake
+placeholder values (e.g. `user:REDACTED_TEST_PW@host`) or add a
+`.trufflehogignore` entry scoped to that file/line, not to disable the
+secret-scan job.
