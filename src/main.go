@@ -107,8 +107,11 @@ func main() {
 	paths.InitCache(resolvedCacheDir)
 	paths.InitBackup(resolvedBackupDir)
 
-	// Resolve --color/NO_COLOR and --lang, applying them process-wide
-	applyColorMode(*colorFlag)
+	// Resolve --color/NO_COLOR and --lang, applying them process-wide.
+	// Config is not loaded yet, so this only applies the CLI-flag/NO_COLOR/
+	// auto-detect tiers; it is re-resolved with the config-file tier below
+	// once config.Load() succeeds, per AI.md PART 8's priority order.
+	applyColorMode(*colorFlag, nil)
 	if *langFlag != "" {
 		appmode.SetLang(*langFlag)
 	} else if envLang := os.Getenv("LANG"); envLang != "" {
@@ -176,6 +179,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+
+	// Re-resolve --color/NO_COLOR now that config is available, applying the
+	// output.color/output.emoji config-file tier per AI.md PART 8's
+	// priority order (CLI flag > config file > NO_COLOR env var > auto-detect).
+	applyColorMode(*colorFlag, cfg.Output.Color)
+	applyEmojiOverride(cfg.Output.Emoji)
 
 	// Initialize logging system
 	if err := server.InitLogger(&cfg.Server.Logs); err != nil {

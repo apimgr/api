@@ -6,10 +6,16 @@ import (
 	"strings"
 )
 
-// colorEnabled holds the resolved --color/NO_COLOR state for this process.
-// Per AI.md PART 8 "NO_COLOR Support", disabling color also disables emojis
-// in terminal output, so cprintf/cprintln (below) strip emoji when false.
+// colorEnabled holds the resolved --color/config/NO_COLOR state for this
+// process, per AI.md PART 8 "NO_COLOR Support".
 var colorEnabled = true
+
+// emojiEnabled holds the resolved emoji-output state for this process.
+// It starts equal to colorEnabled (disabling color also disables emojis by
+// default), but applyEmojiOverride can force it back on independently via
+// the `output.emoji: true` config override, per AI.md PART 8. cprintf/
+// cprintln strip emoji when this is false.
+var emojiEnabled = true
 
 // isEmojiRune reports whether r falls in a Unicode block commonly used for
 // emoji in this codebase's CLI output (pictographs, symbols, dingbats,
@@ -43,21 +49,21 @@ func stripEmoji(s string) string {
 	return strings.Join(fields, " ")
 }
 
-// cprintf is fmt.Printf gated by colorEnabled: emoji are stripped from the
-// formatted output when color/emoji output is disabled (NO_COLOR, --color=no,
-// or non-TTY auto-detection), per AI.md PART 8.
+// cprintf is fmt.Printf gated by emojiEnabled: emoji are stripped from the
+// formatted output when emoji output is disabled (NO_COLOR, --color=no,
+// config, or non-TTY auto-detection), per AI.md PART 8.
 func cprintf(format string, args ...interface{}) {
 	out := fmt.Sprintf(format, args...)
-	if !colorEnabled {
+	if !emojiEnabled {
 		out = stripEmoji(out)
 	}
 	fmt.Print(out)
 }
 
-// cprintln is fmt.Println gated by colorEnabled, mirroring cprintf.
+// cprintln is fmt.Println gated by emojiEnabled, mirroring cprintf.
 func cprintln(args ...interface{}) {
 	out := fmt.Sprintln(args...)
-	if !colorEnabled {
+	if !emojiEnabled {
 		trimmed := stripEmoji(strings.TrimRight(out, "\n"))
 		out = trimmed + "\n"
 	}
@@ -76,27 +82,56 @@ func envOrFlag(flagValue, envKey string) string {
 	return os.Getenv(envKey)
 }
 
-// applyColorMode resolves --color against NO_COLOR and TTY/TERM
-// auto-detection, per AI.md PART 8 "NO_COLOR Support" priority order:
-// CLI flag > NO_COLOR env var > auto-detect. Config-file overrides do not
-// apply here (server has no `output.color` config key).
-func applyColorMode(colorFlag string) {
+// applyColorMode resolves --color against a config-file override, NO_COLOR,
+// and TTY/TERM auto-detection, per AI.md PART 8 "NO_COLOR Support" priority
+// order: CLI flag > config file > NO_COLOR env var > auto-detect. configColor
+// is nil when no config has been loaded yet (e.g. the pre-config.Load() call
+// in main.go, or CLI-only commands that never load config) — in that case
+// the config-file tier is simply skipped, falling through to NO_COLOR/auto-
+// detect, and callers re-invoke this once config.Load() succeeds to apply
+// the config-file tier. Setting colorEnabled also resets emojiEnabled to
+// match, since disabling color disables emojis by default; call
+// applyEmojiOverride afterward to apply the `output.emoji: true` override.
+func applyColorMode(colorFlag string, configColor *bool) {
 	switch strings.ToLower(strings.TrimSpace(colorFlag)) {
 	case "yes", "true", "on":
 		colorEnabled = true
+		emojiEnabled = true
 		return
 	case "no", "false", "off":
 		colorEnabled = false
+		emojiEnabled = false
+		return
+	}
+
+	if configColor != nil {
+		colorEnabled = *configColor
+		emojiEnabled = *configColor
 		return
 	}
 
 	if os.Getenv("NO_COLOR") != "" {
 		colorEnabled = false
+		emojiEnabled = false
 		return
 	}
 	if os.Getenv("TERM") == "dumb" {
 		colorEnabled = false
+		emojiEnabled = false
 		return
 	}
 	colorEnabled = true
+	emojiEnabled = true
+}
+
+// applyEmojiOverride applies the `output.emoji: true` config-file override,
+// which re-enables emoji output even when NO_COLOR/config disabled color,
+// per AI.md PART 8's EmojiEnabled priority order (config override sits above
+// NO_COLOR/TERM=dumb for emoji specifically). It never disables emoji beyond
+// what applyColorMode already resolved — configEmoji == nil or false is a
+// no-op. Callers apply this after applyColorMode once config is available.
+func applyEmojiOverride(configEmoji *bool) {
+	if configEmoji != nil && *configEmoji {
+		emojiEnabled = true
+	}
 }

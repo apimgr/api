@@ -587,14 +587,37 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   libsql/Turso driver, and no such driver is imported (`modernc.org/sqlite`
   is the only one); wiring them now would either be a no-op or misleading.
   Revisit if/when libsql/Turso support is added.
-- **main.go color/comment cleanup**: `colorEnabled` is not threaded through
-  every `fmt.Printf`'s hardcoded emoji output, and there is no `output.color`
-  config-file override wired (only the `--color` CLI flag exists). Re-check
-  whether the dangling `// Generate secure password` comment with no
-  function body (previously attributed to a concurrently-running agent's
-  in-progress edit) is still present — `grep -n "Generate secure password"
-  src/main.go` returned nothing on the most recent check, so this specific
-  sub-item now appears resolved; re-verify before closing it out formally.
+- **main.go color/comment cleanup** — FIXED: two of the three original
+  sub-claims were already stale (confirmed via grep before this fix: zero
+  raw `fmt.Print*` calls in `src/main.go` bypass `cprintf`/`cprintln`, and
+  the dangling `// Generate secure password` comment does not exist). The
+  remaining genuine gap — no `output.color` config-file override wired, only
+  `--color` CLI/`NO_COLOR` env/auto-detect — is now fixed per AI.md PART 8's
+  4-tier priority order (CLI flag > config file > `NO_COLOR` env > auto-
+  detect): added `config.OutputConfig` (`Color`/`Emoji` tri-state pointers)
+  to `config.Config` in `src/config/config.go`; split `src/clihelpers.go`'s
+  single `colorEnabled` into `colorEnabled` + `emojiEnabled`, with
+  `applyColorMode(colorFlag, configColor *bool)` now taking the config-file
+  value at its correct priority tier, and a new `applyEmojiOverride
+  (configEmoji *bool)` implementing the spec's `output.emoji: true`
+  override (forces emoji back on even when color/NO_COLOR disabled it).
+  `main.go` calls `applyColorMode(*colorFlag, nil)` once before
+  `config.Load()` (for CLI-only early-exit commands that never load config),
+  then re-calls `applyColorMode(*colorFlag, cfg.Output.Color)` +
+  `applyEmojiOverride(cfg.Output.Emoji)` right after `config.Load()`
+  succeeds, so the config-file tier only applies on the full server-run
+  path — no side effects (e.g. config-file creation) added to `--help`/
+  `--version`/`--status`/etc. Not addressed here (separate, pre-existing
+  gap, not part of this TODO item): the auto-detect tier's illustrative
+  AI.md pseudocode also does a TTY check (`term.IsTerminal`), which
+  `applyColorMode`'s auto-detect fallback still lacks (only `TERM=dumb` is
+  checked) — logged as a new follow-up below.
+- **applyColorMode auto-detect has no TTY check**: AI.md PART 8's
+  `ColorEnabled` pseudocode auto-detect tier checks
+  `term.IsTerminal(int(os.Stdout.Fd()))` in addition to `TERM=dumb`, so
+  output piped to a file/log still gets ANSI/emoji today. `golang.org/x/term`
+  is already a transitive dependency (via the client TUI). Add the TTY check
+  to `applyColorMode`'s final fallback branch in `src/clihelpers.go`.
 - **Middleware reporting/config-header gaps**: the emitted
   `Reporting-Endpoints`/`Report-To`/`NEL` response headers point at
   `/api/{api_version}/server/reports/{default,csp}`, but no handler for

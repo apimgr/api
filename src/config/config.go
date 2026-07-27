@@ -15,6 +15,16 @@ import (
 type Config struct {
 	Server ServerConfig `yaml:"server"`
 	Web    WebConfig    `yaml:"web"`
+	Output OutputConfig `yaml:"output"`
+}
+
+// OutputConfig holds CLI color/emoji output settings per AI.md PART 8
+// "NO_COLOR Support". Color and Emoji are pointers so an absent key is
+// distinguishable from an explicit false, matching the CLI flag > config
+// file > NO_COLOR env var > auto-detect priority order.
+type OutputConfig struct {
+	Color *bool `yaml:"color,omitempty"`
+	Emoji *bool `yaml:"emoji,omitempty"`
 }
 
 // ServerConfig holds server-related settings
