@@ -461,6 +461,19 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/assert", apiTestAssertHandler)
 			r.Get("/fixture/{type}", apiTestFixtureHandler)
 			r.Get("/fake-data", apiTestFakeDataHandler)
+			r.Post("/api-client", apiTestAPIClientHandler)
+			r.Post("/curl-generator", apiTestCurlGeneratorHandler)
+			r.Post("/postman", apiTestPostmanHandler)
+			r.Get("/request-inspector", apiTestRequestInspectorHandler)
+			r.Post("/request-inspector", apiTestRequestInspectorHandler)
+			r.Get("/status-codes", apiTestStatusCodesHandler)
+			r.Get("/status-codes/{code}", apiTestStatusCodesHandler)
+			r.Get("/response-generator", apiTestResponseGeneratorHandler)
+			r.Post("/webhook", apiTestWebhookHandler)
+			r.Get("/load-test", apiTestLoadTestHandler)
+			r.Post("/load-test", apiTestLoadTestHandler)
+			r.Get("/mock-server", apiTestMockServerHandler)
+			r.Post("/mock-server", apiTestMockServerHandler)
 		})
 
 		// OSINT Tools
@@ -783,6 +796,13 @@ func toolPages() []toolPage {
 		{category: "testing", tool: "assertions", title: "Assertion Runner", description: "Run an equal, not_equal, contains, true, or false assertion and get a pass/fail result"},
 		{category: "testing", tool: "fixtures", title: "Test Fixture Generator", description: "Generate a named test fixture (user, api_response, or custom type)"},
 		{category: "testing", tool: "fake-data", title: "Fake Data Generator", description: "Generate a fake test email, username, or mock user"},
+		{category: "testing", tool: "api-client", title: "API Client Code Generator", description: "Generate curl, JavaScript, Python, and Go client code for an HTTP request"},
+		{category: "testing", tool: "curl-generator", title: "curl Command Generator", description: "Generate a single curl command from a method, URL, headers, and body"},
+		{category: "testing", tool: "postman", title: "Postman Collection Generator", description: "Generate a minimal Postman Collection v2.1 JSON for an HTTP request"},
+		{category: "testing", tool: "request-inspector", title: "Request Inspector", description: "Inspect the method, headers, query parameters, and body of the current request"},
+		{category: "testing", tool: "status-codes", title: "HTTP Status Code Reference", description: "Look up an HTTP status code's reason phrase and description, or browse the full table"},
+		{category: "testing", tool: "response-generator", title: "Mock Response Generator", description: "Generate a mock API response fixture"},
+		{category: "testing", tool: "webhook", title: "Webhook Inspector", description: "POST a payload and get back an inspection of its headers and body"},
 		{category: "osint", tool: "email", title: "Email Intelligence", description: "Validate an email address and check for MX records"},
 		{category: "osint", tool: "domain", title: "WHOIS Lookup", description: "Look up registrar, creation/expiry dates, and nameservers for a domain"},
 		{category: "osint", tool: "ip", title: "IP Intelligence", description: "Look up geolocation and ISP information for a public IP address"},
@@ -947,7 +967,7 @@ func allCategories() []CategoryInfo {
 		{Path: "/parse", Icon: "🔍", Name: "Parsers", Description: "Parsing JSON, YAML, XML, CSV, and format conversions", Count: 72},
 		{Path: "/research", Icon: "📚", Name: "Research Tools", Description: "Content extraction, summarization, and citations", Count: 28},
 		{Path: "/system", Icon: "🩺", Name: "Health & System", Description: "Server health checks, system information, and version details", Count: 3},
-		{Path: "/testing", Icon: "🧪", Name: "Testing Tools", Description: "Mocks, fixtures, assertions, and API testing", Count: 36},
+		{Path: "/testing", Icon: "🧪", Name: "Testing Tools", Description: "Mocks, fixtures, assertions, and API testing", Count: 45},
 		{Path: "/validate", Icon: "✅", Name: "Validators", Description: "Validating emails, phones, URLs, credit cards, and more", Count: 68},
 		{Path: "/weather", Icon: "⛅", Name: "Weather", Description: "Current weather, forecasts, and air quality data", Count: 15},
 	}

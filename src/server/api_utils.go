@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -2520,6 +2521,365 @@ func apiTestFakeDataHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be one of: email, username, user", nil)
 	}
+}
+
+// testRequestSpec is the JSON body shape shared by apiTestAPIClientHandler,
+// apiTestCurlGeneratorHandler, and apiTestPostmanHandler: a caller-described
+// HTTP request to render as generated code/config. These handlers only ever
+// format the caller's own input back into a different textual
+// representation — they never dial out, matching IDEA.md's outbound-call
+// boundary (OSINT and weather tool families only).
+type testRequestSpec struct {
+	Method  string            `json:"method"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Body    string            `json:"body,omitempty"`
+}
+
+// decodeTestRequestSpec parses and validates the shared testRequestSpec
+// body, defaulting Method to GET and rejecting a missing URL.
+func decodeTestRequestSpec(r *http.Request) (testRequestSpec, error) {
+	var spec testRequestSpec
+	if err := decodeJSONBody(r, &spec); err != nil {
+		return spec, err
+	}
+	if strings.TrimSpace(spec.URL) == "" {
+		return spec, errMissingURL
+	}
+	if spec.Method == "" {
+		spec.Method = http.MethodGet
+	}
+	spec.Method = strings.ToUpper(spec.Method)
+	return spec, nil
+}
+
+// errMissingURL is returned by decodeTestRequestSpec when the caller omits
+// the required url field.
+var errMissingURL = fmt.Errorf("url is required")
+
+// buildCurlCommand renders a testRequestSpec as a single curl command
+// string, following this project's standard curl flag set (-q -LSsf) plus
+// -X/-H/-d as needed.
+func buildCurlCommand(spec testRequestSpec) string {
+	var b strings.Builder
+	b.WriteString("curl -q -LSsf")
+	if spec.Method != http.MethodGet {
+		b.WriteString(" -X ")
+		b.WriteString(spec.Method)
+	}
+	for key, value := range spec.Headers {
+		b.WriteString(" -H '")
+		b.WriteString(key)
+		b.WriteString(": ")
+		b.WriteString(value)
+		b.WriteString("'")
+	}
+	if spec.Body != "" {
+		b.WriteString(" -d '")
+		b.WriteString(spec.Body)
+		b.WriteString("'")
+	}
+	b.WriteString(" '")
+	b.WriteString(spec.URL)
+	b.WriteString("'")
+	return b.String()
+}
+
+// apiTestAPIClientHandler renders a caller-described HTTP request as
+// generated client code snippets (curl, JavaScript fetch, Python requests,
+// and Go net/http) so a developer can copy working request code for their
+// language of choice. Pure string templating of the caller's own input, no
+// outbound call.
+func apiTestAPIClientHandler(w http.ResponseWriter, r *http.Request) {
+	spec, err := decodeTestRequestSpec(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+
+	headerLines := make([]string, 0, len(spec.Headers))
+	for key, value := range spec.Headers {
+		headerLines = append(headerLines, fmt.Sprintf("        %q: %q,", key, value))
+	}
+	sort.Strings(headerLines)
+
+	jsHeaders := "{}"
+	if len(headerLines) > 0 {
+		jsHeaders = "{\n" + strings.Join(headerLines, "\n") + "\n    }"
+	}
+	jsBody := ""
+	if spec.Body != "" {
+		jsBody = fmt.Sprintf(",\n    body: %q", spec.Body)
+	}
+	javascript := fmt.Sprintf("fetch(%q, {\n    method: %q,\n    headers: %s%s\n}).then(r => r.json()).then(console.log);", spec.URL, spec.Method, jsHeaders, jsBody)
+
+	pyHeaderLines := make([]string, 0, len(spec.Headers))
+	for key, value := range spec.Headers {
+		pyHeaderLines = append(pyHeaderLines, fmt.Sprintf("    %q: %q,", key, value))
+	}
+	sort.Strings(pyHeaderLines)
+	pyHeaders := "{}"
+	if len(pyHeaderLines) > 0 {
+		pyHeaders = "{\n" + strings.Join(pyHeaderLines, "\n") + "\n}"
+	}
+	pyBody := ""
+	if spec.Body != "" {
+		pyBody = fmt.Sprintf(", data=%q", spec.Body)
+	}
+	python := fmt.Sprintf("import requests\n\nresponse = requests.request(%q, %q, headers=%s%s)\nprint(response.json())", spec.Method, spec.URL, pyHeaders, pyBody)
+
+	goHeaderLines := make([]string, 0, len(spec.Headers))
+	for key, value := range spec.Headers {
+		goHeaderLines = append(goHeaderLines, fmt.Sprintf("\treq.Header.Set(%q, %q)", key, value))
+	}
+	sort.Strings(goHeaderLines)
+	goBody := "nil"
+	if spec.Body != "" {
+		goBody = fmt.Sprintf("strings.NewReader(%q)", spec.Body)
+	}
+	golang := fmt.Sprintf("req, _ := http.NewRequest(%q, %q, %s)\n%s\nresp, _ := http.DefaultClient.Do(req)", spec.Method, spec.URL, goBody, strings.Join(goHeaderLines, "\n"))
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"curl":       buildCurlCommand(spec),
+		"javascript": javascript,
+		"python":     python,
+		"go":         golang,
+	})
+}
+
+// apiTestCurlGeneratorHandler renders a caller-described HTTP request as a
+// single curl command string. Pure string formatting of the caller's own
+// input, no outbound call.
+func apiTestCurlGeneratorHandler(w http.ResponseWriter, r *http.Request) {
+	spec, err := decodeTestRequestSpec(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"curl": buildCurlCommand(spec),
+	})
+}
+
+// postmanCollection is a minimal Postman Collection v2.1 document
+// containing the single caller-described request.
+type postmanCollection struct {
+	Info struct {
+		Name   string `json:"name"`
+		Schema string `json:"schema"`
+	} `json:"info"`
+	Item []postmanItem `json:"item"`
+}
+
+type postmanItem struct {
+	Name    string         `json:"name"`
+	Request postmanRequest `json:"request"`
+}
+
+type postmanRequest struct {
+	Method string          `json:"method"`
+	Header []postmanHeader `json:"header"`
+	Body   *postmanBody    `json:"body,omitempty"`
+	URL    string          `json:"url"`
+}
+
+type postmanHeader struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type postmanBody struct {
+	Mode string `json:"mode"`
+	Raw  string `json:"raw"`
+}
+
+// apiTestPostmanHandler renders a caller-described HTTP request as a
+// minimal Postman Collection v2.1 JSON document containing that single
+// request. Pure JSON templating of the caller's own input, no outbound
+// call, no persistence.
+func apiTestPostmanHandler(w http.ResponseWriter, r *http.Request) {
+	spec, err := decodeTestRequestSpec(r)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		return
+	}
+
+	headers := make([]postmanHeader, 0, len(spec.Headers))
+	for key, value := range spec.Headers {
+		headers = append(headers, postmanHeader{Key: key, Value: value})
+	}
+	sort.Slice(headers, func(i, j int) bool { return headers[i].Key < headers[j].Key })
+
+	var body *postmanBody
+	if spec.Body != "" {
+		body = &postmanBody{Mode: "raw", Raw: spec.Body}
+	}
+
+	collection := postmanCollection{}
+	collection.Info.Name = "Generated Request"
+	collection.Info.Schema = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	collection.Item = []postmanItem{{
+		Name: spec.Method + " " + spec.URL,
+		Request: postmanRequest{
+			Method: spec.Method,
+			Header: headers,
+			Body:   body,
+			URL:    spec.URL,
+		},
+	}}
+
+	writeEnvelopeOK(w, http.StatusOK, collection)
+}
+
+// apiTestRequestInspectorHandler echoes back the caller's own request:
+// method, path, query parameters, headers, and raw body. Directly
+// analogous to the already-shipped network.Service.CallerInfo pattern
+// (IDEA.md's declared caller/header-inspection scope) — no storage, no
+// outbound call.
+func apiTestRequestInspectorHandler(w http.ResponseWriter, r *http.Request) {
+	bodyBytes, _ := io.ReadAll(r.Body)
+
+	headers := make(map[string]string, len(r.Header))
+	for key := range r.Header {
+		headers[key] = r.Header.Get(key)
+	}
+
+	query := make(map[string]string)
+	for key := range r.URL.Query() {
+		query[key] = r.URL.Query().Get(key)
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"method":      r.Method,
+		"path":        r.URL.Path,
+		"query":       query,
+		"headers":     headers,
+		"body":        string(bodyBytes),
+		"remote_addr": r.RemoteAddr,
+	})
+}
+
+// httpStatusDescriptions supplements net/http.StatusText with a one-line
+// human description for the status-codes reference lookup, mirroring
+// IDEA.md's declared "HTTP status code ... reference lookup" scope.
+var httpStatusDescriptions = map[int]string{
+	http.StatusOK:                  "The request succeeded",
+	http.StatusCreated:             "The request succeeded and a new resource was created",
+	http.StatusAccepted:            "The request has been accepted for processing but is not complete",
+	http.StatusNoContent:           "The request succeeded but there is no content to return",
+	http.StatusMovedPermanently:    "The resource has permanently moved to a new URL",
+	http.StatusFound:               "The resource temporarily resides at a different URL",
+	http.StatusNotModified:         "The cached response is still valid",
+	http.StatusBadRequest:          "The request was malformed or invalid",
+	http.StatusUnauthorized:        "Authentication is required and has failed or not been provided",
+	http.StatusForbidden:           "The server understood the request but refuses to authorize it",
+	http.StatusNotFound:            "The requested resource could not be found",
+	http.StatusMethodNotAllowed:    "The request method is not supported for this resource",
+	http.StatusConflict:            "The request conflicts with the current state of the resource",
+	http.StatusGone:                "The resource is no longer available and will not be available again",
+	http.StatusTooManyRequests:     "The caller has sent too many requests in a given amount of time",
+	http.StatusInternalServerError: "The server encountered an unexpected condition",
+	http.StatusNotImplemented:      "The server does not support the functionality required to fulfill the request",
+	http.StatusBadGateway:          "The server received an invalid response from an upstream server",
+	http.StatusServiceUnavailable:  "The server is not ready to handle the request",
+	http.StatusGatewayTimeout:      "The upstream server failed to respond in time",
+}
+
+// apiTestStatusCodesHandler returns a single HTTP status code's canonical
+// reason phrase and description when a {code} path parameter is given, or
+// the full reference table when it is omitted. Static lookup data only, no
+// outbound call, no persistence.
+func apiTestStatusCodesHandler(w http.ResponseWriter, r *http.Request) {
+	codeParam := chi.URLParam(r, "code")
+	if codeParam == "" {
+		table := make(map[string]interface{}, len(httpStatusDescriptions))
+		for code := range httpStatusDescriptions {
+			table[strconv.Itoa(code)] = map[string]interface{}{
+				"text":        http.StatusText(code),
+				"description": httpStatusDescriptions[code],
+			}
+		}
+		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+			"codes": table,
+		})
+		return
+	}
+
+	code, err := strconv.Atoi(codeParam)
+	if err != nil || http.StatusText(code) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CODE", "code must be a known HTTP status code", nil)
+		return
+	}
+
+	description, ok := httpStatusDescriptions[code]
+	if !ok {
+		description = ""
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"code":        code,
+		"text":        http.StatusText(code),
+		"description": description,
+	})
+}
+
+// apiTestResponseGeneratorHandler generates a mock API response fixture.
+// IDEA.md's declared Testing scope names only one mock-API-response
+// generator, which already exists as test.Service.GenerateMockAPIResponse
+// — this dispatches to it directly rather than inventing a broader
+// parameterized (arbitrary status/header/body) response builder that
+// IDEA.md does not declare.
+func apiTestResponseGeneratorHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeOK(w, http.StatusOK, testService.GenerateMockAPIResponse())
+}
+
+// apiTestWebhookHandler accepts a caller-submitted webhook POST and echoes
+// back a structured inspection of it (headers, parsed/raw body) in the
+// same response cycle. This is a stateless same-request echo, not a
+// receive-then-inspect-later store: IDEA.md's non-goals forbid persistent
+// storage of user-submitted data, so no payload is retained past this
+// request.
+func apiTestWebhookHandler(w http.ResponseWriter, r *http.Request) {
+	bodyBytes, _ := io.ReadAll(r.Body)
+
+	headers := make(map[string]string, len(r.Header))
+	for key := range r.Header {
+		headers[key] = r.Header.Get(key)
+	}
+
+	var parsedBody interface{}
+	jsonValid := false
+	if len(bodyBytes) > 0 && json.Unmarshal(bodyBytes, &parsedBody) == nil {
+		jsonValid = true
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"method":      r.Method,
+		"headers":     headers,
+		"raw_body":    string(bodyBytes),
+		"parsed_body": parsedBody,
+		"json_valid":  jsonValid,
+	})
+}
+
+// apiTestLoadTestHandler is a permanent gap: a real load-test tool must
+// fire real, potentially high-volume outbound HTTP traffic at a
+// caller-supplied target URL. IDEA.md restricts outbound calls to only the
+// OSINT and weather tool families (a bounded, intentional SSRF surface) —
+// deliberately generating load against an arbitrary target is outside that
+// boundary and would turn this server into an abuse/DoS proxy.
+func apiTestLoadTestHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "load-test is a permanent gap: it would require firing outbound HTTP traffic at a caller-supplied target, outside IDEA.md's outbound-call boundary (OSINT and weather tool families only)", nil)
+}
+
+// apiTestMockServerHandler is a permanent gap: a configurable mock HTTP
+// server requires either a second runtime-managed listening socket (no
+// dynamic-listener lifecycle exists in this codebase, and config-rules.md
+// forbids a runtime API for listener/port changes) or persisting
+// caller-defined response rules across requests (forbidden by IDEA.md's
+// no-persistent-storage-of-user-submitted-data non-goal). Both readings
+// hit a declared non-goal.
+func apiTestMockServerHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "mock-server is a permanent gap: a configurable dynamic mock server requires either a runtime-managed listening socket or persisted caller-defined response rules, both outside this project's declared scope", nil)
 }
 
 // apiOsintEmailHandler validates the {email} path parameter's format and

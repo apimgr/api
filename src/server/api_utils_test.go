@@ -1825,6 +1825,213 @@ func TestAPITestFixtureHandler(t *testing.T) {
 	assert.NotNil(t, data["fixture"])
 }
 
+// apiTestAPIClientHandler must 400 INVALID_BODY when url is missing and
+// render curl/javascript/python/go snippets for a valid spec.
+func TestAPITestAPIClientHandler(t *testing.T) {
+	t.Run("missing url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/api-client", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiTestAPIClientHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_BODY", env["error"])
+	})
+
+	t.Run("valid spec", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/api-client", strings.NewReader(`{"method":"POST","url":"https://example.com/api","headers":{"Accept":"application/json"},"body":"{\"a\":1}"}`))
+		w := httptest.NewRecorder()
+		apiTestAPIClientHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["curl"], "https://example.com/api")
+		assert.Contains(t, data["javascript"], "fetch(")
+		assert.Contains(t, data["python"], "requests.request")
+		assert.Contains(t, data["go"], "http.NewRequest")
+	})
+}
+
+// apiTestCurlGeneratorHandler must 400 INVALID_BODY when url is missing and
+// render a curl command for a valid spec.
+func TestAPITestCurlGeneratorHandler(t *testing.T) {
+	t.Run("missing url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/curl-generator", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiTestCurlGeneratorHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_BODY", env["error"])
+	})
+
+	t.Run("valid spec", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/curl-generator", strings.NewReader(`{"method":"GET","url":"https://example.com/api"}`))
+		w := httptest.NewRecorder()
+		apiTestCurlGeneratorHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Contains(t, data["curl"], "curl -q -LSsf")
+		assert.Contains(t, data["curl"], "https://example.com/api")
+	})
+}
+
+// apiTestPostmanHandler must 400 INVALID_BODY when url is missing and render
+// a minimal Postman Collection v2.1 document for a valid spec.
+func TestAPITestPostmanHandler(t *testing.T) {
+	t.Run("missing url", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/postman", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		apiTestPostmanHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_BODY", env["error"])
+	})
+
+	t.Run("valid spec", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/postman", strings.NewReader(`{"method":"GET","url":"https://example.com/api","headers":{"Accept":"application/json"}}`))
+		w := httptest.NewRecorder()
+		apiTestPostmanHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		info, ok := data["info"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Generated Request", info["name"])
+		items, ok := data["item"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, items, 1)
+	})
+}
+
+// apiTestRequestInspectorHandler must echo back method, path, query, and
+// headers of the request it receives.
+func TestAPITestRequestInspectorHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/test/request-inspector?foo=bar", nil)
+	req.Header.Set("X-Test", "value")
+	w := httptest.NewRecorder()
+	apiTestRequestInspectorHandler(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, http.MethodGet, data["method"])
+	query, ok := data["query"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "bar", query["foo"])
+	headers, ok := data["headers"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "value", headers["X-Test"])
+}
+
+// apiTestStatusCodesHandler must return the full table when no code is
+// given, a single code's text/description when given a known code, and 400
+// INVALID_CODE for an unknown code.
+func TestAPITestStatusCodesHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/test/status-codes", apiTestStatusCodesHandler)
+	r.Get("/test/status-codes/{code}", apiTestStatusCodesHandler)
+
+	t.Run("full table", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test/status-codes", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		codes, ok := data["codes"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotEmpty(t, codes)
+	})
+
+	t.Run("known code", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test/status-codes/404", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Not Found", data["text"])
+	})
+
+	t.Run("unknown code", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test/status-codes/999", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_CODE", env["error"])
+	})
+}
+
+// apiTestResponseGeneratorHandler must dispatch directly to
+// test.Service.GenerateMockAPIResponse.
+func TestAPITestResponseGeneratorHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/test/response-generator", nil)
+	w := httptest.NewRecorder()
+	apiTestResponseGeneratorHandler(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.NotNil(t, env["data"])
+}
+
+// apiTestWebhookHandler must echo back headers and parsed/raw body for a
+// posted JSON payload, and report json_valid=false for a non-JSON body.
+func TestAPITestWebhookHandler(t *testing.T) {
+	t.Run("valid json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/webhook", strings.NewReader(`{"event":"example"}`))
+		req.Header.Set("X-Hub-Signature", "abc123")
+		w := httptest.NewRecorder()
+		apiTestWebhookHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, true, data["json_valid"])
+		headers, ok := data["headers"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "abc123", headers["X-Hub-Signature"])
+	})
+
+	t.Run("non-json body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/webhook", strings.NewReader(`not json`))
+		w := httptest.NewRecorder()
+		apiTestWebhookHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, false, data["json_valid"])
+		assert.Equal(t, "not json", data["raw_body"])
+	})
+}
+
+// apiTestLoadTestHandler and apiTestMockServerHandler are permanent gaps and
+// must always 501 NOT_SUPPORTED, matching the TestAPIResearchGapHandlers
+// pattern.
+func TestAPITestPermanentGapHandlers(t *testing.T) {
+	handlers := map[string]http.HandlerFunc{
+		"load-test":   apiTestLoadTestHandler,
+		"mock-server": apiTestMockServerHandler,
+	}
+	for tool, handler := range handlers {
+		t.Run(tool, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/test/"+tool, nil)
+			w := httptest.NewRecorder()
+
+			handler(w, req)
+
+			assert.Equal(t, http.StatusNotImplemented, w.Code)
+			env := decodeEnvelope(t, w.Body.Bytes())
+			assert.Equal(t, "NOT_SUPPORTED", env["error"])
+		})
+	}
+}
+
 // apiTestFakeDataHandler must default to type=user and 400 INVALID_TYPE for
 // an unknown type.
 func TestAPITestFakeDataHandler(t *testing.T) {

@@ -373,6 +373,40 @@ precedent, the pre-existing `research.tmpl` nav cards for these 10 tools
 remain as documented dead links. Verified independently with a
 `casjaysdev/go:latest` gofmt/build/vet/staticcheck/test run.
 
+## [x] testing (0, +2 newly-gapped load-test/mock-server)
+Of the 9 MISSING testing sub-tools, 7 wire directly: api-client,
+curl-generator, and postman share a `testRequestSpec` JSON body
+(method/url/headers/body) and a `decodeTestRequestSpec`/`buildCurlCommand`
+helper pair; api-client renders curl+JavaScript+Python+Go client snippets,
+curl-generator renders a single curl string, postman renders a minimal
+Postman Collection v2.1 document. request-inspector and webhook both echo
+back the current request (headers/body/query for request-inspector;
+headers/raw+parsed body/json_valid for webhook) with no persistence —
+webhook is a stateless same-request echo per user confirmation
+(2026-07-26, AskUserQuestion), not a permanent gap. status-codes returns
+either the full `httpStatusDescriptions` table or a single code's
+text/description via an optional `{code}` path param. response-generator
+dispatches directly to the existing `test.Service.GenerateMockAPIResponse`
+per user confirmation (2026-07-26, AskUserQuestion) rather than a broader
+parameterized generator. load-test and mock-server are newly-gapped:
+load-test would require firing outbound HTTP traffic at a caller-supplied
+target, outside IDEA.md's outbound-call boundary (OSINT/weather tool
+families only); mock-server would require either a second runtime-managed
+listening socket (no dynamic-listener lifecycle exists, and config-rules.md
+forbids a runtime API for listener/port changes) or persisting
+caller-defined response rules across requests (forbidden by IDEA.md's
+no-persistent-storage non-goal). All 9 got handlers in
+`src/server/api_utils.go`, routes in `src/server/server.go`, table-driven
+tests in `src/server/api_utils_test.go` (including a
+`TestAPITestPermanentGapHandlers` pair matching the
+`TestAPIResearchGapHandlers` precedent for the 2 gap tools), and
+`toolPages()` entries + templates under `src/server/template/page/tools/
+testing/{api-client,curl-generator,postman,request-inspector,status-codes,
+response-generator,webhook}.tmpl` for the 7 wireable tools only — no
+toolPages()/template added for load-test/mock-server, matching the
+research(10) gap precedent. Verified independently with a
+`casjaysdev/go:latest` gofmt/build/vet/test run (all packages pass).
+
 ## [ ] MISSING sub-tools needing net-new backend service work (32 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
@@ -382,13 +416,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- testing (9): api-client, curl-generator, load-test, mock-server,
-  postman, request-inspector, response-generator, status-codes, webhook
-  (mock-server needs a genuinely new configurable dynamic-response
-  backend — no existing `test.Service` method covers it; response-generator
-  may already be covered by testing/http's `GenerateMockAPIResponse` or may
-  need its own distinct implementation — needs a scoping decision before
-  either is picked up)
 - weather (10): air-quality, alerts, astronomy, historical, hourly, maps,
   marine, pollen, radar, uv
 
@@ -410,9 +437,10 @@ apiResearchMetadataHandler, apiResearchOutlineHandler,
 apiResearchPdfExtractHandler, apiResearchReadabilityHandler,
 apiResearchScraperHandler, apiResearchSummarizeHandler,
 apiOsintBreachHandler, apiOsintCompanyHandler, apiOsintMetadataHandler,
-apiOsintPhoneHandler, apiOsintSocialHandler, apiOsintUsernameHandler doc
-comments), src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
-Twenty-five of the wired API routes honestly return 501 NOT_SUPPORTED
+apiOsintPhoneHandler, apiOsintSocialHandler, apiOsintUsernameHandler,
+apiTestLoadTestHandler, apiTestMockServerHandler doc comments),
+src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
+Twenty-seven of the wired API routes honestly return 501 NOT_SUPPORTED
 rather than inventing behavior: generate/qr (no QR encoder exists anywhere in the
 codebase or go.mod), language/detect (conflicts with IDEA.md's declared
 non-goal of language auto-detection), language/dictionary,
@@ -444,17 +472,24 @@ family beyond IDEA.md's declared OSINT/weather-only trust boundary),
 research/pdf-extract (needs a new third-party dependency to parse
 untrusted binaries), and research/summarize (a genuine summarizer would
 need an external/keyed NLP/LLM service, excluded by IDEA.md's free/
-keyless integration policy). Resolving these requires a user/spec
-decision — either add a QR-encoding dependency, confirm language/detect
-and the four other language gaps should stay unsupported per IDEA.md,
-scope what "extraction" means for research/extract, decide whether
-network/traceroute should ship as a root-only opt-in feature instead of
-a permanent gap, decide whether any of the six osint gaps should be
-promoted to a keyed-API-optional feature, or decide whether any of the
-ten research gaps should be promoted by amending IDEA.md's Research
-scope — not further code guessing.
-None of the twenty-five gap routes have a `toolPages()` entry or
-dedicated frontend page template; osint's six and research's ten still
-have pre-existing nav cards on their category listing page linking to a
-per-tool page that returns 404 (documented dead links, not newly added
-here).
+keyless integration policy), and the two testing gaps — test/load-test
+(would require firing outbound HTTP traffic at a caller-supplied target,
+outside IDEA.md's outbound-call boundary) and test/mock-server (would
+require either a second runtime-managed listening socket, forbidden by
+config-rules.md's no-runtime-port-change rule, or persisting
+caller-defined response rules, forbidden by IDEA.md's no-persistent-
+storage non-goal). Resolving these requires a user/spec decision —
+either add a QR-encoding dependency, confirm language/detect and the
+four other language gaps should stay unsupported per IDEA.md, scope what
+"extraction" means for research/extract, decide whether network/
+traceroute should ship as a root-only opt-in feature instead of a
+permanent gap, decide whether any of the six osint gaps should be
+promoted to a keyed-API-optional feature, decide whether any of the ten
+research gaps should be promoted by amending IDEA.md's Research scope,
+or decide whether load-test/mock-server should be promoted via a
+dynamic-listener-lifecycle feature — not further code guessing.
+None of the twenty-seven gap routes have a `toolPages()` entry or
+dedicated frontend page template; osint's six, research's ten, and
+testing's load-test/mock-server pair still have pre-existing nav cards on
+their category listing page linking to a per-tool page that returns 404
+(documented dead links, not newly added here).
