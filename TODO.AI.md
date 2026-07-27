@@ -547,7 +547,7 @@ placeholder values (e.g. `user:REDACTED_TEST_PW@host`) or add a
 `.trufflehogignore` entry scoped to that file/line, not to disable the
 secret-scan job.
 
-## [ ] AUDIT.AI.md follow-up items flagged but not fixed (out of prior pass scope)
+## [x] AUDIT.AI.md follow-up items flagged but not fixed (out of prior pass scope)
 Several already-`[x]`-marked AUDIT.AI.md entries contain embedded notes for
 real work that was deliberately deferred rather than completed. Recorded
 here per the "no issue left only in conversation" rule since these notes
