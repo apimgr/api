@@ -49,23 +49,62 @@ func stripEmoji(s string) string {
 	return strings.Join(fields, " ")
 }
 
-// cprintf is fmt.Printf gated by emojiEnabled: emoji are stripped from the
-// formatted output when emoji output is disabled (NO_COLOR, --color=no,
-// config, or non-TTY auto-detection), per AI.md PART 8.
+// statusColorCode maps the well-known status emoji this binary's CLI output
+// leads lines with to its standard ANSI SGR color code, used to colorize
+// cprintf/cprintln output when colorEnabled, per AI.md PART 8 "NO_COLOR
+// Support".
+var statusColorCode = map[string]string{
+	"✅": "32", // green: success
+	"❌": "31", // red: error/failure
+	"⚠️": "33", // yellow: warning
+	"🛑": "31", // red: shutdown/stop
+	"ℹ️": "36", // cyan: info
+}
+
+// colorCodeFor returns the ANSI SGR code matching s's leading status emoji
+// (ignoring leading whitespace/newlines), or "" if colorEnabled is false or
+// s does not start with a recognized status emoji.
+func colorCodeFor(s string) string {
+	if !colorEnabled {
+		return ""
+	}
+	trimmed := strings.TrimLeft(s, "\n \t")
+	for emoji, code := range statusColorCode {
+		if strings.HasPrefix(trimmed, emoji) {
+			return code
+		}
+	}
+	return ""
+}
+
+// cprintf is fmt.Printf gated by colorEnabled/emojiEnabled: the output is
+// wrapped in the ANSI color matching its leading status emoji when color
+// output is enabled, and emoji are stripped from the formatted output when
+// emoji output is disabled (NO_COLOR, --color=no, config, or non-TTY
+// auto-detection), per AI.md PART 8.
 func cprintf(format string, args ...interface{}) {
 	out := fmt.Sprintf(format, args...)
+	code := colorCodeFor(out)
 	if !emojiEnabled {
 		out = stripEmoji(out)
+	}
+	if code != "" {
+		out = "\033[" + code + "m" + out + "\033[0m"
 	}
 	fmt.Print(out)
 }
 
-// cprintln is fmt.Println gated by emojiEnabled, mirroring cprintf.
+// cprintln is fmt.Println gated by colorEnabled/emojiEnabled, mirroring cprintf.
 func cprintln(args ...interface{}) {
 	out := fmt.Sprintln(args...)
+	code := colorCodeFor(out)
 	if !emojiEnabled {
 		trimmed := stripEmoji(strings.TrimRight(out, "\n"))
 		out = trimmed + "\n"
+	}
+	if code != "" {
+		trimmed := strings.TrimRight(out, "\n")
+		out = "\033[" + code + "m" + trimmed + "\033[0m\n"
 	}
 	fmt.Print(out)
 }
