@@ -564,36 +564,33 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   clearly-scoped commit (not folded into an unrelated pass) — confirm no
   other in-flight branch/agent still references it, then delete both files
   in one commit.
-- **SSL/TLS wiring gap**: `src/ssl` package exists and its tests pass, but
-  nothing in `src/main.go` ever calls `ListenAndServeTLS`, constructs a
-  `tls.Config`, or references the `ssl` package at all — `grep -n
-  "ssl\|tls\|TLS\|443"` on `main.go` returns nothing. The server only ever
-  binds plain HTTP (`srv.ListenAndServe()` at `src/main.go:277`). Read PART
-  for SSL/ACME (referenced in AUDIT.AI.md line 128) and wire single-domain
-  HTTP-01/on-disk-cert TLS serving into `main.go`; DNS-01 multi-provider
-  support is a separate, larger NEEDS DECISION item (credential storage
-  design, which provider(s) to support) and should stay out of this first
-  wiring pass. `src/scheduler/tasks.go`'s `sslRenewalTask()` also still
-  uses a hardcoded flat `{data_dir}/ssl/cert.pem` path inconsistent with
-  the tiered cert layout the `ssl` package now uses — needs updating in
-  the same pass.
-- **database.go config wiring gap**: `src/database/database.go`'s `Init()`
-  hardcodes the SQLite driver and derives both `server.db` and `users.db`
-  paths from the raw `dataDir` argument, ignoring
-  `cfg.Server.Database.Driver`/`cfg.Server.Database.URL` entirely (which
-  `config.go` already resolves from `DATABASE_DRIVER`/`DATABASE_URL`/
-  `DATABASE_DIR` env vars — those overrides are currently silently
-  dropped). Fixing this requires moving `config.Load()` ahead of
-  `database.Init()` in `main.go`'s startup sequence (currently `config.Load()`
-  runs at line 174, after `database.Init()` at line 165, after the
-  maintenance/update command early-exit branches) and deciding how a single
-  `database.url` config value maps onto the two-database (`server.db`/
-  `users.db`) layout — e.g. treat `DATABASE_URL`/`DATABASE_DIR` as
-  overriding the `db` directory rather than the `server.db` file path
-  directly. `DATABASE_DRIVER` has no second driver implementation to switch
-  to (`modernc.org/sqlite` is the only imported driver), so that override
-  should stay a no-op read for forward-compatibility, not be wired to fake
-  multi-driver support.
+- **SSL/TLS wiring gap** — FIXED (commit 3b28e987e6b6): `main.go` now
+  builds an `ssl.Manager` from `cfg.Server.SSL`, resolves HTTP/HTTPS port(s)
+  per the PART 15 Port Configuration table, and starts HTTP-only,
+  HTTPS-only, or dual HTTP+HTTPS listeners with graceful shutdown for both.
+  `sslRenewalTask()` now resolves the tiered
+  `{config_dir}/ssl/letsencrypt/{fqdn}/fullchain.pem` path instead of the
+  old hardcoded flat path, and skips cleanly when no app-managed cert
+  exists yet. DNS-01 multi-provider support remains a separate, larger
+  NEEDS DECISION item (credential storage design, which provider(s) to
+  support) and was intentionally left out of this pass.
+- **database.go config wiring gap** — FIXED: `src/database/database.go`'s
+  `Init()` previously hardcoded `filepath.Join(dataDir, "db")`, silently
+  ignoring the `DATABASE_DIR` env var documented in AI.md PART 4's
+  Environment Variables table. Added `paths.GetDatabaseDir(dataDir)`
+  (`src/paths/paths.go`), which returns `DATABASE_DIR` when set, else falls
+  back to the previous `{dataDir}/db` behavior unchanged — so it does not
+  alter behavior for the common case and does not disturb the many tests
+  that call `database.Init()` with an explicit temp dir. `Init()` now calls
+  this helper instead of joining the path directly. Reordering
+  `config.Load()` ahead of `database.Init()` in `main.go` was considered but
+  rejected: `GetDatabaseDir` reads the env var directly (matching the CLI
+  flag > env var > default priority table, which lists no CLI flag for the
+  database dir), so no config-load reordering is needed. `DATABASE_URL` and
+  `DATABASE_DRIVER` remain unwired — both only make sense for a remote
+  libsql/Turso driver, and no such driver is imported (`modernc.org/sqlite`
+  is the only one); wiring them now would either be a no-op or misleading.
+  Revisit if/when libsql/Turso support is added.
 - **main.go color/comment cleanup**: `colorEnabled` is not threaded through
   every `fmt.Printf`'s hardcoded emoji output, and there is no `output.color`
   config-file override wired (only the `--color` CLI flag exists). Re-check

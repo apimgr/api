@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/apimgr/api/src/paths"
 	_ "modernc.org/sqlite"
 )
 
@@ -22,8 +23,10 @@ var (
 // - server.db: Server state (config, sessions, rate limits, audit, scheduler)
 // - users.db: User data (admins, users)
 func Init(dataDir string) error {
-	// Ensure database directory exists
-	dbDir := filepath.Join(dataDir, "db")
+	// Ensure database directory exists. Honors the DATABASE_DIR env var per
+	// AI.md PART 4 (Environment Variables table), else falls back to
+	// {dataDir}/db.
+	dbDir := paths.GetDatabaseDir(dataDir)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return fmt.Errorf("failed to create database directory: %w", err)
 	}

@@ -84,6 +84,17 @@ func LogDir() string {
 	return logs
 }
 
+// GetDatabaseDir returns the SQLite database directory: DATABASE_DIR env var
+// if set, else {data_dir}/db. dataDir is already container-aware (see
+// GetDefaultDirs), so no separate container branch is needed here — doing
+// so would ignore an explicitly passed dataDir (e.g. in tests).
+func GetDatabaseDir(dataDir string) string {
+	if envValue := os.Getenv("DATABASE_DIR"); envValue != "" {
+		return envValue
+	}
+	return filepath.Join(dataDir, "db")
+}
+
 // InitCache sets the cache directory override (from --cache flag)
 func InitCache(cache string) {
 	if cache != "" {
