@@ -907,7 +907,7 @@ The `release` job already has `contents: write` to push assets — this covers t
 --status                     # Show status and health (exit 0=healthy, 1=unhealthy)
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
---maintenance {backup,restore,update,mode,setup,pgp,token,data,compliance,--help} [optional-file-or-setting-or-action]
+--maintenance {backup,restore,update,mode,setup,pgp,secret,token,data,compliance,--help} [optional-file-or-setting-or-action]
 --update [check|yes|branch {stable|beta|daily}]
 ```
 
@@ -8107,6 +8107,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 | `--maintenance setup` | 🔐 Auth | Only first-run OR root | N/A |
 | `--maintenance mode` | 🔐 Auth | Requires `server.token` OR root | N/A |
 | `--maintenance pgp <action>` | 🔐 Auth | Requires `server.token` OR root | N/A |
+| `--maintenance secret rotate <name>` | 🔐 Auth | Requires `server.token` OR root | N/A |
 | (normal start) | ❌ No | Adapts paths to current user | N/A |
 
 **Key insight:** After service install, the `{project_name}` user owns all data directories. However, sensitive operations require AUTHORIZATION, not just file access.
@@ -8121,6 +8122,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 | `--maintenance restore` | Overwrites ALL data | `server.token` OR root OR empty database |
 | `--maintenance mode` | Changes server behavior | `server.token` OR root |
 | `--maintenance pgp export private` / `import` / `delete` | Exposes, replaces, or destroys the security private key | `server.token` OR root + typed confirmation |
+| `--maintenance secret rotate installation_secret` / `encryption_key` | Rotates a root secret or the at-rest encryption key | `server.token` OR root + typed confirmation |
 
 **Setup authorization flow:**
 
@@ -10195,7 +10197,7 @@ NO_COLOR=1 {project_name} --status | grep -E '✅|❌|⚠️|🚀'
 --color {auto|yes|no}
 # Language for output (default: auto, from LANG env)
 --lang {code}
---maintenance {backup,restore,update,mode,setup,pgp,token,data,compliance,--help} [optional-file-or-setting-or-action]
+--maintenance {backup,restore,update,mode,setup,pgp,secret,token,data,compliance,--help} [optional-file-or-setting-or-action]
 # Check/perform updates
 --update [check|yes|branch {stable|beta|daily}|--help]
 # Shell integration
@@ -13865,7 +13867,7 @@ The root secret all other derived material hangs off. Without it, in-flight HMAC
 | Generated | First start. Stored in `server.db` row `app_secrets.installation_secret`, base64-encoded. |
 | Scope | Server-wide. Generated on first start and persisted to `server.db`. NEVER appears in a request, response, or log. |
 | Used by | `{security_id}` HMAC (PART 11 → "Security Reports"); PGP private-key KDF (PART 11 → "GPG Keypair Management"); future derived material (cookie signing salts, etc.). |
-| Rotation | Manual via CLI command or config file. Sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt for the operator token, log to `audit.log` as `security.installation_secret_rotated`. Rotation re-encrypts the PGP private key and re-bases all live HMACs. The previous secret is kept for 7 days to validate any in-flight `{security_id}` URLs that referenced it. |
+| Rotation | Manual via `--maintenance secret rotate installation_secret` (PART 5 → "Secret Rotation"). Sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt for the operator token, log to `audit.log` as `security.installation_secret_rotated`. Rotation re-encrypts the PGP private key and re-bases all live HMACs. The previous secret is kept for 7 days to validate any in-flight `{security_id}` URLs that referenced it. |
 | Backup | Always — see PART 21 → "Backup Contents". Required for any restore: without it, the PGP private key in the backup is undecryptable. |
 | Loss = catastrophic | Lost = cannot decrypt PGP private key (and therefore cannot decrypt in-flight encrypted security reports); cannot validate `{security_id}` URLs on existing security.txt copies until the file regenerates. Recovery requires the operator to: regenerate keypair, regenerate `installation_secret`, accept that all in-flight encrypted reports are unreadable. |
 
@@ -13880,7 +13882,16 @@ The root secret all other derived material hangs off. Without it, in-flight HMAC
 
 | Key | Length | Storage | Purpose | Rotation |
 |-----|--------|---------|---------|----------|
-| `server.security.encryption_key` | 32 bytes (AES-256-GCM) | `server.yml` (auto-generated on first run) | At-rest encryption for ALL sensitive server data: API token hashes, security report bodies (used as the AES fallback when no PGP keypair exists, see PART 11 → "Security Reports"), and any future at-rest encrypted data. | Manual via API (sensitive-op flow). 30-day grace for in-flight encrypted data. |
+| `server.security.encryption_key` | 32 bytes (AES-256-GCM) | `server.yml` (auto-generated on first run) | At-rest encryption for ALL sensitive server data: API token hashes, security report bodies (used as the AES fallback when no PGP keypair exists, see PART 11 → "Security Reports"), and any future at-rest encrypted data. | Manual via `--maintenance secret rotate encryption_key` (PART 5 → "Secret Rotation"). Sensitive-operation flow (PART 5 → "Sensitive Operations"): re-prompt for the operator token, log to `audit.log` as `security.encryption_key_rotated`. 30-day grace for in-flight encrypted data. |
+
+### Secret Rotation (`--maintenance secret` / `server.token`)
+
+**There is no web UI and no admin API route for secret rotation. All actions run through the existing `--maintenance` dispatcher (PART 5): `{project_name} --maintenance secret rotate <name>`, authorized like other sensitive operations (`server.token` OR root). This reuses an existing PART 8 flag — no new flag is added.** Only `installation_secret` and `encryption_key` support manual rotation; `cookie_signing_key` and `csrf_token_secret` are auto-rotated only (see "Other Project-Level Secrets" above) and are rejected as `<name>` values.
+
+| Action | Command | Effect |
+|--------|---------|--------|
+| **Rotate installation_secret** | `--maintenance secret rotate installation_secret` | Sensitive-operation flow: re-prompt for the operator token, log to `audit.log` as `security.installation_secret_rotated`. Generates a new 32-byte secret, re-encrypts the PGP private key, and re-bases all live HMACs. Previous secret kept 7 days to validate in-flight `{security_id}` URLs. |
+| **Rotate encryption_key** | `--maintenance secret rotate encryption_key` | Sensitive-operation flow: re-prompt for the operator token, log to `audit.log` as `security.encryption_key_rotated`. Generates a new AES-256-GCM key in `server.yml`, re-encrypts all at-rest data (API token hashes, security report bodies) under the new key. Previous key kept 30 days to decrypt any data not yet re-encrypted. |
 
 **Note on consolidation:** `server.security.encryption_key` is the canonical at-rest AES key — every place the spec talks about "encrypt this sensitive data at rest" resolves to this one key, including security report bodies. It is NOT duplicated in `app_secrets`. The three `app_secrets` rows above are HMAC keys (not AES) and a root-secret for HMAC derivation; they are stored in the DB rather than `server.yml` because they have independent rotation lifecycles.
 
@@ -14985,17 +14996,29 @@ server:
 | `security.rate_limit_exceeded` | Rate limit hit | IP, endpoint, limit |
 | `security.ip_blocked` | IP address blocked | IP, reason, duration |
 | `security.ip_unblocked` | IP address unblocked | IP, reason |
+| `security.ip_allowlisted` | IP/CIDR added to allowlist | CIDR, description |
+| `security.ip_allowlist_removed` | IP/CIDR removed from allowlist | CIDR |
 | `security.country_blocked` | Request blocked by GeoIP signal | IP, country code |
 | `security.suspicious_activity` | Unusual activity detected | IP, activity type, details |
+| `security.installation_secret_rotated` | Installation secret rotated | IP, operator reason |
+| `security.encryption_key_rotated` | At-rest encryption key rotated | IP, operator reason |
+| `security.csp_violation` | CSP violation report received | IP, blocked-uri, violated-directive |
+| `security.security_id_invalid` | Invalid/expired security.txt id used | IP, user-agent, supplied id |
+| `security.report_received` | Security vulnerability report received | tracking_id, severity, sanitized affected-component |
+| `security.private_key_exported` | PGP private key exported | Operator IP, reason |
+| `security.csrf_failure` | CSRF token validation failed | IP, endpoint, reason |
 
 ### Backup & System Events
 
 | Event | Description | Logged Data |
 |-------|-------------|-------------|
-| `backup.created` | Backup created | Filename, size |
+| `backup.created` | Backup created and verified | Filename, size, encrypted, verification status |
 | `backup.restored` | Backup restored | Filename |
 | `backup.deleted` | Backup deleted | Filename |
 | `backup.failed` | Backup failed | Error message |
+| `backup.retention_cleanup` | Old backups deleted | Deleted files, reason, remaining count |
+| `backup.verification_failed` | Backup verification failed | Filename, check that failed |
+| `backup.daily_updated` | Daily incremental updated | Filename, changes since last |
 | `backup.skipped_disk_full` | Backup skipped — insufficient free space or disk above threshold | Free space, disk usage %, threshold |
 | `server.started` | Application started | Version, mode |
 | `server.stopped` | Application stopped | Reason, uptime |
@@ -16072,7 +16095,7 @@ Every outbound webhook POST includes these headers so the receiver can verify th
 | `X-Webhook-Signature` | `sha256=<hex_hmac>` where `hmac = HMAC-SHA256(per_webhook_secret, request_body_bytes)`. The `per_webhook_secret` is auto-generated when the webhook URL is first saved (random 32 bytes, persisted in `server.yml` next to the URL as `webhooks.<name>_secret`) and returned ONCE in the API response for the operator to configure on the receiving end. |
 | `X-Webhook-Timestamp` | Unix seconds — receiver SHOULD reject if delta exceeds `±5 min` to prevent replay |
 | `X-Webhook-ID` | UUID v7 (PART 11) — idempotency key the receiver can use to deduplicate retries |
-| `X-Webhook-Event` | The event type (e.g., `security.report_received`, `admin.backup_failed`) |
+| `X-Webhook-Event` | The event type (e.g., `security.report_received`, `backup.failed`) |
 | `User-Agent` | `{project_name}/{project_version} (+{app_url})` |
 
 The signature applies to **all** transports — even built-in adapters (Telegram, Discord, Slack) get an `X-Webhook-Signature` header in the unlikely case their endpoint is forwarded somewhere that wants to verify origin. Adapters that the target service doesn't read (Telegram doesn't care about the header) ignore it harmlessly.
@@ -26514,6 +26537,8 @@ server:
 | `ssl_renewed` | Certificate renewed successfully | ✗ |
 | `ssl_renewal_failed` | Certificate renewal failure | ✗ |
 | `scheduler_error` | Scheduled task failed | ✗ |
+| `update_available` | New eligible release detected (`update_check` task) | ✗ |
+| `update_installed` | Self-update completed (`auto_install: true`) | ✗ |
 | `test` | Test email | ✗ |
 
 ## Sane Defaults
@@ -26529,6 +26554,8 @@ server:
 | `ssl_renewed` | `SSL Certificate Renewed - {app_name}` | Confirmation of renewal |
 | `ssl_renewal_failed` | `SSL Renewal Failed - {app_name}` | Includes domain, error, days until expiry, next retry |
 | `scheduler_error` | `Scheduled Task Failed - {app_name}` | Includes task name and error |
+| `update_available` | `Update Available - {app_name}` | Includes current version, new version, and channel |
+| `update_installed` | `Update Installed - {app_name}` | Includes previous version and new version |
 | `test` | `Test Email - {app_name}` | Simple test message |
 
 **Default Sender:**
@@ -29156,6 +29183,9 @@ Every backup is verified **immediately after creation** - backups must be 100% w
 | Event | Description | Logged Data |
 |-------|-------------|-------------|
 | `backup.created` | Backup created and verified | Filename, size, encrypted, verification status |
+| `backup.restored` | Backup restored | Filename |
+| `backup.deleted` | Backup deleted | Filename |
+| `backup.failed` | Backup failed | Error message |
 | `backup.retention_cleanup` | Old backups deleted | Deleted files, reason, remaining count |
 | `backup.verification_failed` | Backup verification failed | Filename, check that failed |
 | `backup.daily_updated` | Daily incremental updated | Filename, changes since last |
