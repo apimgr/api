@@ -2771,6 +2771,82 @@ func apiResearchExtractHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "citation/reference extraction from unstructured text is not implemented; only formatting of caller-supplied citation fields is supported", nil)
 }
 
+// apiResearchArxivHandler reports that arXiv paper lookup is not supported.
+// IDEA.md's declared Research scope covers only citation formatting,
+// bibliography generation, and DOI formatting/validation; an arXiv search
+// integration is a new outbound-call family outside IDEA.md's declared
+// trust boundary (OSINT and weather tool families only).
+func apiResearchArxivHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "arXiv paper lookup requires a new outbound integration outside this project's declared OSINT/weather trust boundary; not supported", nil)
+}
+
+// apiResearchBibtexHandler reports that BibTeX parsing/formatting is not
+// supported. IDEA.md's declared Research scope covers only citation
+// formatting (APA/MLA/Chicago), bibliography generation, and DOI
+// formatting/validation — BibTeX is a distinct format not named in scope.
+func apiResearchBibtexHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "BibTeX parsing/formatting is outside this project's declared Research scope (citation formatting, bibliography generation, DOI only); not supported", nil)
+}
+
+// apiResearchFootnotesHandler reports that footnote/endnote formatting is
+// not supported. Not named in IDEA.md's declared Research scope.
+func apiResearchFootnotesHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "footnote/endnote formatting is outside this project's declared Research scope (citation formatting, bibliography generation, DOI only); not supported", nil)
+}
+
+// apiResearchIsbnHandler reports that ISBN-to-book-info lookup is not
+// supported. It would require a new outbound integration outside IDEA.md's
+// declared trust boundary (OSINT and weather tool families only).
+func apiResearchIsbnHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "ISBN-to-book-info lookup requires a new outbound integration outside this project's declared OSINT/weather trust boundary; not supported", nil)
+}
+
+// apiResearchMetadataHandler reports that web-page metadata extraction is
+// not supported. Not named in IDEA.md's declared Research scope, and
+// fetching a caller-supplied URL would add a new outbound-call family
+// outside IDEA.md's declared OSINT/weather trust boundary.
+func apiResearchMetadataHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "web-page metadata extraction is outside this project's declared Research scope and would require fetching caller-supplied URLs outside the declared OSINT/weather trust boundary; not supported", nil)
+}
+
+// apiResearchOutlineHandler reports that document outline generation is not
+// supported. Not named in IDEA.md's declared Research scope; heading
+// extraction from Markdown is already covered by parse/markdown.
+func apiResearchOutlineHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "document outline generation is outside this project's declared Research scope; see parse/markdown for heading extraction from Markdown", nil)
+}
+
+// apiResearchPdfExtractHandler reports that PDF text extraction is not
+// supported. It would require a new third-party PDF-parsing dependency,
+// and is not named in IDEA.md's declared Research scope.
+func apiResearchPdfExtractHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "PDF text extraction requires a new third-party dependency and is outside this project's declared Research scope; not supported", nil)
+}
+
+// apiResearchReadabilityHandler reports that reader-mode article extraction
+// is not supported. Not named in IDEA.md's declared Research scope, and
+// fetching a caller-supplied URL would add a new outbound-call family
+// outside IDEA.md's declared OSINT/weather trust boundary.
+func apiResearchReadabilityHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "reader-mode article extraction is outside this project's declared Research scope and would require fetching caller-supplied URLs outside the declared OSINT/weather trust boundary; not supported", nil)
+}
+
+// apiResearchScraperHandler reports that general web scraping is not
+// supported. It would require fetching arbitrary caller-supplied URLs, a
+// broad SSRF surface outside IDEA.md's declared OSINT/weather trust
+// boundary and its narrow, mitigated outbound-call mechanisms.
+func apiResearchScraperHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "general-purpose web scraping requires fetching arbitrary caller-supplied URLs, outside this project's declared OSINT/weather trust boundary; not supported", nil)
+}
+
+// apiResearchSummarizeHandler reports that text summarization is not
+// supported. A genuine summarizer needs an external/keyed NLP or LLM
+// service, which IDEA.md excludes ("every outbound integration must be
+// free and keyless"); it is not named in IDEA.md's declared Research scope.
+func apiResearchSummarizeHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "text summarization would require an external or keyed NLP/LLM service, which this project's free/keyless integration policy excludes; not supported", nil)
+}
+
 // apiFunJokeHandler composes the existing joke-category selector with a
 // fortune-cookie string, since no dedicated joke-text corpus exists
 // anywhere in src/service/fun (RandomJokeType only returns a category

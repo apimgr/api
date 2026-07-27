@@ -2011,6 +2011,39 @@ func TestAPIResearchExtractHandler(t *testing.T) {
 	assert.Equal(t, "NOT_SUPPORTED", env["error"])
 }
 
+// The remaining research sub-tools (arxiv, bibtex, footnotes, isbn,
+// metadata, outline, pdf-extract, readability, scraper, summarize) are
+// permanent gaps per TODO.AI.md's "Known permanent API gaps" section: none
+// are named in IDEA.md's declared Research scope, and several would add a
+// new outbound-call family or third-party dependency outside this
+// project's declared trust boundary. Each must 501 NOT_SUPPORTED.
+func TestAPIResearchGapHandlers(t *testing.T) {
+	handlers := map[string]http.HandlerFunc{
+		"arxiv":       apiResearchArxivHandler,
+		"bibtex":      apiResearchBibtexHandler,
+		"footnotes":   apiResearchFootnotesHandler,
+		"isbn":        apiResearchIsbnHandler,
+		"metadata":    apiResearchMetadataHandler,
+		"outline":     apiResearchOutlineHandler,
+		"pdf-extract": apiResearchPdfExtractHandler,
+		"readability": apiResearchReadabilityHandler,
+		"scraper":     apiResearchScraperHandler,
+		"summarize":   apiResearchSummarizeHandler,
+	}
+	for tool, handler := range handlers {
+		t.Run(tool, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/research/"+tool, nil)
+			w := httptest.NewRecorder()
+
+			handler(w, req)
+
+			assert.Equal(t, http.StatusNotImplemented, w.Code)
+			env := decodeEnvelope(t, w.Body.Bytes())
+			assert.Equal(t, "NOT_SUPPORTED", env["error"])
+		})
+	}
+}
+
 // apiResearchCitationHandler must 400 MISSING_FIELDS when title/author are
 // absent, default to APA style when none is given, and honor an explicit
 // style.

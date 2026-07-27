@@ -484,6 +484,16 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/citation", apiResearchCitationHandler)
 			r.Get("/doi/*", apiResearchDOIHandler)
 			r.Post("/extract", apiResearchExtractHandler)
+			r.Post("/arxiv", apiResearchArxivHandler)
+			r.Post("/bibtex", apiResearchBibtexHandler)
+			r.Post("/footnotes", apiResearchFootnotesHandler)
+			r.Post("/isbn", apiResearchIsbnHandler)
+			r.Post("/metadata", apiResearchMetadataHandler)
+			r.Post("/outline", apiResearchOutlineHandler)
+			r.Post("/pdf-extract", apiResearchPdfExtractHandler)
+			r.Post("/readability", apiResearchReadabilityHandler)
+			r.Post("/scraper", apiResearchScraperHandler)
+			r.Post("/summarize", apiResearchSummarizeHandler)
 		})
 
 		// Fun & Content

@@ -351,7 +351,29 @@ and independently re-run in `casjaysdev/go:latest` (gofmt/build/vet/
 staticcheck/test all clean, caches mounted outside the project tree).
 The MISSING parse line is now fully resolved.
 
-## [ ] MISSING sub-tools needing net-new backend service work (42 linked, unwired)
+## [x] research (0, +10 newly-gapped arxiv/bibtex/footnotes/isbn/metadata/outline/pdf-extract/readability/scraper/summarize)
+User confirmed (2026-07-26, AskUserQuestion): none of the 10 research
+sub-tools trace to IDEA.md's declared Research scope (line 40: citation
+formatting, bibliography generation, DOI formatting/validation only).
+bibtex, footnotes, and outline are pure-stdlib/no-network but still
+unnamed in scope; arxiv, isbn, metadata, readability, and scraper would
+each add a new outbound-call family beyond IDEA.md:94's declared
+OSINT/weather-only trust boundary; pdf-extract needs a new third-party
+dependency to parse untrusted binaries; summarize would need either an
+external/keyed NLP/LLM service (excluded by IDEA.md:55's free/keyless
+integration policy) or a low-value stdlib heuristic. Decision: mark all
+10 as permanent gaps rather than amend IDEA.md's scope. All 10 got
+`apiResearch*Handler`s in `src/server/api_utils.go` returning 501
+NOT_SUPPORTED with a doc comment citing the specific IDEA.md line, routes
+in `src/server/server.go`, and a single table-driven test
+(`TestAPIResearchGapHandlers`) in `src/server/api_utils_test.go`
+confirming each returns NOT_SUPPORTED. No toolPages() entry or frontend
+template was added — matching the existing osint/breach-family gap
+precedent, the pre-existing `research.tmpl` nav cards for these 10 tools
+remain as documented dead links. Verified independently with a
+`casjaysdev/go:latest` gofmt/build/vet/staticcheck/test run.
+
+## [ ] MISSING sub-tools needing net-new backend service work (32 linked, unwired)
 Read: src/server/template/page/{category}.tmpl for the exact linked path,
 src/service/{category}/ for whatever backend already exists in that area
 None of these have a corresponding template under
@@ -360,8 +382,6 @@ it needs a brand-new service method, a new third-party dependency, or is
 out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
 One commit per tool or small logical group when picked up.
 
-- research (10): arxiv, bibtex, footnotes, isbn, metadata, outline,
-  pdf-extract, readability, scraper, summarize
 - testing (9): api-client, curl-generator, load-test, mock-server,
   postman, request-inspector, response-generator, status-codes, webhook
   (mock-server needs a genuinely new configurable dynamic-response
@@ -384,11 +404,16 @@ Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,
 apiLanguageDictionaryHandler, apiLanguageGrammarHandler,
 apiLanguageSpellCheckHandler, apiLanguageThesaurusHandler,
 apiLanguageTranslateHandler, apiResearchExtractHandler,
+apiResearchArxivHandler, apiResearchBibtexHandler,
+apiResearchFootnotesHandler, apiResearchIsbnHandler,
+apiResearchMetadataHandler, apiResearchOutlineHandler,
+apiResearchPdfExtractHandler, apiResearchReadabilityHandler,
+apiResearchScraperHandler, apiResearchSummarizeHandler,
 apiOsintBreachHandler, apiOsintCompanyHandler, apiOsintMetadataHandler,
 apiOsintPhoneHandler, apiOsintSocialHandler, apiOsintUsernameHandler doc
 comments), src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
-Fifteen of the wired API routes honestly return 501 NOT_SUPPORTED rather
-than inventing behavior: generate/qr (no QR encoder exists anywhere in the
+Twenty-five of the wired API routes honestly return 501 NOT_SUPPORTED
+rather than inventing behavior: generate/qr (no QR encoder exists anywhere in the
 codebase or go.mod), language/detect (conflicts with IDEA.md's declared
 non-goal of language auto-detection), language/dictionary,
 language/grammar, language/spell-check, and language/thesaurus (each
@@ -410,12 +435,26 @@ DNS/TLS cert), osint/phone (phone-number intelligence requires a
 commercial keyed API — validate/phone already covers format validation),
 and osint/social and osint/username (cross-platform profile/username
 discovery would require probing dozens of third-party platforms rather
-than a single user-named target). Resolving these requires a user/spec
+than a single user-named target), and the ten research gaps —
+research/bibtex, research/footnotes, and research/outline (none named in
+IDEA.md's declared Research scope of citation formatting/bibliography/
+DOI), research/arxiv, research/isbn, research/metadata, research/
+readability, and research/scraper (each would add a new outbound-call
+family beyond IDEA.md's declared OSINT/weather-only trust boundary),
+research/pdf-extract (needs a new third-party dependency to parse
+untrusted binaries), and research/summarize (a genuine summarizer would
+need an external/keyed NLP/LLM service, excluded by IDEA.md's free/
+keyless integration policy). Resolving these requires a user/spec
 decision — either add a QR-encoding dependency, confirm language/detect
 and the four other language gaps should stay unsupported per IDEA.md,
 scope what "extraction" means for research/extract, decide whether
 network/traceroute should ship as a root-only opt-in feature instead of
-a permanent gap, or decide whether any of the six osint gaps should be
-promoted to a keyed-API-optional feature — not further code guessing.
-None of the fifteen gap routes have a `toolPages()` entry or frontend
-template (API-only, no dead frontend link to a page that doesn't exist).
+a permanent gap, decide whether any of the six osint gaps should be
+promoted to a keyed-API-optional feature, or decide whether any of the
+ten research gaps should be promoted by amending IDEA.md's Research
+scope — not further code guessing.
+None of the twenty-five gap routes have a `toolPages()` entry or
+dedicated frontend page template; osint's six and research's ten still
+have pre-existing nav cards on their category listing page linking to a
+per-tool page that returns 404 (documented dead links, not newly added
+here).
