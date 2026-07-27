@@ -624,16 +624,46 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   `/api/{api_version}/server/reports/{default,csp}`, but no handler for
   those paths exists anywhere in the tree — either implement the PART 11
   Reporting API receiving endpoints or stop emitting headers that point at
-  a 404. PARTIALLY FIXED: added `src/server/reports.go` with a generic
+  a 404. FIXED: added `src/server/reports.go` with a generic
   `POST /api/v1/server/reports/{name}` handler (registered in
   `src/server/server.go`) covering `default`/`csp`/`nel`/any future report
   name per PART 11's "all report endpoints share the same rules" — caps the
   body at 64KB, validates content type, logs an allowlisted field set via
   the existing `Logger.LogSecurity`, always responds 204 (log-don't-reject).
-  Still open: config-driven per-project header tightening
-  (`web.headers`/`web.csp`/`web.permissions_policy`) is not wired into
-  `config.go`/`server.yml` yet — `securityHeadersMiddleware` remains fully
-  hardcoded.
+  Config-driven per-project header tightening
+  (`web.headers`/`web.csp`/`web.permissions_policy`) is now wired into
+  `config.go`/`server.yml`: `securityHeadersMiddleware` in
+  `src/server/middleware.go` is fully config-driven off
+  `cfg.Web.CSP`/`cfg.Web.Headers`/`cfg.Web.PermissionsPolicy` (CSP directive
+  extra/override per-source, dev-mode report-only auto-degrade, HSTS,
+  Permissions-Policy, cross-origin isolation headers, Sec-GPC/DNT opt-out
+  logging), with `config.DefaultConfig()` exported for callers/tests.
+  Deferred to separate follow-up items below (out of scope for this pass):
+  CSP `connect-src`/`frame-ancestors`/`form-action` auto-detection from
+  DOMAIN/reverse-proxy hosts, `Sec-Fetch-*` request validation, Clear-Site-
+  Data emission, Server-Timing, and the IDEA.md → Header Tightening
+  Auto-Map first-run pre-fill.
+
+## [ ] Security-header follow-ups deferred from config-header wiring pass
+- **CSP source auto-detection**: `connect-src`/`frame-ancestors`/
+  `form-action` are static `'self'` plus `cfg.Web.CSP.*Extra`/`*Override`
+  only — no CORS-origin-resolution system exists yet to reuse for
+  DOMAIN-env/reverse-proxy-detected host auto-inclusion. Needs a design
+  decision on where that origin-resolution logic should live before
+  implementing.
+- **`Sec-Fetch-*` request validation**: `cfg.Web.Headers.SecFetchValidation`
+  config field exists but is unused/unwired — this is inbound
+  request-rejection logic and belongs in its own middleware (runs before
+  handlers, not in the response-header-emission `securityHeadersMiddleware`).
+- **Clear-Site-Data**: `cfg.Web.Headers.ClearSiteData.*` config fields exist
+  but are unused — no token-revocation/consent-withdrawal endpoints exist
+  in this IDEA.md-scoped project (no accounts/sessions/admin panel) to emit
+  it from. Reserved for future use if such an endpoint is ever added.
+- **Server-Timing**: debug-mode-only per AI.md PART 11 — no per-request
+  timing instrumentation exists yet to source values from.
+- **IDEA.md → Header Tightening Auto-Map**: first-run pre-fill of
+  `web.headers`/`web.csp` tightened values based on IDEA.md declared
+  compliance flags — not started.
 
 ## [x] Revert `.github/workflows/ci.yml` lint job to `casjaysdev/go:latest`
 FIXED: `docker run --rm --name ... --entrypoint sh casjaysdev/go:latest -c
