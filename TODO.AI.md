@@ -442,12 +442,13 @@ MeteoAlarm endpoints).
 This was the last entry under "MISSING sub-tools needing net-new backend
 service work" — that heading is now fully closed and removed.
 
-## [ ] Known template bugs (tracked, not yet fixed)
-- `network.tmpl` links `/network/useragent` but the wired API/frontend path
-  is `/network/user-agent` — fix the link, do not add a second route.
-- `docker/version.tmpl`'s form has no `image` input field even though
-  `apiDockerVersionHandler` requires `?image=` — form submits with a
-  missing required param.
+## [x] Known template bugs — CLOSED
+- `network.tmpl` linked `/network/useragent` but the wired API/frontend path
+  is `/network/user-agent` — fixed the link to `/network/user-agent`.
+- `docker/version.tmpl`'s form had no `image` input field even though
+  `apiDockerVersionHandler` requires `?image=` — added a required `image`
+  text input, matching the `generate/license.tmpl` query-string form
+  precedent (`data-template="...?image={image}"`).
 
 ## [ ] Known permanent API gaps needing a future spec/dependency decision
 Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,

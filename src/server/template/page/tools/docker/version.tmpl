@@ -17,7 +17,12 @@
         Look up the latest available Docker Engine version information.
       </p>
 
-      <form id="version-form" class="tool-form" data-template="/api/v1/docker/version">
+      <form id="version-form" class="tool-form" data-template="/api/v1/docker/version?image={image}">
+        <div class="form-group">
+          <label class="form-label">Image</label>
+          <input type="text" name="image" class="form-input" required placeholder="nginx:1.25-alpine">
+        </div>
+
         <button type="submit" class="btn btn-primary">Check Version</button>
       </form>
 
@@ -31,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/docker/version</pre>
+            <pre>curl "{{.BaseURL}}/api/v1/docker/version?image=nginx:1.25-alpine"</pre>
           </div>
         </div>
       </div>
