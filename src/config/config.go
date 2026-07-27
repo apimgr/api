@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -234,10 +235,165 @@ type UserLimitsConfig struct {
 
 // WebConfig holds web-related settings
 type WebConfig struct {
-	UI       UIConfig       `yaml:"ui"`
-	Robots   RobotsConfig   `yaml:"robots"`
-	Security SecurityConfig `yaml:"security"`
-	CORS     string         `yaml:"cors"`
+	UI                UIConfig                `yaml:"ui"`
+	Robots            RobotsConfig            `yaml:"robots"`
+	Security          SecurityConfig          `yaml:"security"`
+	CORS              string                  `yaml:"cors"`
+	HSTS              HSTSConfig              `yaml:"hsts"`
+	PermissionsPolicy PermissionsPolicyConfig `yaml:"permissions_policy"`
+	Reports           WebReportsConfig        `yaml:"reports"`
+	CSP               CSPConfig               `yaml:"csp"`
+	Headers           WebHeadersConfig        `yaml:"headers"`
+}
+
+// HSTSConfig holds Strict-Transport-Security header settings (AI.md PART 11
+// "Security Headers"); only emitted when SSL is enabled.
+type HSTSConfig struct {
+	Enabled           bool `yaml:"enabled"`
+	MaxAgeSeconds     int  `yaml:"max_age_seconds"`
+	IncludeSubdomains bool `yaml:"include_subdomains"`
+	Preload           bool `yaml:"preload"`
+}
+
+// PermissionsPolicyConfig holds the per-feature Permissions-Policy allowlist
+// (AI.md PART 11 "Permissions-Policy Configuration"); each value is the raw
+// allowlist token (e.g. "()", "(self)") joined into the header.
+type PermissionsPolicyConfig struct {
+	Accelerometer           string `yaml:"accelerometer"`
+	AmbientLightSensor      string `yaml:"ambient-light-sensor"`
+	Battery                 string `yaml:"battery"`
+	Camera                  string `yaml:"camera"`
+	DisplayCapture          string `yaml:"display-capture"`
+	Geolocation             string `yaml:"geolocation"`
+	Gyroscope               string `yaml:"gyroscope"`
+	HID                     string `yaml:"hid"`
+	IdleDetection           string `yaml:"idle-detection"`
+	Magnetometer            string `yaml:"magnetometer"`
+	Microphone              string `yaml:"microphone"`
+	MIDI                    string `yaml:"midi"`
+	ScreenWakeLock          string `yaml:"screen-wake-lock"`
+	Serial                  string `yaml:"serial"`
+	USB                     string `yaml:"usb"`
+	XRSpatialTracking       string `yaml:"xr-spatial-tracking"`
+	AttributionReporting    string `yaml:"attribution-reporting"`
+	BrowsingTopics          string `yaml:"browsing-topics"`
+	InterestCohort          string `yaml:"interest-cohort"`
+	Autoplay                string `yaml:"autoplay"`
+	EncryptedMedia          string `yaml:"encrypted-media"`
+	Fullscreen              string `yaml:"fullscreen"`
+	Payment                 string `yaml:"payment"`
+	PictureInPicture        string `yaml:"picture-in-picture"`
+	PublicKeyCredentialsGet string `yaml:"publickey-credentials-get"`
+	StorageAccess           string `yaml:"storage-access"`
+	WebShare                string `yaml:"web-share"`
+}
+
+// Header returns the Permissions-Policy header value built from every
+// non-empty feature, in the fixed spec order, so output is deterministic
+// across restarts (a Go map would not be).
+func (p PermissionsPolicyConfig) Header() string {
+	pairs := []struct{ name, value string }{
+		{"accelerometer", p.Accelerometer},
+		{"ambient-light-sensor", p.AmbientLightSensor},
+		{"battery", p.Battery},
+		{"camera", p.Camera},
+		{"display-capture", p.DisplayCapture},
+		{"geolocation", p.Geolocation},
+		{"gyroscope", p.Gyroscope},
+		{"hid", p.HID},
+		{"idle-detection", p.IdleDetection},
+		{"magnetometer", p.Magnetometer},
+		{"microphone", p.Microphone},
+		{"midi", p.MIDI},
+		{"screen-wake-lock", p.ScreenWakeLock},
+		{"serial", p.Serial},
+		{"usb", p.USB},
+		{"xr-spatial-tracking", p.XRSpatialTracking},
+		{"attribution-reporting", p.AttributionReporting},
+		{"browsing-topics", p.BrowsingTopics},
+		{"interest-cohort", p.InterestCohort},
+		{"autoplay", p.Autoplay},
+		{"encrypted-media", p.EncryptedMedia},
+		{"fullscreen", p.Fullscreen},
+		{"payment", p.Payment},
+		{"picture-in-picture", p.PictureInPicture},
+		{"publickey-credentials-get", p.PublicKeyCredentialsGet},
+		{"storage-access", p.StorageAccess},
+		{"web-share", p.WebShare},
+	}
+	parts := make([]string, 0, len(pairs))
+	for _, pair := range pairs {
+		if pair.value == "" {
+			continue
+		}
+		parts = append(parts, pair.name+"="+pair.value)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// WebReportsConfig holds rate limits for the browser reporting endpoints
+// (AI.md PART 11 "Reporting API"), separate from the general API rate limits.
+type WebReportsConfig struct {
+	RateLimitPerMinute  int `yaml:"rate_limit_per_minute"`
+	RateLimitPerIPBurst int `yaml:"rate_limit_per_ip_burst"`
+}
+
+// CSPConfig holds Content-Security-Policy generation settings (AI.md PART 11
+// "Content Security Policy"). Each `*Extra` field appends to the built-in
+// default directive; each `*Override` field replaces it entirely.
+type CSPConfig struct {
+	Enabled            bool    `yaml:"enabled"`
+	Mode               string  `yaml:"mode"`
+	DefaultSrcOverride string  `yaml:"default_src_override"`
+	ScriptSrcExtra     string  `yaml:"script_src_extra"`
+	ScriptSrcOverride  string  `yaml:"script_src_override"`
+	StyleSrcExtra      string  `yaml:"style_src_extra"`
+	StyleSrcOverride   string  `yaml:"style_src_override"`
+	ImgSrcExtra        string  `yaml:"img_src_extra"`
+	ImgSrcOverride     string  `yaml:"img_src_override"`
+	FontSrcExtra       string  `yaml:"font_src_extra"`
+	FontSrcOverride    string  `yaml:"font_src_override"`
+	ConnectSrcExtra    string  `yaml:"connect_src_extra"`
+	ConnectSrcOverride string  `yaml:"connect_src_override"`
+	FrameSrcExtra      string  `yaml:"frame_src_extra"`
+	FrameSrcOverride   string  `yaml:"frame_src_override"`
+	FormActionExtra    string  `yaml:"form_action_extra"`
+	FormActionOverride string  `yaml:"form_action_override"`
+	ReportsEnabled     bool    `yaml:"reports_enabled"`
+	ReportsSampleRate  float64 `yaml:"reports_sample_rate"`
+}
+
+// WebHeadersConfig holds the remaining PART 11 response-header toggles not
+// covered by HSTSConfig/CSPConfig/PermissionsPolicyConfig.
+type WebHeadersConfig struct {
+	COOP                    string              `yaml:"coop"`
+	COEP                    string              `yaml:"coep"`
+	CORP                    string              `yaml:"corp"`
+	OriginAgentCluster      bool                `yaml:"origin_agent_cluster"`
+	CrossDomainPolicies     string              `yaml:"cross_domain_policies"`
+	DNSPrefetchControl      string              `yaml:"dns_prefetch_control"`
+	HonorSecGPC             bool                `yaml:"honor_sec_gpc"`
+	HonorDNT                bool                `yaml:"honor_dnt"`
+	SecFetchValidation      bool                `yaml:"sec_fetch_validation"`
+	ServerTimingInDebugOnly bool                `yaml:"server_timing_in_debug_only"`
+	ClearSiteData           ClearSiteDataConfig `yaml:"clear_site_data"`
+	NEL                     NELConfig           `yaml:"nel"`
+}
+
+// ClearSiteDataConfig controls when the Clear-Site-Data header is emitted
+// (AI.md PART 11 "Security Headers" — token revocation / consent withdrawal).
+type ClearSiteDataConfig struct {
+	OnTokenRevocation   bool `yaml:"on_token_revocation"`
+	OnConsentWithdrawal bool `yaml:"on_consent_withdrawal"`
+	ExecutionContexts   bool `yaml:"execution_contexts"`
+}
+
+// NELConfig holds Network Error Logging header settings.
+type NELConfig struct {
+	Enabled           bool    `yaml:"enabled"`
+	MaxAgeSeconds     int     `yaml:"max_age_seconds"`
+	IncludeSubdomains bool    `yaml:"include_subdomains"`
+	SampleRate        float64 `yaml:"sample_rate"`
 }
 
 // UIConfig holds UI settings
@@ -272,6 +428,13 @@ func generateRandomPort() string {
 	// Generate port between 64000-64999
 	port := 64000 + (int(bytes[0])<<8|int(bytes[1]))%1000
 	return string(rune('0'+port/10000)) + string(rune('0'+(port/1000)%10)) + string(rune('0'+(port/100)%10)) + string(rune('0'+(port/10)%10)) + string(rune('0'+port%10))
+}
+
+// DefaultConfig returns a fully populated default configuration. Exported
+// for tests and any other caller needing production defaults without going
+// through Load (e.g. security-headers middleware tests).
+func DefaultConfig() *Config {
+	return defaultConfig()
 }
 
 // defaultConfig returns the default configuration
@@ -433,6 +596,74 @@ func defaultConfig() *Config {
 				Expires: time.Now().AddDate(1, 0, 0),
 			},
 			CORS: "*",
+			HSTS: HSTSConfig{
+				Enabled:           true,
+				MaxAgeSeconds:     63072000,
+				IncludeSubdomains: true,
+				Preload:           true,
+			},
+			PermissionsPolicy: PermissionsPolicyConfig{
+				Accelerometer:           "()",
+				AmbientLightSensor:      "()",
+				Battery:                 "()",
+				Camera:                  "()",
+				DisplayCapture:          "()",
+				Geolocation:             "()",
+				Gyroscope:               "()",
+				HID:                     "()",
+				IdleDetection:           "()",
+				Magnetometer:            "()",
+				Microphone:              "()",
+				MIDI:                    "()",
+				ScreenWakeLock:          "()",
+				Serial:                  "()",
+				USB:                     "()",
+				XRSpatialTracking:       "()",
+				AttributionReporting:    "()",
+				BrowsingTopics:          "()",
+				InterestCohort:          "()",
+				Autoplay:                "(self)",
+				EncryptedMedia:          "(self)",
+				Fullscreen:              "(self)",
+				Payment:                 "(self)",
+				PictureInPicture:        "(self)",
+				PublicKeyCredentialsGet: "(self)",
+				StorageAccess:           "(self)",
+				WebShare:                "(self)",
+			},
+			Reports: WebReportsConfig{
+				RateLimitPerMinute:  60,
+				RateLimitPerIPBurst: 10,
+			},
+			CSP: CSPConfig{
+				Enabled:           true,
+				Mode:              "enforce",
+				ReportsEnabled:    true,
+				ReportsSampleRate: 1.0,
+			},
+			Headers: WebHeadersConfig{
+				COOP:                    "unsafe-none",
+				COEP:                    "unsafe-none",
+				CORP:                    "cross-origin",
+				OriginAgentCluster:      true,
+				CrossDomainPolicies:     "none",
+				DNSPrefetchControl:      "",
+				HonorSecGPC:             true,
+				HonorDNT:                false,
+				SecFetchValidation:      true,
+				ServerTimingInDebugOnly: true,
+				ClearSiteData: ClearSiteDataConfig{
+					OnTokenRevocation:   true,
+					OnConsentWithdrawal: true,
+					ExecutionContexts:   false,
+				},
+				NEL: NELConfig{
+					Enabled:           true,
+					MaxAgeSeconds:     2592000,
+					IncludeSubdomains: true,
+					SampleRate:        1.0,
+				},
+			},
 		},
 	}
 }

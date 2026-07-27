@@ -72,10 +72,11 @@ func TestRequestIDMiddleware_UniquePerRequest(t *testing.T) {
 	assert.NotEqual(t, id1, id2)
 }
 
-// newSecurityHeadersConfig builds the minimal config needed to exercise
-// securityHeadersMiddleware's SSL-dependent branches.
+// newSecurityHeadersConfig builds a production-default config (so CSP,
+// HSTS, Permissions-Policy, and other Web.* header settings are populated
+// as they would be at runtime) and overrides only the SSL flag under test.
 func newSecurityHeadersConfig(sslEnabled bool) *config.Config {
-	cfg := &config.Config{}
+	cfg := config.DefaultConfig()
 	cfg.Server.SSL.Enabled = sslEnabled
 	return cfg
 }

@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/mode"
 )
 
 // requestIDMiddleware generates a unique request ID for each request
@@ -33,10 +35,23 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// securityHeadersMiddleware adds security headers to all responses (PART 13
-// → "Security Headers"). Directive values match the spec's "everyone"
-// defaults; per-project tightening via server.yml is a separate feature
-// (PART 16 → "IDEA.md → Header Tightening Auto-Map") not yet implemented.
+// cspDirective builds one CSP directive from the built-in default value,
+// applying an operator override (replaces default) or extra (appends to
+// default) per AI.md PART 11 → "Content Security Policy" → Configuration.
+func cspDirective(name, def, extra, override string) string {
+	if override != "" {
+		return name + " " + override
+	}
+	if extra != "" {
+		return name + " " + def + " " + extra
+	}
+	return name + " " + def
+}
+
+// securityHeadersMiddleware adds security headers to all responses per
+// AI.md PART 11 → "Security Headers" / "Content Security Policy" /
+// "Permissions-Policy Configuration", fully driven by cfg.Web.* so
+// server.yml can tighten or extend every directive without a code change.
 func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,30 +62,41 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 			reportsURL := fmt.Sprintf("%s://%s/api/v1/server/reports/default", scheme, r.Host)
 			cspReportURI := fmt.Sprintf("%s://%s/api/v1/server/reports/csp", scheme, r.Host)
 
-			// Content Security Policy — no unsafe-inline/unsafe-eval on
-			// script-src; style-src keeps unsafe-inline (inline style=""
-			// attributes are unavoidable in current templates)
-			cspDirectives := []string{
-				"default-src 'self'",
-				"script-src 'self'",
-				"style-src 'self' 'unsafe-inline'",
-				"img-src 'self' data: blob: https:",
-				"font-src 'self' https:",
-				"connect-src 'self'",
-				"media-src 'self' blob:",
-				"worker-src 'self' blob:",
-				"manifest-src 'self'",
-				"frame-src 'self'",
-				"frame-ancestors 'self'",
-				"base-uri 'self'",
-				"form-action 'self'",
-				"object-src 'none'",
+			csp := cfg.Web.CSP
+			if csp.Enabled {
+				directives := []string{
+					cspDirective("default-src", "'self'", "", csp.DefaultSrcOverride),
+					cspDirective("script-src", "'self'", csp.ScriptSrcExtra, csp.ScriptSrcOverride),
+					cspDirective("style-src", "'self' 'unsafe-inline'", csp.StyleSrcExtra, csp.StyleSrcOverride),
+					cspDirective("img-src", "'self' data: blob: https:", csp.ImgSrcExtra, csp.ImgSrcOverride),
+					cspDirective("font-src", "'self' https:", csp.FontSrcExtra, csp.FontSrcOverride),
+					cspDirective("connect-src", "'self'", csp.ConnectSrcExtra, csp.ConnectSrcOverride),
+					"media-src 'self' blob:",
+					"worker-src 'self' blob:",
+					"manifest-src 'self'",
+					cspDirective("frame-src", "'self'", csp.FrameSrcExtra, csp.FrameSrcOverride),
+					"frame-ancestors 'self'",
+					"base-uri 'self'",
+					cspDirective("form-action", "'self'", csp.FormActionExtra, csp.FormActionOverride),
+					"object-src 'none'",
+				}
+				if cfg.Server.SSL.Enabled {
+					directives = append(directives, "upgrade-insecure-requests")
+				}
+				if csp.ReportsEnabled {
+					directives = append(directives, "report-to default", "report-uri "+cspReportURI)
+				}
+
+				// Development mode auto-degrades to report-only unless the
+				// operator explicitly pinned mode: enforce, per AI.md PART
+				// 11 → "In development mode ... CSP runs in
+				// Content-Security-Policy-Report-Only mode".
+				headerName := "Content-Security-Policy"
+				if csp.Mode == "report-only" || (mode.IsDevelopment() && csp.Mode != "enforce") {
+					headerName = "Content-Security-Policy-Report-Only"
+				}
+				w.Header().Set(headerName, strings.Join(directives, "; "))
 			}
-			if cfg.Server.SSL.Enabled {
-				cspDirectives = append(cspDirectives, "upgrade-insecure-requests")
-			}
-			cspDirectives = append(cspDirectives, "report-to default", "report-uri "+cspReportURI)
-			w.Header().Set("Content-Security-Policy", strings.Join(cspDirectives, "; "))
 
 			// Modern replacement for X-Frame-Options is frame-ancestors
 			// above; X-Frame-Options stays set for legacy browsers
@@ -86,52 +112,85 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 			// Referrer Policy
 			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
+			headers := cfg.Web.Headers
+
 			// Blocks Flash/PDF cross-domain embedding
-			w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
+			if headers.CrossDomainPolicies != "" {
+				w.Header().Set("X-Permitted-Cross-Domain-Policies", headers.CrossDomainPolicies)
+			}
 
 			// Security/perf hygiene, no compatibility cost
-			w.Header().Set("Origin-Agent-Cluster", "?1")
+			if headers.OriginAgentCluster {
+				w.Header().Set("Origin-Agent-Cluster", "?1")
+			}
 
 			// Cross-origin isolation headers — "everyone" defaults; per
-			// PART 13 these tighten only for compliance-flagged projects
-			w.Header().Set("Cross-Origin-Opener-Policy", "unsafe-none")
-			w.Header().Set("Cross-Origin-Embedder-Policy", "unsafe-none")
-			w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+			// PART 11 these tighten only for compliance-flagged projects
+			// via the IDEA.md → Header Tightening Auto-Map
+			if headers.COOP != "" {
+				w.Header().Set("Cross-Origin-Opener-Policy", headers.COOP)
+			}
+			if headers.COEP != "" {
+				w.Header().Set("Cross-Origin-Embedder-Policy", headers.COEP)
+			}
+			if headers.CORP != "" {
+				w.Header().Set("Cross-Origin-Resource-Policy", headers.CORP)
+			}
 
-			// Permissions Policy
-			permissions := strings.Join([]string{
-				"geolocation=()",
-				"microphone=()",
-				"camera=()",
-				"payment=(self)",
-				"usb=()",
-				"magnetometer=()",
-				"gyroscope=()",
-				"accelerometer=()",
-				"fullscreen=(self)",
-				"autoplay=(self)",
-				"encrypted-media=(self)",
-				"picture-in-picture=(self)",
-				"publickey-credentials-get=(self)",
-				"storage-access=(self)",
-				"web-share=(self)",
-				"interest-cohort=()",
-				"browsing-topics=()",
-				"attribution-reporting=()",
-			}, ", ")
-			w.Header().Set("Permissions-Policy", permissions)
+			// "" = omit (browser default applies); "off" = privacy-strict
+			if headers.DNSPrefetchControl != "" {
+				w.Header().Set("X-DNS-Prefetch-Control", headers.DNSPrefetchControl)
+			}
+
+			// Permissions Policy — fully config-driven per AI.md PART 11 →
+			// "Permissions-Policy Configuration"
+			if permissions := cfg.Web.PermissionsPolicy.Header(); permissions != "" {
+				w.Header().Set("Permissions-Policy", permissions)
+			}
 
 			// Reporting API (modern + legacy) and Network Error Logging —
 			// same endpoint referenced by the CSP report-to/report-uri
 			// directives above
 			w.Header().Set("Reporting-Endpoints", fmt.Sprintf(`default="%s"`, reportsURL))
 			w.Header().Set("Report-To", fmt.Sprintf(`{"group":"default","max_age":10886400,"endpoints":[{"url":"%s"}]}`, reportsURL))
-			w.Header().Set("NEL", `{"report_to":"default","max_age":2592000,"include_subdomains":true}`)
+			if headers.NEL.Enabled {
+				w.Header().Set("NEL", fmt.Sprintf(
+					`{"report_to":"default","max_age":%d,"include_subdomains":%t,"success_fraction":%s,"failure_fraction":%s}`,
+					headers.NEL.MaxAgeSeconds, headers.NEL.IncludeSubdomains,
+					strconv.FormatFloat(headers.NEL.SampleRate, 'g', -1, 64),
+					strconv.FormatFloat(headers.NEL.SampleRate, 'g', -1, 64),
+				))
+			}
 
-			// HSTS (only if SSL is enabled) — max-age=63072000 (2 years,
-			// preload-list eligible) per RFC 6797
-			if cfg.Server.SSL.Enabled {
-				w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+			// HSTS (only if SSL is enabled and the operator hasn't
+			// disabled it) — per RFC 6797
+			if cfg.Server.SSL.Enabled && cfg.Web.HSTS.Enabled && cfg.Web.HSTS.MaxAgeSeconds > 0 {
+				hsts := fmt.Sprintf("max-age=%d", cfg.Web.HSTS.MaxAgeSeconds)
+				if cfg.Web.HSTS.IncludeSubdomains {
+					hsts += "; includeSubDomains"
+				}
+				if cfg.Web.HSTS.Preload {
+					hsts += "; preload"
+				}
+				w.Header().Set("Strict-Transport-Security", hsts)
+			}
+
+			// Privacy signal — Sec-GPC (Global Privacy Control) is honored
+			// as an inbound opt-out signal per AI.md PART 11 → "Privacy
+			// Signal Headers"; DNT is off by default (dead in modern
+			// browsers) but operator-configurable.
+			gpcOptOut := headers.HonorSecGPC && r.Header.Get("Sec-GPC") == "1"
+			dntOptOut := headers.HonorDNT && r.Header.Get("DNT") == "1"
+			if gpcOptOut || dntOptOut {
+				if logger := GetLogger(); logger != nil {
+					logger.LogSecurity("compliance.gpc_honored", getClientIP(r), map[string]interface{}{
+						"sec_gpc": gpcOptOut,
+						"dnt":     dntOptOut,
+						"path":    r.URL.Path,
+					})
+				}
+				ctx := contextWithPrivacyOptOut(r.Context(), true)
+				r = r.WithContext(ctx)
 			}
 
 			next.ServeHTTP(w, r)
