@@ -553,17 +553,13 @@ real work that was deliberately deferred rather than completed. Recorded
 here per the "no issue left only in conversation" rule since these notes
 live only inside AUDIT.AI.md's changelog prose, not as actionable items:
 
-- **Dead code**: `src/service/system/health.go` and
-  `src/service/system/health_test.go` are unreferenced anywhere in the tree
-  (`grep -rln "service/system"` outside the package itself returns nothing —
-  reconfirmed). The real `/server/healthz` implementation lives in
-  `src/server/handler/health.go`. AUDIT.AI.md explicitly flagged this file
-  as "flagged, not deleted... left as dead code for a follow-up cleanup
-  pass." `ai-rules.md` forbids deleting pre-scaffolded content outside a
-  scoped cleanup task, so deletion needs to happen as its own dedicated,
-  clearly-scoped commit (not folded into an unrelated pass) — confirm no
-  other in-flight branch/agent still references it, then delete both files
-  in one commit.
+- **Dead code** — FIXED: `src/service/system/health.go` and
+  `src/service/system/health_test.go` were unreferenced anywhere in the tree
+  (reconfirmed via `grep -rln "service/system" --include="*.go" .` outside
+  the package itself, no matches). The real `/server/healthz`
+  implementation lives in `src/server/handler/health.go`. Deleted both dead
+  files (and the now-empty `src/service/system/` directory) in their own
+  scoped commit per `ai-rules.md`.
 - **SSL/TLS wiring gap** — FIXED (commit 3b28e987e6b6): `main.go` now
   builds an `ssl.Manager` from `cfg.Server.SSL`, resolves HTTP/HTTPS port(s)
   per the PART 15 Port Configuration table, and starts HTTP-only,
