@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 // colorEnabled holds the resolved --color/config/NO_COLOR state for this
@@ -122,8 +124,10 @@ func envOrFlag(flagValue, envKey string) string {
 }
 
 // applyColorMode resolves --color against a config-file override, NO_COLOR,
-// and TTY/TERM auto-detection, per AI.md PART 8 "NO_COLOR Support" priority
-// order: CLI flag > config file > NO_COLOR env var > auto-detect. configColor
+// and TTY/TERM auto-detection (term.IsTerminal(os.Stdout.Fd()) plus
+// TERM=dumb, per AI.md PART 8's ColorEnabled pseudocode), per AI.md PART 8
+// "NO_COLOR Support" priority order: CLI flag > config file > NO_COLOR env
+// var > auto-detect. configColor
 // is nil when no config has been loaded yet (e.g. the pre-config.Load() call
 // in main.go, or CLI-only commands that never load config) — in that case
 // the config-file tier is simply skipped, falling through to NO_COLOR/auto-
@@ -150,6 +154,11 @@ func applyColorMode(colorFlag string, configColor *bool) {
 	}
 
 	if os.Getenv("NO_COLOR") != "" {
+		colorEnabled = false
+		emojiEnabled = false
+		return
+	}
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
 		colorEnabled = false
 		emojiEnabled = false
 		return

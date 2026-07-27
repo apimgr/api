@@ -612,12 +612,13 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   AI.md pseudocode also does a TTY check (`term.IsTerminal`), which
   `applyColorMode`'s auto-detect fallback still lacks (only `TERM=dumb` is
   checked) — logged as a new follow-up below.
-- **applyColorMode auto-detect has no TTY check**: AI.md PART 8's
-  `ColorEnabled` pseudocode auto-detect tier checks
-  `term.IsTerminal(int(os.Stdout.Fd()))` in addition to `TERM=dumb`, so
-  output piped to a file/log still gets ANSI/emoji today. `golang.org/x/term`
-  is already a transitive dependency (via the client TUI). Add the TTY check
-  to `applyColorMode`'s final fallback branch in `src/clihelpers.go`.
+- **applyColorMode auto-detect has no TTY check** — FIXED: added
+  `term.IsTerminal(int(os.Stdout.Fd()))` to `applyColorMode`'s auto-detect
+  fallback branch in `src/clihelpers.go`, checked ahead of `TERM=dumb`
+  (matching AI.md PART 8's `ColorEnabled` pseudocode order), so output piped
+  to a file/log now correctly disables color/emoji. `golang.org/x/term` was
+  already a direct `go.mod` dependency (via the client TUI) — no dependency
+  change needed.
 - **Middleware reporting/config-header gaps**: the emitted
   `Reporting-Endpoints`/`Report-To`/`NEL` response headers point at
   `/api/{api_version}/server/reports/{default,csp}`, but no handler for
