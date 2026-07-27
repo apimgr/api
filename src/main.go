@@ -25,6 +25,7 @@ import (
 	"github.com/apimgr/api/src/scheduler"
 	"github.com/apimgr/api/src/server"
 	"github.com/apimgr/api/src/server/handler"
+	"github.com/apimgr/api/src/ssl"
 	"github.com/apimgr/api/src/sysservice"
 )
 
@@ -250,6 +251,55 @@ func main() {
 	// Create server
 	srv := server.New(cfg)
 
+	// Wire SSL/TLS per AI.md PART 15 Port Configuration rules: a single
+	// port of 443 is HTTPS-only, ssl.enabled forces HTTPS on any other
+	// single port, and "port1,port2" runs HTTP on the first and HTTPS on
+	// the second. DNS-01 multi-provider support is a separate, deferred
+	// item (see TODO.AI.md).
+	httpPort, httpsPort := resolvePorts(cfg)
+	var httpsSrv *http.Server
+	if httpsPort != "" {
+		sslCertPath := cfg.Server.SSL.CertPath
+		if sslCertPath == "" {
+			sslCertPath = filepath.Join(paths.ConfigDir(), "ssl")
+		}
+		domain := cfg.Server.FQDN
+		if domain == "" {
+			domain = "localhost"
+		}
+		sslMgr := ssl.NewManager(ssl.Config{
+			Enabled:  true,
+			CertPath: sslCertPath,
+			LetsEncrypt: ssl.LetsEncryptConfig{
+				Enabled:   cfg.Server.SSL.LetsEncrypt.Enabled,
+				Email:     cfg.Server.SSL.LetsEncrypt.Email,
+				Challenge: cfg.Server.SSL.LetsEncrypt.Challenge,
+			},
+		})
+		tlsConfig, err := sslMgr.GetTLSConfig([]string{domain})
+		if err != nil {
+			log.Fatalf("Failed to configure TLS: %v", err)
+		}
+		httpsSrv = &http.Server{
+			Addr:         fmt.Sprintf("%s:%s", cfg.Server.Address, httpsPort),
+			Handler:      srv.Handler,
+			TLSConfig:    tlsConfig,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		}
+		if httpPort != "" {
+			// The HTTP listener stays up solely to answer ACME HTTP-01
+			// challenges; all normal traffic is served over HTTPS.
+			srv.Addr = fmt.Sprintf("%s:%s", cfg.Server.Address, httpPort)
+			srv.Handler = sslMgr.GetHTTPHandler(srv.Handler)
+		} else {
+			// Single port 443, or ssl.enabled on a single non-443 port:
+			// HTTPS-only mode, no separate HTTP listener.
+			srv = nil
+		}
+	}
+
 	// Initialize and start scheduler (if enabled in config)
 	if cfg.Server.Schedule.Enabled {
 		sched := scheduler.New()
@@ -271,13 +321,22 @@ func main() {
 	// Channel to listen for errors
 	errChan := make(chan error, 1)
 
-	// Start server in goroutine
+	// Start server(s) in goroutine(s)
 	go func() {
 		printStartup(cfg, binaryName)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errChan <- err
+		if srv != nil {
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				errChan <- err
+			}
 		}
 	}()
+	if httpsSrv != nil {
+		go func() {
+			if err := httpsSrv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				errChan <- err
+			}
+		}()
+	}
 
 	// Wait for interrupt signal or error
 	quit := make(chan os.Signal, 1)
@@ -307,8 +366,15 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+	if srv != nil {
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("Server forced to shutdown: %v", err)
+		}
+	}
+	if httpsSrv != nil {
+		if err := httpsSrv.Shutdown(ctx); err != nil {
+			log.Printf("HTTPS server forced to shutdown: %v", err)
+		}
 	}
 
 	cprintln("✅ Server stopped")
@@ -385,14 +451,57 @@ Documentation: https://apimgr-api.readthedocs.io
 `, binaryName, binaryName)
 }
 
+// resolvePorts implements the AI.md PART 15 Port Configuration table: a
+// single port of 443 is HTTPS-only, ssl.enabled forces HTTPS on any other
+// single port, and "port1,port2" runs HTTP on the first and HTTPS on the
+// second. Returns the HTTP port and HTTPS port to bind, either of which
+// may be empty.
+func resolvePorts(cfg *config.Config) (httpPort, httpsPort string) {
+	ports := strings.Split(cfg.Server.Port, ",")
+	for i := range ports {
+		ports[i] = strings.TrimSpace(ports[i])
+	}
+	switch {
+	case len(ports) == 2:
+		return ports[0], ports[1]
+	case ports[0] == "443" || cfg.Server.SSL.Enabled:
+		return "", ports[0]
+	default:
+		return ports[0], ""
+	}
+}
+
+// formatURL applies the AI.md PART 15 URL Format Rule: :80 and :443 are
+// always stripped from the displayed URL.
+func formatURL(host, port string, isHTTPS bool) string {
+	proto := "http"
+	if isHTTPS || port == "443" {
+		proto = "https"
+	}
+	if port == "" || port == "80" || port == "443" {
+		return fmt.Sprintf("%s://%s", proto, host)
+	}
+	return fmt.Sprintf("%s://%s:%s", proto, host, port)
+}
+
 func printStartup(cfg *config.Config, binaryName string) {
+	httpPort, httpsPort := resolvePorts(cfg)
+	host := getDisplayAddress(cfg)
+
 	cprintln()
 	cprintf("✅ %s v%s started successfully\n", binaryName, Version)
-	cprintf("📡 Listening on http://%s:%s\n", getDisplayAddress(cfg), cfg.Server.Port)
-	cprintf("📊 Swagger UI: http://%s:%s/openapi\n", getDisplayAddress(cfg), cfg.Server.Port)
-	cprintf("🔮 GraphQL: http://%s:%s/graphql\n", getDisplayAddress(cfg), cfg.Server.Port)
-	cprintf("📚 API Docs: http://%s:%s/api\n", getDisplayAddress(cfg), cfg.Server.Port)
-	cprintf("🔧 Admin Panel: http://%s:%s/admin\n", getDisplayAddress(cfg), cfg.Server.Port)
+	if httpPort != "" {
+		cprintf("📡 Listening on %s\n", formatURL(host, httpPort, false))
+		cprintf("📊 Swagger UI: %s/openapi\n", formatURL(host, httpPort, false))
+		cprintf("🔮 GraphQL: %s/graphql\n", formatURL(host, httpPort, false))
+		cprintf("📚 API Docs: %s/api\n", formatURL(host, httpPort, false))
+	}
+	if httpsPort != "" {
+		cprintf("🔐 Listening on %s\n", formatURL(host, httpsPort, true))
+		cprintf("📊 Swagger UI: %s/openapi\n", formatURL(host, httpsPort, true))
+		cprintf("🔮 GraphQL: %s/graphql\n", formatURL(host, httpsPort, true))
+		cprintf("📚 API Docs: %s/api\n", formatURL(host, httpsPort, true))
+	}
 	cprintln()
 }
 

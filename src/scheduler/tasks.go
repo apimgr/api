@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/backup"
+	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/geoip"
 	"github.com/apimgr/api/src/paths"
@@ -76,12 +77,34 @@ func backupTask() error {
 	return nil
 }
 
-// sslRenewalTask checks and renews SSL certificates
+// sslRenewalTask checks and renews SSL certificates. Per AI.md PART 15
+// (Renewal Rules), only app-managed Let's Encrypt certificates under
+// {config_dir}/ssl/letsencrypt/{fqdn}/ are auto-renewed; local/user-provided
+// certificates under ssl/local/{fqdn}/ are never touched by this task.
 func sslRenewalTask() error {
 	log.Println("Scheduler: Checking SSL certificates...")
 
-	// Get certificate path from data directory
-	certPath := filepath.Join(paths.DataDir(), "ssl", "cert.pem")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Scheduler: SSL renewal check skipped, failed to load config: %v", err)
+		return err
+	}
+
+	domain := cfg.Server.FQDN
+	if domain == "" {
+		domain = "localhost"
+	}
+
+	sslCertPath := cfg.Server.SSL.CertPath
+	if sslCertPath == "" {
+		sslCertPath = filepath.Join(paths.ConfigDir(), "ssl")
+	}
+
+	certPath := filepath.Join(sslCertPath, "letsencrypt", domain, "fullchain.pem")
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		log.Println("Scheduler: No app-managed Let's Encrypt certificate found, nothing to renew")
+		return nil
+	}
 
 	// Run SSL renewal check
 	if err := ssl.RenewalTask(certPath); err != nil {
