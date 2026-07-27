@@ -451,7 +451,7 @@ service work" — that heading is now fully closed and removed.
   precedent (`data-template="...?image={image}"`).
 
 ## [ ] Known permanent API gaps needing a future spec/dependency decision
-Read: src/server/api_utils.go (apiGenerateQRHandler, apiLanguageDetectHandler,
+Read: src/server/api_utils.go (apiLanguageDetectHandler,
 apiLanguageDictionaryHandler, apiLanguageGrammarHandler,
 apiLanguageSpellCheckHandler, apiLanguageThesaurusHandler,
 apiLanguageTranslateHandler, apiResearchExtractHandler,
@@ -465,10 +465,17 @@ apiOsintPhoneHandler, apiOsintSocialHandler, apiOsintUsernameHandler,
 apiTestLoadTestHandler, apiTestMockServerHandler,
 apiWeatherMapsHandler, apiWeatherRadarHandler doc comments),
 src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
-Twenty-nine of the wired API routes honestly return 501 NOT_SUPPORTED
-rather than inventing behavior: generate/qr (no QR encoder exists anywhere in the
-codebase or go.mod), language/detect (conflicts with IDEA.md's declared
-non-goal of language auto-detection), language/dictionary,
+`generate/qr` and `image/qr` are no longer in this gap list — real QR
+encoding (including standard Wi-Fi join QR payloads) was implemented via
+`github.com/boombuler/barcode/qr` (already a transitive dependency of the
+existing 1D barcode feature) in `src/service/generate/qr.go`, wired into
+`apiGenerateQRHandler`/`apiImageQRHandler` in `src/server/api_utils.go`,
+with `toolPages()` entries and frontend templates added — the original
+"no QR encoder exists anywhere in the codebase or go.mod" justification
+for the gap was factually wrong.
+Twenty-eight of the wired API routes honestly return 501 NOT_SUPPORTED
+rather than inventing behavior: language/detect (conflicts with IDEA.md's
+declared non-goal of language auto-detection), language/dictionary,
 language/grammar, language/spell-check, and language/thesaurus (each
 would require a new outbound integration outside IDEA.md's declared
 trust boundary — outbound calls are restricted to only the OSINT and
@@ -507,19 +514,18 @@ storage non-goal), and the two weather gaps — weather/maps and
 weather/radar (keyless weather tile/map and radar imagery has no free
 provider within IDEA.md's declared outbound-call boundary; a real
 implementation needs a keyed provider such as RainViewer, OpenWeatherMap
-tiles, or NOAA radar mosaics). Resolving these requires a user/spec decision —
-either add a QR-encoding dependency, confirm language/detect and the
-four other language gaps should stay unsupported per IDEA.md, scope what
-"extraction" means for research/extract, decide whether network/
+tiles, or NOAA radar mosaics). Resolving these requires a user/spec
+decision, not further code guessing — either confirm language/detect and
+the four other language gaps should stay unsupported per IDEA.md, scope
+what "extraction" means for research/extract, decide whether network/
 traceroute should ship as a root-only opt-in feature instead of a
 permanent gap, decide whether any of the six osint gaps should be
 promoted to a keyed-API-optional feature, decide whether any of the ten
 research gaps should be promoted by amending IDEA.md's Research scope,
-or decide whether load-test/mock-server should be promoted via a
+decide whether load-test/mock-server should be promoted via a
 dynamic-listener-lifecycle feature, or decide whether weather/maps and
-weather/radar should be promoted via a keyed-tile-provider integration —
-not further code guessing.
-None of the twenty-nine gap routes have a `toolPages()` entry or
+weather/radar should be promoted via a keyed-tile-provider integration.
+None of the twenty-eight gap routes have a `toolPages()` entry or
 dedicated frontend page template; osint's six, research's ten,
 testing's load-test/mock-server pair, and weather's maps/radar pair still
 have pre-existing nav cards on their category listing page linking to a

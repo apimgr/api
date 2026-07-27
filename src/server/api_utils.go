@@ -1924,12 +1924,10 @@ func apiDatetimeMoonHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
-// apiGenerateQRHandler reports that QR-code generation is not supported.
-// No QR encoder exists anywhere in the codebase (generate, image, or any
-// dependency in go.mod) and authoring one from scratch would be inventing
-// new business logic, which is explicitly forbidden.
+// apiGenerateQRHandler renders a QR code PNG for the given data, or for a
+// Wi-Fi join payload when ssid is supplied instead of data.
 func apiGenerateQRHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "QR code generation is not implemented: no QR encoder exists in src/service/generate or any dependency", nil)
+	handleQRRequest(w, r)
 }
 
 // apiValidateEmailHandler validates the email address supplied in the
@@ -4078,15 +4076,56 @@ func apiImageIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(png)
 }
 
-// apiImageQRHandler reports that QR-code generation is not supported.
-// No QR encoder exists anywhere in the codebase (generate, image, or any
-// dependency in go.mod) and authoring one from scratch would be inventing
-// new business logic, which is explicitly forbidden. This mirrors
+// apiImageQRHandler renders a QR code PNG for the given data, or for a
+// Wi-Fi join payload when ssid is supplied instead of data. This mirrors
 // apiGenerateQRHandler exactly; it exists only so the /api/v1/image/qr
-// path returns the same honest error as /api/v1/generate/qr rather than
-// a 404.
+// path works the same as /api/v1/generate/qr.
 func apiImageQRHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "QR code generation is not implemented: no QR encoder exists in src/service/generate or any dependency", nil)
+	handleQRRequest(w, r)
+}
+
+// handleQRRequest implements the shared body of apiGenerateQRHandler and
+// apiImageQRHandler: either ?data=... is encoded directly, or ?ssid=...
+// (with optional password/security/hidden) is built into a standard
+// Wi-Fi QR join payload per IDEA.md's Wi-Fi QR code requirement.
+func handleQRRequest(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	data := q.Get("data")
+	ssid := q.Get("ssid")
+
+	var content string
+	switch {
+	case ssid != "":
+		payload, err := generate.BuildWifiQRPayload(ssid, q.Get("password"), q.Get("security"), config.IsTruthy(q.Get("hidden")))
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIFI_QR_PARAMS", err.Error(), nil)
+			return
+		}
+		content = payload
+	case data != "":
+		content = data
+	default:
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data (or ssid for a Wi-Fi QR code) is required", nil)
+		return
+	}
+
+	width, err := strconv.Atoi(q.Get("width"))
+	if err != nil || width <= 0 {
+		width = 300
+	}
+	height, err := strconv.Atoi(q.Get("height"))
+	if err != nil || height <= 0 {
+		height = 300
+	}
+
+	png, err := generateService.QR(content, width, height)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "QR_GENERATION_FAILED", err.Error(), nil)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
 }
 
 // apiImageFilterHandler decodes an uploaded image and applies a named

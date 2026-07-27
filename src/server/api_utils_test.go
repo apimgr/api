@@ -860,14 +860,80 @@ func TestAPIDatetimeMoonHandler(t *testing.T) {
 // apiGenerateQRHandler must always report NOT_SUPPORTED — no QR encoder
 // exists anywhere in the codebase.
 func TestAPIGenerateQRHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr", nil)
-	w := httptest.NewRecorder()
+	t.Run("missing data and ssid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr", nil)
+		w := httptest.NewRecorder()
 
-	apiGenerateQRHandler(w, req)
+		apiGenerateQRHandler(w, req)
 
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "NOT_SUPPORTED", env["error"])
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DATA", env["error"])
+	})
+
+	t.Run("plain data renders PNG", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr?data=https://example.com", nil)
+		w := httptest.NewRecorder()
+
+		apiGenerateQRHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		assert.NotEmpty(t, w.Body.Bytes())
+	})
+
+	t.Run("custom width and height respected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr?data=hello&width=150&height=150", nil)
+		w := httptest.NewRecorder()
+
+		apiGenerateQRHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+	})
+
+	t.Run("ssid with WPA security requires password", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr?ssid=MyNetwork&security=WPA", nil)
+		w := httptest.NewRecorder()
+
+		apiGenerateQRHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_WIFI_QR_PARAMS", env["error"])
+	})
+
+	t.Run("ssid with no security defaults to open network PNG", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr?ssid=MyNetwork", nil)
+		w := httptest.NewRecorder()
+
+		apiGenerateQRHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+	})
+
+	t.Run("ssid with password renders PNG", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr?ssid=MyNetwork&password=hunter2&security=WPA", nil)
+		w := httptest.NewRecorder()
+
+		apiGenerateQRHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		assert.NotEmpty(t, w.Body.Bytes())
+	})
+
+	t.Run("ssid with nopass security and no password renders PNG", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr?ssid=OpenNetwork&security=nopass&hidden=true", nil)
+		w := httptest.NewRecorder()
+
+		apiGenerateQRHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		assert.NotEmpty(t, w.Body.Bytes())
+	})
 }
 
 // apiValidateEmailHandler must 400 MISSING_EMAIL with no email supplied
@@ -3186,12 +3252,23 @@ func TestAPIImageIdenticonHandler(t *testing.T) {
 // in the codebase, so it must always report the same honest 501 as
 // apiGenerateQRHandler.
 func TestAPIImageQRHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/image/qr", nil)
-	w := httptest.NewRecorder()
-	apiImageQRHandler(w, req)
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "NOT_SUPPORTED", env["error"])
+	t.Run("missing data and ssid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/qr", nil)
+		w := httptest.NewRecorder()
+		apiImageQRHandler(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DATA", env["error"])
+	})
+
+	t.Run("plain data renders PNG", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/qr?data=https://example.com", nil)
+		w := httptest.NewRecorder()
+		apiImageQRHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
+		assert.NotEmpty(t, w.Body.Bytes())
+	})
 }
 
 // apiImageFilterHandler must 400 on missing image / missing filter name,
