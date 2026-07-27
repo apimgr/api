@@ -33,10 +33,7 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     container:
-      # Pinned to 2606: the 2026-07-27 casjaysdev/go:latest rebuild shipped
-      # without staticcheck (upstream regression); tracked in TODO.AI.md to
-      # revert to :latest once the upstream image restores the tool.
-      image: casjaysdev/go:2606
+      image: casjaysdev/go:latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: go vet ./...
