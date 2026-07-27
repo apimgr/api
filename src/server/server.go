@@ -138,6 +138,15 @@ func New(cfg *config.Config) *http.Server {
 		// Theme switching
 		r.Post("/theme", HandleThemeSwitch)
 
+		// Browser-emitted reports (CSP violations, NEL, deprecation,
+		// intervention, crash, and the generic "default" group) — see
+		// AI.md PART 11 "Reporting API (Modern + Legacy)". One handler
+		// serves every {name} since all report endpoints share the same
+		// scope, shape, rate limits, and sanitization rules.
+		r.Route("/server/reports", func(r chi.Router) {
+			r.Post("/{name}", reportsHandler())
+		})
+
 		// Text utilities
 		r.Route("/text", func(r chi.Router) {
 			// UUID

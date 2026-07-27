@@ -624,9 +624,16 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   `/api/{api_version}/server/reports/{default,csp}`, but no handler for
   those paths exists anywhere in the tree — either implement the PART 11
   Reporting API receiving endpoints or stop emitting headers that point at
-  a 404. Config-driven per-project header tightening
-  (`web.headers`/`web.csp`/`web.permissions_policy`) is also not wired into
-  `config.go`/`server.yml` yet.
+  a 404. PARTIALLY FIXED: added `src/server/reports.go` with a generic
+  `POST /api/v1/server/reports/{name}` handler (registered in
+  `src/server/server.go`) covering `default`/`csp`/`nel`/any future report
+  name per PART 11's "all report endpoints share the same rules" — caps the
+  body at 64KB, validates content type, logs an allowlisted field set via
+  the existing `Logger.LogSecurity`, always responds 204 (log-don't-reject).
+  Still open: config-driven per-project header tightening
+  (`web.headers`/`web.csp`/`web.permissions_policy`) is not wired into
+  `config.go`/`server.yml` yet — `securityHeadersMiddleware` remains fully
+  hardcoded.
 
 ## [x] Revert `.github/workflows/ci.yml` lint job to `casjaysdev/go:latest`
 FIXED: `docker run --rm --name ... --entrypoint sh casjaysdev/go:latest -c
