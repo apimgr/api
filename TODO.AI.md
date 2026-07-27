@@ -546,3 +546,67 @@ connection-string test fixtures in `config_test.go` with obviously-fake
 placeholder values (e.g. `user:REDACTED_TEST_PW@host`) or add a
 `.trufflehogignore` entry scoped to that file/line, not to disable the
 secret-scan job.
+
+## [ ] AUDIT.AI.md follow-up items flagged but not fixed (out of prior pass scope)
+Several already-`[x]`-marked AUDIT.AI.md entries contain embedded notes for
+real work that was deliberately deferred rather than completed. Recorded
+here per the "no issue left only in conversation" rule since these notes
+live only inside AUDIT.AI.md's changelog prose, not as actionable items:
+
+- **Dead code**: `src/service/system/health.go` and
+  `src/service/system/health_test.go` are unreferenced anywhere in the tree
+  (`grep -rln "service/system"` outside the package itself returns nothing —
+  reconfirmed). The real `/server/healthz` implementation lives in
+  `src/server/handler/health.go`. AUDIT.AI.md explicitly flagged this file
+  as "flagged, not deleted... left as dead code for a follow-up cleanup
+  pass." `ai-rules.md` forbids deleting pre-scaffolded content outside a
+  scoped cleanup task, so deletion needs to happen as its own dedicated,
+  clearly-scoped commit (not folded into an unrelated pass) — confirm no
+  other in-flight branch/agent still references it, then delete both files
+  in one commit.
+- **SSL/TLS wiring gap**: `src/ssl` package exists and its tests pass, but
+  nothing in `src/main.go` ever calls `ListenAndServeTLS`, constructs a
+  `tls.Config`, or references the `ssl` package at all — `grep -n
+  "ssl\|tls\|TLS\|443"` on `main.go` returns nothing. The server only ever
+  binds plain HTTP (`srv.ListenAndServe()` at `src/main.go:277`). Read PART
+  for SSL/ACME (referenced in AUDIT.AI.md line 128) and wire single-domain
+  HTTP-01/on-disk-cert TLS serving into `main.go`; DNS-01 multi-provider
+  support is a separate, larger NEEDS DECISION item (credential storage
+  design, which provider(s) to support) and should stay out of this first
+  wiring pass. `src/scheduler/tasks.go`'s `sslRenewalTask()` also still
+  uses a hardcoded flat `{data_dir}/ssl/cert.pem` path inconsistent with
+  the tiered cert layout the `ssl` package now uses — needs updating in
+  the same pass.
+- **database.go config wiring gap**: `src/database/database.go`'s `Init()`
+  hardcodes the SQLite driver and derives both `server.db` and `users.db`
+  paths from the raw `dataDir` argument, ignoring
+  `cfg.Server.Database.Driver`/`cfg.Server.Database.URL` entirely (which
+  `config.go` already resolves from `DATABASE_DRIVER`/`DATABASE_URL`/
+  `DATABASE_DIR` env vars — those overrides are currently silently
+  dropped). Fixing this requires moving `config.Load()` ahead of
+  `database.Init()` in `main.go`'s startup sequence (currently `config.Load()`
+  runs at line 174, after `database.Init()` at line 165, after the
+  maintenance/update command early-exit branches) and deciding how a single
+  `database.url` config value maps onto the two-database (`server.db`/
+  `users.db`) layout — e.g. treat `DATABASE_URL`/`DATABASE_DIR` as
+  overriding the `db` directory rather than the `server.db` file path
+  directly. `DATABASE_DRIVER` has no second driver implementation to switch
+  to (`modernc.org/sqlite` is the only imported driver), so that override
+  should stay a no-op read for forward-compatibility, not be wired to fake
+  multi-driver support.
+- **main.go color/comment cleanup**: `colorEnabled` is not threaded through
+  every `fmt.Printf`'s hardcoded emoji output, and there is no `output.color`
+  config-file override wired (only the `--color` CLI flag exists). Re-check
+  whether the dangling `// Generate secure password` comment with no
+  function body (previously attributed to a concurrently-running agent's
+  in-progress edit) is still present — `grep -n "Generate secure password"
+  src/main.go` returned nothing on the most recent check, so this specific
+  sub-item now appears resolved; re-verify before closing it out formally.
+- **Middleware reporting/config-header gaps**: the emitted
+  `Reporting-Endpoints`/`Report-To`/`NEL` response headers point at
+  `/api/{api_version}/server/reports/{default,csp}`, but no handler for
+  those paths exists anywhere in the tree — either implement the PART 11
+  Reporting API receiving endpoints or stop emitting headers that point at
+  a 404. Config-driven per-project header tightening
+  (`web.headers`/`web.csp`/`web.permissions_policy`) is also not wired into
+  `config.go`/`server.yml` yet.
