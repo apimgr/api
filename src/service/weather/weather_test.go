@@ -297,6 +297,227 @@ func TestGetWeatherEmoji(t *testing.T) {
 	}
 }
 
+// Covers GetAirQuality, GetUVIndex, and GetPollen: all three share
+// fetchAirQuality, so exercise the successful decode path once per
+// public method plus the European-vs-non-European pollen coverage note.
+func TestGetAirQualityUVPollen(t *testing.T) {
+	s := New()
+
+	airQualityServer := func(country, countryCode string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/search" {
+				_, _ = w.Write([]byte(`{"results":[{"name":"City","latitude":1,"longitude":2,"country":"` + country + `","country_code":"` + countryCode + `"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"current":{"time":"2024-01-01T12:00","european_aqi":25,"us_aqi":30,"pm10":5.1,"pm2_5":2.3,"carbon_monoxide":100,"nitrogen_dioxide":10,"sulphur_dioxide":1,"ozone":50,"uv_index":4.5,"uv_index_clear_sky":5.1,"alder_pollen":1,"birch_pollen":2,"grass_pollen":3,"mugwort_pollen":4,"olive_pollen":5,"ragweed_pollen":6}}`))
+		}))
+	}
+
+	t.Run("GetAirQuality success", func(t *testing.T) {
+		server := airQualityServer("United Kingdom", "GB")
+		defer server.Close()
+		withMockServer(t, server)
+
+		aq, err := s.GetAirQuality("London")
+		require.NoError(t, err)
+		assert.Equal(t, "City", aq.Location)
+		assert.Equal(t, 25, aq.EuropeanAQI)
+		assert.Equal(t, 30, aq.USAQI)
+		assert.Equal(t, 5.1, aq.PM10)
+	})
+
+	t.Run("GetUVIndex success", func(t *testing.T) {
+		server := airQualityServer("United Kingdom", "GB")
+		defer server.Close()
+		withMockServer(t, server)
+
+		uv, err := s.GetUVIndex("London")
+		require.NoError(t, err)
+		assert.Equal(t, 4.5, uv.UVIndex)
+		assert.Equal(t, 5.1, uv.UVIndexClearSky)
+	})
+
+	t.Run("GetPollen European coverage", func(t *testing.T) {
+		server := airQualityServer("United Kingdom", "GB")
+		defer server.Close()
+		withMockServer(t, server)
+
+		p, err := s.GetPollen("London")
+		require.NoError(t, err)
+		assert.Equal(t, "europe", p.CoverageRegion)
+		assert.Equal(t, 3.0, p.GrassPollen)
+	})
+
+	t.Run("GetPollen non-European coverage note", func(t *testing.T) {
+		server := airQualityServer("United States", "US")
+		defer server.Close()
+		withMockServer(t, server)
+
+		p, err := s.GetPollen("Miami")
+		require.NoError(t, err)
+		assert.Contains(t, p.CoverageRegion, "unsupported")
+	})
+
+	t.Run("propagates geocode error", func(t *testing.T) {
+		_, err := s.GetAirQuality("")
+		require.Error(t, err)
+	})
+}
+
+// Covers GetAstronomy: successful decode of the daily astronomy block and
+// the "no data returned" error path.
+func TestGetAstronomy(t *testing.T) {
+	s := New()
+
+	t.Run("successful astronomy", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/search" {
+				_, _ = w.Write([]byte(`{"results":[{"name":"London","latitude":51.5,"longitude":-0.12,"country":"UK"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"daily":{"time":["2024-01-01"],"sunrise":["2024-01-01T08:00"],"sunset":["2024-01-01T16:00"],"daylight_duration":[28800],"sunshine_duration":[20000],"uv_index_max":[3.2]}}`))
+		}))
+		defer server.Close()
+		withMockServer(t, server)
+
+		a, err := s.GetAstronomy("London")
+		require.NoError(t, err)
+		assert.Equal(t, "2024-01-01", a.Date)
+		assert.Equal(t, "2024-01-01T08:00", a.Sunrise)
+		assert.Equal(t, "2024-01-01T16:00", a.Sunset)
+		assert.Equal(t, 28800.0, a.DaylightDuration)
+		assert.Equal(t, 3.2, a.UVIndexMax)
+	})
+
+	t.Run("no data returned", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/search" {
+				_, _ = w.Write([]byte(`{"results":[{"name":"London","latitude":51.5,"longitude":-0.12,"country":"UK"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"daily":{"time":[]}}`))
+		}))
+		defer server.Close()
+		withMockServer(t, server)
+
+		a, err := s.GetAstronomy("London")
+		require.Error(t, err)
+		assert.Nil(t, a)
+		assert.Contains(t, err.Error(), "no astronomy data")
+	})
+}
+
+// Covers GetHistorical: missing/invalid date validation rejected before
+// any network call, and a successful multi-day decode.
+func TestGetHistorical(t *testing.T) {
+	s := New()
+
+	t.Run("missing dates", func(t *testing.T) {
+		days, err := s.GetHistorical("London", "", "2024-01-07")
+		require.Error(t, err)
+		assert.Nil(t, days)
+		assert.Contains(t, err.Error(), "required")
+	})
+
+	t.Run("invalid start date", func(t *testing.T) {
+		days, err := s.GetHistorical("London", "not-a-date", "2024-01-07")
+		require.Error(t, err)
+		assert.Nil(t, days)
+		assert.Contains(t, err.Error(), "invalid start_date")
+	})
+
+	t.Run("invalid end date", func(t *testing.T) {
+		days, err := s.GetHistorical("London", "2024-01-01", "not-a-date")
+		require.Error(t, err)
+		assert.Nil(t, days)
+		assert.Contains(t, err.Error(), "invalid end_date")
+	})
+
+	t.Run("successful historical range", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/search" {
+				_, _ = w.Write([]byte(`{"results":[{"name":"London","latitude":51.5,"longitude":-0.12,"country":"UK"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"daily":{"time":["2024-01-01","2024-01-02"],"temperature_2m_max":[10,11],"temperature_2m_min":[2,3],"precipitation_sum":[0,1.2],"windspeed_10m_max":[15,20]}}`))
+		}))
+		defer server.Close()
+		withMockServer(t, server)
+
+		days, err := s.GetHistorical("London", "2024-01-01", "2024-01-02")
+		require.NoError(t, err)
+		require.Len(t, days, 2)
+		assert.Equal(t, 10.0, days[0].TempMax)
+		assert.Equal(t, 1.2, days[1].PrecipitationMM)
+		assert.Equal(t, 20.0, days[1].WindSpeedMaxKMH)
+	})
+}
+
+// Covers GetHourly: out-of-range hour counts rejected before any network
+// call, and a successful decode trimmed to the requested hour count.
+func TestGetHourly(t *testing.T) {
+	s := New()
+
+	t.Run("hours too low", func(t *testing.T) {
+		entries, err := s.GetHourly("London", 0)
+		require.Error(t, err)
+		assert.Nil(t, entries)
+	})
+
+	t.Run("hours too high", func(t *testing.T) {
+		entries, err := s.GetHourly("London", 49)
+		require.Error(t, err)
+		assert.Nil(t, entries)
+	})
+
+	t.Run("successful hourly forecast trimmed to requested hours", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/search" {
+				_, _ = w.Write([]byte(`{"results":[{"name":"London","latitude":51.5,"longitude":-0.12,"country":"UK"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"hourly":{"time":["2024-01-01T00:00","2024-01-01T01:00","2024-01-01T02:00"],"temperature_2m":[5,6,7],"precipitation_probability":[0,10,20],"weather_code":[0,1,2],"wind_speed_10m":[3,4,5]}}`))
+		}))
+		defer server.Close()
+		withMockServer(t, server)
+
+		entries, err := s.GetHourly("London", 2)
+		require.NoError(t, err)
+		require.Len(t, entries, 2)
+		assert.Equal(t, 5.0, entries[0].Temperature)
+		assert.Equal(t, "Clear sky", entries[0].Description)
+		assert.Equal(t, 6.0, entries[1].Temperature)
+	})
+}
+
+// Covers GetMarine: successful decode of the current marine conditions block.
+func TestGetMarine(t *testing.T) {
+	s := New()
+
+	t.Run("successful marine conditions", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/search" {
+				_, _ = w.Write([]byte(`{"results":[{"name":"Miami","latitude":25.7,"longitude":-80.1,"country":"United States"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"current":{"time":"2024-01-01T12:00","wave_height":1.2,"wave_direction":180,"wave_period":6.5,"swell_wave_height":0.8,"wind_wave_height":0.4,"ocean_current_velocity":0.3,"sea_surface_temperature":24.1}}`))
+		}))
+		defer server.Close()
+		withMockServer(t, server)
+
+		m, err := s.GetMarine("Miami")
+		require.NoError(t, err)
+		assert.Equal(t, "Miami", m.Location)
+		assert.Equal(t, 1.2, m.WaveHeightM)
+		assert.Equal(t, 24.1, m.SeaSurfaceTempC)
+	})
+
+	t.Run("propagates geocode error", func(t *testing.T) {
+		_, err := s.GetMarine("")
+		require.Error(t, err)
+	})
+}
+
 // Covers weatherCodeInfo across every documented WMO code range/exact
 // match plus an unmapped code, verifying every switch branch fires.
 func TestWeatherCodeInfo(t *testing.T) {

@@ -362,6 +362,146 @@ func apiWeatherForecastHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// apiWeatherAirQualityHandler returns current air quality (AQI and
+// pollutant concentrations) for the {location} path parameter.
+func apiWeatherAirQualityHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	data, err := weatherService.GetAirQuality(location)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, data)
+}
+
+// apiWeatherAlertsHandler returns active government weather alerts for the
+// {location} path parameter, aggregated across NWS (US), Environment
+// Canada (CA), and MeteoAlarm (Europe), normalized into a uniform shape.
+func apiWeatherAlertsHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	alerts, err := weatherService.GetAlerts(location)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"location": location,
+		"alerts":   alerts,
+	})
+}
+
+// apiWeatherAstronomyHandler returns sunrise/sunset and daylight data for
+// the {location} path parameter.
+func apiWeatherAstronomyHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	data, err := weatherService.GetAstronomy(location)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, data)
+}
+
+// apiWeatherHistoricalHandler returns historical daily weather for the
+// {location} path parameter between the required ?start= and ?end= query
+// parameters (each YYYY-MM-DD).
+func apiWeatherHistoricalHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	start := r.URL.Query().Get("start")
+	end := r.URL.Query().Get("end")
+	if start == "" || end == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATE_RANGE", "start and end query parameters are required (YYYY-MM-DD)", nil)
+		return
+	}
+	data, err := weatherService.GetHistorical(location, start, end)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"location": location,
+		"start":    start,
+		"end":      end,
+		"days":     data,
+	})
+}
+
+// apiWeatherHourlyHandler returns an hourly weather forecast for the
+// {location} path parameter. The number of hours (1-48) is read from the
+// ?hours= query parameter, defaulting to 24.
+func apiWeatherHourlyHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	hours := 24
+	if raw := r.URL.Query().Get("hours"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HOURS", "hours must be an integer between 1 and 48", nil)
+			return
+		}
+		hours = parsed
+	}
+	data, err := weatherService.GetHourly(location, hours)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
+		"location": location,
+		"hours":    hours,
+		"hourly":   data,
+	})
+}
+
+// apiWeatherMapsHandler is a permanent gap: keyless weather tile/map
+// imagery has no free provider within IDEA.md's outbound-call boundary.
+func apiWeatherMapsHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "weather map tile imagery requires a keyed provider (e.g. RainViewer, OpenWeatherMap tiles); no free keyless provider exists within this project's declared outbound-call boundary; not supported", nil)
+}
+
+// apiWeatherMarineHandler returns current marine/ocean conditions for the
+// {location} path parameter. Inland locations return zero-value fields,
+// not an error.
+func apiWeatherMarineHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	data, err := weatherService.GetMarine(location)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, data)
+}
+
+// apiWeatherPollenHandler returns current pollen counts for the {location}
+// path parameter. Coverage is currently limited to Europe by the
+// upstream provider; other regions return an explanatory coverage note.
+func apiWeatherPollenHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	data, err := weatherService.GetPollen(location)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, data)
+}
+
+// apiWeatherRadarHandler is a permanent gap: keyless weather radar imagery
+// has no free provider within IDEA.md's outbound-call boundary.
+func apiWeatherRadarHandler(w http.ResponseWriter, r *http.Request) {
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "weather radar imagery requires a keyed provider (e.g. RainViewer, NOAA radar mosaics); no free keyless provider exists within this project's declared outbound-call boundary; not supported", nil)
+}
+
+// apiWeatherUVHandler returns the current UV index for the {location}
+// path parameter.
+func apiWeatherUVHandler(w http.ResponseWriter, r *http.Request) {
+	location := chi.URLParam(r, "location")
+	data, err := weatherService.GetUVIndex(location)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		return
+	}
+	writeEnvelopeOK(w, http.StatusOK, data)
+}
+
 // apiGeoIPHandler resolves geolocation for the {ip} path parameter. The
 // geo service package only implements coordinate math (distance, bearing,
 // midpoint) with no IP capability, so this deliberately reuses

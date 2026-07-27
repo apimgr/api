@@ -345,6 +345,16 @@ func New(cfg *config.Config) *http.Server {
 		r.Route("/weather", func(r chi.Router) {
 			r.Get("/current/{location}", apiWeatherCurrentHandler)
 			r.Get("/forecast/{location}", apiWeatherForecastHandler)
+			r.Get("/air-quality/{location}", apiWeatherAirQualityHandler)
+			r.Get("/alerts/{location}", apiWeatherAlertsHandler)
+			r.Get("/astronomy/{location}", apiWeatherAstronomyHandler)
+			r.Get("/historical/{location}", apiWeatherHistoricalHandler)
+			r.Get("/hourly/{location}", apiWeatherHourlyHandler)
+			r.Get("/maps/{location}", apiWeatherMapsHandler)
+			r.Get("/marine/{location}", apiWeatherMarineHandler)
+			r.Get("/pollen/{location}", apiWeatherPollenHandler)
+			r.Get("/radar/{location}", apiWeatherRadarHandler)
+			r.Get("/uv/{location}", apiWeatherUVHandler)
 		})
 
 		// Geolocation
@@ -727,6 +737,14 @@ func toolPages() []toolPage {
 		{category: "network", tool: "whois", title: "WHOIS Lookup", description: "Look up domain and IP WHOIS registration information"},
 		{category: "weather", tool: "current", title: "Current Weather", description: "Get current weather conditions for a location"},
 		{category: "weather", tool: "forecast", title: "Weather Forecast", description: "Get a 1-16 day weather forecast for a location"},
+		{category: "weather", tool: "air-quality", title: "Air Quality", description: "Get current air quality index and pollutant levels for a location"},
+		{category: "weather", tool: "alerts", title: "Weather Alerts", description: "Get active government weather alerts for a location (NWS, Environment Canada, MeteoAlarm)"},
+		{category: "weather", tool: "astronomy", title: "Astronomy", description: "Get sunrise, sunset, and daylight data for a location"},
+		{category: "weather", tool: "historical", title: "Historical Weather", description: "Get historical daily weather for a location over a date range"},
+		{category: "weather", tool: "hourly", title: "Hourly Forecast", description: "Get an hourly weather forecast for a location"},
+		{category: "weather", tool: "marine", title: "Marine Conditions", description: "Get current marine and ocean conditions for a coastal location"},
+		{category: "weather", tool: "pollen", title: "Pollen Count", description: "Get current pollen counts for a location"},
+		{category: "weather", tool: "uv", title: "UV Index", description: "Get the current UV index for a location"},
 		{category: "geo", tool: "ip", title: "IP Geolocation", description: "Look up geolocation details for a public IP address"},
 		{category: "geo", tool: "distance", title: "Distance Calculator", description: "Calculate the great-circle distance between two coordinates"},
 		{category: "geo", tool: "bearing", title: "Bearing Calculator", description: "Calculate the initial compass bearing from one coordinate to another"},
@@ -969,7 +987,7 @@ func allCategories() []CategoryInfo {
 		{Path: "/system", Icon: "🩺", Name: "Health & System", Description: "Server health checks, system information, and version details", Count: 3},
 		{Path: "/testing", Icon: "🧪", Name: "Testing Tools", Description: "Mocks, fixtures, assertions, and API testing", Count: 45},
 		{Path: "/validate", Icon: "✅", Name: "Validators", Description: "Validating emails, phones, URLs, credit cards, and more", Count: 68},
-		{Path: "/weather", Icon: "⛅", Name: "Weather", Description: "Current weather, forecasts, and air quality data", Count: 15},
+		{Path: "/weather", Icon: "⛅", Name: "Weather", Description: "Current weather, forecasts, and air quality data", Count: 27},
 	}
 }
 

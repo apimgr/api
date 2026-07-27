@@ -407,17 +407,40 @@ toolPages()/template added for load-test/mock-server, matching the
 research(10) gap precedent. Verified independently with a
 `casjaysdev/go:latest` gofmt/build/vet/test run (all packages pass).
 
-## [ ] MISSING sub-tools needing net-new backend service work (32 linked, unwired)
-Read: src/server/template/page/{category}.tmpl for the exact linked path,
-src/service/{category}/ for whatever backend already exists in that area
-None of these have a corresponding template under
-`src/server/template/page/tools/{category}/` yet. Confirm per-tool whether
-it needs a brand-new service method, a new third-party dependency, or is
-out of scope per IDEA.md non-goals, before wiring — do not guess behavior.
-One commit per tool or small logical group when picked up.
+## [x] weather (10): air-quality, alerts, astronomy, historical, hourly, maps,
+  marine, pollen, radar, uv — CLOSED
+Implemented via `src/service/weather/weather.go` (air-quality, UV, pollen,
+astronomy, historical, hourly, marine — all built on the existing
+open-meteo geocoding/forecast/air-quality/marine/archive endpoints already
+used by current/forecast) and the new `src/service/weather/alerts.go`
+multi-provider alerts aggregator, per the user's explicit "use as many as
+possible, such as NWS, MetOffice, etc then make the data uniform" scoping
+instruction: NWS (US, `api.weather.gov/alerts/active`), Environment Canada/
+MSC GeoMet (CA, `api.weather.gc.ca/collections/weather-alerts`), and
+MeteoAlarm (European countries, Atom+CAP XML feed), all normalized into a
+single `Alert` shape and routed by resolved-location country code, with an
+empty (not error) result for uncovered countries. maps and radar are
+permanent-gap handlers (501 `NOT_SUPPORTED`, doc-commented) — no free
+keyless tile/radar-imagery provider exists within IDEA.md's outbound-call
+boundary; folded into "Known permanent API gaps" below. All 10 got handlers
+in `src/server/api_utils.go`, routes in `src/server/server.go`, table-driven
+tests in `src/server/api_utils_test.go` (including a
+`TestAPIWeatherPermanentGapHandlers` pair matching the
+`TestAPITestPermanentGapHandlers` precedent for maps/radar), service-layer
+tests in `src/service/weather/weather_test.go` and the new
+`src/service/weather/alerts_test.go` (NWS/ECCC/MeteoAlarm routing,
+visibility filtering, uncovered-country empty result, geocode-error
+propagation), and `toolPages()` entries + templates under
+`src/server/template/page/tools/weather/{air-quality,alerts,astronomy,
+historical,hourly,marine,pollen,uv}.tmpl` for the 8 wireable tools only —
+no toolPages()/template added for maps/radar, matching the testing(9)
+load-test/mock-server gap precedent. Verified independently with a
+`casjaysdev/go:latest` gofmt/build/vet/test run (all packages pass,
+including real-network handler tests hitting the live open-meteo/NWS/ECCC/
+MeteoAlarm endpoints).
 
-- weather (10): air-quality, alerts, astronomy, historical, hourly, maps,
-  marine, pollen, radar, uv
+This was the last entry under "MISSING sub-tools needing net-new backend
+service work" — that heading is now fully closed and removed.
 
 ## [ ] Known template bugs (tracked, not yet fixed)
 - `network.tmpl` links `/network/useragent` but the wired API/frontend path
@@ -438,9 +461,10 @@ apiResearchPdfExtractHandler, apiResearchReadabilityHandler,
 apiResearchScraperHandler, apiResearchSummarizeHandler,
 apiOsintBreachHandler, apiOsintCompanyHandler, apiOsintMetadataHandler,
 apiOsintPhoneHandler, apiOsintSocialHandler, apiOsintUsernameHandler,
-apiTestLoadTestHandler, apiTestMockServerHandler doc comments),
+apiTestLoadTestHandler, apiTestMockServerHandler,
+apiWeatherMapsHandler, apiWeatherRadarHandler doc comments),
 src/server/api_network.go (apiNetworkTracerouteHandler doc comment)
-Twenty-seven of the wired API routes honestly return 501 NOT_SUPPORTED
+Twenty-nine of the wired API routes honestly return 501 NOT_SUPPORTED
 rather than inventing behavior: generate/qr (no QR encoder exists anywhere in the
 codebase or go.mod), language/detect (conflicts with IDEA.md's declared
 non-goal of language auto-detection), language/dictionary,
@@ -478,7 +502,11 @@ outside IDEA.md's outbound-call boundary) and test/mock-server (would
 require either a second runtime-managed listening socket, forbidden by
 config-rules.md's no-runtime-port-change rule, or persisting
 caller-defined response rules, forbidden by IDEA.md's no-persistent-
-storage non-goal). Resolving these requires a user/spec decision —
+storage non-goal), and the two weather gaps — weather/maps and
+weather/radar (keyless weather tile/map and radar imagery has no free
+provider within IDEA.md's declared outbound-call boundary; a real
+implementation needs a keyed provider such as RainViewer, OpenWeatherMap
+tiles, or NOAA radar mosaics). Resolving these requires a user/spec decision —
 either add a QR-encoding dependency, confirm language/detect and the
 four other language gaps should stay unsupported per IDEA.md, scope what
 "extraction" means for research/extract, decide whether network/
@@ -487,9 +515,12 @@ permanent gap, decide whether any of the six osint gaps should be
 promoted to a keyed-API-optional feature, decide whether any of the ten
 research gaps should be promoted by amending IDEA.md's Research scope,
 or decide whether load-test/mock-server should be promoted via a
-dynamic-listener-lifecycle feature — not further code guessing.
-None of the twenty-seven gap routes have a `toolPages()` entry or
-dedicated frontend page template; osint's six, research's ten, and
-testing's load-test/mock-server pair still have pre-existing nav cards on
-their category listing page linking to a per-tool page that returns 404
-(documented dead links, not newly added here).
+dynamic-listener-lifecycle feature, or decide whether weather/maps and
+weather/radar should be promoted via a keyed-tile-provider integration —
+not further code guessing.
+None of the twenty-nine gap routes have a `toolPages()` entry or
+dedicated frontend page template; osint's six, research's ten,
+testing's load-test/mock-server pair, and weather's maps/radar pair still
+have pre-existing nav cards on their category listing page linking to a
+per-tool page that returns 404 (documented dead links, not newly added
+here).

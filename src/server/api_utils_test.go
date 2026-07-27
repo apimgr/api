@@ -2068,6 +2068,182 @@ func TestAPITestFakeDataHandler(t *testing.T) {
 	})
 }
 
+// apiWeatherMapsHandler and apiWeatherRadarHandler are permanent gaps and
+// must always 501 NOT_SUPPORTED, matching the TestAPITestPermanentGapHandlers
+// pattern.
+func TestAPIWeatherPermanentGapHandlers(t *testing.T) {
+	handlers := map[string]http.HandlerFunc{
+		"maps":  apiWeatherMapsHandler,
+		"radar": apiWeatherRadarHandler,
+	}
+	for tool, handler := range handlers {
+		t.Run(tool, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/weather/"+tool+"/London", nil)
+			w := httptest.NewRecorder()
+
+			handler(w, req)
+
+			assert.Equal(t, http.StatusNotImplemented, w.Code)
+			env := decodeEnvelope(t, w.Body.Bytes())
+			assert.Equal(t, "NOT_SUPPORTED", env["error"])
+		})
+	}
+}
+
+// apiWeatherAirQualityHandler must return 200 with an ok:true envelope for a
+// location lookup.
+func TestAPIWeatherAirQualityHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherAirQualityHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/weather/London", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, true, env["ok"])
+}
+
+// apiWeatherAlertsHandler must return 200 with a location/alerts envelope.
+func TestAPIWeatherAlertsHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherAlertsHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/weather/London", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, true, env["ok"])
+	data, ok := env["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "London", data["location"])
+	assert.NotNil(t, data["alerts"])
+}
+
+// apiWeatherAstronomyHandler must return 200 with an ok:true envelope for a
+// location lookup.
+func TestAPIWeatherAstronomyHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherAstronomyHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/weather/London", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, true, env["ok"])
+}
+
+// apiWeatherHistoricalHandler must 400 MISSING_DATE_RANGE with no ?start=/
+// ?end= and 200 with a days breakdown when both are supplied.
+func TestAPIWeatherHistoricalHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherHistoricalHandler)
+
+	t.Run("missing date range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/weather/London", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_DATE_RANGE", env["error"])
+	})
+
+	t.Run("valid date range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/weather/London?start=2024-01-01&end=2024-01-02", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, true, env["ok"])
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "2024-01-01", data["start"])
+		assert.Equal(t, "2024-01-02", data["end"])
+	})
+}
+
+// apiWeatherHourlyHandler must default to 24 hours, 400 INVALID_HOURS for a
+// non-integer ?hours=, and 200 with an hours breakdown otherwise.
+func TestAPIWeatherHourlyHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherHourlyHandler)
+
+	t.Run("default hours", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/weather/London", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, true, env["ok"])
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(24), data["hours"])
+	})
+
+	t.Run("invalid hours", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/weather/London?hours=notanumber", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "INVALID_HOURS", env["error"])
+	})
+}
+
+// apiWeatherMarineHandler must return 200 with an ok:true envelope for a
+// location lookup.
+func TestAPIWeatherMarineHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherMarineHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/weather/Miami", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, true, env["ok"])
+}
+
+// apiWeatherPollenHandler must return 200 with an ok:true envelope for a
+// location lookup.
+func TestAPIWeatherPollenHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherPollenHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/weather/Berlin", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, true, env["ok"])
+}
+
+// apiWeatherUVHandler must return 200 with an ok:true envelope for a
+// location lookup.
+func TestAPIWeatherUVHandler(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/weather/{location}", apiWeatherUVHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/weather/London", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, true, env["ok"])
+}
+
 // apiOsintEmailHandler must 400 INVALID_EMAIL for a malformed address and
 // 200 for a well-formed one.
 func TestAPIOsintEmailHandler(t *testing.T) {
