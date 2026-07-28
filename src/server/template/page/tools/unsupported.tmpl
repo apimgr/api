@@ -1,0 +1,31 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+      <a href="/">Home</a> / <a href="/{{.ActivePage}}">{{.ActivePage}}</a> / {{.PageTitle}}
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">{{.PageTitle}}</h1>
+        <span class="badge badge-warning">Not supported</span>
+      </div>
+
+      <p class="tool-description">
+        {{.PageDescription}}
+      </p>
+
+      <div class="alert alert-warning">
+        <p>
+          This tool is not available. The matching API endpoint returns
+          <code>501 NOT_SUPPORTED</code> rather than inventing behavior:
+        </p>
+        <p>{{.NotSupportedReason}}</p>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -677,3 +677,15 @@ FIXED: `docker run --rm --name ... --entrypoint sh casjaysdev/go:latest -c
 restored the tool. Reverted the `lint` job's `container.image` back to
 `casjaysdev/go:latest` (removed the `casjaysdev/go:2606` pin and its
 tracking comment), matching AI.md PART 27's lint job spec exactly.
+
+## [ ] go-lint findings from the toolPages()/unsupported.tmpl pass (unrelated pre-existing issues)
+A `go-lint` scoped run flagged 10 pre-existing convention violations
+unrelated to the 28-route `toolPages()` fix that surfaced them; none are
+app-breaking, so they are logged here rather than blocking that commit.
+- `docker/Dockerfile` line 21: `go build` missing inline `-buildvcs=false` flag
+- `docker/Dockerfile` line 21: `go build` missing `-trimpath`
+- `docker/Dockerfile`: `GO_DOCKER` build stage missing `-e GOFLAGS=-buildvcs=false`
+- `src/main.go` lines 170, 180, 222, 232, 243, 290: `log.Fatalf` used instead
+  of `os.Exit` with the correct sysexits code
+- `src/graphql/theme.go` lines 89-104: client-side React rendering present —
+  spec requires server-side Go templates only

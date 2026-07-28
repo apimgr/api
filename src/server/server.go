@@ -92,7 +92,7 @@ func New(cfg *config.Config) *http.Server {
 
 	// Per-tool detail pages (see TODO.AI.md for remaining sub-tool wiring)
 	for _, tp := range toolPages() {
-		r.Get("/"+tp.category+"/"+tp.tool, toolPageHandler(cfg, tp.category, tp.tool, tp.title, tp.description))
+		r.Get("/"+tp.category+"/"+tp.tool, toolPageHandler(cfg, tp.category, tp.tool, tp.title, tp.description, tp.reason))
 	}
 
 	r.Get("/api", apiDocsHandler(cfg))
@@ -604,6 +604,7 @@ type PageData struct {
 	ActivePage        string
 	PageTitle         string
 	PageDescription   string
+	NotSupportedReason string
 	Tagline           string
 	Version           string
 	CommitID          string
@@ -667,14 +668,22 @@ func initTemplates() error {
 	}
 
 	// Per-tool detail pages nested under template/page/tools/{category}/{tool}.tmpl,
-	// registered under composite keys like "crypto/hash"
+	// registered under composite keys like "crypto/hash". Entries with a
+	// non-empty reason (the 28 permanent API gaps) instead share
+	// template/page/tools/unsupported.tmpl — see the loop below.
 	for _, tp := range toolPages() {
 		key := tp.category + "/" + tp.tool
+		contentTemplate := fmt.Sprintf("template/page/tools/%s.tmpl", key)
+		if tp.reason != "" {
+			// Permanent API gap (PART 16 route mirroring): reuse the one
+			// shared "not supported" template instead of a per-tool file.
+			contentTemplate = "template/page/tools/unsupported.tmpl"
+		}
 		tmpl, err := template.ParseFS(templatesFS,
 			"template/layout/public.tmpl",
 			"template/partial/*.tmpl",
 			"template/partial/public/*.tmpl",
-			fmt.Sprintf("template/page/tools/%s.tmpl", key),
+			contentTemplate,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to parse %s tool template: %w", key, err)
@@ -691,13 +700,24 @@ type toolPage struct {
 	tool        string
 	title       string
 	description string
+	// reason is set only for the 28 permanent API gaps (PART 16 route-
+	// mirroring: every wired API route, including a 501 NOT_SUPPORTED one,
+	// gets a matching frontend page). When non-empty, initTemplates()
+	// renders this entry from the shared template/page/tools/unsupported.tmpl
+	// instead of a per-tool template, and the handler surfaces reason as
+	// PageData.NotSupportedReason instead of a working form.
+	reason string
 }
 
 // toolPages lists the per-tool detail pages that currently have templates on
 // disk under template/page/tools/{category}/{tool}.tmpl (PART 16 frontend
-// route mirrors API route rule). Most of the ~240 sub-tool pages linked from
-// the 21 category pages have neither a template nor a route yet — see
-// TODO.AI.md for the remaining wiring work.
+// route mirrors API route rule). This includes the 28 permanent API gaps
+// (entries with a non-empty reason), which render the shared
+// template/page/tools/unsupported.tmpl instead of a working form so their
+// wired-but-501 API route still has a matching frontend page. Most of the
+// remaining ~240 sub-tool pages linked from the 21 category pages have
+// neither a template nor a route yet — see TODO.AI.md for the remaining
+// wiring work.
 func toolPages() []toolPage {
 	return []toolPage{
 		{category: "crypto", tool: "hash", title: "Hash Generator", description: "Generate cryptographic hashes using various algorithms (MD5, SHA-1, SHA-256, SHA-512, BLAKE3)"},
@@ -911,15 +931,52 @@ func toolPages() []toolPage {
 		{category: "generate", tool: "ssh-key", title: "SSH Key", description: "Generate SSH key pairs"},
 		{category: "generate", tool: "identicon", title: "Identicon", description: "Generate identicons from hashes"},
 		{category: "generate", tool: "placeholder", title: "Placeholder Image", description: "Generate placeholder images"},
+
+		// The 28 permanent API gaps (see TODO.AI.md "Known permanent API
+		// gaps"): each has a real, wired /api/{version}/... route that
+		// honestly returns 501 NOT_SUPPORTED rather than inventing
+		// behavior IDEA.md's declared scope/non-goals/trust-boundary
+		// excludes. PART 16 requires a matching frontend route for every
+		// wired API route, so each gets a page here too — rendered via
+		// the shared unsupported.tmpl rather than a working form.
+		{category: "language", tool: "detect", title: "Language Detection", description: "Detect the language of a piece of text", reason: "Language auto-detection is a declared non-goal in IDEA.md; only language code/name lookup is supported."},
+		{category: "language", tool: "translate", title: "Translate", description: "Translate text between languages", reason: "Machine translation is a declared non-goal in IDEA.md and commercial translation APIs are outside the declared free/keyless trust boundary."},
+		{category: "language", tool: "dictionary", title: "Dictionary Lookup", description: "Look up word definitions", reason: "Dictionary lookup would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "language", tool: "grammar", title: "Grammar Check", description: "Check text for grammar issues", reason: "Grammar checking would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "language", tool: "spell-check", title: "Spell Check", description: "Check text for spelling issues", reason: "Spell checking would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "language", tool: "thesaurus", title: "Thesaurus", description: "Look up word synonyms", reason: "Thesaurus lookup would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "research", tool: "extract", title: "Citation Extraction", description: "Extract citations from unstructured text", reason: "Citation extraction from free-form text is unimplemented; IDEA.md's Research scope covers citation formatting, bibliography generation, and DOI validation only."},
+		{category: "research", tool: "arxiv", title: "arXiv Lookup", description: "Look up an arXiv paper by ID", reason: "arXiv lookup would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "research", tool: "bibtex", title: "BibTeX Export", description: "Export a citation as BibTeX", reason: "BibTeX export is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI."},
+		{category: "research", tool: "footnotes", title: "Footnote Formatter", description: "Format footnotes for a document", reason: "Footnote formatting is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI."},
+		{category: "research", tool: "isbn", title: "ISBN Lookup", description: "Look up book metadata by ISBN", reason: "ISBN lookup would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "research", tool: "metadata", title: "Page Metadata Extraction", description: "Extract metadata from a web page", reason: "Web page metadata extraction would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "research", tool: "outline", title: "Document Outline", description: "Generate a document outline", reason: "Document outlining is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI."},
+		{category: "research", tool: "pdf-extract", title: "PDF Text Extraction", description: "Extract text from a PDF", reason: "PDF text extraction needs a new third-party dependency to parse untrusted binaries; outside IDEA.md's declared scope."},
+		{category: "research", tool: "readability", title: "Readability Score", description: "Score the readability of a page or text", reason: "Readability scoring of remote pages would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "research", tool: "scraper", title: "Web Scraper", description: "Scrape content from a web page", reason: "Web scraping would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "research", tool: "summarize", title: "Text Summarizer", description: "Summarize a piece of text", reason: "A genuine summarizer needs an external/keyed NLP or LLM service, excluded by IDEA.md's free/keyless integration policy."},
+		{category: "osint", tool: "breach", title: "Breach Check", description: "Check whether an email or username appears in a known breach", reason: "Breach-database checking requires a commercial keyed third-party API, outside IDEA.md's declared free/keyless OSINT trust boundary."},
+		{category: "osint", tool: "company", title: "Company Lookup", description: "Look up company registration details", reason: "Company lookup requires a commercial keyed third-party API, outside IDEA.md's declared free/keyless OSINT trust boundary."},
+		{category: "osint", tool: "metadata", title: "File Metadata Extraction", description: "Extract metadata from an uploaded file", reason: "Generic file-metadata extraction duplicates the existing image/metadata tool and is outside OSINT's declared 4-mechanism scope of IP geolocation/WHOIS/DNS/TLS certificate."},
+		{category: "osint", tool: "phone", title: "Phone Intelligence", description: "Look up carrier and risk details for a phone number", reason: "Phone-number intelligence requires a commercial keyed API; validate/phone already covers format validation within IDEA.md's declared scope."},
+		{category: "osint", tool: "social", title: "Social Profile Discovery", description: "Discover social media profiles for a name or handle", reason: "Cross-platform profile discovery would require probing dozens of third-party platforms, outside IDEA.md's declared free/keyless OSINT trust boundary."},
+		{category: "osint", tool: "username", title: "Username Search", description: "Search for a username across platforms", reason: "Cross-platform username discovery would require probing dozens of third-party platforms, outside IDEA.md's declared free/keyless OSINT trust boundary."},
+		{category: "testing", tool: "load-test", title: "Load Test", description: "Run a load test against a target URL", reason: "Load testing would require firing outbound HTTP traffic at a caller-supplied target, outside IDEA.md's declared outbound-call boundary."},
+		{category: "testing", tool: "mock-server", title: "Mock Server", description: "Spin up a temporary mock HTTP server", reason: "A mock server needs either a second runtime-managed listening socket (forbidden by the no-runtime-port-change config rule) or persisting caller-defined rules (forbidden by IDEA.md's no-persistent-storage non-goal)."},
+		{category: "weather", tool: "maps", title: "Weather Map Tiles", description: "Get weather map tile imagery for a region", reason: "Keyless weather tile imagery has no free provider within IDEA.md's declared outbound-call boundary; a real implementation needs a keyed provider."},
+		{category: "weather", tool: "radar", title: "Radar Imagery", description: "Get radar imagery for a location", reason: "Keyless radar imagery has no free provider within IDEA.md's declared outbound-call boundary; a real implementation needs a keyed provider."},
+		{category: "network", tool: "traceroute", title: "Traceroute", description: "Trace the network path to a host", reason: "A real traceroute needs TTL-limited probes and a raw ICMP socket (CAP_NET_RAW or root), which this unprivileged self-contained binary cannot assume it has."},
 	}
 }
 
 // toolPageHandler renders a per-tool detail page under a category
-func toolPageHandler(cfg *config.Config, category, tool, title, description string) http.HandlerFunc {
+func toolPageHandler(cfg *config.Config, category, tool, title, description, reason string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, category)
 		data.PageTitle = title
 		data.PageDescription = description
+		data.NotSupportedReason = reason
 		renderPage(w, category+"/"+tool, data)
 	}
 }
