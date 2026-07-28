@@ -30,9 +30,20 @@ import (
 )
 
 var (
-	Version   = "1.0.0"
-	CommitID  = "unknown"
-	BuildDate = "unknown"
+	Version      = "1.0.0"
+	CommitID     = "unknown"
+	BuildDate    = "unknown"
+	OfficialSite = ""
+)
+
+// Sysexits-style exit codes (BSD sysexits.h); the stdlib does not export
+// these, so they are defined locally per go_conventions.md.
+const (
+	exUsage       = 64 // Invalid flag or argument value
+	exUnavailable = 69 // Required service or resource unavailable
+	exOSErr       = 71 // OS-level error (fork/daemonize failed, etc.)
+	exCantCreat   = 73 // Output file cannot be created (PID file)
+	exConfig      = 78 // Configuration error
 )
 
 func main() {
@@ -167,7 +178,8 @@ func main() {
 
 	// Initialize database
 	if err := database.Init(paths.DataDir()); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Printf("Failed to initialize database: %v", err)
+		os.Exit(exUnavailable)
 	}
 	defer database.Close()
 
@@ -177,7 +189,8 @@ func main() {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		log.Printf("Failed to load configuration: %v", err)
+		os.Exit(exConfig)
 	}
 
 	// Re-resolve --color/NO_COLOR now that config is available, applying the
@@ -219,7 +232,8 @@ func main() {
 
 	// Set application mode + debug flag (CLI > env > "debug" mode alias > default)
 	if err := appmode.Initialize(*mode, *debug, debugFlagSet); err != nil {
-		log.Fatalf("Invalid --mode value: %v", err)
+		log.Printf("Invalid --mode value: %v", err)
+		os.Exit(exUsage)
 	}
 	cfg.Server.Mode = appmode.GetCurrentMode().String()
 
@@ -229,7 +243,8 @@ func main() {
 	// start decides for itself via shouldDaemonize/detectServiceManager.
 	if *daemon {
 		if err := daemonize(); err != nil {
-			log.Fatalf("Failed to daemonize: %v", err)
+			log.Printf("Failed to daemonize: %v", err)
+			os.Exit(exOSErr)
 		}
 	}
 
@@ -240,7 +255,8 @@ func main() {
 		pidPath = paths.DefaultPIDPath()
 	}
 	if err := pidfile.WritePIDFile(pidPath); err != nil {
-		log.Fatalf("Failed to write PID file: %v", err)
+		log.Printf("Failed to write PID file: %v", err)
+		os.Exit(exCantCreat)
 	}
 	defer pidfile.RemovePIDFile(pidPath)
 
@@ -287,7 +303,8 @@ func main() {
 		})
 		tlsConfig, err := sslMgr.GetTLSConfig([]string{domain})
 		if err != nil {
-			log.Fatalf("Failed to configure TLS: %v", err)
+			log.Printf("Failed to configure TLS: %v", err)
+			os.Exit(exConfig)
 		}
 		httpsSrv = &http.Server{
 			Addr:         fmt.Sprintf("%s:%s", cfg.Server.Address, httpsPort),

@@ -9,12 +9,14 @@ import (
 	"github.com/apimgr/api/src/client/tui"
 )
 
-// version, commit, and buildDate are injected at build time via
-// -ldflags "-X main.version=... -X main.commit=... -X main.buildDate=...".
+// Version, CommitID, and BuildDate are injected at build time via
+// -ldflags "-X main.Version=... -X main.CommitID=... -X main.BuildDate=...",
+// matching the Makefile/Dockerfile/release.yml ldflags targets.
 var (
-	version   = "dev"
-	commit    = "none"
-	buildDate = "unknown"
+	Version      = "dev"
+	CommitID     = "none"
+	BuildDate    = "unknown"
+	OfficialSite = ""
 )
 
 func init() {
@@ -23,9 +25,9 @@ func init() {
 
 func main() {
 	build := cmd.BuildInfo{
-		Version:   version,
-		Commit:    commit,
-		BuildDate: buildDate,
+		Version:   Version,
+		Commit:    CommitID,
+		BuildDate: BuildDate,
 	}
 	os.Exit(cmd.Execute(os.Args, build))
 }

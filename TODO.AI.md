@@ -717,20 +717,43 @@ restored the tool. Reverted the `lint` job's `container.image` back to
 `casjaysdev/go:latest` (removed the `casjaysdev/go:2606` pin and its
 tracking comment), matching AI.md PART 27's lint job spec exactly.
 
-## [ ] go-lint findings from the toolPages()/unsupported.tmpl pass (unrelated pre-existing issues)
+## [x] go-lint findings from the toolPages()/unsupported.tmpl pass (unrelated pre-existing issues)
 A `go-lint` scoped run flagged 10 pre-existing convention violations
 unrelated to the 28-route `toolPages()` fix that surfaced them; none are
-app-breaking, so they are logged here rather than blocking that commit.
-- `docker/Dockerfile` line 21: `go build` missing inline `-buildvcs=false` flag
-- `docker/Dockerfile` line 21: `go build` missing `-trimpath`
-- `docker/Dockerfile`: `GO_DOCKER` build stage missing `-e GOFLAGS=-buildvcs=false`
-- `src/main.go` lines 170, 180, 222, 232, 243, 290: `log.Fatalf` used instead
-  of `os.Exit` with the correct sysexits code
-- `src/graphql/theme.go` lines 89-104: client-side React rendering present —
-  spec requires server-side Go templates only
-- `src/client/main.go` lines 14-18: build-info variables are named `version`/
+app-breaking, so they were logged here rather than blocking that commit.
+- [x] `docker/Dockerfile` line 21: `go build` missing inline `-buildvcs=false`
+  flag — fixed, added `-buildvcs=false -trimpath` and a `GOFLAGS=-buildvcs=false`
+  env-var prefix to the builder-stage `go build` invocation (2026-07-28)
+- [x] `docker/Dockerfile` line 21: `go build` missing `-trimpath` — fixed in
+  the same edit above (2026-07-28)
+- [x] `docker/Dockerfile`: `GO_DOCKER` build stage missing
+  `-e GOFLAGS=-buildvcs=false` — fixed via the inline `GOFLAGS=-buildvcs=false`
+  env-var prefix on the `go build` line (2026-07-28)
+- [x] `src/main.go` lines 170, 180, 222, 232, 243, 290: `log.Fatalf` used
+  instead of `os.Exit` with the correct sysexits code — fixed; replaced each
+  with `log.Printf` + `os.Exit(N)` using locally-defined sysexits constants
+  (`exUnavailable`=69 DB init, `exConfig`=78 config load / TLS config,
+  `exUsage`=64 invalid `--mode`, `exOSErr`=71 daemonize failure,
+  `exCantCreat`=73 PID file write failure) per `go_conventions.md` (2026-07-28)
+- [x] `src/graphql/theme.go` lines 89-104: client-side React rendering
+  present — reviewed against AI.md's GraphQL/Swagger theming section
+  (line ~18779): GraphiQL is a spec-mandated interactive third-party
+  explorer UI (`/server/docs/graphql`) that inherently ships its own
+  React/CodeMirror bundle via CDN script tags; this is the documented
+  exception to the "no client-side JS framework" rule, not a violation —
+  no code change made (2026-07-28)
+- [x] `src/client/main.go` lines 14-18: build-info variables are named `version`/
   `commit`/`buildDate` instead of the required `Version`/`CommitID`/
   `BuildDate`; the release workflow's `-X 'main.Version=...'` ldflags target
   names that don't exist in this file, so the client binary's runtime
   version info is silently unset — found by a `go-lint` pass during the
-  language/research 4-tool scope-broadening (2026-07-24)
+  language/research 4-tool scope-broadening (2026-07-24). Fixed by renaming
+  to `Version`/`CommitID`/`BuildDate` (2026-07-28). While fixing, found a
+  related gap: AI.md line 663 requires LDFLAGS to also set
+  `-X 'main.OfficialSite=...'`, but neither `src/main.go` nor
+  `src/client/main.go` declared an `OfficialSite` var (silently ignored by
+  the linker) and `docker/Dockerfile`'s LDFLAGS omitted the flag entirely
+  (Makefile and release.yml already had it correctly). Fixed by adding
+  `OfficialSite = ""` to both `main.go` files and adding the `OFFICIAL_SITE`
+  ARG + `-X 'main.OfficialSite=${OFFICIAL_SITE}'` to the Dockerfile
+  (2026-07-28)

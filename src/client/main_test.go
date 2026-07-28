@@ -16,29 +16,29 @@ func TestInit_WiresTUILauncher(t *testing.T) {
 	assert.NotNil(t, cmd.TUILauncher, "main.go's init() must wire cmd.TUILauncher to tui.Run")
 }
 
-// TestBuildInfo_Defaults confirms the package-level version/commit/buildDate
+// TestBuildInfo_Defaults confirms the package-level Version/CommitID/BuildDate
 // vars carry their documented ldflags-overridable defaults when the binary
 // is built without -ldflags (e.g. `go test`).
 func TestBuildInfo_Defaults(t *testing.T) {
-	assert.Equal(t, "dev", version)
-	assert.Equal(t, "none", commit)
-	assert.Equal(t, "unknown", buildDate)
+	assert.Equal(t, "dev", Version)
+	assert.Equal(t, "none", CommitID)
+	assert.Equal(t, "unknown", BuildDate)
 }
 
-// TestBuildInfo_ConstructsCmdBuildInfo confirms the local version/commit/
-// buildDate vars map correctly into cmd.BuildInfo field-for-field, the same
+// TestBuildInfo_ConstructsCmdBuildInfo confirms the local Version/CommitID/
+// BuildDate vars map correctly into cmd.BuildInfo field-for-field, the same
 // construction main() performs before calling cmd.Execute. main() and
 // os.Exit itself are not covered here: exercising them would terminate the
 // test process, so that wiring is intentionally left to integration/e2e
 // testing of the compiled binary rather than a unit test.
 func TestBuildInfo_ConstructsCmdBuildInfo(t *testing.T) {
 	build := cmd.BuildInfo{
-		Version:   version,
-		Commit:    commit,
-		BuildDate: buildDate,
+		Version:   Version,
+		Commit:    CommitID,
+		BuildDate: BuildDate,
 	}
 
-	assert.Equal(t, version, build.Version)
-	assert.Equal(t, commit, build.Commit)
-	assert.Equal(t, buildDate, build.BuildDate)
+	assert.Equal(t, Version, build.Version)
+	assert.Equal(t, CommitID, build.Commit)
+	assert.Equal(t, BuildDate, build.BuildDate)
 }
