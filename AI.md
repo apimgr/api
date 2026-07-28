@@ -1735,7 +1735,6 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
   "permissions": {
     "allow": [
       "Read(**)",
-      "Write(**)",
       "Edit(**)",
       "Bash(go *)",
       "Bash(make *)",
@@ -1785,20 +1784,20 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write(**)",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "if grep -qi 'anthropic\\|claude' \"$file\" 2>/dev/null; then echo 'Error: File contains vendor names (Anthropic/Claude)' >&2; exit 1; fi"
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); if [ -n \"$f\" ] && grep -qi 'anthropic\\|claude' \"$f\" 2>/dev/null; then echo 'Error: File contains vendor names (Anthropic/Claude)' >&2; exit 1; fi"
           }
         ]
       },
       {
-        "matcher": "Write(*.go)",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "gofmt -l \"$file\" 2>/dev/null | grep -q . && echo 'Error: Go file would not be formatted' >&2 && exit 1 || exit 0"
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.go) gofmt -l \"$f\" 2>/dev/null | grep -q . && { echo 'Error: Go file would not be formatted' >&2; exit 1; } || exit 0 ;; *) exit 0 ;; esac"
           }
         ]
       }
@@ -1815,8 +1814,7 @@ Both files use the same structure. Settings are merged: `settings.local.json` ov
 | Pattern | Description | Example |
 |---------|-------------|---------|
 | `Read(**)` | Read any file | All files recursively |
-| `Write(**)` | Write any file | All files recursively |
-| `Edit(**)` | Edit any file | All files recursively |
+| `Edit(**)` | Edit or write any file | All files recursively — `Write(...)` rules are NOT matched by permission checks; use `Edit(...)` for both write and edit tools |
 | `Bash(cmd *)` | Command with zero or more args | `Bash(go *)` → `go`, `go build`, `go test ./...` |
 | `Bash(cmd arg *)` | Command with specific prefix | `Bash(git commit *)` → `git commit -m "msg"` |
 | `WebFetch(domain:x)` | Fetch from specific domain | `WebFetch(domain:github.com)` |
@@ -10038,6 +10036,36 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 ```
 
 **For client flags, see PART 32.**
+
+## Flag Parsing (Server Binary)
+
+**Never hand-roll argument parsing** (no manual `switch`/`os.Args` loops for the primary flag set — see `go_conventions.md` § CLI Flags). The server binary is single-command (it starts the server; it has no subcommands), so it uses the stdlib `flag` package. `cobra`/`viper` (listed under "Common Go Modules") are for the multi-command client CLI binary — see PART 32 — not the server.
+
+```go
+func main() {
+    fs := flag.NewFlagSet(filepath.Base(os.Args[0]), flag.ExitOnError)
+    configPath := fs.String("config", "", "Path to config file")
+    dataDir := fs.String("data", "", "Data directory")
+    port := fs.Int("port", 0, "Listen port")
+    mode := fs.String("mode", "", "Application mode")
+    daemon := fs.Bool("daemon", false, "Run as background daemon")
+    debug := fs.Bool("debug", false, "Enable debug logging")
+    color := fs.String("color", "auto", "Color output: auto, yes, no")
+    showVersion := fs.Bool("version", false, "Show version and exit")
+
+    fs.Usage = func() { printHelp(fs) }
+    _ = fs.Parse(os.Args[1:])
+
+    if *showVersion {
+        printVersion()
+        os.Exit(0)
+    }
+    // Remaining flags (*configPath, *dataDir, *port, *mode, *daemon, *debug, *color)
+    // feed into config load / server startup below.
+}
+```
+
+`os.Args` manipulation elsewhere in this PART (e.g. `filterDaemonFlag`) operates on the args slice *after* this parse step (for daemon re-exec) — it is not a substitute for it.
 
 ## NO_COLOR Support (ALL Binaries)
 

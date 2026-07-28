@@ -525,12 +525,17 @@ research gaps should be promoted by amending IDEA.md's Research scope,
 decide whether load-test/mock-server should be promoted via a
 dynamic-listener-lifecycle feature, or decide whether weather/maps and
 weather/radar should be promoted via a keyed-tile-provider integration.
-None of the twenty-eight gap routes have a `toolPages()` entry or
-dedicated frontend page template; osint's six, research's ten,
-testing's load-test/mock-server pair, and weather's maps/radar pair still
-have pre-existing nav cards on their category listing page linking to a
-per-tool page that returns 404 (documented dead links, not newly added
-here).
+All twenty-eight gap routes now have a `toolPages()` entry (with a
+per-tool `reason` string sourced from IDEA.md's scope/non-goal language)
+and render through the shared `template/page/tools/unsupported.tmpl`
+partial instead of 404ing — this satisfies PART 16's "frontend mirrors
+API route" rule for routes that are wired but permanently return
+`501 NOT_SUPPORTED`, without fabricating functionality IDEA.md excludes.
+The underlying promotion decisions listed above (language/detect,
+research/extract, network/traceroute opt-in, osint keyed-API promotion,
+research scope amendment, load-test/mock-server dynamic-listener
+feature, weather keyed-tile-provider integration) remain open and still
+need a user/spec decision.
 
 ## [ ] CI secret-scan false-positive history on src/config/config_test.go
 CI run 30255631519's `secret-scan` job (TruffleHog) failed against harmless
