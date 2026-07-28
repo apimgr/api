@@ -597,24 +597,24 @@ func New(cfg *config.Config) *http.Server {
 
 // Template data
 type PageData struct {
-	SiteTitle         string
-	SiteIcon          string
-	BaseURL           string
-	Theme             string
-	ActivePage        string
-	PageTitle         string
-	PageDescription   string
+	SiteTitle          string
+	SiteIcon           string
+	BaseURL            string
+	Theme              string
+	ActivePage         string
+	PageTitle          string
+	PageDescription    string
 	NotSupportedReason string
-	Tagline           string
-	Version           string
-	CommitID          string
-	BuildDate         string
-	Mode              string
-	SecurityEmail     string
-	UpdatedAt         string
-	RateLimitRequests int
-	RateLimitWindow   int
-	Categories        []CategoryInfo
+	Tagline            string
+	Version            string
+	CommitID           string
+	BuildDate          string
+	Mode               string
+	SecurityEmail      string
+	UpdatedAt          string
+	RateLimitRequests  int
+	RateLimitWindow    int
+	Categories         []CategoryInfo
 }
 
 // CategoryInfo describes one tool category shown on the /categories index page
@@ -824,6 +824,8 @@ func toolPages() []toolPage {
 		{category: "parse", tool: "yaml", title: "YAML Parser", description: "Parse a YAML document into a structured map"},
 		{category: "research", tool: "citation", title: "Citation Formatter", description: "Format a reference into an APA, MLA, or Chicago style citation"},
 		{category: "research", tool: "doi", title: "DOI Validator", description: "Validate a DOI and get its canonical https://doi.org resolver URL"},
+		{category: "research", tool: "arxiv", title: "arXiv Lookup", description: "Look up an arXiv paper by ID using the free, keyless arXiv API"},
+		{category: "research", tool: "isbn", title: "ISBN Lookup", description: "Look up book metadata by ISBN using the free, keyless Open Library API"},
 		{category: "fun", tool: "joke", title: "Random Joke", description: "Get a random joke type paired with a fortune-cookie style saying"},
 		{category: "fun", tool: "fortune", title: "Random Fortune", description: "Get a single random fortune-cookie style saying"},
 		{category: "fun", tool: "dad-joke", title: "Dad Jokes", description: "Classic dad jokes"},
@@ -889,6 +891,8 @@ func toolPages() []toolPage {
 		{category: "language", tool: "readability", title: "Readability Scores", description: "Compute Flesch Reading Ease, Flesch-Kincaid Grade, and Gunning Fog scores for text"},
 		{category: "language", tool: "reading-time", title: "Reading Time", description: "Estimate reading time for text at a given words-per-minute rate"},
 		{category: "language", tool: "sentiment", title: "Sentiment Analysis", description: "Score text as positive, negative, or neutral using a lexicon-based heuristic"},
+		{category: "language", tool: "dictionary", title: "Dictionary Lookup", description: "Look up word definitions using the free, keyless Dictionary API"},
+		{category: "language", tool: "thesaurus", title: "Thesaurus", description: "Look up word synonyms and antonyms using the free, keyless Datamuse API"},
 		{category: "text", tool: "encode", title: "Encode", description: "Encode text using base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "decode", title: "Decode", description: "Decode text encoded with base64, base32, hex, URL, or HTML encoding"},
 		{category: "text", tool: "case", title: "Case Converter", description: "Convert text between upper, lower, title, camel, snake, kebab, and other case styles"},
@@ -941,20 +945,16 @@ func toolPages() []toolPage {
 		// the shared unsupported.tmpl rather than a working form.
 		{category: "language", tool: "detect", title: "Language Detection", description: "Detect the language of a piece of text", reason: "Language auto-detection is a declared non-goal in IDEA.md; only language code/name lookup is supported."},
 		{category: "language", tool: "translate", title: "Translate", description: "Translate text between languages", reason: "Machine translation is a declared non-goal in IDEA.md and commercial translation APIs are outside the declared free/keyless trust boundary."},
-		{category: "language", tool: "dictionary", title: "Dictionary Lookup", description: "Look up word definitions", reason: "Dictionary lookup would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "language", tool: "grammar", title: "Grammar Check", description: "Check text for grammar issues", reason: "Grammar checking would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "language", tool: "spell-check", title: "Spell Check", description: "Check text for spelling issues", reason: "Spell checking would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "language", tool: "thesaurus", title: "Thesaurus", description: "Look up word synonyms", reason: "Thesaurus lookup would require a new outbound integration outside IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "research", tool: "extract", title: "Citation Extraction", description: "Extract citations from unstructured text", reason: "Citation extraction from free-form text is unimplemented; IDEA.md's Research scope covers citation formatting, bibliography generation, and DOI validation only."},
-		{category: "research", tool: "arxiv", title: "arXiv Lookup", description: "Look up an arXiv paper by ID", reason: "arXiv lookup would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "research", tool: "bibtex", title: "BibTeX Export", description: "Export a citation as BibTeX", reason: "BibTeX export is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI."},
-		{category: "research", tool: "footnotes", title: "Footnote Formatter", description: "Format footnotes for a document", reason: "Footnote formatting is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI."},
-		{category: "research", tool: "isbn", title: "ISBN Lookup", description: "Look up book metadata by ISBN", reason: "ISBN lookup would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "research", tool: "metadata", title: "Page Metadata Extraction", description: "Extract metadata from a web page", reason: "Web page metadata extraction would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "research", tool: "outline", title: "Document Outline", description: "Generate a document outline", reason: "Document outlining is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI."},
+		{category: "language", tool: "grammar", title: "Grammar Check", description: "Check text for grammar issues", reason: "Grammar checking is not named in IDEA.md's declared Language scope of code/name lookup and listing."},
+		{category: "language", tool: "spell-check", title: "Spell Check", description: "Check text for spelling issues", reason: "Spell checking is not named in IDEA.md's declared Language scope of code/name lookup and listing."},
+		{category: "research", tool: "extract", title: "Citation Extraction", description: "Extract citations from unstructured text", reason: "Citation extraction from free-form text is unimplemented; IDEA.md's Research scope covers citation formatting, bibliography generation, DOI validation, and the arXiv/ISBN lookups only."},
+		{category: "research", tool: "bibtex", title: "BibTeX Export", description: "Export a citation as BibTeX", reason: "BibTeX export is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
+		{category: "research", tool: "footnotes", title: "Footnote Formatter", description: "Format footnotes for a document", reason: "Footnote formatting is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
+		{category: "research", tool: "metadata", title: "Page Metadata Extraction", description: "Extract metadata from a web page", reason: "Web page metadata extraction is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
+		{category: "research", tool: "outline", title: "Document Outline", description: "Generate a document outline", reason: "Document outlining is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
 		{category: "research", tool: "pdf-extract", title: "PDF Text Extraction", description: "Extract text from a PDF", reason: "PDF text extraction needs a new third-party dependency to parse untrusted binaries; outside IDEA.md's declared scope."},
-		{category: "research", tool: "readability", title: "Readability Score", description: "Score the readability of a page or text", reason: "Readability scoring of remote pages would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
-		{category: "research", tool: "scraper", title: "Web Scraper", description: "Scrape content from a web page", reason: "Web scraping would add a new outbound-call family beyond IDEA.md's declared OSINT/weather-only trust boundary."},
+		{category: "research", tool: "readability", title: "Readability Score", description: "Score the readability of a page or text", reason: "Readability scoring of remote pages is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
+		{category: "research", tool: "scraper", title: "Web Scraper", description: "Scrape content from a web page", reason: "Web scraping is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
 		{category: "research", tool: "summarize", title: "Text Summarizer", description: "Summarize a piece of text", reason: "A genuine summarizer needs an external/keyed NLP or LLM service, excluded by IDEA.md's free/keyless integration policy."},
 		{category: "osint", tool: "breach", title: "Breach Check", description: "Check whether an email or username appears in a known breach", reason: "Breach-database checking requires a commercial keyed third-party API, outside IDEA.md's declared free/keyless OSINT trust boundary."},
 		{category: "osint", tool: "company", title: "Company Lookup", description: "Look up company registration details", reason: "Company lookup requires a commercial keyed third-party API, outside IDEA.md's declared free/keyless OSINT trust boundary."},

@@ -271,6 +271,15 @@ independently (gofmt/build/vet/staticcheck/test clean in
 tidy` produced no `go.mod`/`go.sum` diff — no new dependency introduced).
 The MISSING language line is now fully resolved.
 
+**Amendment (2026-07-24):** the user authorized outbound calls to any free,
+keyless, commercial-friendly external API across all tool categories, not
+only OSINT/weather. `dictionary` and `thesaurus` were subsequently promoted
+from 501 stubs to real handlers backed by the free Dictionary API and
+Datamuse API respectively (see "Known permanent API gaps" section above for
+the current record); `grammar`, `spell-check`, and `translate` remain
+permanent gaps — the former two are unnamed in IDEA.md's declared Language
+scope, and `translate` remains an explicit non-goal.
+
 ## [x] osint (2, +6 newly-gapped breach/company/metadata/phone/social/username): subdomain, tech-stack
 osint/subdomain is wired via a fixed-wordlist DNS-label enumeration
 (`SubdomainEnum` in `src/service/osint/osint.go`) resolving ~25 common
@@ -373,6 +382,19 @@ precedent, the pre-existing `research.tmpl` nav cards for these 10 tools
 remain as documented dead links. Verified independently with a
 `casjaysdev/go:latest` gofmt/build/vet/staticcheck/test run.
 
+**Amendment (2026-07-24):** the user authorized outbound calls to any free,
+keyless, commercial-friendly external API across all tool categories, not
+only OSINT/weather. `arxiv` and `isbn` were subsequently promoted from 501
+stubs to real handlers backed by the free arXiv query API and Open Library
+Books API respectively (see "Known permanent API gaps" section above for the
+current record); `bibtex`, `footnotes`, `metadata`, `outline`, `pdf-extract`,
+`readability`, `scraper`, and `summarize` remain permanent gaps — the first
+four are unnamed in IDEA.md's declared Research scope, `pdf-extract` still
+needs a new third-party dependency, `summarize` still needs either a keyed
+NLP/LLM service or a low-value heuristic, and `metadata`/`readability`/
+`scraper` are excluded for the separate reason that they'd fetch an
+arbitrary caller-supplied URL rather than query one fixed trusted provider.
+
 ## [x] testing (0, +2 newly-gapped load-test/mock-server)
 Of the 9 MISSING testing sub-tools, 7 wire directly: api-client,
 curl-generator, and postman share a `testRequestSpec` JSON body
@@ -452,11 +474,9 @@ service work" — that heading is now fully closed and removed.
 
 ## [ ] Known permanent API gaps needing a future spec/dependency decision
 Read: src/server/api_utils.go (apiLanguageDetectHandler,
-apiLanguageDictionaryHandler, apiLanguageGrammarHandler,
-apiLanguageSpellCheckHandler, apiLanguageThesaurusHandler,
+apiLanguageGrammarHandler, apiLanguageSpellCheckHandler,
 apiLanguageTranslateHandler, apiResearchExtractHandler,
-apiResearchArxivHandler, apiResearchBibtexHandler,
-apiResearchFootnotesHandler, apiResearchIsbnHandler,
+apiResearchBibtexHandler, apiResearchFootnotesHandler,
 apiResearchMetadataHandler, apiResearchOutlineHandler,
 apiResearchPdfExtractHandler, apiResearchReadabilityHandler,
 apiResearchScraperHandler, apiResearchSummarizeHandler,
@@ -473,59 +493,78 @@ existing 1D barcode feature) in `src/service/generate/qr.go`, wired into
 with `toolPages()` entries and frontend templates added — the original
 "no QR encoder exists anywhere in the codebase or go.mod" justification
 for the gap was factually wrong.
-Twenty-eight of the wired API routes honestly return 501 NOT_SUPPORTED
+`language/dictionary`, `language/thesaurus`, `research/arxiv`, and
+`research/isbn` are also no longer in this gap list. The user explicitly
+authorized outbound calls to any free, keyless, commercial-friendly
+external API across all tool categories (not just OSINT/weather), so
+these four were implemented for real: `language/dictionary` and
+`language/thesaurus` call the free Dictionary API
+(api.dictionaryapi.dev) and Datamuse (api.datamuse.com) respectively in
+`src/service/language/language.go`; `research/arxiv` and `research/isbn`
+call the free arXiv query API (export.arxiv.org) and Open Library Books
+API (openlibrary.org) respectively in `src/service/research/research.go`.
+All four got real `toolPages()` entries (no `reason` field), real
+frontend templates, and real handlers in `api_utils.go` replacing the
+prior 501 stubs. IDEA.md's trust-boundary table and Language/Research
+scope bullets were updated to name the four new providers/tools. Note:
+Datamuse's API requires a key starting 2027-01-01 per its own
+documentation — `language.go` has a code comment tracking this; when
+that date approaches, `Thesaurus` will need either a Datamuse key
+(disqualifying it under the keyless-only policy) or a replacement
+keyless synonym provider.
+Twenty-four of the wired API routes honestly return 501 NOT_SUPPORTED
 rather than inventing behavior: language/detect (conflicts with IDEA.md's
-declared non-goal of language auto-detection), language/dictionary,
-language/grammar, language/spell-check, and language/thesaurus (each
-would require a new outbound integration outside IDEA.md's declared
-trust boundary — outbound calls are restricted to only the OSINT and
-weather tool families), language/translate (IDEA.md explicitly excludes
-machine translation as a non-goal and forbids commercial translation
-among outbound integrations), research/extract (research.go's own
-source comment documents citation extraction from unstructured text as
-unimplemented), network/traceroute (a real traceroute needs TTL-limited
-probes and ICMP time-exceeded replies, which requires a raw ICMP socket —
-CAP_NET_RAW or root — that this unprivileged self-contained binary cannot
-assume it has on the host it runs on), osint/breach and osint/company
-(each requires a commercial keyed third-party API, outside IDEA.md's
-declared free/keyless OSINT trust boundary), osint/metadata (generic
-file-metadata extraction duplicates the existing image/metadata tool and
-is outside OSINT's declared 4-mechanism scope of IP geolocation/WHOIS/
-DNS/TLS cert), osint/phone (phone-number intelligence requires a
-commercial keyed API — validate/phone already covers format validation),
-and osint/social and osint/username (cross-platform profile/username
-discovery would require probing dozens of third-party platforms rather
-than a single user-named target), and the ten research gaps —
-research/bibtex, research/footnotes, and research/outline (none named in
-IDEA.md's declared Research scope of citation formatting/bibliography/
-DOI), research/arxiv, research/isbn, research/metadata, research/
-readability, and research/scraper (each would add a new outbound-call
-family beyond IDEA.md's declared OSINT/weather-only trust boundary),
-research/pdf-extract (needs a new third-party dependency to parse
-untrusted binaries), and research/summarize (a genuine summarizer would
-need an external/keyed NLP/LLM service, excluded by IDEA.md's free/
-keyless integration policy), and the two testing gaps — test/load-test
-(would require firing outbound HTTP traffic at a caller-supplied target,
-outside IDEA.md's outbound-call boundary) and test/mock-server (would
-require either a second runtime-managed listening socket, forbidden by
-config-rules.md's no-runtime-port-change rule, or persisting
-caller-defined response rules, forbidden by IDEA.md's no-persistent-
-storage non-goal), and the two weather gaps — weather/maps and
-weather/radar (keyless weather tile/map and radar imagery has no free
-provider within IDEA.md's declared outbound-call boundary; a real
-implementation needs a keyed provider such as RainViewer, OpenWeatherMap
-tiles, or NOAA radar mosaics). Resolving these requires a user/spec
+declared non-goal of language auto-detection), language/grammar and
+language/spell-check (neither is named in IDEA.md's declared Language
+scope of code/name lookup, listing, dictionary, and thesaurus),
+language/translate (IDEA.md explicitly excludes machine translation as a
+non-goal and forbids commercial translation among outbound integrations),
+research/extract (research.go's own source comment documents citation
+extraction from unstructured text as unimplemented), network/traceroute
+(a real traceroute needs TTL-limited probes and ICMP time-exceeded
+replies, which requires a raw ICMP socket — CAP_NET_RAW or root — that
+this unprivileged self-contained binary cannot assume it has on the host
+it runs on), osint/breach and osint/company (each requires a commercial
+keyed third-party API, outside IDEA.md's declared free/keyless OSINT
+trust boundary), osint/metadata (generic file-metadata extraction
+duplicates the existing image/metadata tool and is outside OSINT's
+declared 4-mechanism scope of IP geolocation/WHOIS/DNS/TLS cert),
+osint/phone (phone-number intelligence requires a commercial keyed API —
+validate/phone already covers format validation), and osint/social and
+osint/username (cross-platform profile/username discovery would require
+probing dozens of third-party platforms rather than a single user-named
+target), and the eight remaining research gaps — research/bibtex,
+research/footnotes, and research/outline (none named in IDEA.md's
+declared Research scope of citation formatting/bibliography/DOI/arXiv/
+ISBN), research/metadata, research/readability, and research/scraper
+(none named in that same declared Research scope), research/pdf-extract
+(needs a new third-party dependency to parse untrusted binaries), and
+research/summarize (a genuine summarizer would need an external/keyed
+NLP/LLM service, excluded by IDEA.md's free/keyless integration policy),
+and the two testing gaps — test/load-test (would require firing outbound
+HTTP traffic at a caller-supplied target, outside IDEA.md's outbound-call
+boundary) and test/mock-server (would require either a second
+runtime-managed listening socket, forbidden by config-rules.md's
+no-runtime-port-change rule, or persisting caller-defined response
+rules, forbidden by IDEA.md's no-persistent-storage non-goal), and the
+two weather gaps — weather/maps and weather/radar (keyless weather
+tile/map and radar imagery has no free, commercial-friendly provider
+within IDEA.md's declared outbound-call boundary; a real implementation
+needs a keyed provider such as OpenWeatherMap tiles or NOAA radar
+mosaics — RainViewer was considered but disqualified, its free tier is
+personal/non-commercial-use-only). Resolving these requires a user/spec
 decision, not further code guessing — either confirm language/detect and
-the four other language gaps should stay unsupported per IDEA.md, scope
+the remaining language gaps should stay unsupported per IDEA.md, scope
 what "extraction" means for research/extract, decide whether network/
 traceroute should ship as a root-only opt-in feature instead of a
 permanent gap, decide whether any of the six osint gaps should be
-promoted to a keyed-API-optional feature, decide whether any of the ten
-research gaps should be promoted by amending IDEA.md's Research scope,
-decide whether load-test/mock-server should be promoted via a
-dynamic-listener-lifecycle feature, or decide whether weather/maps and
-weather/radar should be promoted via a keyed-tile-provider integration.
-All twenty-eight gap routes now have a `toolPages()` entry (with a
+promoted to a keyed-API-optional feature, decide whether any of the
+eight remaining research gaps should be promoted by amending IDEA.md's
+Research scope, decide whether load-test/mock-server should be promoted
+via a dynamic-listener-lifecycle feature, or decide whether weather/maps
+and weather/radar should be promoted via a keyed-tile-provider
+integration.
+All twenty-four gap routes now have a `toolPages()` entry (with a
 per-tool `reason` string sourced from IDEA.md's scope/non-goal language)
 and render through the shared `template/page/tools/unsupported.tmpl`
 partial instead of 404ing — this satisfies PART 16's "frontend mirrors
@@ -689,3 +728,9 @@ app-breaking, so they are logged here rather than blocking that commit.
   of `os.Exit` with the correct sysexits code
 - `src/graphql/theme.go` lines 89-104: client-side React rendering present —
   spec requires server-side Go templates only
+- `src/client/main.go` lines 14-18: build-info variables are named `version`/
+  `commit`/`buildDate` instead of the required `Version`/`CommitID`/
+  `BuildDate`; the release workflow's `-X 'main.Version=...'` ldflags target
+  names that don't exist in this file, so the client binary's runtime
+  version info is silently unset — found by a `go-lint` pass during the
+  language/research 4-tool scope-broadening (2026-07-24)

@@ -2365,31 +2365,54 @@ func apiLanguageDetectHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "language auto-detection is a declared non-goal for this project; only language code/name lookup is supported", nil)
 }
 
-// apiLanguageDictionaryHandler reports that dictionary lookups are not
-// supported. IDEA.md's trust-boundary table states outbound calls exist
-// only for the OSINT and weather tool families; a real dictionary lookup
-// would require a new outbound integration outside that boundary.
+// apiLanguageDictionaryHandler looks up a word's definitions using the
+// free, keyless Free Dictionary API (dictionaryapi.dev).
 func apiLanguageDictionaryHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "dictionary lookup requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+	word := r.URL.Query().Get("word")
+	if strings.TrimSpace(word) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_WORD", "word query parameter is required", nil)
+		return
+	}
+
+	result, err := languageService.Dictionary(r.Context(), word)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
-// apiLanguageThesaurusHandler reports that synonym/antonym lookups are not
-// supported, for the same trust-boundary reason as apiLanguageDictionaryHandler.
+// apiLanguageThesaurusHandler looks up a word's synonyms and antonyms
+// using the free, keyless Datamuse API.
 func apiLanguageThesaurusHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "thesaurus lookup requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+	word := r.URL.Query().Get("word")
+	if strings.TrimSpace(word) == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_WORD", "word query parameter is required", nil)
+		return
+	}
+
+	result, err := languageService.Thesaurus(r.Context(), word)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
-// apiLanguageSpellCheckHandler reports that spell-checking against an
-// external corpus is not supported, for the same trust-boundary reason as
-// apiLanguageDictionaryHandler.
+// apiLanguageSpellCheckHandler reports that spell-checking is not
+// supported. Not named in IDEA.md's declared Language scope of code/name
+// lookup, listing, dictionary, and thesaurus.
 func apiLanguageSpellCheckHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "spell-check requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "spell-check is not named in this project's declared Language scope of code/name lookup, listing, dictionary, and thesaurus; not supported", nil)
 }
 
-// apiLanguageGrammarHandler reports that grammar checking is not supported,
-// for the same trust-boundary reason as apiLanguageDictionaryHandler.
+// apiLanguageGrammarHandler reports that grammar checking is not supported.
+// Not named in IDEA.md's declared Language scope of code/name lookup,
+// listing, dictionary, and thesaurus.
 func apiLanguageGrammarHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "grammar checking requires an outbound integration outside this project's declared trust boundary (OSINT and weather only); not supported", nil)
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "grammar checking is not named in this project's declared Language scope of code/name lookup, listing, dictionary, and thesaurus; not supported", nil)
 }
 
 // apiLanguageTranslateHandler reports that machine translation is not
@@ -3269,13 +3292,23 @@ func apiResearchExtractHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "citation/reference extraction from unstructured text is not implemented; only formatting of caller-supplied citation fields is supported", nil)
 }
 
-// apiResearchArxivHandler reports that arXiv paper lookup is not supported.
-// IDEA.md's declared Research scope covers only citation formatting,
-// bibliography generation, and DOI formatting/validation; an arXiv search
-// integration is a new outbound-call family outside IDEA.md's declared
-// trust boundary (OSINT and weather tool families only).
+// apiResearchArxivHandler looks up an arXiv paper by ID (JSON body
+// {"id":"..."} or ?id= query parameter) using the free, keyless arXiv
+// query API.
 func apiResearchArxivHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "arXiv paper lookup requires a new outbound integration outside this project's declared OSINT/weather trust boundary; not supported", nil)
+	id := queryOrJSONField(r, "id")
+	if id == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ID", "id is required (JSON body or ?id= query parameter)", nil)
+		return
+	}
+
+	result, err := researchService.ArxivLookup(r.Context(), id)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
 // apiResearchBibtexHandler reports that BibTeX parsing/formatting is not
@@ -3292,19 +3325,32 @@ func apiResearchFootnotesHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "footnote/endnote formatting is outside this project's declared Research scope (citation formatting, bibliography generation, DOI only); not supported", nil)
 }
 
-// apiResearchIsbnHandler reports that ISBN-to-book-info lookup is not
-// supported. It would require a new outbound integration outside IDEA.md's
-// declared trust boundary (OSINT and weather tool families only).
+// apiResearchIsbnHandler looks up a book's metadata by ISBN (JSON body
+// {"isbn":"..."} or ?isbn= query parameter) using the free, keyless Open
+// Library Books API.
 func apiResearchIsbnHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "ISBN-to-book-info lookup requires a new outbound integration outside this project's declared OSINT/weather trust boundary; not supported", nil)
+	isbn := queryOrJSONField(r, "isbn")
+	if isbn == "" {
+		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ISBN", "isbn is required (JSON body or ?isbn= query parameter)", nil)
+		return
+	}
+
+	result, err := researchService.ISBNLookup(r.Context(), isbn)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		return
+	}
+
+	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
 // apiResearchMetadataHandler reports that web-page metadata extraction is
 // not supported. Not named in IDEA.md's declared Research scope, and
-// fetching a caller-supplied URL would add a new outbound-call family
-// outside IDEA.md's declared OSINT/weather trust boundary.
+// fetching an arbitrary caller-supplied URL (rather than querying a single
+// fixed, trusted provider) is a broader SSRF surface than this project
+// takes on.
 func apiResearchMetadataHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "web-page metadata extraction is outside this project's declared Research scope and would require fetching caller-supplied URLs outside the declared OSINT/weather trust boundary; not supported", nil)
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "web-page metadata extraction is outside this project's declared Research scope and would require fetching arbitrary caller-supplied URLs rather than querying a single fixed, trusted provider; not supported", nil)
 }
 
 // apiResearchOutlineHandler reports that document outline generation is not
@@ -3323,18 +3369,19 @@ func apiResearchPdfExtractHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiResearchReadabilityHandler reports that reader-mode article extraction
 // is not supported. Not named in IDEA.md's declared Research scope, and
-// fetching a caller-supplied URL would add a new outbound-call family
-// outside IDEA.md's declared OSINT/weather trust boundary.
+// fetching an arbitrary caller-supplied URL (rather than querying a single
+// fixed, trusted provider) is a broader SSRF surface than this project
+// takes on.
 func apiResearchReadabilityHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "reader-mode article extraction is outside this project's declared Research scope and would require fetching caller-supplied URLs outside the declared OSINT/weather trust boundary; not supported", nil)
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "reader-mode article extraction is outside this project's declared Research scope and would require fetching arbitrary caller-supplied URLs rather than querying a single fixed, trusted provider; not supported", nil)
 }
 
 // apiResearchScraperHandler reports that general web scraping is not
 // supported. It would require fetching arbitrary caller-supplied URLs, a
-// broad SSRF surface outside IDEA.md's declared OSINT/weather trust
-// boundary and its narrow, mitigated outbound-call mechanisms.
+// broader SSRF surface than the narrow, mitigated outbound-call mechanisms
+// (fixed, trusted providers) this project uses elsewhere.
 func apiResearchScraperHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "general-purpose web scraping requires fetching arbitrary caller-supplied URLs, outside this project's declared OSINT/weather trust boundary; not supported", nil)
+	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "general-purpose web scraping requires fetching arbitrary caller-supplied URLs rather than querying a single fixed, trusted provider; not supported", nil)
 }
 
 // apiResearchSummarizeHandler reports that text summarization is not

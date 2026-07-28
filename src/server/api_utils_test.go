@@ -1588,19 +1588,16 @@ func TestAPILanguageDetectHandler(t *testing.T) {
 	assert.Equal(t, "NOT_SUPPORTED", env["error"])
 }
 
-// apiLanguageDictionaryHandler, apiLanguageThesaurusHandler,
 // apiLanguageSpellCheckHandler, apiLanguageGrammarHandler, and
-// apiLanguageTranslateHandler must always report NOT_SUPPORTED — each
-// requires an outbound integration outside IDEA.md's declared trust
-// boundary (OSINT and weather only), or is an explicit non-goal.
+// apiLanguageTranslateHandler must always report NOT_SUPPORTED — spell-check
+// and grammar are unnamed in IDEA.md's declared Language scope, and
+// translate is an explicit non-goal.
 func TestAPILanguageGapHandlers(t *testing.T) {
 	cases := []struct {
 		name    string
 		path    string
 		handler http.HandlerFunc
 	}{
-		{"dictionary", "/api/v1/language/dictionary", apiLanguageDictionaryHandler},
-		{"thesaurus", "/api/v1/language/thesaurus", apiLanguageThesaurusHandler},
 		{"spell-check", "/api/v1/language/spell-check", apiLanguageSpellCheckHandler},
 		{"grammar", "/api/v1/language/grammar", apiLanguageGrammarHandler},
 		{"translate", "/api/v1/language/translate", apiLanguageTranslateHandler},
@@ -1618,6 +1615,38 @@ func TestAPILanguageGapHandlers(t *testing.T) {
 			assert.Equal(t, "NOT_SUPPORTED", env["error"])
 		})
 	}
+}
+
+// apiLanguageDictionaryHandler must 400 MISSING_WORD with no ?word=; the
+// success path is covered at the service layer in
+// src/service/language/language_test.go.
+func TestAPILanguageDictionaryHandler(t *testing.T) {
+	t.Run("missing word", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/language/dictionary", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguageDictionaryHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_WORD", env["error"])
+	})
+}
+
+// apiLanguageThesaurusHandler must 400 MISSING_WORD with no ?word=; the
+// success path is covered at the service layer in
+// src/service/language/language_test.go.
+func TestAPILanguageThesaurusHandler(t *testing.T) {
+	t.Run("missing word", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/language/thesaurus", nil)
+		w := httptest.NewRecorder()
+
+		apiLanguageThesaurusHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_WORD", env["error"])
+	})
 }
 
 // apiLanguagePhoneticHandler must 400 MISSING_WORD with no ?word= and
@@ -2460,18 +2489,16 @@ func TestAPIResearchExtractHandler(t *testing.T) {
 	assert.Equal(t, "NOT_SUPPORTED", env["error"])
 }
 
-// The remaining research sub-tools (arxiv, bibtex, footnotes, isbn,
-// metadata, outline, pdf-extract, readability, scraper, summarize) are
-// permanent gaps per TODO.AI.md's "Known permanent API gaps" section: none
-// are named in IDEA.md's declared Research scope, and several would add a
-// new outbound-call family or third-party dependency outside this
-// project's declared trust boundary. Each must 501 NOT_SUPPORTED.
+// The remaining research sub-tools (bibtex, footnotes, metadata, outline,
+// pdf-extract, readability, scraper, summarize) are permanent gaps per
+// TODO.AI.md's "Known permanent API gaps" section: none are named in
+// IDEA.md's declared Research scope, and several would add a new
+// outbound-call family or third-party dependency beyond that scope. Each
+// must 501 NOT_SUPPORTED.
 func TestAPIResearchGapHandlers(t *testing.T) {
 	handlers := map[string]http.HandlerFunc{
-		"arxiv":       apiResearchArxivHandler,
 		"bibtex":      apiResearchBibtexHandler,
 		"footnotes":   apiResearchFootnotesHandler,
-		"isbn":        apiResearchIsbnHandler,
 		"metadata":    apiResearchMetadataHandler,
 		"outline":     apiResearchOutlineHandler,
 		"pdf-extract": apiResearchPdfExtractHandler,
@@ -2491,6 +2518,38 @@ func TestAPIResearchGapHandlers(t *testing.T) {
 			assert.Equal(t, "NOT_SUPPORTED", env["error"])
 		})
 	}
+}
+
+// apiResearchArxivHandler must 400 MISSING_ID with no id (JSON body or
+// ?id= query parameter); the success path is covered at the service layer
+// in src/service/research/research_test.go.
+func TestAPIResearchArxivHandler(t *testing.T) {
+	t.Run("missing id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/research/arxiv", nil)
+		w := httptest.NewRecorder()
+
+		apiResearchArxivHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_ID", env["error"])
+	})
+}
+
+// apiResearchIsbnHandler must 400 MISSING_ISBN with no isbn (JSON body or
+// ?isbn= query parameter); the success path is covered at the service layer
+// in src/service/research/research_test.go.
+func TestAPIResearchIsbnHandler(t *testing.T) {
+	t.Run("missing isbn", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/research/isbn", nil)
+		w := httptest.NewRecorder()
+
+		apiResearchIsbnHandler(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		env := decodeEnvelope(t, w.Body.Bytes())
+		assert.Equal(t, "MISSING_ISBN", env["error"])
+	})
 }
 
 // apiResearchCitationHandler must 400 MISSING_FIELDS when title/author are

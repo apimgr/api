@@ -56,10 +56,10 @@ func stripEmoji(s string) string {
 // cprintf/cprintln output when colorEnabled, per AI.md PART 8 "NO_COLOR
 // Support".
 var statusColorCode = map[string]string{
-	"✅": "32", // green: success
-	"❌": "31", // red: error/failure
+	"✅":  "32", // green: success
+	"❌":  "31", // red: error/failure
 	"⚠️": "33", // yellow: warning
-	"🛑": "31", // red: shutdown/stop
+	"🛑":  "31", // red: shutdown/stop
 	"ℹ️": "36", // cyan: info
 }
 

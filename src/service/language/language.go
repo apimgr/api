@@ -1,10 +1,15 @@
 package language
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
+	"net/url"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Service provides language/translation utilities
@@ -13,6 +18,200 @@ type Service struct{}
 // New creates a new Language service
 func New() *Service {
 	return &Service{}
+}
+
+// httpClient is a shared client with a hard timeout for the keyless
+// dictionary/thesaurus providers (no API key, free, fair-use rate limited)
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+
+const (
+	dictionaryEndpoint = "https://api.dictionaryapi.dev/api/v2/entries/en"
+	// datamuseEndpoint's synonym/antonym relations (rel_syn/rel_ant) are
+	// free and keyless today; Datamuse has announced a mandatory API key
+	// starting 2027-01-01 — see TODO.AI.md for the tracked follow-up.
+	datamuseEndpoint = "https://api.datamuse.com/words"
+)
+
+// userAgent identifies this service to keyless providers; harmless to send
+// to every provider even when not required.
+const userAgent = "apimgr-api/1.0 (+https://github.com/apimgr/api)"
+
+// DictionaryPhonetic holds one pronunciation entry
+type DictionaryPhonetic struct {
+	Text  string `json:"text,omitempty"`
+	Audio string `json:"audio,omitempty"`
+}
+
+// DictionaryDefinition holds one sense definition within a part of speech
+type DictionaryDefinition struct {
+	Definition string   `json:"definition"`
+	Example    string   `json:"example,omitempty"`
+	Synonyms   []string `json:"synonyms,omitempty"`
+	Antonyms   []string `json:"antonyms,omitempty"`
+}
+
+// DictionaryMeaning groups definitions under one part of speech
+type DictionaryMeaning struct {
+	PartOfSpeech string                 `json:"part_of_speech"`
+	Definitions  []DictionaryDefinition `json:"definitions"`
+}
+
+// DictionaryResult is the response for a Dictionary lookup
+type DictionaryResult struct {
+	Word      string               `json:"word"`
+	Phonetics []DictionaryPhonetic `json:"phonetics,omitempty"`
+	Meanings  []DictionaryMeaning  `json:"meanings"`
+}
+
+// dictionaryAPIEntry mirrors one element of the Free Dictionary API's
+// (dictionaryapi.dev) response array
+type dictionaryAPIEntry struct {
+	Word      string `json:"word"`
+	Phonetics []struct {
+		Text  string `json:"text"`
+		Audio string `json:"audio"`
+	} `json:"phonetics"`
+	Meanings []struct {
+		PartOfSpeech string `json:"partOfSpeech"`
+		Definitions  []struct {
+			Definition string   `json:"definition"`
+			Example    string   `json:"example"`
+			Synonyms   []string `json:"synonyms"`
+			Antonyms   []string `json:"antonyms"`
+		} `json:"definitions"`
+	} `json:"meanings"`
+}
+
+// Dictionary looks up a word's definitions using the free, keyless Free
+// Dictionary API (dictionaryapi.dev; English only).
+func (s *Service) Dictionary(ctx context.Context, word string) (*DictionaryResult, error) {
+	word = strings.TrimSpace(word)
+	if word == "" {
+		return nil, fmt.Errorf("word is required")
+	}
+
+	endpoint := dictionaryEndpoint + "/" + url.PathEscape(word)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("dictionary provider request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("no definitions found for %q", word)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dictionary provider returned status %d", resp.StatusCode)
+	}
+
+	var entries []dictionaryAPIEntry
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil, fmt.Errorf("failed to decode dictionary provider response: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no definitions found for %q", word)
+	}
+
+	entry := entries[0]
+	result := &DictionaryResult{Word: entry.Word}
+	for _, p := range entry.Phonetics {
+		if p.Text == "" && p.Audio == "" {
+			continue
+		}
+		result.Phonetics = append(result.Phonetics, DictionaryPhonetic{Text: p.Text, Audio: p.Audio})
+	}
+	for _, m := range entry.Meanings {
+		meaning := DictionaryMeaning{PartOfSpeech: m.PartOfSpeech}
+		for _, d := range m.Definitions {
+			meaning.Definitions = append(meaning.Definitions, DictionaryDefinition{
+				Definition: d.Definition,
+				Example:    d.Example,
+				Synonyms:   d.Synonyms,
+				Antonyms:   d.Antonyms,
+			})
+		}
+		result.Meanings = append(result.Meanings, meaning)
+	}
+
+	return result, nil
+}
+
+// ThesaurusResult is the response for a Thesaurus lookup
+type ThesaurusResult struct {
+	Word     string   `json:"word"`
+	Synonyms []string `json:"synonyms"`
+	Antonyms []string `json:"antonyms"`
+}
+
+// datamuseWord mirrors one element of the Datamuse API's word-list response
+type datamuseWord struct {
+	Word string `json:"word"`
+}
+
+// Thesaurus looks up a word's synonyms and antonyms using the free, keyless
+// Datamuse API. Datamuse has announced that a free API key will become
+// mandatory starting 2027-01-01; tracked in TODO.AI.md.
+func (s *Service) Thesaurus(ctx context.Context, word string) (*ThesaurusResult, error) {
+	word = strings.TrimSpace(word)
+	if word == "" {
+		return nil, fmt.Errorf("word is required")
+	}
+
+	synonyms, err := datamuseWords(ctx, "rel_syn", word)
+	if err != nil {
+		return nil, err
+	}
+	antonyms, err := datamuseWords(ctx, "rel_ant", word)
+	if err != nil {
+		return nil, err
+	}
+	if len(synonyms) == 0 && len(antonyms) == 0 {
+		return nil, fmt.Errorf("no synonyms or antonyms found for %q", word)
+	}
+
+	return &ThesaurusResult{Word: word, Synonyms: synonyms, Antonyms: antonyms}, nil
+}
+
+// datamuseWords queries the Datamuse API for one relation (rel_syn/rel_ant)
+// against a given word and returns the matched words.
+func datamuseWords(ctx context.Context, relation, word string) ([]string, error) {
+	endpoint := datamuseEndpoint + "?" + relation + "=" + url.QueryEscape(word)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("thesaurus provider request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("thesaurus provider returned status %d", resp.StatusCode)
+	}
+
+	var words []datamuseWord
+	if err := json.NewDecoder(resp.Body).Decode(&words); err != nil {
+		return nil, fmt.Errorf("failed to decode thesaurus provider response: %w", err)
+	}
+
+	result := make([]string, 0, len(words))
+	for _, w := range words {
+		result = append(result, w.Word)
+	}
+	return result, nil
 }
 
 // Language codes

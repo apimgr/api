@@ -36,8 +36,8 @@ client_binary: api-cli
 - **Image**: resize, crop, rotate, metadata inspection, placeholder image generation
 - **Fun**: dice roll, coin flip, random choice, magic-8-ball-style responses, fortune messages, yes/no, random emoji, joke delivery, shuffle, rock-paper-scissors
 - **Lorem/faker**: lorem-ipsum text generation, fake person/address/company data for testing
-- **Language**: language code/name lookup and listing (machine translation and language auto-detection are excluded — see non-goals)
-- **Research**: citation formatting (APA/MLA/Chicago), bibliography generation, DOI formatting/validation
+- **Language**: language code/name lookup and listing, dictionary lookup (free Dictionary API), thesaurus lookup (free Datamuse API) — machine translation and language auto-detection are excluded, see non-goals
+- **Research**: citation formatting (APA/MLA/Chicago), bibliography generation, DOI formatting/validation, arXiv paper lookup, ISBN book metadata lookup (free Open Library API)
 - **Docker/container**: Dockerfile generation, compose file generation, image name parsing, container name validation, port/volume mapping formatting and parsing
 - **Testing/QA helpers**: mock data generation (email/username/user/API response), assertion helpers, execution-time measurement, fixture generation
 - **System**: health, liveness/readiness probes, system info, version info
@@ -52,7 +52,7 @@ client_binary: api-cli
 - No admin web panel (server configured via `server.yml` only)
 - No persistent storage of user-submitted data
 - No paid tiers, no API keys, no rate-limited access tiers
-- No tools that require external paid or keyed APIs (e.g., SMS, payment processing, commercial translation, commercial weather/geocoding) — every outbound integration must be free and keyless (system DNS resolver, public WHOIS protocol, direct TLS handshake, MaxMind GeoLite2, keyless weather provider)
+- No tools that require external paid or keyed APIs (e.g., SMS, payment processing, commercial translation requiring a key, commercial weather/geocoding requiring a key) — every outbound integration must be free, keyless, and commercial-use-friendly per that provider's terms; this applies to any tool category, not only OSINT/weather (system DNS resolver, public WHOIS protocol, direct TLS handshake, MaxMind GeoLite2, keyless weather provider, and other free/keyless public APIs such as arXiv, Open Library, Datamuse, Free Dictionary API). Providers whose terms restrict use to personal/non-commercial/educational purposes (e.g. RainViewer) do NOT qualify and must not be used.
 - No client-hardware-only tools (e.g., camera/microphone recorder, local chronometer/stopwatch) — this is a server API/CLI, not a client-side SPA
 
 ### Roles & permissions
@@ -88,10 +88,14 @@ This project processes transient inputs — no data is stored server-side. Input
 | Public WHOIS protocol (OSINT `WHOISLookup`) | **Untrusted target** | Free, keyless TCP/43 protocol query to the domain's registrar-designated WHOIS server; hard timeout |
 | Direct TLS handshake (OSINT `SSLInfo`) | **Untrusted target** | Connects to user-supplied `host:443` only to read the certificate; no data sent beyond the TLS handshake |
 | Keyless weather/geocoding provider (`weather` tools) | Trusted provider, untrusted query | e.g. Open-Meteo — free, no API key; only location text/coordinates are sent |
+| Free Dictionary API (`language/dictionary`) | Trusted provider, untrusted query | api.dictionaryapi.dev — free, no API key; only the looked-up word is sent |
+| Datamuse API (`language/thesaurus`) | Trusted provider, untrusted query | api.datamuse.com — free, no API key; only the looked-up word is sent. Note: Datamuse requires a key starting 2027-01-01 |
+| arXiv query API (`research/arxiv`) | Trusted provider, untrusted query | export.arxiv.org — free, no API key; only the arXiv ID is sent |
+| Open Library Books API (`research/isbn`) | Trusted provider, untrusted query | openlibrary.org — free, no API key; only the ISBN is sent, descriptive User-Agent per their low-volume guidance |
 | Incoming HTTP requests | **Untrusted** | All input validated and size-capped before processing |
 | All tool inputs | **Untrusted** | Inputs are processed as data, never evaluated or executed |
 
-Outbound calls exist only for the OSINT and weather tool families above, all user-directed (the caller explicitly names the domain/IP/host/location to query) and all free/keyless — never used to relay credentials or reach services on the caller's behalf. This is a bounded, intentional SSRF surface, not general server-side request forgery; see mitigations below.
+Outbound calls are permitted for any tool family, not only OSINT/weather, provided each call is user-directed (the caller explicitly names the domain/IP/host/location/query to look up), the provider is free, keyless, and commercial-use-friendly per its terms, and the same SSRF mitigations below apply — never used to relay credentials or reach services on the caller's behalf. This is a bounded, intentional SSRF surface, not general server-side request forgery; see mitigations below. Each new outbound provider gets its own row in the table above once implemented.
 
 Failure mode for GeoIP: if databases unavailable, the geo/network tools return IP only without GeoIP fields. All other tools are unaffected.
 
