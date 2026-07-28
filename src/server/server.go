@@ -53,6 +53,7 @@ func New(cfg *config.Config) *http.Server {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 	r.Use(securityHeadersMiddleware(cfg))
+	r.Use(secFetchValidationMiddleware(cfg))
 	r.Use(RateLimitMiddleware(cfg))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{cfg.Web.CORS},

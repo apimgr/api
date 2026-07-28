@@ -695,10 +695,30 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   DOMAIN-env/reverse-proxy-detected host auto-inclusion. Needs a design
   decision on where that origin-resolution logic should live before
   implementing.
-- **`Sec-Fetch-*` request validation**: `cfg.Web.Headers.SecFetchValidation`
-  config field exists but is unused/unwired — this is inbound
-  request-rejection logic and belongs in its own middleware (runs before
-  handlers, not in the response-header-emission `securityHeadersMiddleware`).
+- [x] **`Sec-Fetch-*` request validation**: FIXED — added
+  `secFetchValidationMiddleware` in `src/server/middleware.go`, a separate
+  pre-handler middleware (not part of the response-header-emission
+  `securityHeadersMiddleware`), gated on `cfg.Web.Headers.SecFetchValidation`
+  and wired into the chain in `src/server/server.go` right after
+  `securityHeadersMiddleware(cfg)`. Implements all 4 AI.md "Sec-Fetch-*
+  Request Validation" checks with present-and-bad-only semantics (absent
+  header always passes through): cross-site `Sec-Fetch-Site` on
+  state-changing methods rejected unless a Bearer credential is present
+  (`hasBearerToken`, since this IDEA.md-scoped project has no
+  cookies/sessions/CSRF-token exempt_paths to check instead); `navigate`
+  `Sec-Fetch-Mode` against `/api/*` rejected on state-changing methods (GET/
+  HEAD navigation to the API surface is allowed); a present-but-not-`?1`
+  `Sec-Fetch-User` rejected on Bearer-authenticated navigate state-changers;
+  cross-site `iframe` `Sec-Fetch-Dest` rejected against the hardcoded
+  `frame-ancestors 'self'` (no per-path allow-list config exists here).
+  Rejections use the existing canonical `writeEnvelopeError` PART 14 JSON
+  envelope via a new `writeSecFetchRejected` helper. Tests added in
+  `src/server/middleware_test.go` covering disabled-config pass-through, all
+  absent-header pass-through, all 4 reject conditions, the Bearer bypass, and
+  the GET/HEAD `/api/*` navigate exception. Verified in Docker
+  (`casjaysdev/go:latest`): `gofmt -l .` clean, `go build ./...` and
+  `go vet ./...` clean, `go test ./src/server/...` passes
+  (`ok github.com/apimgr/api/src/server`).
 - **Clear-Site-Data**: `cfg.Web.Headers.ClearSiteData.*` config fields exist
   but are unused — no token-revocation/consent-withdrawal endpoints exist
   in this IDEA.md-scoped project (no accounts/sessions/admin panel) to emit

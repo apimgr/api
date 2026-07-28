@@ -35,6 +35,102 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// hasBearerToken reports whether the request carries an Authorization:
+// Bearer credential — the signal the spec uses to exempt API-client
+// requests from Sec-Fetch-Site cross-site rejection (a browser cannot
+// auto-attach a Bearer header the way it auto-attaches cookies).
+func hasBearerToken(r *http.Request) bool {
+	return strings.HasPrefix(strings.ToLower(r.Header.Get("Authorization")), "bearer ")
+}
+
+// secFetchValidationMiddleware validates the browser-set Sec-Fetch-*
+// request headers as a defense-in-depth layer against CSRF and
+// clickjacking, per AI.md "Sec-Fetch-* Request Validation". It runs before
+// handlers execute and is deliberately separate from
+// securityHeadersMiddleware, which only emits response headers. Gated on
+// cfg.Web.Headers.SecFetchValidation.
+//
+// Validation is present-and-bad reject only: an absent Sec-Fetch-* header
+// is always treated as legacy-browser pass-through, never a rejection.
+//
+// This project has no user accounts, sessions, or CSRF-token middleware
+// (IDEA.md non-goals: no accounts, no admin panel, no auth). The spec
+// table's CSRF `exempt_paths` allow-list therefore has no corresponding
+// config in this codebase; the closest faithful reading treats that
+// allow-list as empty (no exemptions) rather than inventing a new config
+// surface. Similarly, there is no per-path `frame-ancestors` config — the
+// CSP frame-ancestors directive is hardcoded to 'self' in
+// securityHeadersMiddleware, so that hardcoded value is the allow-list
+// checked here for Sec-Fetch-Dest.
+func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !cfg.Web.Headers.SecFetchValidation {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			stateChanging := r.Method == http.MethodPost || r.Method == http.MethodPut ||
+				r.Method == http.MethodPatch || r.Method == http.MethodDelete
+
+			if stateChanging {
+				// Sec-Fetch-Site: reject a cross-site state-changer unless
+				// the caller proved possession of a Bearer credential (a
+				// browser cannot auto-attach that the way it auto-attaches
+				// cookies). No CSRF exempt_paths config exists in this
+				// project (see doc comment above), so that exemption is
+				// empty here.
+				if r.Header.Get("Sec-Fetch-Site") == "cross-site" && !hasBearerToken(r) {
+					writeSecFetchRejected(w)
+					return
+				}
+
+				// Sec-Fetch-Mode: block form-based navigation CSRF against
+				// the JSON API surface. GET/HEAD navigations are excluded
+				// by the stateChanging gate above — opening an API URL in
+				// a browser still returns JSON normally.
+				if r.Header.Get("Sec-Fetch-Mode") == "navigate" && strings.HasPrefix(r.URL.Path, "/api/") {
+					writeSecFetchRejected(w)
+					return
+				}
+
+				// Sec-Fetch-User: only meaningful for authenticated
+				// state-changing navigations (spec: "sensitive
+				// operator-token flows only"). This project has no
+				// accounts/sessions, so a Bearer credential is the closest
+				// available "authenticated" signal. The check only runs
+				// once Sec-Fetch-Mode confirms the browser participates in
+				// the Sec-Fetch-* family (present as "navigate"), so a
+				// missing/bad Sec-Fetch-User here is present-and-bad for a
+				// confirmed-participating browser, not a legacy omission.
+				if hasBearerToken(r) && r.Header.Get("Sec-Fetch-Mode") == "navigate" {
+					if user := r.Header.Get("Sec-Fetch-User"); user != "" && user != "?1" {
+						writeSecFetchRejected(w)
+						return
+					}
+				}
+			}
+
+			// Sec-Fetch-Dest: block a cross-site iframe embed attempt.
+			// frame-ancestors is hardcoded to 'self' (no per-path
+			// allow-list exists to check against), so any cross-site
+			// framing destination is outright disallowed.
+			if r.Header.Get("Sec-Fetch-Dest") == "iframe" && r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+				writeSecFetchRejected(w)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// writeSecFetchRejected writes the canonical PART 14 error envelope for a
+// request blocked by Sec-Fetch-* validation.
+func writeSecFetchRejected(w http.ResponseWriter) {
+	writeEnvelopeError(w, http.StatusForbidden, "SEC_FETCH_REJECTED", "Request blocked by Sec-Fetch validation", nil)
+}
+
 // cspDirective builds one CSP directive from the built-in default value,
 // applying an operator override (replaces default) or extra (appends to
 // default) per AI.md PART 11 → "Content Security Policy" → Configuration.
