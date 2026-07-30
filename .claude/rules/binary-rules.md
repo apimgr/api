@@ -62,7 +62,7 @@ sensitive/maintenance operations (PART 5, referenced from PART 8).
 | Client CLI framework? | Actual implementation: a custom `Command`/registry pattern in `src/client/cmd/` (`Execute`, `register`, `findCommand`, `categoryCommands`) — NOT cobra/viper as PART 32 examples show. This is a deviation from the spec's illustrative code, not a violation of any NEVER-DO rule (PART 32 doesn't mandate cobra specifically), but it should be recorded so future edits match the actual pattern instead of reintroducing cobra | `src/client/cmd/root.go`, `registry.go` |
 | Does the User-Agent follow the renamed binary? | No — always `{project_name}-cli/{version}` regardless of `os.Args[0]` | PART 32, User-Agent Rule |
 | TUI library set | `github.com/charmbracelet/bubbletea`, `bubbles`, `lipgloss` — confirmed present in `go.mod` | PART 32, Required Libraries; `go.mod` |
-| Is the PART 7/32 window-size (`SizeMode`) package implemented yet? | **No** — `src/common/terminal` (or equivalent `SizeMode`/`GetTerminalSize()` package referenced by PART 7 and used throughout PART 32's TUI examples) does not exist in `src/` yet. TUI breakpoint/responsive behavior is spec-mandated but not yet built | PART 7, PART 32 (Terminal Size Breakpoints) |
+| Is the PART 7/32 window-size (`SizeMode`) package implemented yet? | **Yes** — `src/common/terminal/size.go` (`SizeMode`, `TerminalSize`, `GetTerminalSize()`, `calculateMode()`, `Show*` helpers, 100% test coverage) plus `src/client/tui/layout.go` (`LayoutConfig`, `GetLayoutConfig()`, `GetSpacingForMode()`), wired into `src/client/tui/app.go`'s `Update()`/`applyLayout()`/`View()` so header/footer/border chrome degrades per breakpoint. Open follow-up: `MaxColumns`/`TruncateAt` unused (no multi-column list rendering yet) and no real sidebar widget renders for `ShowSidebar` modes — see `TODO.AI.md` | PART 7, PART 32 (Terminal Size Breakpoints) |
 | Output formats required | JSON, table, plain — all three, selectable via `--output` | PART 32, Output Formats |
 | Exit code for "not found"? | `5` | PART 32, Exit Codes |
 
@@ -74,7 +74,7 @@ sensitive/maintenance operations (PART 5, referenced from PART 8).
 | Resource owner token | Per-resource auth token concept from base PART 8 — does NOT apply to this project (no user-owned resources) |
 | `server.token` | The one operator-level token this project actually uses, for sensitive/maintenance ops |
 | Smart argument detection | CLI infers stdin/file/directory/text intent from bare args instead of requiring flags |
-| `SizeMode` | PART 7/32's terminal-breakpoint enum (Massive → Micro) — spec-mandated, not yet implemented in this repo |
+| `SizeMode` | PART 7/32's terminal-breakpoint enum (Massive → Micro) — implemented in `src/common/terminal/size.go` |
 
 ## QUICK REFERENCE
 - Single static binary, `CGO_ENABLED=0`, embedded assets, 8-platform matrix
@@ -85,8 +85,10 @@ sensitive/maintenance operations (PART 5, referenced from PART 8).
 - All client URLs built through `url.PathEscape`/`url.QueryEscape` — never
   raw string concatenation
 - TUI: bubbletea/bubbles/lipgloss, dark-default theme matching server
-  frontend, must degrade gracefully on small/phone-SSH terminals (breakpoint
-  package not yet implemented — flag before assuming it exists)
+  frontend, degrades gracefully on small/phone-SSH terminals via
+  `src/common/terminal` (`SizeMode`) + `src/client/tui/layout.go`
+  (`LayoutConfig`/`GetLayoutConfig`/`GetSpacingForMode`), wired into
+  `src/client/tui/app.go`
 - CLI output: `--output json|table|plain`
 - Standard exit codes: 0/1/2/3/4/5/64
 

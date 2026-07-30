@@ -741,12 +741,24 @@ Read: AI.md PART 12 (FQDN detection), PART 31 (.onion in security.txt)
 `BuildURL` helpers, and `security.txt`'s Tor-specific variant (surfacing
 the `.onion` address) is not implemented.
 
-## [ ] TUI terminal-breakpoint package (`SizeMode`, PART 7/32) not implemented
+## [x] TUI terminal-breakpoint package (`SizeMode`, PART 7/32) — RESOLVED
 Read: AI.md PART 7, PART 32 (Terminal Size Breakpoints)
-`bubbletea`/`bubbles`/`lipgloss` are present in `go.mod`, but no
-`src/common/terminal` (or equivalent `SizeMode`/`GetTerminalSize()`)
-package exists yet to implement the spec-mandated responsive TUI
-breakpoint behavior (Massive → Micro).
+Implemented `src/common/terminal/size.go` (`SizeMode` enum, `TerminalSize`,
+`GetTerminalSize()`, `calculateMode()`, `ShowASCIIArt`/`ShowBorders`/
+`ShowSidebar`/`ShowIcons` helpers, `String()`) with full test coverage
+(`size_test.go`, 100% statement coverage) and `src/client/tui/layout.go`
+(`LayoutConfig`, `GetLayoutConfig()`, `GetSpacingForMode()`) matching PART
+32's canonical breakpoint table exactly. Wired into `src/client/tui/app.go`:
+`Model.sizeMode`/`Model.layout` are recalculated on every `tea.WindowSizeMsg`
+via `terminal.SizeModeForDimensions()`, and `applyLayout()`/`View()` now
+gate header/footer/border chrome and abbreviate title/footer text per the
+active `LayoutConfig` (Micro = bare vertical stack, no chrome).
+Not yet done (follow-up, not blocking): `MaxColumns`/`TruncateAt` are not
+yet consumed anywhere (no multi-column/tile list rendering exists in the
+TUI yet to apply them to), and `ShowSidebar`/`SidebarWidth` only reserves
+width in `applyLayout()` — there is no actual sidebar pane/widget rendered
+yet. Track building a real sidebar view (category tree alongside command
+list) as separate future TUI work if/when the product wants it.
 
 ## [ ] Missing required `tests/` scripts (`run_tests.sh`, `docker.sh`, `incus.sh`)
 Read: AI.md PART 3 (structure requirement), PART 28 (behavioral spec —

@@ -14,6 +14,7 @@ import (
 	"github.com/apimgr/api/src/client/cmd"
 	"github.com/apimgr/api/src/client/config"
 	"github.com/apimgr/api/src/client/output"
+	"github.com/apimgr/api/src/common/terminal"
 )
 
 // state is which screen of the TUI is active.
@@ -61,6 +62,8 @@ type Model struct {
 	selectedCommand  cmd.Command
 
 	width, height int
+	sizeMode      terminal.SizeMode
+	layout        LayoutConfig
 	err           error
 	prevState     state
 }
@@ -112,6 +115,8 @@ func newModel(cfg *config.CLIConfig, client *api.Client, build cmd.BuildInfo) Mo
 		commands:   commands,
 		argsInput:  ti,
 		outputView: viewport.New(0, 0),
+		sizeMode:   terminal.SizeModeStandard,
+		layout:     GetLayoutConfig(terminal.SizeModeStandard),
 	}
 }
 
@@ -125,6 +130,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.sizeMode = terminal.SizeModeForDimensions(m.width, m.height)
+		m.layout = GetLayoutConfig(m.sizeMode)
 		m.applyLayout()
 		return m, nil
 
@@ -147,10 +154,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) applyLayout() {
-	// Reserve one line each for header and footer chrome, per the
-	// PART 32 small-terminal viewport-management guidance.
-	headerHeight := 1
-	footerHeight := 1
+	// Reserve one line each for header and footer chrome, but only when
+	// the active SizeMode's LayoutConfig says to show them at all — Micro
+	// terminals get a bare vertical stack with no chrome, per AI.md
+	// PART 32's Screen Size Categories/GetLayoutConfig table.
+	headerHeight := 0
+	if m.layout.ShowHeader {
+		headerHeight = 1
+	}
+	footerHeight := 0
+	if m.layout.ShowFooter {
+		footerHeight = 1
+	}
 	usableHeight := m.height - headerHeight - footerHeight
 	if usableHeight < 3 {
 		usableHeight = 3
@@ -158,6 +173,9 @@ func (m *Model) applyLayout() {
 	usableWidth := m.width
 	if usableWidth < 20 {
 		usableWidth = 20
+	}
+	if m.layout.ShowSidebar && usableWidth > m.layout.SidebarWidth+20 {
+		usableWidth -= m.layout.SidebarWidth
 	}
 
 	m.categories.SetSize(usableWidth, usableHeight)
@@ -282,15 +300,6 @@ func (m Model) runSelectedCommand(args []string) (string, error) {
 
 // View satisfies tea.Model.
 func (m Model) View() string {
-	header := lipgloss.NewStyle().
-		Foreground(m.theme.Accent).
-		Bold(true).
-		Render(fmt.Sprintf("api-cli %s", m.build.Version))
-
-	footer := lipgloss.NewStyle().
-		Foreground(m.theme.Muted).
-		Render("q quit  ?  help  esc back  / search  enter select")
-
 	var body string
 	switch m.state {
 	case stateCategories:
@@ -310,7 +319,42 @@ func (m Model) View() string {
 		body = helpText()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	if m.layout.ShowBorders {
+		body = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(m.theme.Muted).
+			Render(body)
+	}
+
+	// Micro SizeMode is a bare vertical stack with no chrome, per AI.md
+	// PART 32's Screen Size Categories table.
+	if !m.layout.ShowHeader && !m.layout.ShowFooter {
+		return body
+	}
+
+	parts := make([]string, 0, 3)
+	if m.layout.ShowHeader {
+		title := fmt.Sprintf("api-cli %s", m.build.Version)
+		if m.layout.UseAbbrev {
+			title = "api-cli"
+		}
+		parts = append(parts, lipgloss.NewStyle().
+			Foreground(m.theme.Accent).
+			Bold(true).
+			Render(title))
+	}
+	parts = append(parts, body)
+	if m.layout.ShowFooter {
+		hint := "q quit  ?  help  esc back  / search  enter select"
+		if m.layout.UseAbbrev {
+			hint = "q quit  ? help"
+		}
+		parts = append(parts, lipgloss.NewStyle().
+			Foreground(m.theme.Muted).
+			Render(hint))
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 func helpText() string {
