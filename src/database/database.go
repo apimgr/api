@@ -14,14 +14,16 @@ import (
 
 var (
 	serverDB *sql.DB
-	usersDB  *sql.DB
 	mu       sync.RWMutex
 )
 
-// Init initializes the database connections
-// Creates two SQLite databases per spec:
-// - server.db: Server state (config, sessions, rate limits, audit, scheduler)
-// - users.db: User data (admins, users)
+// Init initializes the database connection.
+// Creates one SQLite database per spec: server.db holds resource state
+// (rate limits, audit log, scheduler, backups). server.yml is the sole
+// source of truth for configuration (see config-rules.md); this project has
+// no user accounts, sessions, or admin panel (IDEA.md non-goals, confirmed
+// against AI.md's own "no admin web UI" statements), so there is no
+// users.db.
 func Init(dataDir string) error {
 	// Ensure database directory exists. Honors the DATABASE_DIR env var per
 	// AI.md PART 4 (Environment Variables table), else falls back to
@@ -44,39 +46,18 @@ func Init(dataDir string) error {
 	serverDB.SetMaxOpenConns(25)
 	serverDB.SetMaxIdleConns(5)
 
-	// Open users database
-	usersPath := filepath.Join(dbDir, "users.db")
-	usersDB, err = sql.Open("sqlite", usersPath+"?_journal_mode=WAL&_busy_timeout=5000")
-	if err != nil {
-		serverDB.Close()
-		return fmt.Errorf("failed to open users database: %w", err)
-	}
-
-	// Configure users DB connection pool
-	usersDB.SetMaxOpenConns(25)
-	usersDB.SetMaxIdleConns(5)
-
-	// Test connections
+	// Test connection
 	if err := serverDB.Ping(); err != nil {
 		serverDB.Close()
-		usersDB.Close()
 		return fmt.Errorf("failed to ping server database: %w", err)
 	}
 
-	if err := usersDB.Ping(); err != nil {
-		serverDB.Close()
-		usersDB.Close()
-		return fmt.Errorf("failed to ping users database: %w", err)
-	}
-
-	log.Printf("Database: Initialized SQLite databases")
+	log.Printf("Database: Initialized SQLite database")
 	log.Printf("  Server DB: %s", serverPath)
-	log.Printf("  Users DB: %s", usersPath)
 
 	// Create schema
 	if err := createSchema(); err != nil {
 		serverDB.Close()
-		usersDB.Close()
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
@@ -90,34 +71,15 @@ func GetServerDB() *sql.DB {
 	return serverDB
 }
 
-// GetUsersDB returns the users database connection
-func GetUsersDB() *sql.DB {
-	mu.RLock()
-	defer mu.RUnlock()
-	return usersDB
-}
-
-// Close closes both database connections
+// Close closes the database connection
 func Close() error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	var errs []error
-
 	if serverDB != nil {
 		if err := serverDB.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("server db: %w", err))
+			return fmt.Errorf("server db: %w", err)
 		}
-	}
-
-	if usersDB != nil {
-		if err := usersDB.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("users db: %w", err))
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("database close errors: %v", errs)
 	}
 
 	return nil
@@ -130,46 +92,12 @@ func createSchema() error {
 		return fmt.Errorf("server schema: %w", err)
 	}
 
-	// Create users.db schema
-	if err := createUsersSchema(); err != nil {
-		return fmt.Errorf("users schema: %w", err)
-	}
-
 	return nil
 }
 
 // createServerSchema creates tables in server.db
 func createServerSchema() error {
 	schema := `
-	-- Config storage (key-value)
-	CREATE TABLE IF NOT EXISTS config (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	-- Config metadata (version tracking)
-	CREATE TABLE IF NOT EXISTS config_meta (
-		id INTEGER PRIMARY KEY CHECK (id = 1),
-		version INTEGER NOT NULL DEFAULT 1,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	-- Insert initial config_meta row
-	INSERT OR IGNORE INTO config_meta (id, version) VALUES (1, 1);
-
-	-- Sessions (admin WebUI login sessions)
-	CREATE TABLE IF NOT EXISTS sessions (
-		id TEXT PRIMARY KEY,
-		admin_id INTEGER NOT NULL,
-		data TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME NOT NULL,
-		last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-	CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-	CREATE INDEX IF NOT EXISTS idx_sessions_admin ON sessions(admin_id);
-
 	-- Rate limiting (sliding window counters)
 	CREATE TABLE IF NOT EXISTS rate_limits (
 		key TEXT PRIMARY KEY,
@@ -241,92 +169,5 @@ func createServerSchema() error {
 	}
 
 	log.Println("Database: Server schema created/verified")
-	return nil
-}
-
-// createUsersSchema creates tables in users.db
-func createUsersSchema() error {
-	schema := `
-	-- Server admin accounts (WebUI access)
-	CREATE TABLE IF NOT EXISTS admins (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT UNIQUE NOT NULL,
-		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
-		totp_secret TEXT,
-		totp_enabled BOOLEAN DEFAULT 0,
-		webauthn_credentials TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_login DATETIME,
-		is_primary BOOLEAN DEFAULT 0,
-		enabled BOOLEAN DEFAULT 1
-	);
-	CREATE INDEX IF NOT EXISTS idx_admins_email ON admins(email);
-	CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
-
-	-- Regular app users (if project has users)
-	CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT UNIQUE NOT NULL,
-		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
-		totp_secret TEXT,
-		totp_enabled BOOLEAN DEFAULT 0,
-		webauthn_credentials TEXT,
-		email_verified BOOLEAN DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_login DATETIME,
-		enabled BOOLEAN DEFAULT 1
-	);
-	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-	CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-
-	-- Password reset tokens
-	CREATE TABLE IF NOT EXISTS password_resets (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT UNIQUE NOT NULL,
-		email TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME NOT NULL,
-		used BOOLEAN DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
-	CREATE INDEX IF NOT EXISTS idx_password_resets_expires ON password_resets(expires_at);
-
-	-- Email verification tokens
-	CREATE TABLE IF NOT EXISTS email_verifications (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token TEXT UNIQUE NOT NULL,
-		user_id INTEGER NOT NULL,
-		email TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME NOT NULL,
-		verified BOOLEAN DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_email_verifications_token ON email_verifications(token);
-	CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
-
-	-- TOTP secrets and backup codes
-	CREATE TABLE IF NOT EXISTS totp_secrets (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		admin_id INTEGER,
-		user_id INTEGER,
-		secret TEXT NOT NULL,
-		backup_codes TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_used DATETIME
-	);
-	CREATE INDEX IF NOT EXISTS idx_totp_admin ON totp_secrets(admin_id);
-	CREATE INDEX IF NOT EXISTS idx_totp_user ON totp_secrets(user_id);
-	`
-
-	_, err := usersDB.Exec(schema)
-	if err != nil {
-		return fmt.Errorf("failed to create users schema: %w", err)
-	}
-
-	log.Println("Database: Users schema created/verified")
 	return nil
 }

@@ -130,21 +130,24 @@ func geoipUpdateTask() error {
 	return nil
 }
 
-// tokenCleanupTask removes expired tokens
+// tokenCleanupTask removes expired ephemeral state.
+// This project has no user accounts, sessions, or API tokens (IDEA.md
+// non-goals) — the closest real expiring state to PART 18's spec purpose
+// ("Remove expired API tokens and sessions") is the rate_limits
+// sliding-window table, so that is what this task cleans.
 func tokenCleanupTask() error {
-	log.Println("Scheduler: Cleaning up expired tokens...")
+	log.Println("Scheduler: Cleaning up expired rate-limit entries...")
 
-	// Clean all expired tokens from database
-	count, err := database.CleanupExpiredTokens()
+	count, err := database.CleanupExpiredRateLimits()
 	if err != nil {
 		log.Printf("Scheduler: Token cleanup failed: %v", err)
 		return err
 	}
 
 	if count > 0 {
-		log.Printf("Scheduler: Token cleanup completed (%d tokens removed)", count)
+		log.Printf("Scheduler: Token cleanup completed (%d entries removed)", count)
 	} else {
-		log.Println("Scheduler: Token cleanup completed (no expired tokens)")
+		log.Println("Scheduler: Token cleanup completed (no expired entries)")
 	}
 
 	return nil

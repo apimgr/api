@@ -8,58 +8,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// CleanupExpiredTokens must delete expired and already-used password reset
-// rows and expired/already-verified email verification rows, while leaving
-// still-valid, unused/unverified rows in place.
-func TestCleanupExpiredTokens(t *testing.T) {
-	db := GetUsersDB()
+// CleanupExpiredRateLimits must delete rate_limits rows whose window_start
+// is older than the 1-hour staleness cutoff, while leaving recent rows in
+// place. This project has no accounts/sessions/API tokens (IDEA.md
+// non-goals), so rate_limits is the real expiring state PART 18's
+// "token_cleanup" task acts on here.
+func TestCleanupExpiredRateLimits(t *testing.T) {
+	db := GetServerDB()
+	_, err := db.Exec(`DELETE FROM rate_limits`)
+	require.NoError(t, err)
+
 	now := time.Now()
-	future := now.Add(24 * time.Hour)
-	past := now.Add(-24 * time.Hour)
+	stale := now.Add(-2 * time.Hour)
+	recent := now.Add(-1 * time.Minute)
 
-	_, err := db.Exec(`INSERT INTO password_resets (token, email, expires_at, used) VALUES (?, ?, ?, ?)`,
-		"pr-expired", "expired@example.com", past, 0)
+	_, err = db.Exec(`INSERT INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)`,
+		"stale-key", 5, stale)
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO password_resets (token, email, expires_at, used) VALUES (?, ?, ?, ?)`,
-		"pr-used", "used@example.com", future, 1)
-	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO password_resets (token, email, expires_at, used) VALUES (?, ?, ?, ?)`,
-		"pr-valid", "valid@example.com", future, 0)
+	_, err = db.Exec(`INSERT INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)`,
+		"recent-key", 3, recent)
 	require.NoError(t, err)
 
-	_, err = db.Exec(`INSERT INTO email_verifications (token, user_id, email, expires_at, verified) VALUES (?, ?, ?, ?, ?)`,
-		"ev-expired", 1, "expired@example.com", past, 0)
+	cleaned, err := CleanupExpiredRateLimits()
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO email_verifications (token, user_id, email, expires_at, verified) VALUES (?, ?, ?, ?, ?)`,
-		"ev-valid", 2, "valid@example.com", future, 0)
-	require.NoError(t, err)
+	assert.Equal(t, int64(1), cleaned)
 
-	cleaned, err := CleanupExpiredTokens()
-	require.NoError(t, err)
-	assert.Equal(t, int64(3), cleaned)
-
-	var prCount int
-	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM password_resets`).Scan(&prCount))
-	assert.Equal(t, 1, prCount)
-
-	var remainingToken string
-	require.NoError(t, db.QueryRow(`SELECT token FROM password_resets`).Scan(&remainingToken))
-	assert.Equal(t, "pr-valid", remainingToken)
-
-	var evCount int
-	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM email_verifications`).Scan(&evCount))
-	assert.Equal(t, 1, evCount)
+	var remainingKey string
+	require.NoError(t, db.QueryRow(`SELECT key FROM rate_limits`).Scan(&remainingKey))
+	assert.Equal(t, "recent-key", remainingKey)
 }
 
-// CleanupExpiredTokens with nothing to clean must return zero, not error.
-func TestCleanupExpiredTokensNoop(t *testing.T) {
-	db := GetUsersDB()
-	_, err := db.Exec(`DELETE FROM password_resets`)
-	require.NoError(t, err)
-	_, err = db.Exec(`DELETE FROM email_verifications`)
+// CleanupExpiredRateLimits with nothing stale to clean must return zero,
+// not error.
+func TestCleanupExpiredRateLimitsNoop(t *testing.T) {
+	db := GetServerDB()
+	_, err := db.Exec(`DELETE FROM rate_limits`)
 	require.NoError(t, err)
 
-	cleaned, err := CleanupExpiredTokens()
+	cleaned, err := CleanupExpiredRateLimits()
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), cleaned)
 }

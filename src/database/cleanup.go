@@ -5,50 +5,34 @@ import (
 	"time"
 )
 
-// CleanupExpiredTokens removes expired tokens from the database
-// This includes password reset tokens and email verification tokens
-func CleanupExpiredTokens() (int64, error) {
-	db := GetUsersDB()
+// CleanupExpiredRateLimits removes stale rate-limit sliding-window rows.
+// This project has no user accounts, sessions, or API tokens (IDEA.md
+// non-goals, confirmed against AI.md's own "no admin web UI" statements) —
+// the closest real expiring state to PART 18's "token_cleanup" task is the
+// rate_limits sliding-window table, so that is what this task cleans.
+// A window row is stale once it is more than one hour past window_start.
+func CleanupExpiredRateLimits() (int64, error) {
+	db := GetServerDB()
 	if db == nil {
 		return 0, nil
 	}
 
-	now := time.Now()
-	var totalCleaned int64
+	cutoff := time.Now().Add(-1 * time.Hour)
 
-	// Clean expired password reset tokens
 	result, err := db.Exec(`
-		DELETE FROM password_resets
-		WHERE expires_at < ? OR used = 1
-	`, now)
+		DELETE FROM rate_limits
+		WHERE window_start < ?
+	`, cutoff)
 	if err != nil {
-		return totalCleaned, err
+		return 0, err
 	}
+
 	count, _ := result.RowsAffected()
-	totalCleaned += count
 	if count > 0 {
-		log.Printf("Database: Cleaned %d expired password reset tokens", count)
+		log.Printf("Database: Cleaned %d stale rate-limit entries", count)
 	}
 
-	// Clean expired email verification tokens
-	result, err = db.Exec(`
-		DELETE FROM email_verifications
-		WHERE expires_at < ? OR verified = 1
-	`, now)
-	if err != nil {
-		return totalCleaned, err
-	}
-	count, _ = result.RowsAffected()
-	totalCleaned += count
-	if count > 0 {
-		log.Printf("Database: Cleaned %d expired email verification tokens", count)
-	}
-
-	if totalCleaned > 0 {
-		log.Printf("Database: Total tokens cleaned: %d", totalCleaned)
-	}
-
-	return totalCleaned, nil
+	return count, nil
 }
 
 // CleanupOldAuditLogs removes audit logs older than the retention period
@@ -120,15 +104,6 @@ func VacuumDatabases() error {
 			log.Printf("Database: Failed to vacuum server.db: %v", err)
 		} else {
 			log.Println("Database: Vacuumed server.db")
-		}
-	}
-
-	// Vacuum users.db
-	if usersDB != nil {
-		if _, err := usersDB.Exec("VACUUM"); err != nil {
-			log.Printf("Database: Failed to vacuum users.db: %v", err)
-		} else {
-			log.Println("Database: Vacuumed users.db")
 		}
 	}
 

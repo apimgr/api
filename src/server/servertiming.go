@@ -156,8 +156,8 @@ func recordServerTiming(w http.ResponseWriter, name string, d time.Duration) {
 // intentionally NOT implemented: this project's HTTP handlers never call
 // the database package directly (see src/database/database.go) — only
 // src/main.go (bootstrap) and src/scheduler/tasks.go (background jobs, not
-// per-request) touch GetServerDB()/GetUsersDB(), so there is no per-request
-// DB call site to accumulate query time from without inventing one.
+// per-request) touch GetServerDB(), so there is no per-request DB call site
+// to accumulate query time from without inventing one.
 //
 // "render" was also investigated: src/server/server.go's renderPage is a
 // realistic, single chokepoint to time. It was NOT wired up, though —
