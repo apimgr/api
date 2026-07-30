@@ -12,28 +12,29 @@ examples and PART 11's "Authentication & Identity Rules" describe mechanisms
 this project has no legitimate use for (there is nothing to authenticate
 except the single operator `server.token`, per `config-rules.md`).
 
-**⚠️ FLAGGED DISCREPANCY — read before touching `src/database/`:** the actual
-codebase (`src/database/database.go`) creates a `users.db` with `admins`,
-`users`, `password_resets`, `email_verifications`, and `totp_secrets` tables,
-and a `server.db` with a `sessions` table (admin WebUI login sessions) and a
-`config`/`config_meta` key-value store. This directly contradicts (a)
-IDEA.md's non-goals (no accounts, no admin panel, no auth/sessions), (b) this
-project's own `CLAUDE.md` note that `src/admin/` and `src/session/` were
-already removed, and (c) `config-rules.md`'s rule that "config/operator-editable
-configuration" must never live in the database (`server.yml` is the sole
-source of truth). This was found during rules-file authoring, not fixed here
-— it needs a decision (delete the dead schema vs. confirm it's still
-in-progress removal) and should be tracked in `TODO.AI.md` before the next
-database-touching change.
+**RESOLVED — previously flagged discrepancy:** the codebase used to create a
+`users.db` with `admins`, `users`, `password_resets`, `email_verifications`,
+and `totp_secrets` tables, plus a `sessions` table and a `config`/
+`config_meta` key-value store in `server.db`. This was confirmed to be dead
+scaffold code with zero real call sites (verified via `grep -rn`), and
+directly contradicted both IDEA.md's non-goals AND AI.md's own "no admin web
+UI" statements (multiple PARTs, e.g. lines 5357, 7177, 15816, 23502, 23540,
+26818) — there was no actual AI.md-vs-IDEA.md conflict to resolve, only dead
+code to delete. `users.db` and the `config`/`config_meta`/`sessions` tables
+were removed from `src/database/database.go`; PART 18's required
+`token_cleanup` task was repointed at `rate_limits` (the one real expiring
+state this project has) via `database.CleanupExpiredRateLimits()`. See
+`TODO.AI.md` for the full resolution note.
 
 ## CRITICAL - NEVER DO
 - Never store operator-editable configuration in the database — `server.yml`
-  is sole source of truth (see `config-rules.md`); a `config`/`config_meta`
-  DB table, if still present, is a bug to resolve, not a pattern to extend
-- Never reintroduce user accounts, sessions, or admin-panel auth tables in
-  new work — IDEA.md forbids them; the existing `admins`/`users`/`sessions`/
-  `password_resets`/`email_verifications`/`totp_secrets` tables are a known,
-  flagged discrepancy, not sanctioned prior art to build on
+  is sole source of truth (see `config-rules.md`); there is no `config`/
+  `config_meta` DB table in this codebase, and none should be reintroduced
+- Never reintroduce user accounts, sessions, or admin-panel auth tables —
+  IDEA.md forbids them and AI.md itself states there is no admin web UI; the
+  `admins`/`users`/`sessions`/`password_resets`/`email_verifications`/
+  `totp_secrets` tables were dead code and have been deleted, not sanctioned
+  prior art to build on
 - Never compare tokens/passwords/HMACs/signatures with `==`, `bytes.Equal`,
   or `strings.EqualFold` — always `crypto/subtle.ConstantTimeCompare`
 - Never expose Tier-1 data (DB credentials, internal IPs/hostnames, any
@@ -107,11 +108,11 @@ database-touching change.
 | Question | Answer | Spec Reference |
 |----------|--------|----------------|
 | Does the auth/session machinery in PART 11 apply to this project? | No — IDEA.md forbids accounts/sessions/admin panel; the only credential concept is `server.token` | IDEA.md non-goals; PART 11 |
-| Is the existing `users.db` (admins/users/sessions/password_resets/email_verifications/totp_secrets) sanctioned? | **No — flagged discrepancy.** Contradicts IDEA.md and this project's own prior admin/session removal; needs a `TODO.AI.md` entry and a decision, not silent reuse | `src/database/database.go`; IDEA.md; project `CLAUDE.md` |
-| Does a `config`/`config_meta` DB table belong in `server.db`? | No per `config-rules.md` ("DB never stores config") — if present in `src/database/database.go`, it's part of the same flagged discrepancy | `config-rules.md`; PART 5 |
-| Database engine actually used | SQLite via `modernc.org/sqlite` (pure-Go driver, CGO-free), WAL mode, `_busy_timeout=5000`, split across two files (`server.db`, `users.db`) rather than PART 10's single-DB framing | `src/database/database.go` |
+| Does `users.db` (admins/users/sessions/password_resets/email_verifications/totp_secrets) still exist? | **No — deleted.** Was dead scaffold code contradicting both IDEA.md and AI.md's own "no admin web UI" statements; removed along with `GetUsersDB()`/`createUsersSchema()` | `src/database/database.go`; `TODO.AI.md` |
+| Does a `config`/`config_meta` DB table belong in `server.db`? | No per `config-rules.md` ("DB never stores config") — removed, was dead/unused | `config-rules.md`; PART 5 |
+| Database engine actually used | SQLite via `modernc.org/sqlite` (pure-Go driver, CGO-free), WAL mode, `_busy_timeout=5000`, single file (`server.db`) | `src/database/database.go` |
 | Schema creation pattern | `CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`, idempotent, no migration files — matches PART 10 | `src/database/database.go`; PART 10 |
-| Connection pool sizing actually used | `SetMaxOpenConns(25)` / `SetMaxIdleConns(5)` on both `server.db` and `users.db` | `src/database/database.go` |
+| Connection pool sizing actually used | `SetMaxOpenConns(25)` / `SetMaxIdleConns(5)` on `server.db` | `src/database/database.go` |
 | Is Tor hidden service (PART 31) implemented yet? | **No** — no `src/tor` package exists, and `github.com/cretz/bine` is not in `go.mod`. PART 31 is mandatory for all projects but is currently an open gap, not a "feature the project opted out of" | `go.mod`; PART 31 |
 | CSP/security-header middleware location | `src/server/middleware.go` and `src/config/config.go` implement CSP/header config — no dedicated `src/security` package | `src/server/middleware.go`, `src/config/config.go` |
 | Compliance posture for this project | IDEA.md declares no `audience`/`compliance`/`data_class`/etc. values → all `web.headers.*` stay at loose "everyone" defaults; all `server.compliance.*` flags stay `false` | IDEA.md, Compliance declarations; PART 11 |
@@ -127,13 +128,13 @@ database-touching change.
 | Well-known namespace | `/.well-known/**` — root-owned protocol/discovery namespace; never a general static-file bucket |
 | Additive-only schema | Never `DROP`/rename a column; add new columns/tables, migrate data, deprecate old ones |
 | Dedicated Tor process | The server's own Tor instance (never system Tor), started as the server's child process, using `127.0.0.1:auto` control/SOCKS ports |
-| Flagged discrepancy | An issue found during this rules-file authoring pass that is documented here rather than silently fixed or silently ignored — see banner note above |
+| Flagged discrepancy | An issue found during rules-file authoring; the `users.db`/dead-schema discrepancy noted here was resolved by deletion — see banner note above |
 
 ## QUICK REFERENCE
 - Canonical response shape: `{ok,data}` / `{ok,error,message,details?}`
   (PART 9); error-tier classification per Public Endpoint Safety Principle
   (PART 11)
-- SQLite via `modernc.org/sqlite`, two files (`server.db`, `users.db`),
+- SQLite via `modernc.org/sqlite`, single file (`server.db`),
   `CREATE TABLE IF NOT EXISTS`, additive-only changes, no migrations
 - Constant-time compare for every secret comparison; opaque IDs on every
   public-facing resource identifier
@@ -146,9 +147,6 @@ database-touching change.
   append-only, `keep: none`
 - Tor hidden service is spec-mandatory but **not yet implemented** in this
   repo — no `src/tor`, no `bine` dependency
-- **Known discrepancy to resolve:** `users.db`/`server.db` currently contain
-  account/session/config tables that conflict with IDEA.md and prior
-  cleanup — log in `TODO.AI.md`, do not extend
 
 ---
 For complete details, see AI.md PART 9, PART 10, PART 11, PART 31

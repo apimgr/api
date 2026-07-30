@@ -685,18 +685,25 @@ OpenRC or SysVinit-only fall through to `ServiceUnknown` and error with
 "unsupported service manager." Flagged by `service-rules.md` authoring
 (also noted independently by the binary/backend-rules.md pass).
 
-## [ ] Database schema conflicts with IDEA.md non-goals (flagged by backend-rules.md authoring)
-Read: `src/database/database.go`, IDEA.md non-goals, project `CLAUDE.md`
-`src/database/database.go` creates a `users.db` with `admins`, `users`,
-`password_resets`, `email_verifications`, `totp_secrets` tables, and a
-`server.db` with a `sessions` table and a `config`/`config_meta`
-key-value store. This contradicts (a) IDEA.md's non-goals (no accounts,
-no admin panel, no auth/sessions), (b) this project's own `CLAUDE.md` note
-that `src/admin/` and `src/session/` were already removed, and (c)
-`config-rules.md`'s rule that config must never live in the database
-(`server.yml` is sole source of truth). Needs a user/spec decision: delete
-the dead schema, or confirm it's mid-removal and finish the job. Not fixed
-here — flagged only, per `backend-rules.md`'s banner note.
+## [x] Database schema conflicts with IDEA.md non-goals — RESOLVED, dead schema deleted
+Read: `src/database/database.go`, IDEA.md non-goals, AI.md (multiple PARTs
+state "no admin web UI" directly — lines 5357, 7177, 15816, 23502, 23540,
+26818), project `CLAUDE.md`
+Confirmed with the user: AI.md itself states "no admin web UI" / config is
+`server.yml`-only in several PARTs, so there was no actual AI.md-vs-IDEA.md
+conflict — the `admins`/`users`/`password_resets`/`email_verifications`/
+`totp_secrets` tables (`users.db`) and `sessions`/`config`/`config_meta`
+tables (`server.db`) were dead leftover scaffold code contradicting both
+specs, confirmed via grep to have zero real call sites outside their own
+schema/cleanup code. Deleted `users.db` entirely (`GetUsersDB()`,
+`createUsersSchema()`, the second `sql.Open`/ping/close) and the
+`config`/`config_meta`/`sessions` tables from `server.db`. PART 18's
+`token_cleanup` task (required, "remove expired API tokens and sessions")
+was repointed at the one real expiring state this project has —
+`rate_limits` sliding-window rows — via new `database.CleanupExpiredRateLimits()`,
+replacing the deleted `database.CleanupExpiredTokens()`. Updated
+`database_test.go`/`cleanup_test.go` accordingly. `go build`/`go vet`/
+`go test ./src/database/... ./src/scheduler/... ./src/server/...` all pass.
 
 ## [ ] Tor hidden service (PART 31) not implemented
 Read: AI.md PART 31
