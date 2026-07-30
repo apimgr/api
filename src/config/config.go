@@ -46,6 +46,39 @@ type ServerConfig struct {
 	Logs           LogsConfig           `yaml:"logs"`
 	Users          UsersConfig          `yaml:"users"`
 	Update         UpdateConfig         `yaml:"update"`
+	Tor            TorConfig            `yaml:"tor"`
+}
+
+// TorConfig holds Tor hidden-service settings, per AI.md PART 31. Hidden
+// service support is always enabled when a Tor binary is found - there is
+// no separate enable/disable flag.
+type TorConfig struct {
+	// Binary is the path to the tor executable (empty = auto-detect).
+	Binary string `yaml:"binary"`
+	// UseNetwork routes the server's own outbound requests through Tor.
+	UseNetwork bool `yaml:"use_network"`
+	// MaxCircuits is the maximum number of circuits Tor may keep open.
+	MaxCircuits int `yaml:"max_circuits"`
+	// CircuitTimeout is the circuit build timeout, in seconds.
+	CircuitTimeout int `yaml:"circuit_timeout"`
+	// BootstrapTimeout is the max seconds to wait for Tor to bootstrap.
+	BootstrapTimeout int `yaml:"bootstrap_timeout"`
+	// SafeLogging scrubs sensitive info from Tor's own logs.
+	SafeLogging bool `yaml:"safe_logging"`
+	// MaxStreamsPerCircuit limits streams per circuit.
+	MaxStreamsPerCircuit int `yaml:"max_streams_per_circuit"`
+	// CloseCircuitOnStreamLimit closes a circuit once the stream limit is hit.
+	CloseCircuitOnStreamLimit bool `yaml:"close_circuit_on_stream_limit"`
+	// BandwidthRate is Tor's sustained bandwidth rate (e.g. "1 MB").
+	BandwidthRate string `yaml:"bandwidth_rate"`
+	// BandwidthBurst is Tor's burst bandwidth allowance (e.g. "2 MB").
+	BandwidthBurst string `yaml:"bandwidth_burst"`
+	// MaxMonthlyBandwidth caps monthly bandwidth, or "unlimited".
+	MaxMonthlyBandwidth string `yaml:"max_monthly_bandwidth"`
+	// NumIntroPoints is the number of hidden-service introduction points.
+	NumIntroPoints int `yaml:"num_intro_points"`
+	// VirtualPort is the .onion port clients connect to.
+	VirtualPort int `yaml:"virtual_port"`
 }
 
 // UpdateConfig holds release-channel and auto-update settings
@@ -529,6 +562,21 @@ func defaultConfig() *Config {
 				Branch:      "stable",
 				AutoInstall: false,
 				DeferDays:   0,
+			},
+			Tor: TorConfig{
+				Binary:                    "",
+				UseNetwork:                false,
+				MaxCircuits:               32,
+				CircuitTimeout:            60,
+				BootstrapTimeout:          180,
+				SafeLogging:               true,
+				MaxStreamsPerCircuit:      100,
+				CloseCircuitOnStreamLimit: true,
+				BandwidthRate:             "1 MB",
+				BandwidthBurst:            "2 MB",
+				MaxMonthlyBandwidth:       "100 GB",
+				NumIntroPoints:            3,
+				VirtualPort:               80,
 			},
 			Logs: LogsConfig{
 				Level: "warn",

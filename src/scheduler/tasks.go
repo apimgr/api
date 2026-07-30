@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/apimgr/api/src/geoip"
 	"github.com/apimgr/api/src/paths"
 	"github.com/apimgr/api/src/ssl"
+	"github.com/apimgr/api/src/tor"
 )
 
 // RegisterDefaultTasks registers all built-in scheduled tasks
@@ -228,18 +228,22 @@ func healthCheckTask() error {
 	return nil
 }
 
-// torHealthTask checks and restarts Tor if needed
+// torHealthTask checks the running Tor hidden service's control connection
+// and restarts it if unresponsive. It is a soft no-op whenever Tor was
+// never started (no binary found, or Tor disabled) - Tor is always
+// optional and this task must never fail the scheduler.
 func torHealthTask() error {
-	// Check if tor binary exists
-	torPath, err := exec.LookPath("tor")
-	if err != nil {
-		// Tor not installed, skip
+	mgr := tor.Get()
+	if mgr == nil || !mgr.Running() {
 		return nil
 	}
 
-	// Check if tor process is running
-	// Simple approach: try to connect to tor control port
-	log.Printf("Scheduler: Tor binary found at %s (health check not yet implemented)", torPath)
+	if err := mgr.Ping(); err != nil {
+		log.Printf("Scheduler: Tor process unresponsive, restarting: %v", err)
+		if err := mgr.Restart(context.Background()); err != nil {
+			log.Printf("Scheduler: Tor restart failed: %v", err)
+		}
+	}
 
 	return nil
 }

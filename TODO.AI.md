@@ -705,13 +705,41 @@ replacing the deleted `database.CleanupExpiredTokens()`. Updated
 `database_test.go`/`cleanup_test.go` accordingly. `go build`/`go vet`/
 `go test ./src/database/... ./src/scheduler/... ./src/server/...` all pass.
 
-## [ ] Tor hidden service (PART 31) not implemented
-Read: AI.md PART 31
-PART 31 mandates auto-enabled Tor hidden-service support (dedicated child
-Tor process, never system Tor, `{config_dir}/tor/`/`{data_dir}/tor/`/
-`{log_dir}/tor.log`) for every project. No `src/tor` package exists and
-`github.com/cretz/bine` is not in `go.mod`. This is a spec-mandatory gap,
-not an opted-out feature.
+## [x] Tor hidden service (PART 31) not implemented — RESOLVED
+`src/tor` package implements the dedicated child Tor process (never system
+Tor), persistent v3 onion address via the control protocol's `ADD_ONION`,
+`{config_dir}/tor/`/`{data_dir}/tor/` directories at 0700 with 0600 files,
+config/PATH/common-location binary auto-detection, and non-fatal handling
+of a missing binary or bootstrap failure. `github.com/cretz/bine v0.2.0`
+added to `go.mod`. Wired into `src/main.go` (started only after the
+server's own listener is confirmed accepting connections; stopped first in
+graceful shutdown) and `src/scheduler/tasks.go`'s `torHealthTask()`
+(ping/restart via `tor.Manager`). Three follow-up gaps remain, logged as
+separate items below: privilege-drop-aware process ownership, `api-cli
+tor` subcommands, and PART 12 FQDN/`.onion` `security.txt` integration.
+
+## [ ] Tor: privilege-drop-aware process ownership (PART 31)
+Read: AI.md PART 31, "Tor Process Ownership"
+`src/main.go`'s Tor startup does not yet coordinate with a
+privilege-drop step — PART 31 requires the dedicated Tor child process to
+run as the same (post-privilege-drop) user as the server. No privilege-drop
+code exists in `main.go` yet for the server itself, so this is currently
+moot but must be wired together once/if server-level privilege dropping is
+implemented (see PART 23 service-account rules).
+
+## [ ] Tor: `api-cli tor` CLI subcommands (PART 31 CLI table)
+Read: AI.md PART 31, CLI table
+PART 31 documents `tor status/validate/restart/regenerate/vanity/
+import-keys` client subcommands. `src/tor.Manager` already exposes the
+needed methods (`Restart`, `RegenerateAddress`, `ApplyKeys`, `Ping`,
+`OnionAddress`, `Running`), but no `api-cli` command wiring was added in
+`src/client/cmd/`.
+
+## [ ] Tor: PART 12 FQDN/`BuildURL`/.onion `security.txt` integration
+Read: AI.md PART 12 (FQDN detection), PART 31 (.onion in security.txt)
+`.onion` address awareness is not yet wired into PART 12's FQDN-detection/
+`BuildURL` helpers, and `security.txt`'s Tor-specific variant (surfacing
+the `.onion` address) is not implemented.
 
 ## [ ] TUI terminal-breakpoint package (`SizeMode`, PART 7/32) not implemented
 Read: AI.md PART 7, PART 32 (Terminal Size Breakpoints)

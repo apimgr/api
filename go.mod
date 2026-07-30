@@ -9,8 +9,8 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/cretz/bine v0.2.0
 	github.com/go-chi/chi/v5 v5.1.0
-	github.com/go-chi/cors v1.2.1
 	github.com/google/open-location-code/go v0.0.0-20250620134813-83986da0156b
 	github.com/google/uuid v1.6.0
 	github.com/oschwald/maxminddb-golang v1.13.1

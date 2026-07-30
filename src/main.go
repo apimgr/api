@@ -3,14 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -27,6 +30,7 @@ import (
 	"github.com/apimgr/api/src/server/handler"
 	"github.com/apimgr/api/src/ssl"
 	"github.com/apimgr/api/src/sysservice"
+	"github.com/apimgr/api/src/tor"
 )
 
 var (
@@ -379,6 +383,60 @@ func main() {
 		}()
 	}
 
+	// Start Tor hidden service, per AI.md PART 31. Tor is always optional -
+	// a missing binary or any startup failure logs a warning and the server
+	// continues running without it; nothing here may block or fail
+	// server startup.
+	var torMgr *tor.Manager
+	if listenPort := httpPort; listenPort != "" || httpsPort != "" {
+		if listenPort == "" {
+			listenPort = httpsPort
+		}
+		if serverPort, err := strconv.Atoi(listenPort); err == nil {
+			torCfg := tor.Config{
+				Binary:                    cfg.Server.Tor.Binary,
+				UseNetwork:                cfg.Server.Tor.UseNetwork,
+				MaxCircuits:               cfg.Server.Tor.MaxCircuits,
+				CircuitTimeout:            cfg.Server.Tor.CircuitTimeout,
+				BootstrapTimeout:          cfg.Server.Tor.BootstrapTimeout,
+				SafeLogging:               cfg.Server.Tor.SafeLogging,
+				MaxStreamsPerCircuit:      cfg.Server.Tor.MaxStreamsPerCircuit,
+				CloseCircuitOnStreamLimit: cfg.Server.Tor.CloseCircuitOnStreamLimit,
+				BandwidthRate:             cfg.Server.Tor.BandwidthRate,
+				BandwidthBurst:            cfg.Server.Tor.BandwidthBurst,
+				MaxMonthlyBandwidth:       cfg.Server.Tor.MaxMonthlyBandwidth,
+				NumIntroPoints:            cfg.Server.Tor.NumIntroPoints,
+				VirtualPort:               cfg.Server.Tor.VirtualPort,
+			}
+			torMgr = tor.NewManager(serverPort, torCfg, paths.ConfigDir(), paths.DataDir())
+			tor.Set(torMgr)
+
+			go func() {
+				// Confirm the HTTP(S) listener is actually accepting
+				// connections before starting Tor, since the hidden
+				// service forwards to it - bounded retry, never blocks
+				// server startup.
+				deadline := time.Now().Add(10 * time.Second)
+				for time.Now().Before(deadline) {
+					conn, dialErr := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", serverPort), 500*time.Millisecond)
+					if dialErr == nil {
+						conn.Close()
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+
+				if err := torMgr.Start(context.Background()); err != nil {
+					if errors.Is(err, tor.ErrBinaryNotFound) {
+						log.Println("Tor binary not found, hidden service disabled")
+					} else {
+						log.Printf("Warning: Tor disabled - %v", err)
+					}
+				}
+			}()
+		}
+	}
+
 	// Wait for interrupt signal or error
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -401,6 +459,13 @@ func main() {
 			log.Printf("Server error: %v", err)
 		}
 		break
+	}
+
+	// Stop Tor first - server owns the Tor process lifecycle.
+	if torMgr != nil {
+		if err := torMgr.Close(); err != nil {
+			log.Printf("Tor: error during shutdown: %v", err)
+		}
 	}
 
 	// Graceful shutdown with 30 second timeout

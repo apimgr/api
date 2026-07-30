@@ -113,7 +113,7 @@ state this project has) via `database.CleanupExpiredRateLimits()`. See
 | Database engine actually used | SQLite via `modernc.org/sqlite` (pure-Go driver, CGO-free), WAL mode, `_busy_timeout=5000`, single file (`server.db`) | `src/database/database.go` |
 | Schema creation pattern | `CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`, idempotent, no migration files — matches PART 10 | `src/database/database.go`; PART 10 |
 | Connection pool sizing actually used | `SetMaxOpenConns(25)` / `SetMaxIdleConns(5)` on `server.db` | `src/database/database.go` |
-| Is Tor hidden service (PART 31) implemented yet? | **No** — no `src/tor` package exists, and `github.com/cretz/bine` is not in `go.mod`. PART 31 is mandatory for all projects but is currently an open gap, not a "feature the project opted out of" | `go.mod`; PART 31 |
+| Is Tor hidden service (PART 31) implemented yet? | **Yes** — `src/tor` package (`config.go`, `torrc.go`, `dirs.go`, `binary.go`, `manager.go`, `service.go` + tests) implements the dedicated Tor process, v3 persistent onion via `ADD_ONION`, and `github.com/cretz/bine v0.2.0` is in `go.mod`; wired into `src/main.go` (start after listener confirmed accepting, stop first on shutdown) and `src/scheduler/tasks.go`'s `torHealthTask()`. Still open: privilege-drop-aware process ownership, `api-cli tor` subcommands, and PART 12 FQDN/`.onion` `security.txt` integration — tracked in `TODO.AI.md` | `src/tor/`; `go.mod`; PART 31 |
 | CSP/security-header middleware location | `src/server/middleware.go` and `src/config/config.go` implement CSP/header config — no dedicated `src/security` package | `src/server/middleware.go`, `src/config/config.go` |
 | Compliance posture for this project | IDEA.md declares no `audience`/`compliance`/`data_class`/etc. values → all `web.headers.*` stay at loose "everyone" defaults; all `server.compliance.*` flags stay `false` | IDEA.md, Compliance declarations; PART 11 |
 | Which log is machine-parseable only? | `audit.log` — JSON only, no text format option | PART 11, Logging |
@@ -145,8 +145,9 @@ state this project has) via `database.CleanupExpiredRateLimits()`. See
   `/.well-known/**` never a general file bucket
 - All compliance standards off by default; audit log is JSON Lines,
   append-only, `keep: none`
-- Tor hidden service is spec-mandatory but **not yet implemented** in this
-  repo — no `src/tor`, no `bine` dependency
+- Tor hidden service is implemented: `src/tor/` package + `bine` dependency,
+  wired into `main.go`/`scheduler/tasks.go`; CLI subcommands and
+  privilege-drop-aware ownership remain open per `TODO.AI.md`
 
 ---
 For complete details, see AI.md PART 9, PART 10, PART 11, PART 31
