@@ -35,25 +35,11 @@ ARG BUILD_DATE
 ARG COMMIT_ID
 ARG LICENSE=MIT
 
-# Static Labels
-LABEL maintainer="apimgr <apimgr@casjay.pro>" \
-      org.opencontainers.image.vendor="apimgr" \
-      org.opencontainers.image.authors="apimgr" \
-      org.opencontainers.image.title="api" \
-      org.opencontainers.image.base.name="api" \
-      org.opencontainers.image.description="Containerized version of api" \
-      org.opencontainers.image.url="https://github.com/apimgr/api" \
-      org.opencontainers.image.source="https://github.com/apimgr/api" \
-      org.opencontainers.image.documentation="https://github.com/apimgr/api" \
-      org.opencontainers.image.vcs-type="Git" \
-      com.github.containers.toolbox="false"
-
-# Dynamic Labels (from ARGs)
-LABEL org.opencontainers.image.licenses="${LICENSE}" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.schema-version="${VERSION}" \
-      org.opencontainers.image.revision="${COMMIT_ID}"
+# No LABEL blocks — all image metadata is applied as OCI annotations at build time.
+# Pass --annotation flags to docker buildx build (or use docker/metadata-action
+# annotations: output in GitHub Actions). Annotations attach to the manifest index
+# and are visible on multiarch pulls. LABEL applies only to per-platform layers.
+# See docker-rules.md → OCI Meta Labels.
 
 # Install required packages including Tor
 # libcap provides setcap, used below to grant the non-root user
@@ -70,8 +56,9 @@ RUN apk add --no-cache \
 # Create non-root user/group to run the application
 RUN addgroup -S app && adduser -S -G app app
 
-# Create directories with proper structure
-RUN mkdir -p /config /config/security /data/db /data/logs /data/tor /data/geoip /data/backup
+# NO directory creation - binary handles ALL setup based on env vars
+# This allows users to override CONFIG_DIR, DATA_DIR, etc.
+# Docker volume mounts auto-create mount points
 
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/api /usr/local/bin/api
@@ -88,16 +75,14 @@ RUN chmod 755 /usr/local/bin/*
 # Grant the api binary permission to bind port 80 without running as root
 RUN setcap 'cap_net_bind_service=+ep' /usr/local/bin/api
 
-# Hand ownership of config/data directories to the non-root user
-RUN chown -R app:app /config /data
-
 # Run as non-root user; setcap above allows binding port 80
 USER app
 
 # Set environment
-# Note: Tor auto-enabled because tor binary is installed above
-ENV MODE=development \
-    TZ=America/New_York
+# Note: Tor available (binary installed) but server binary controls Tor startup (see PART 31)
+# MODE is never baked into the image — binary defaults to production; compose sets MODE explicitly
+ENV TZ=America/New_York \
+    DATABASE_DIR=/data/db/sqlite
 
 # Expose internal port (always 80)
 EXPOSE 80
