@@ -378,6 +378,13 @@ type WebHeadersConfig struct {
 	ServerTimingInDebugOnly bool                `yaml:"server_timing_in_debug_only"`
 	ClearSiteData           ClearSiteDataConfig `yaml:"clear_site_data"`
 	NEL                     NELConfig           `yaml:"nel"`
+	// ReferrerPolicy is config-driven (rather than the historical hardcoded
+	// header value) so the IDEA.md → Header Tightening Auto-Map can tighten
+	// it to "no-referrer" for COPPA/PCI-DSS/GLBA-flagged projects. Empty
+	// string on an old server.yml (upgraded from before this field existed)
+	// falls back to the same "strict-origin-when-cross-origin" default that
+	// was previously hardcoded — see securityHeadersMiddleware.
+	ReferrerPolicy string `yaml:"referrer_policy"`
 }
 
 // ClearSiteDataConfig controls when the Clear-Site-Data header is emitted
@@ -652,6 +659,7 @@ func defaultConfig() *Config {
 				HonorDNT:                false,
 				SecFetchValidation:      true,
 				ServerTimingInDebugOnly: true,
+				ReferrerPolicy:          "strict-origin-when-cross-origin",
 				ClearSiteData: ClearSiteDataConfig{
 					OnTokenRevocation:   true,
 					OnConsentWithdrawal: true,
@@ -676,6 +684,14 @@ func Load() (*Config, error) {
 
 	// Check if config file exists
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		// First-run setup: pre-fill web.headers.* from IDEA.md's declared
+		// audience/compliance/data-class per AI.md "IDEA.md → Header
+		// Tightening Auto-Map". Must run before Save() so the tightened
+		// values (not the loose defaultConfig() values) are what gets
+		// persisted; changes are recorded for the setup audit log via
+		// LastAutoTightenChanges() once server.InitLogger() is up.
+		applyIdeaHeaderAutoMap(cfg)
+
 		// Create default config file
 		if err := Save(cfg); err != nil {
 			return cfg, err

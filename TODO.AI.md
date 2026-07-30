@@ -725,9 +725,37 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   it from. Reserved for future use if such an endpoint is ever added.
 - **Server-Timing**: debug-mode-only per AI.md PART 11 — no per-request
   timing instrumentation exists yet to source values from.
-- **IDEA.md → Header Tightening Auto-Map**: first-run pre-fill of
-  `web.headers`/`web.csp` tightened values based on IDEA.md declared
-  compliance flags — not started.
+- [x] **IDEA.md → Header Tightening Auto-Map**: FIXED — new
+  `src/config/ideamap.go` implements AI.md's "IDEA.md → Header Tightening
+  Auto-Map" trigger table. `config.Load()` calls `applyIdeaHeaderAutoMap`
+  before `Save()` on the first-run "config file does not exist" branch,
+  parsing a new `## Compliance declarations` IDEA.md section
+  (`audience`/`compliance`/`data_class`/`uses_sharedarraybuffer`/
+  `uses_wasm_threads`/`embeds_third_party`, `key: value` lines,
+  comma-separated multi-values) via `parseComplianceDeclarations`. Covers the
+  COPPA, HIPAA, PCI-DSS, GDPR/CCPA/UK-GDPR/LGPD, GLBA, FERPA, and
+  SharedArrayBuffer/WASM-threads rows with strictest-wins merge across
+  COOP/COEP/CORP/`Referrer-Policy`/`HonorSecGPC`/
+  `ClearSiteData.ExecutionContexts`. `Referrer-Policy` is now config-driven
+  (`cfg.Web.Headers.ReferrerPolicy`, `securityHeadersMiddleware` in
+  `src/server/middleware.go`) instead of hardcoded, falling back to the
+  historical `strict-origin-when-cross-origin` default when empty. Rows with
+  no implementable config surface in this IDEA.md-scoped project (HIPAA
+  Cache-Control on PHI endpoints; PCI-DSS/GLBA frame-ancestors/
+  X-Frame-Options on payment pages — no accounts/payment pages exist) are
+  explicitly documented as intentional no-ops rather than fabricated. Since
+  `config.Load()` runs before `server.InitLogger()`, changes are buffered via
+  `config.LastAutoTightenChanges()` and logged to the existing setup audit
+  log (`logger.LogAudit("header_auto_tighten", ...)`) from `src/main.go`
+  once the logger is available. This project's own `IDEA.md` gained a
+  `## Compliance declarations` section documenting its empty (no accounts,
+  no payment pages, no PHI/cardholder data) declaration state. Tests added
+  in `src/config/ideamap_test.go` covering the declaration parser (section
+  scoping, comma-separated values, case-insensitivity, unknown-key
+  rejection), each trigger row, strictest-wins merges across combined
+  compliances, and graceful IDEA.md-not-found degradation. Verified in
+  Docker (`casjaysdev/go:latest`): `gofmt -l .` clean, `go build ./...` and
+  `go vet ./...` clean, `go test ./...` passes (full suite, all packages).
 
 ## [x] Revert `.github/workflows/ci.yml` lint job to `casjaysdev/go:latest`
 FIXED: `docker run --rm --name ... --entrypoint sh casjaysdev/go:latest -c

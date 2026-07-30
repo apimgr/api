@@ -204,6 +204,21 @@ func main() {
 		log.Printf("Warning: Failed to initialize logging system: %v", err)
 	}
 
+	// Record any first-run IDEA.md → Header Tightening Auto-Map changes to
+	// the setup audit log now that the logger is available (config.Load()
+	// runs before InitLogger, so it can't log directly — see
+	// config.LastAutoTightenChanges).
+	if logger := server.GetLogger(); logger != nil {
+		for _, change := range config.LastAutoTightenChanges() {
+			logger.LogAudit("header_auto_tighten", map[string]interface{}{
+				"field":   change.Field,
+				"old":     change.OldValue,
+				"new":     change.NewValue,
+				"trigger": change.Trigger,
+			})
+		}
+	}
+
 	// Initialize GeoIP database (load if exists, or will download on first use)
 	if err := geoip.Get().Load(paths.DataDir()); err != nil {
 		log.Printf("Warning: Failed to load GeoIP database: %v (will auto-download on first request)", err)

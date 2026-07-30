@@ -195,7 +195,14 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 			}
 
 			// Modern replacement for X-Frame-Options is frame-ancestors
-			// above; X-Frame-Options stays set for legacy browsers
+			// above; X-Frame-Options stays set for legacy browsers.
+			//
+			// AI.md's IDEA.md → Header Tightening Auto-Map PCI-DSS row also
+			// calls for frame-ancestors='none'/X-Frame-Options=DENY "on
+			// payment pages". This project has no payment pages (IDEA.md
+			// non-goals: no accounts, no checkout flow), so that per-page
+			// override is intentionally not implemented — see
+			// src/config/ideamap.go doc comment.
 			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 
 			// Prevent MIME sniffing
@@ -205,10 +212,17 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 			// older browser compatibility)
 			w.Header().Set("X-XSS-Protection", "1; mode=block")
 
-			// Referrer Policy
-			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-
 			headers := cfg.Web.Headers
+
+			// Referrer Policy — config-driven so the IDEA.md → Header
+			// Tightening Auto-Map can tighten it per AI.md PART 11; empty
+			// (pre-upgrade server.yml with no key yet) falls back to the
+			// same default this used to be hardcoded to.
+			referrerPolicy := headers.ReferrerPolicy
+			if referrerPolicy == "" {
+				referrerPolicy = "strict-origin-when-cross-origin"
+			}
+			w.Header().Set("Referrer-Policy", referrerPolicy)
 
 			// Blocks Flash/PDF cross-domain embedding
 			if headers.CrossDomainPolicies != "" {

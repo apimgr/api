@@ -126,3 +126,15 @@ Failure mode for GeoIP: if databases unavailable, the geo/network tools return I
 - **GeoIP databases downloaded at runtime**: intentional for size and freshness. Integrity checked via HTTPS.
 - **All responses include `Access-Control-Allow-Origin: *`**: intentional. Public API designed for cross-origin browser use.
 - **MD5 and SHA-1 available in hash tool**: intentional. These are provided as utility tools for interoperability (legacy systems, checksum verification), not for password hashing. The API documentation explicitly notes they are cryptographically broken for security purposes.
+
+## Compliance declarations
+
+This project declares no `audience`, `compliance`, `data_class`,
+`uses_sharedarraybuffer`, `uses_wasm_threads`, or `embeds_third_party`
+values here — consistent with the product-scope/non-goals above (no
+accounts, no payment pages, no PHI/cardholder data ever handled). Per AI.md
+"IDEA.md → Header Tightening Auto-Map" (accepted key/value line format:
+`key: value`, comma-separated for multi-value keys), no declarations means
+the `web.headers.*` first-run defaults stay at their loose "everyone"
+baseline (`unsafe-none` COOP/COEP, `cross-origin` CORP, etc.); the operator
+may still tighten any of them manually post-setup via `server.yml`.
