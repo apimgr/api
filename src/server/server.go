@@ -91,12 +91,19 @@ func New(cfg *config.Config) *http.Server {
 	}
 
 	r.Get("/api", apiDocsHandler(cfg))
-	r.Get("/openapi", openapiHandler(cfg))
-	r.Get("/openapi.json", openapiJSONHandler(cfg))
-	r.Get("/openapi.yaml", openapiYAMLHandler(cfg))
-	r.Get("/swagger", swaggerHandler(cfg))
-	r.Get("/graphql", graphqlHandler(cfg))
-	r.Post("/graphql", graphqlQueryHandler(cfg))
+
+	// Swagger/GraphQL docs UIs and API routes (PART 14 canonical paths).
+	// The old root paths (/openapi, /openapi.json, /openapi.yaml, /swagger,
+	// /graphql) are no longer served — do not implement redirects from
+	// them. The unversioned /api/swagger and /api/graphql aliases mount
+	// the SAME handler as their /api/v1/server/* counterparts (no
+	// redirect), per PART 14's "Unversioned API aliases" rules.
+	r.Get("/server/docs/swagger", swaggerUIHandler(cfg))
+	r.Get("/server/docs/graphql", graphqlUIHandler(cfg))
+	r.Get("/api/swagger", apiSwaggerSpecHandler(cfg))
+	r.Post("/api/graphql", graphql.HandleQuery)
+	r.Get("/api/v1/server/swagger", apiSwaggerSpecHandler(cfg))
+	r.Post("/api/v1/server/graphql", graphql.HandleQuery)
 
 	// Standard pages (/server/*)
 	r.Get("/server/about", aboutPageHandler(cfg))
@@ -1129,29 +1136,19 @@ func apiDocsHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func swaggerHandler(cfg *config.Config) http.HandlerFunc {
-	// Use new swagger package for Swagger UI with theme support
+// swaggerUIHandler serves the Swagger UI at the PART 14 canonical
+// /server/docs/swagger path; it fetches its spec from /api/swagger.
+func swaggerUIHandler(cfg *config.Config) http.HandlerFunc {
 	baseURL := getBaseURL(cfg)
-	return swagger.ServeUI(baseURL + "/openapi.json")
+	return swagger.ServeUI(baseURL + "/api/swagger")
 }
 
-func openapiHandler(cfg *config.Config) http.HandlerFunc {
-	// Redirect /openapi to /swagger for consistency
-	return swaggerHandler(cfg)
-}
-
-func openapiJSONHandler(cfg *config.Config) http.HandlerFunc {
-	// Use new swagger package to generate OpenAPI spec
+// apiSwaggerSpecHandler serves the OpenAPI JSON spec. Mounted at both
+// /api/swagger (unversioned alias) and /api/v1/server/swagger (versioned
+// canonical) — same handler, no redirect, per PART 14. JSON only, no YAML.
+func apiSwaggerSpecHandler(cfg *config.Config) http.HandlerFunc {
 	baseURL := getBaseURL(cfg)
 	return swagger.ServeSpec(Version, baseURL)
-}
-
-func openapiYAMLHandler(cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Note: Per AI.md PART 20, OpenAPI spec uses JSON format only (NO YAML)
-		// Redirect to JSON endpoint as per specification
-		http.Redirect(w, r, "/openapi.json", http.StatusFound)
-	}
 }
 
 // getBaseURL returns the base URL for the server
@@ -1166,15 +1163,11 @@ func getBaseURL(cfg *config.Config) string {
 	return baseURL
 }
 
-func graphqlHandler(cfg *config.Config) http.HandlerFunc {
-	// Use new graphql package for GraphiQL UI with theme support
+// graphqlUIHandler serves the GraphiQL UI at the PART 14 canonical
+// /server/docs/graphql path; it POSTs to /api/graphql.
+func graphqlUIHandler(cfg *config.Config) http.HandlerFunc {
 	baseURL := getBaseURL(cfg)
-	return graphql.ServeUI(baseURL + "/graphql")
-}
-
-func graphqlQueryHandler(cfg *config.Config) http.HandlerFunc {
-	// Use new graphql package to handle queries
-	return graphql.HandleQuery
+	return graphql.ServeUI(baseURL + "/api/graphql")
 }
 
 // metricsPrometheusHandler serves metrics in Prometheus format

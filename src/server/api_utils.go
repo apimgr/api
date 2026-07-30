@@ -5153,7 +5153,7 @@ func requestBaseURL(r *http.Request) string {
 }
 
 // apiGenerateAPIDocsHandler renders API documentation for ?format=
-// (markdown, default, or json — which duplicates /openapi.json's structure)
+// (markdown, default, or json — which duplicates /api/swagger's structure)
 // and ?version=, using generateService.APIDocs against the shared
 // swagger.GenerateSpec output.
 func apiGenerateAPIDocsHandler(w http.ResponseWriter, r *http.Request) {

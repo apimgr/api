@@ -17,8 +17,8 @@ A versatile REST API toolkit providing multiple utility services through a unifi
 
 - **Multiple API Interfaces**
   - REST API at `/api/v1/`
-  - Swagger/OpenAPI documentation at `/openapi`
-  - GraphQL interface at `/graphql`
+  - Swagger/OpenAPI documentation at `/server/docs/swagger`
+  - GraphQL interface at `/server/docs/graphql`
 
 - **Production Ready**
   - SSL/TLS with Let's Encrypt integration
@@ -168,8 +168,8 @@ api --config /etc/apimgr/api --data /var/lib/apimgr/api \
 
 ## Interactive Documentation
 
-- **Swagger UI:** `http://localhost:64580/openapi`
-- **GraphQL:** `http://localhost:64580/graphql`
+- **Swagger UI:** `http://localhost:64580/server/docs/swagger`
+- **GraphQL:** `http://localhost:64580/server/docs/graphql`
 
 ## Configuration
 

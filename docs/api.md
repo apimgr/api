@@ -545,8 +545,8 @@ When rate limit is exceeded:
 
 For interactive API exploration, visit:
 
-- **Swagger UI:** `http://localhost:64580/openapi`
-- **GraphQL:** `http://localhost:64580/graphql`
+- **Swagger UI:** `http://localhost:64580/server/docs/swagger`
+- **GraphQL:** `http://localhost:64580/server/docs/graphql`
 
 ## Next Steps
 

@@ -1334,14 +1334,15 @@ func TestRobotsHandler(t *testing.T) {
 	assert.Contains(t, body, "Sitemap: http://example.com:8080/sitemap.xml")
 }
 
-// TestOpenapiYAMLHandler_RedirectsToJSON covers the documented PART 20
-// behavior: no YAML spec, always redirect to /openapi.json.
-func TestOpenapiYAMLHandler_RedirectsToJSON(t *testing.T) {
+// TestApiSwaggerSpecHandler_ServesJSON covers PART 14's canonical
+// /api/swagger and /api/v1/server/swagger routes: OpenAPI is JSON-only,
+// there is no YAML route or redirect.
+func TestApiSwaggerSpecHandler_ServesJSON(t *testing.T) {
 	cfg := &config.Config{}
-	req := httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/swagger", nil)
 	rec := httptest.NewRecorder()
-	openapiYAMLHandler(cfg)(rec, req)
+	apiSwaggerSpecHandler(cfg)(rec, req)
 
-	assert.Equal(t, http.StatusFound, rec.Code)
-	assert.Equal(t, "/openapi.json", rec.Header().Get("Location"))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 }

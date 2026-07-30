@@ -624,13 +624,34 @@ vuln job `vuln-scan`. Needs verification and a fix pass (job rename may
 just be a naming difference; `workflow-policy`/`image-scan` may be a real
 missing-job gap).
 
-## [ ] API docs routes non-compliant with PART 14 canonical paths
+## [x] API docs routes non-compliant with PART 14 canonical paths — RESOLVED (swagger/graphql)
 Read: AI.md PART 14, `src/server/server.go`
-`src/server/server.go` still registers `/openapi.json`, `/swagger`, and
-`/graphql` (GET+POST) at root, and does not yet register the canonical
-`/server/docs/swagger`, `/server/docs/graphql`, or `/api/autodiscover`
-paths. PART 14 explicitly states the old root paths are "no longer
-served." Flagged by `api-rules.md` authoring; not fixed here.
+Removed the old root routes (`/openapi`, `/openapi.json`, `/openapi.yaml`,
+`/swagger`, `/graphql` GET+POST) and their handlers
+(`swaggerHandler`/`openapiHandler`/`openapiJSONHandler`/`openapiYAMLHandler`/
+`graphqlHandler`/`graphqlQueryHandler`). Registered PART 14's canonical set:
+`/server/docs/swagger`, `/server/docs/graphql` (UI routes, new
+`swaggerUIHandler`/`graphqlUIHandler`), `/api/swagger` +
+`/api/v1/server/swagger` (same `apiSwaggerSpecHandler`, no redirect),
+`/api/graphql` + `/api/v1/server/graphql` (same `graphql.HandleQuery`, no
+redirect) — matching the existing `/api/healthz` +
+`/api/v1/server/healthz` alias pattern. OpenAPI is JSON-only, no YAML
+route. Updated `server_test.go` (replaced the obsolete YAML-redirect test
+with a JSON-content-type test for `apiSwaggerSpecHandler`), the `/api`
+frontend page template (`openapi.tmpl`), `README.md`, `docs/index.md`,
+`docs/api.md`, and two doc comments referencing the old `/openapi.json`
+path. Verified: `go build ./...`, `go vet ./...`,
+`go test ./src/server/... ./src/swagger/... ./src/graphql/...` all pass.
+**`/api/autodiscover` remains unimplemented** — deferred separately below,
+depends on the not-yet-built self-update package
+(`cli_versions`/`cli_min_version` data it must serve).
+
+## [ ] `/api/autodiscover` (PART 14) unimplemented — depends on self-update package
+Read: AI.md PART 14, PART 22
+`/api/autodiscover` needs `cli_versions`/`cli_min_version` data that
+depends on the not-yet-built self-update package (see the PART 22
+self-update TODO item below). Do not stub or partially implement; build
+once self-update exists or is explicitly scoped.
 
 ## [ ] SSL: DNS-01 ACME, `ssl.Manager` wiring, and scheduler renewal path gaps
 Read: AI.md PART 15, `src/ssl/acme.go`, `src/ssl/ssl.go`,

@@ -16,8 +16,8 @@ API Toolkit is a universal API platform that offers various utility services thr
 ### Multiple API Interfaces
 
 - **REST API** - Standard HTTP/JSON endpoints at `/api/v1/`
-- **Swagger/OpenAPI** - Interactive API documentation at `/openapi`
-- **GraphQL** - Flexible query interface at `/graphql`
+- **Swagger/OpenAPI** - Interactive API documentation at `/server/docs/swagger`
+- **GraphQL** - Flexible query interface at `/server/docs/graphql`
 
 ### Modern Web Interface
 

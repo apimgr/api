@@ -10,7 +10,7 @@ import (
 )
 
 // APIDocs renders API documentation for the given version and base URL.
-// format "json" returns the same OpenAPI structure served at /openapi.json
+// format "json" returns the same OpenAPI structure served at /api/swagger
 // (reusing swagger.GenerateSpec, not duplicating its logic); any other
 // format (default "markdown") walks the spec's paths and renders a
 // human-readable Markdown document, one section per path with its methods,

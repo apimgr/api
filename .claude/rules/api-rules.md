@@ -57,7 +57,7 @@ example code.
 |----------|--------|----------------|
 | Response envelope | `{ok, data}` success / `{ok, error, message, details}` error | PART 14 |
 | Health routes | `/server/healthz`, `/api/healthz`, `/api/{api_version}/server/healthz` (+ optional `/healthz` alias) | PART 13 |
-| Old `/openapi`, `/openapi.json`, `/graphql` root routes | Removed by spec — must not be served; **current `src/server/server.go` still registers `/openapi.json`, `/swagger`, and `/graphql` (GET+POST) at root and does not yet register the canonical `/server/docs/swagger`, `/server/docs/graphql`, or `/api/autodiscover` paths — this is an open compliance gap, not an intentional deviation** | PART 14 |
+| Old `/openapi`, `/openapi.json`, `/graphql` root routes | Removed by spec and now actually removed — `src/server/server.go` registers the canonical `/server/docs/swagger`, `/server/docs/graphql`, `/api/swagger` (+ `/api/v1/server/swagger`), `/api/graphql` (+ `/api/v1/server/graphql` POST), unversioned aliases mounting the same handlers, no redirects. `/api/autodiscover` is **still not implemented** — separate open gap, depends on the not-yet-built self-update package, tracked in `TODO.AI.md` | PART 14 |
 | OpenAPI format | JSON only, never YAML | PART 14 |
 | Renewal threshold | 7 days before expiry (not the generic 30) | PART 15; confirmed in `src/ssl/` per AUDIT.AI.md |
 | Self-signed fallback | Implemented (`src/ssl/selfsigned.go`) for Tor/I2P and ACME-failure cases | PART 15; AUDIT.AI.md |
@@ -82,8 +82,10 @@ example code.
   separate `src/common/httputil/detect.go`; spec code blocks are
   illustrative of behavior, not a mandated file path
 - Swagger/GraphQL source: `src/swagger/`, `src/graphql/` (standardized
-  locations); **route registration in `src/server/server.go` does not yet
-  match PART 14's canonical paths — flagged as an open gap above**
+  locations); route registration in `src/server/server.go` now matches
+  PART 14's canonical paths (`swaggerUIHandler`, `graphqlUIHandler`,
+  `apiSwaggerSpecHandler`); `/api/autodiscover` remains unimplemented,
+  tracked in `TODO.AI.md`
 - SSL: `src/ssl/{acme,acme_test,selfsigned,selfsigned_test,ssl,ssl_test}.go`
 - No admin/auth fields ever appear in health or API JSON — IDEA.md override
 - DNS-01 ACME: do not implement piecemeal; requires the NEEDS DECISION
