@@ -591,6 +591,33 @@ placeholder values (e.g. `user:REDACTED_TEST_PW@host`) or add a
 `.trufflehogignore` entry scoped to that file/line, not to disable the
 secret-scan job.
 
+## [ ] Missing `.claude/rules/*.md` files (9 of 13 mandated files)
+Read: AI.md PART 0
+PART 0's `.claude/rules/` trigger condition mandates all 13 grouped
+cheatsheet files exist. Only 4 exist today: `ai-rules.md` (PART 0, 1),
+`project-rules.md` (PART 2, 3, 4), `config-rules.md` (PART 5, 6, 12),
+`frontend-rules.md` (PART 16). Still missing, each requiring its source
+PART(s) read first (never fabricate content without reading the spec):
+`binary-rules.md` (PART 7, 8, 32), `backend-rules.md` (PART 9, 10, 11, 31),
+`api-rules.md` (PART 13, 14, 15), `features-rules.md` (PART 17-22),
+`service-rules.md` (PART 23, 24), `makefile-rules.md` (PART 25),
+`docker-rules.md` (PART 26), `cicd-rules.md` (PART 27), `testing-rules.md`
+(PART 28, 29, 30). A prior session's CLAUDE.md note explicitly deferred
+these as "out of scope for this pass" — deferral confirmed still valid,
+not silently dropped.
+
+## [ ] Missing required `tests/` scripts (`run_tests.sh`, `docker.sh`, `incus.sh`)
+Read: AI.md PART 3 (structure requirement), PART 28 (behavioral spec —
+auto-detect Docker/Incus, `docker.sh` against `alpine:latest`, `incus.sh`
+against `debian:latest` preferred for full systemd testing)
+`tests/` currently contains only `.gitkeep` — the three REQUIRED
+repository-root integration-test scripts from the PART 3 directory
+structure table are absent. PART 28 defines their expected behavior in
+more detail (see "Phase 2 — Binary Validation" table and "Typical
+workflow" example around AI.md line 31599-31627) and must be read in full
+before authoring them, since they must run against the compiled binary
+(not `go test`) and pick the right container backend.
+
 ## [x] AUDIT.AI.md follow-up items flagged but not fixed (out of prior pass scope)
 Several already-`[x]`-marked AUDIT.AI.md entries contain embedded notes for
 real work that was deliberately deferred rather than completed. Recorded

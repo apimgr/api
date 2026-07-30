@@ -1,5 +1,4 @@
 # gitignore created on 09/26/25 at 04:30
-# Disable reminder in prompt
 ignoredirmessage
 
 # Build outputs (per AI.md spec)
