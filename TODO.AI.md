@@ -744,8 +744,64 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   but are unused — no token-revocation/consent-withdrawal endpoints exist
   in this IDEA.md-scoped project (no accounts/sessions/admin panel) to emit
   it from. Reserved for future use if such an endpoint is ever added.
-- **Server-Timing**: debug-mode-only per AI.md PART 11 — no per-request
-  timing instrumentation exists yet to source values from.
+- [x] **Server-Timing**: FIXED — new `src/server/servertiming.go` implements
+  the AI.md PART 11 "Server-Timing (Debug Mode Only)" header
+  (`Server-Timing: total;dur=18.7`), gated on `mode.IsDebugEnabled()` AND
+  the existing (previously unused) `cfg.Web.Headers.ServerTimingInDebugOnly`
+  operator toggle — production never emits it, since
+  `mode.IsDebugEnabled()` is independent of any config value.
+  `serverTimingMiddleware` is registered first in the `src/server/server.go`
+  chain (ahead of `realIPMiddleware`) so a `*serverTimingWriter` wraps the
+  raw `http.ResponseWriter` under every later layer and captures `total` on
+  every response including early rejections; it locates a wrapped writer
+  via a new `Unwrap() http.ResponseWriter` method added to the existing
+  logging `responseWriter` in `src/server/logging_middleware.go` (the Go
+  1.20+ `http.ResponseController` convention already used by chi's
+  `compressResponseWriter`). `db` is intentionally NOT implemented:
+  grepping the codebase shows no HTTP handler ever calls
+  `database.GetServerDB()`/`GetUsersDB()` directly — only `src/main.go`
+  (startup) and `src/scheduler/tasks.go` (background scheduler, not
+  per-request) do — so there is no per-request DB call path to source a
+  `db` span from without inventing one. `render` was investigated
+  (`renderPage` is a realistic single chokepoint) but NOT wired up: timing
+  it requires buffering `ExecuteTemplate` output so the header can still be
+  set before the first byte reaches the client, and buffering changes
+  `renderPage`'s error behavior from a masked partial-200 (bytes already
+  flushed before a mid-render template error surfaces, so `http.Error`'s
+  `WriteHeader(500)` becomes a silent no-op) to a clean 500. That surfaced
+  a pre-existing, unrelated bug — `server.PageData` has no `Layout` field
+  while `partial/head.tmpl` unconditionally reads `.Layout` — breaking
+  ~150 previously-passing template-route tests. Fixing that bug is out of
+  scope for this change (see the new gap bullet below); `recordServerTiming`/
+  `findServerTimingWriter`/`RecordTiming` remain in `servertiming.go`, fully
+  implemented and unit-tested, ready for `renderPage` (or any other call
+  site) to opt into a `render`/other named span once the `Layout` bug is
+  fixed separately. Tests added in `src/server/servertiming_test.go`:
+  header absent when debug is off; present with a `total;dur=` entry when
+  debug is on; entries match the spec's `name;dur=N.N` comma-separated
+  format (exercised directly via `recordServerTiming` in
+  `TestServerTimingMiddleware_HeaderFormat`); operator toggle suppresses
+  the header even while debug mode is on. Verified in Docker
+  (`casjaysdev/go:latest`): `gofmt -l .` clean, `go build ./...` and
+  `go vet ./...` clean, `go test ./...` passes.
+- [ ] **`server.PageData` missing `Layout` field**: `partial/head.tmpl`
+  lines 12/14 read `.Layout` (`{{if eq .Layout "public"}}` /
+  `{{else if eq .Layout "admin"}}`) but `server.PageData`
+  (`src/server/server.go`) has no `Layout` field, so every page render hits
+  a template-execution error on that line. Currently masked in production:
+  `renderPage` executes the template directly into the live
+  `http.ResponseWriter`, so the doctype/head bytes emitted before the
+  error already flushed an implicit 200, and the subsequent `http.Error`
+  call is a silent no-op — pages render with a truncated `<head>` (missing
+  everything from the `.Layout` branch onward) instead of visibly failing.
+  Found while investigating `render` Server-Timing instrumentation (see
+  above): buffering `renderPage`'s output to time it turns this into a
+  real, correctly-reported 500 on every page. Fix is likely a single
+  `Layout string` field on `PageData` set to `"public"` in `newPageData`
+  (per `.claude/rules/frontend-rules.md`: "Which layouts exist? Only
+  `layout/public.tmpl` — no admin layout" — the `admin` branch in
+  `head.tmpl` is dead per IDEA.md's no-admin-panel non-goal), but confirm
+  against AI.md PART 16 before changing `head.tmpl`/`PageData` shape.
 - [x] **IDEA.md → Header Tightening Auto-Map**: FIXED — new
   `src/config/ideamap.go` implements AI.md's "IDEA.md → Header Tightening
   Auto-Map" trigger table. `config.Load()` calls `applyIdeaHeaderAutoMap`

@@ -46,6 +46,7 @@ func New(cfg *config.Config) *http.Server {
 	r := chi.NewRouter()
 
 	// Core middleware
+	r.Use(serverTimingMiddleware(cfg))
 	r.Use(realIPMiddleware(cfg))
 	r.Use(requestIDMiddleware)
 	r.Use(loggingMiddleware)
@@ -975,7 +976,7 @@ func toolPageHandler(cfg *config.Config, category, tool, title, description, rea
 	}
 }
 
-// renderPage renders a page using the base layout
+// renderPage renders a page using the base layout.
 func renderPage(w http.ResponseWriter, page string, data PageData) {
 	tmpl, ok := pageTemplates[page]
 	if !ok {

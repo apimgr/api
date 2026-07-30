@@ -30,6 +30,14 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	return size, err
 }
 
+// Unwrap exposes the underlying http.ResponseWriter for http.ResponseController
+// and any code that needs to walk down through a chain of wrapping writers
+// (e.g. serverTimingMiddleware's writer lookup in server.go) to find a
+// specific wrapper type further down the chain.
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
+
 // loggingMiddleware logs all HTTP requests
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
