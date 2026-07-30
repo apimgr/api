@@ -784,24 +784,24 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   the header even while debug mode is on. Verified in Docker
   (`casjaysdev/go:latest`): `gofmt -l .` clean, `go build ./...` and
   `go vet ./...` clean, `go test ./...` passes.
-- [ ] **`server.PageData` missing `Layout` field**: `partial/head.tmpl`
+- [x] **`server.PageData` missing `Layout` field**: FIXED — app-breaking
+  (every page shipped a truncated `<head>` in production, missing
+  `public.css`, `manifest.json`, `theme-color`, the Open Graph tags, and
+  the per-page `head-extra` block), so fixed immediately rather than
+  deferred per CLAUDE.md's app-breaking-bug exception. `partial/head.tmpl`
   lines 12/14 read `.Layout` (`{{if eq .Layout "public"}}` /
   `{{else if eq .Layout "admin"}}`) but `server.PageData`
-  (`src/server/server.go`) has no `Layout` field, so every page render hits
-  a template-execution error on that line. Currently masked in production:
-  `renderPage` executes the template directly into the live
-  `http.ResponseWriter`, so the doctype/head bytes emitted before the
-  error already flushed an implicit 200, and the subsequent `http.Error`
-  call is a silent no-op — pages render with a truncated `<head>` (missing
-  everything from the `.Layout` branch onward) instead of visibly failing.
-  Found while investigating `render` Server-Timing instrumentation (see
-  above): buffering `renderPage`'s output to time it turns this into a
-  real, correctly-reported 500 on every page. Fix is likely a single
-  `Layout string` field on `PageData` set to `"public"` in `newPageData`
-  (per `.claude/rules/frontend-rules.md`: "Which layouts exist? Only
-  `layout/public.tmpl` — no admin layout" — the `admin` branch in
-  `head.tmpl` is dead per IDEA.md's no-admin-panel non-goal), but confirm
-  against AI.md PART 16 before changing `head.tmpl`/`PageData` shape.
+  (`src/server/server.go`) had no `Layout` field, so every page render hit
+  a template-execution error on that line; `renderPage` executes the
+  template directly into the live `http.ResponseWriter`, so bytes emitted
+  before the error already flushed an implicit 200 and the subsequent
+  `http.Error` call was a silent no-op. Added `Layout string` to
+  `PageData` and set it to `"public"` in `newPageData` — confirmed against
+  AI.md PART 16 "Layout Separation" ("All web routes are public — there is
+  no admin web UI"; only `public.tmpl` exists), so the `admin` branch in
+  `head.tmpl` is intentionally dead per spec and left as-is. Verified in
+  Docker (`casjaysdev/go:latest`): `gofmt -l .` clean, `go build ./...`
+  and `go vet ./...` clean, `go test ./src/server/...` passes.
 - [x] **IDEA.md → Header Tightening Auto-Map**: FIXED — new
   `src/config/ideamap.go` implements AI.md's "IDEA.md → Header Tightening
   Auto-Map" trigger table. `config.Load()` calls `applyIdeaHeaderAutoMap`

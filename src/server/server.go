@@ -596,6 +596,7 @@ type PageData struct {
 	SiteIcon           string
 	BaseURL            string
 	Theme              string
+	Layout             string
 	ActivePage         string
 	PageTitle          string
 	PageDescription    string
@@ -631,6 +632,7 @@ func newPageData(cfg *config.Config, activePage string) PageData {
 		SiteIcon:   "🛠️",
 		BaseURL:    baseURL,
 		Theme:      cfg.Web.UI.Theme,
+		Layout:     "public",
 		ActivePage: activePage,
 	}
 }
