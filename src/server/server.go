@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -123,8 +124,15 @@ func New(cfg *config.Config) *http.Server {
 
 	// Metrics endpoint (Prometheus-compatible, PART 20 — internal only,
 	// no JSON alias: the spec defines a single Prometheus text-format
-	// endpoint, not a versioned API route)
-	r.Get("/metrics", metricsPrometheusHandler)
+	// endpoint, not a versioned API route). Endpoint path and optional
+	// bearer-token auth are both configurable via server.metrics.*.
+	if cfg.Server.Metrics.Enabled {
+		metricsPath := cfg.Server.Metrics.Endpoint
+		if metricsPath == "" {
+			metricsPath = "/metrics"
+		}
+		r.Get(metricsPath, metricsPrometheusHandler(cfg))
+	}
 
 	// Special files
 	r.Get("/robots.txt", robotsHandler(cfg))
@@ -1170,9 +1178,26 @@ func graphqlUIHandler(cfg *config.Config) http.HandlerFunc {
 	return graphql.ServeUI(baseURL + "/api/graphql")
 }
 
-// metricsPrometheusHandler serves metrics in Prometheus format
-func metricsPrometheusHandler(w http.ResponseWriter, r *http.Request) {
-	metrics.Get().ServePrometheus(w, r)
+// metricsPrometheusHandler serves metrics in Prometheus format. When
+// server.metrics.token is set, requests must present a matching
+// "Authorization: Bearer <token>" header (PART 20 optional bearer-token
+// auth) - compared in constant time, never with ==. An empty token means
+// no auth check: the endpoint relies on firewall/proxy/NetworkPolicy
+// restriction alone (PART 20 Access Control).
+func metricsPrometheusHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if token := cfg.Server.Metrics.Token; token != "" {
+			const prefix = "Bearer "
+			auth := r.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, prefix) ||
+				subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, prefix)), []byte(token)) != 1 {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		metrics.Get().ServePrometheus(w, r)
+	}
 }
 
 func robotsHandler(cfg *config.Config) http.HandlerFunc {

@@ -47,6 +47,20 @@ type ServerConfig struct {
 	Users          UsersConfig          `yaml:"users"`
 	Update         UpdateConfig         `yaml:"update"`
 	Tor            TorConfig            `yaml:"tor"`
+	Metrics        MetricsConfig        `yaml:"metrics"`
+}
+
+// MetricsConfig holds Prometheus metrics endpoint settings, per AI.md
+// PART 20. The endpoint is internal-only (firewall/proxy/NetworkPolicy
+// restricted per PART 20 Access Control) - Token is an optional additional
+// layer, never a substitute for network-level restriction.
+type MetricsConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Endpoint is the path metrics are served on.
+	Endpoint string `yaml:"endpoint"`
+	// Token, when non-empty, requires "Authorization: Bearer <token>" on
+	// every request to Endpoint. Empty means no token check (firewall-only).
+	Token string `yaml:"token"`
 }
 
 // TorConfig holds Tor hidden-service settings, per AI.md PART 31. Hidden
@@ -562,6 +576,11 @@ func defaultConfig() *Config {
 				Branch:      "stable",
 				AutoInstall: false,
 				DeferDays:   0,
+			},
+			Metrics: MetricsConfig{
+				Enabled:  true,
+				Endpoint: "/metrics",
+				Token:    "",
 			},
 			Tor: TorConfig{
 				Binary:                    "",
