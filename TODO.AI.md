@@ -603,17 +603,48 @@ were discovered while authoring these files and are logged as their own
 items below/above — this entry only tracks the documentation-file
 creation task itself.
 
-## [ ] Dockerfile/entrypoint deviations from PART 26
+## [x] Dockerfile/entrypoint deviations from PART 26 — RESOLVED
 Read: AI.md PART 26, `docker/Dockerfile`, `docker/rootfs/usr/local/bin/entrypoint.sh`
-Flagged by `docker-rules.md` authoring, three known deviations: (1)
-`docker/Dockerfile` may contain `LABEL`/`ENV MODE` content the spec says
-belongs only in CI-applied `--label`/`docker/metadata-action` annotations
-and per-environment compose files, not the Dockerfile; (2)
-`entrypoint.sh` performs `setup_directories()` (mkdir + chown/chmod for
-Tor) and starts Tor itself, where PART 26 says the binary owns all
-directory setup and Tor startup and the entrypoint should only set env
-defaults, trap signals, and `exec "$@"`. Needs verification against the
-actual current Dockerfile content and a fix pass once confirmed.
+Fixed all three deviations. `docker/Dockerfile`: removed both LABEL
+blocks (static + ARG-driven) — OCI metadata is now applied only via CI
+`--annotation`/`docker/metadata-action` at build time; removed
+`mkdir -p`/`chown -R app:app` directory setup — binary now owns all
+directory/permission setup from env vars, volume mounts auto-create
+mount points; removed `ENV MODE=development` — binary defaults to
+production on its own, only compose files set MODE per environment;
+added `DATABASE_DIR=/data/db/sqlite` to match PART 26's canonical
+container path table. `entrypoint.sh`: rewritten to be minimal — removed
+`setup_directories()`, `start_tor()`, `start_app()`,
+`wait_for_services()`, `cleanup()`/PID-array signal trapping, and
+hardcoded flat `CONFIG_DIR`/`DATA_DIR`/`LOG_DIR`/`DATABASE_DIR`/
+`BACKUP_DIR` env exports that were actively overriding the binary's own
+correct container-path auto-detection in `src/paths/paths.go`; now only
+sets env defaults, builds CLI flags, and ends with `exec` so tini's
+forwarded signals reach the binary directly as PID 1's child. Also
+applied script-lint naming conventions (`ENTRYPOINT_` prefix on globals,
+`__` prefix on the internal function). Verified via `docker build` +
+`docker run` (non-root `whoami` = `app`, clean startup log, `--version`/
+`--help` work), `go-lint` (clean) and `script-lint` (4 naming findings,
+all fixed; one intentional SC2086 info-level warning left as-is, matches
+AI.md PART 26's own literal spec example of unquoted flag word-splitting).
+Committed `b8d9df0b7335`, pushed, CI green (run 30581780376).
+
+## [ ] No `docker.yml` workflow — OCI annotations have no CI application point
+Read: AI.md PART 26 (OCI Meta Labels / Multi-Arch Image Annotations),
+`.github/workflows/` (only `ci.yml` and `release.yml` exist)
+Now that `docker/Dockerfile` no longer carries `LABEL` blocks (see the
+resolved item above), the required OCI metadata (maintainer, vendor,
+title, description, licenses, created/version/revision, url/source/
+documentation, vcs-type) has nowhere to be applied — PART 26 requires it
+be set via `docker/metadata-action` `annotations:` + `docker/build-push-action`
+in a `docker.yml` workflow, which does not exist in this repo. This is a
+separate, pre-existing gap (`docker.yml` is optional per `cicd-rules.md`
+only in the sense that not every project publishes images at all — but
+if images are published, annotations must land somewhere). Needs a
+product decision on whether/where this project publishes container
+images (GHCR tags referenced elsewhere: `ghcr.io/apimgr/...`) before
+building the workflow; explicitly out of scope for the Dockerfile/
+entrypoint PART 26 fix above.
 
 ## [ ] ci.yml missing `workflow-policy` and `image-scan` jobs; `vuln-check` vs spec's `vuln-scan` naming
 Read: AI.md PART 27, `.github/workflows/ci.yml`
