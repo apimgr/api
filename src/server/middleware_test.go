@@ -201,6 +201,53 @@ func TestSecurityHeadersMiddleware_CallsNext(t *testing.T) {
 	assert.Equal(t, "hello", rec.Body.String())
 }
 
+// TestSecurityHeadersMiddleware_CSPLearnedOrigins covers AI.md PART 11 →
+// "Content Security Policy" → "Auto-detection": connect-src, frame-
+// ancestors, and form-action must automatically pick up DOMAIN env entries
+// and reverse-proxy-detected hosts, using the same resolution order as the
+// CORS allow-list (PART 16).
+func TestSecurityHeadersMiddleware_CSPLearnedOrigins(t *testing.T) {
+	resetLearnedOrigins()
+	t.Setenv("DOMAIN", "app.example.com")
+	cfg := newSecurityHeadersConfig(false)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	handler := securityHeadersMiddleware(cfg)(next)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "example.com"
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	assert.Contains(t, csp, "connect-src 'self' https://app.example.com")
+	assert.Contains(t, csp, "frame-ancestors 'self' https://app.example.com")
+	assert.Contains(t, csp, "form-action 'self' https://app.example.com")
+}
+
+// TestSecurityHeadersMiddleware_CSPNoLearnedOrigins ensures the directives
+// fall back to a bare 'self' when nothing has been learned (no DOMAIN env,
+// no trusted-proxy-forwarded host).
+func TestSecurityHeadersMiddleware_CSPNoLearnedOrigins(t *testing.T) {
+	resetLearnedOrigins()
+	t.Setenv("DOMAIN", "")
+	cfg := newSecurityHeadersConfig(false)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	handler := securityHeadersMiddleware(cfg)(next)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "example.com"
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	assert.Contains(t, csp, "connect-src 'self'")
+	assert.NotContains(t, csp, "connect-src 'self' https://")
+	assert.Contains(t, csp, "frame-ancestors 'self'")
+	assert.NotContains(t, csp, "frame-ancestors 'self' https://")
+}
+
 // newSecFetchConfig builds a production-default config with
 // SecFetchValidation forced to the given state, so tests don't depend on
 // whatever config.DefaultConfig() happens to default it to.

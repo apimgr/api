@@ -238,12 +238,42 @@ type WebConfig struct {
 	UI                UIConfig                `yaml:"ui"`
 	Robots            RobotsConfig            `yaml:"robots"`
 	Security          SecurityConfig          `yaml:"security"`
-	CORS              string                  `yaml:"cors"`
+	CORS              CORSConfig              `yaml:"cors"`
 	HSTS              HSTSConfig              `yaml:"hsts"`
 	PermissionsPolicy PermissionsPolicyConfig `yaml:"permissions_policy"`
 	Reports           WebReportsConfig        `yaml:"reports"`
 	CSP               CSPConfig               `yaml:"csp"`
 	Headers           WebHeadersConfig        `yaml:"headers"`
+}
+
+// CORSConfig holds the CORS allowed-origin list (AI.md PART 16 → "CORS
+// Allow-list Resolution Order"). AllowedOrigins is the explicit config
+// source (step 1 of the resolution order); a single "" entry disables CORS
+// entirely and stops resolution, and an empty/omitted list falls through to
+// the DOMAIN-env / reverse-proxy-learned / "*"-default sources instead.
+type CORSConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins"`
+}
+
+// UnmarshalYAML accepts either the current list form
+// (`cors: {allowed_origins: [...]}`) or a legacy bare-string form
+// (`cors: "*"` / `cors: "https://example.com"`) left over from before this
+// field became a nested struct, auto-migrating the latter into a
+// single-entry AllowedOrigins list. Decoding into (*plain)(c) — the same
+// underlying struct, not a fresh zero value — preserves whatever
+// defaultConfig() already populated for any key absent from the document.
+func (c *CORSConfig) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		var legacy string
+		if err := node.Decode(&legacy); err != nil {
+			return err
+		}
+		c.AllowedOrigins = []string{legacy}
+		return nil
+	}
+
+	type plain CORSConfig
+	return node.Decode((*plain)(c))
 }
 
 // HSTSConfig holds Strict-Transport-Security header settings (AI.md PART 11
@@ -602,7 +632,7 @@ func defaultConfig() *Config {
 				Contact: "security@" + hostname,
 				Expires: time.Now().AddDate(1, 0, 0),
 			},
-			CORS: "*",
+			CORS: CORSConfig{AllowedOrigins: []string{"*"}},
 			HSTS: HSTSConfig{
 				Enabled:           true,
 				MaxAgeSeconds:     63072000,

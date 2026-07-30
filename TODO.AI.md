@@ -689,12 +689,33 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   Auto-Map first-run pre-fill.
 
 ## [ ] Security-header follow-ups deferred from config-header wiring pass
-- **CSP source auto-detection**: `connect-src`/`frame-ancestors`/
-  `form-action` are static `'self'` plus `cfg.Web.CSP.*Extra`/`*Override`
-  only — no CORS-origin-resolution system exists yet to reuse for
-  DOMAIN-env/reverse-proxy-detected host auto-inclusion. Needs a design
-  decision on where that origin-resolution logic should live before
-  implementing.
+- [x] **CSP source auto-detection**: FIXED — new `src/server/origins.go`
+  implements the AI.md PART 16 "CORS Allow-list Resolution Order" and its
+  shared `{learned_origins}` set (steps 2+3: every `DOMAIN` env hostname as
+  an `https://` origin, plus hostnames observed via `X-Forwarded-Host` from
+  trusted proxies only, gated on `isTrustedPeer`/`trusted_proxies`). `web.cors`
+  migrated from a bare string to a nested `config.CORSConfig{AllowedOrigins
+  []string}` struct with a custom `UnmarshalYAML` that auto-migrates legacy
+  `cors: "somevalue"` YAML into `cors: {allowed_origins: ["somevalue"]}` on
+  load. `resolveCORSOrigins` implements the full 4-step order (explicit
+  config; a sole `""` entry disables CORS and stops resolution; DOMAIN env;
+  trusted-proxy-learned; default `*`), consumed by a new hand-rolled
+  `corsMiddleware` in `src/server/cors.go` (replacing the static
+  `go-chi/cors` wiring in `src/server/server.go`) that sends
+  `Access-Control-Allow-Credentials: true` only when the resolved list is
+  explicit, never with `*`. `securityHeadersMiddleware` in
+  `src/server/middleware.go` now injects the same `learnedOrigins(cfg, r)`
+  set (DOMAIN + proxy-learned only, excluding explicit config and the `*`
+  fallback per spec) into `connect-src`, `frame-ancestors`, and
+  `form-action` defaults, so the operator no longer has to list their own
+  domain in `connect_src_extra`. Tests added in
+  `src/server/origins_test.go`, `src/server/cors_test.go`, and
+  `src/server/middleware_test.go` (resolution order, disabling, wildcard
+  short-circuit, trusted-vs-untrusted-proxy learning, credentials-only-
+  when-explicit, CSP directive reflection) and
+  `src/config/config_test.go` (legacy bare-string → struct auto-migration).
+  Verified in Docker (`casjaysdev/go:latest`): `gofmt -l .` clean,
+  `go build ./...` and `go vet ./...` clean, `go test ./...` passes.
 - [x] **`Sec-Fetch-*` request validation**: FIXED — added
   `secFetchValidationMiddleware` in `src/server/middleware.go`, a separate
   pre-handler middleware (not part of the response-header-emission

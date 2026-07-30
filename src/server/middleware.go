@@ -59,9 +59,13 @@ func hasBearerToken(r *http.Request) bool {
 // config in this codebase; the closest faithful reading treats that
 // allow-list as empty (no exemptions) rather than inventing a new config
 // surface. Similarly, there is no per-path `frame-ancestors` config — the
-// CSP frame-ancestors directive is hardcoded to 'self' in
-// securityHeadersMiddleware, so that hardcoded value is the allow-list
-// checked here for Sec-Fetch-Dest.
+// CSP frame-ancestors directive defaults to 'self' plus any auto-detected
+// {learned_origins} (DOMAIN env + reverse-proxy-detected hosts, see PART 11
+// → "Content Security Policy" → "Auto-detection") in securityHeadersMiddleware.
+// The Sec-Fetch-Dest check here is deliberately stricter than that CSP
+// directive: it rejects ALL cross-site iframe embeds outright, since this
+// project has no per-path allow-list config to check a learned origin
+// against.
 func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,10 +115,12 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 				}
 			}
 
-			// Sec-Fetch-Dest: block a cross-site iframe embed attempt.
-			// frame-ancestors is hardcoded to 'self' (no per-path
-			// allow-list exists to check against), so any cross-site
-			// framing destination is outright disallowed.
+			// Sec-Fetch-Dest: block a cross-site iframe embed attempt. This
+			// check is intentionally stricter than the CSP frame-ancestors
+			// directive (which now also allows auto-detected
+			// {learned_origins} — see doc comment above): there's no
+			// per-path allow-list here, so any cross-site framing
+			// destination is outright disallowed.
 			if r.Header.Get("Sec-Fetch-Dest") == "iframe" && r.Header.Get("Sec-Fetch-Site") == "cross-site" {
 				writeSecFetchRejected(w)
 				return
@@ -160,20 +166,37 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 
 			csp := cfg.Web.CSP
 			if csp.Enabled {
+				// Auto-detection per AI.md PART 11 → "Content Security
+				// Policy" → "Auto-detection": connect-src, frame-ancestors,
+				// and form-action pick up the same {learned_origins} set as
+				// the CORS Allow-list Resolution Order (PART 16) — DOMAIN
+				// env entries plus reverse-proxy-detected hosts — so the
+				// operator never has to list their own domain in
+				// connect_src_extra.
+				learned := strings.Join(learnedOrigins(cfg, r), " ")
+				connectSrcDefault := "'self'"
+				frameAncestorsDefault := "'self'"
+				formActionDefault := "'self'"
+				if learned != "" {
+					connectSrcDefault += " " + learned
+					frameAncestorsDefault += " " + learned
+					formActionDefault += " " + learned
+				}
+
 				directives := []string{
 					cspDirective("default-src", "'self'", "", csp.DefaultSrcOverride),
 					cspDirective("script-src", "'self'", csp.ScriptSrcExtra, csp.ScriptSrcOverride),
 					cspDirective("style-src", "'self' 'unsafe-inline'", csp.StyleSrcExtra, csp.StyleSrcOverride),
 					cspDirective("img-src", "'self' data: blob: https:", csp.ImgSrcExtra, csp.ImgSrcOverride),
 					cspDirective("font-src", "'self' https:", csp.FontSrcExtra, csp.FontSrcOverride),
-					cspDirective("connect-src", "'self'", csp.ConnectSrcExtra, csp.ConnectSrcOverride),
+					cspDirective("connect-src", connectSrcDefault, csp.ConnectSrcExtra, csp.ConnectSrcOverride),
 					"media-src 'self' blob:",
 					"worker-src 'self' blob:",
 					"manifest-src 'self'",
 					cspDirective("frame-src", "'self'", csp.FrameSrcExtra, csp.FrameSrcOverride),
-					"frame-ancestors 'self'",
+					cspDirective("frame-ancestors", frameAncestorsDefault, "", ""),
 					"base-uri 'self'",
-					cspDirective("form-action", "'self'", csp.FormActionExtra, csp.FormActionOverride),
+					cspDirective("form-action", formActionDefault, csp.FormActionExtra, csp.FormActionOverride),
 					"object-src 'none'",
 				}
 				if cfg.Server.SSL.Enabled {

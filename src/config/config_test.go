@@ -57,7 +57,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.Server.RateLimit.Enabled)
 	assert.Equal(t, "sqlite", cfg.Server.Database.Driver)
 	assert.Equal(t, "dark", cfg.Web.UI.Theme)
-	assert.Equal(t, "*", cfg.Web.CORS)
+	assert.Equal(t, []string{"*"}, cfg.Web.CORS.AllowedOrigins)
 	assert.NotEmpty(t, cfg.Server.FQDN)
 
 	port, err := stringToInt(cfg.Server.Port)
@@ -143,6 +143,41 @@ func TestLoadInvalidYAMLReturnsError(t *testing.T) {
 
 	_, err := Load()
 	assert.Error(t, err)
+}
+
+// TestLoadMigratesLegacyBareStringCORS verifies that an old-format
+// server.yml with `web.cors` as a bare string (the pre-migration format)
+// is auto-migrated on load into the nested
+// `web.cors.allowed_origins: [<value>]` struct form, per AI.md PART 16 →
+// "CORS Allow-list Resolution Order".
+func TestLoadMigratesLegacyBareStringCORS(t *testing.T) {
+	configDir, _ := initTestPaths(t)
+	resetGlobalConfig(t)
+
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	legacyFile := filepath.Join(configDir, "server.yml")
+	legacyYAML := "web:\n  cors: https://legacy.example.com\n"
+	require.NoError(t, os.WriteFile(legacyFile, []byte(legacyYAML), 0644))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://legacy.example.com"}, cfg.Web.CORS.AllowedOrigins)
+}
+
+// TestCORSConfigUnmarshalYAML_StructForm verifies the current nested-struct
+// form still parses correctly (not just the legacy scalar fallback).
+func TestCORSConfigUnmarshalYAML_StructForm(t *testing.T) {
+	configDir, _ := initTestPaths(t)
+	resetGlobalConfig(t)
+
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	structFile := filepath.Join(configDir, "server.yml")
+	structYAML := "web:\n  cors:\n    allowed_origins:\n      - https://a.example.com\n      - https://b.example.com\n"
+	require.NoError(t, os.WriteFile(structFile, []byte(structYAML), 0644))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://a.example.com", "https://b.example.com"}, cfg.Web.CORS.AllowedOrigins)
 }
 
 // TestApplyDatabaseEnvOverrides covers the three override env vars
