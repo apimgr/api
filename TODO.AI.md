@@ -646,14 +646,33 @@ images (GHCR tags referenced elsewhere: `ghcr.io/apimgr/...`) before
 building the workflow; explicitly out of scope for the Dockerfile/
 entrypoint PART 26 fix above.
 
-## [ ] ci.yml missing `workflow-policy` and `image-scan` jobs; `vuln-check` vs spec's `vuln-scan` naming
-Read: AI.md PART 27, `.github/workflows/ci.yml`
-Flagged by `cicd-rules.md` authoring: actual `ci.yml` has `secret-scan`,
-`lint`, `test`, `build`, `vuln-check`, but PART 27's security-jobs note
-calls for `workflow-policy` and `image-scan` jobs too, and names the
-vuln job `vuln-scan`. Needs verification and a fix pass (job rename may
-just be a naming difference; `workflow-policy`/`image-scan` may be a real
-missing-job gap).
+## [x] ci.yml missing `workflow-policy` and `image-scan` jobs; `vuln-check` vs spec's `vuln-scan` naming — RESOLVED
+Read: AI.md PART 27, `~/.claude/memory/cicd_conventions.md` job-order
+diagram and `workflow-policy`/`image-scan` templates (not literal YAML in
+AI.md itself), `.github/workflows/ci.yml`.
+Fixed:
+- Renamed `vuln-check` job to `vuln-scan` (body unchanged: `casjaysdev/go:latest`
+  container, `govulncheck ./...`).
+- Added `workflow-policy` job: SHA-pin verification (every `uses:` ref must
+  be a 40-char hex commit SHA) plus a `pull_request_target` trigger ban,
+  per PART 27's action-pinning/trigger-policy rules.
+- Added `image-scan` job: `needs: build`, `if: github.event_name != 'schedule'`,
+  builds `docker/Dockerfile` then scans with `aquasec/trivy:0.70.0 image
+  --exit-code 1 --severity CRITICAL,HIGH`, per PART 27 + cicd_conventions.md's
+  job-order diagram (image-scan needs build, conditional on Dockerfile,
+  skipped on schedule).
+- Self-caught a false-positive bug pre-commit: the naive
+  `grep -q 'pull_request_target' "$f"` in `workflow-policy` would flag
+  itself, since its own script text contains that string. Anchored the
+  check to `^\s*pull_request_target\s*:` (real YAML trigger key only) and
+  verified clean via a local dry-run of the exact shell logic against the
+  real workflow files (`FAIL=0`, exit 0) before pushing.
+Verified: `act --list -W .github/workflows/ci.yml` showed the correct
+7-job graph; committed `fdd5ecf7e8ef`; CI run `30582316740` fully green —
+all 7 jobs passed (test, secret-scan, lint, vuln-scan, workflow-policy,
+build, image-scan), including both new jobs actually executing for real
+(image-scan built the image and ran Trivy with no CVE failures;
+workflow-policy ran its pinning/trigger check with no false positives).
 
 ## [x] API docs routes non-compliant with PART 14 canonical paths — RESOLVED (swagger/graphql)
 Read: AI.md PART 14, `src/server/server.go`
