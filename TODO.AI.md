@@ -591,20 +591,127 @@ placeholder values (e.g. `user:REDACTED_TEST_PW@host`) or add a
 `.trufflehogignore` entry scoped to that file/line, not to disable the
 secret-scan job.
 
-## [ ] Missing `.claude/rules/*.md` files (9 of 13 mandated files)
-Read: AI.md PART 0
-PART 0's `.claude/rules/` trigger condition mandates all 13 grouped
-cheatsheet files exist. Only 4 exist today: `ai-rules.md` (PART 0, 1),
-`project-rules.md` (PART 2, 3, 4), `config-rules.md` (PART 5, 6, 12),
-`frontend-rules.md` (PART 16). Still missing, each requiring its source
-PART(s) read first (never fabricate content without reading the spec):
-`binary-rules.md` (PART 7, 8, 32), `backend-rules.md` (PART 9, 10, 11, 31),
-`api-rules.md` (PART 13, 14, 15), `features-rules.md` (PART 17-22),
-`service-rules.md` (PART 23, 24), `makefile-rules.md` (PART 25),
-`docker-rules.md` (PART 26), `cicd-rules.md` (PART 27), `testing-rules.md`
-(PART 28, 29, 30). A prior session's CLAUDE.md note explicitly deferred
-these as "out of scope for this pass" — deferral confirmed still valid,
-not silently dropped.
+## [x] Missing `.claude/rules/*.md` files — all 13 mandated files now exist
+All 13 PART-0-mandated cheatsheet files are created: `ai-rules.md`,
+`project-rules.md`, `config-rules.md`, `frontend-rules.md`,
+`binary-rules.md`, `backend-rules.md`, `api-rules.md`,
+`features-rules.md`, `service-rules.md`, `makefile-rules.md`,
+`docker-rules.md`, `cicd-rules.md`, `testing-rules.md`. The `tests/`
+scripts (`run_tests.sh`, `docker.sh`, `incus.sh`) required by PART 3/28
+were also authored in the same pass. Several new spec-compliance gaps
+were discovered while authoring these files and are logged as their own
+items below/above — this entry only tracks the documentation-file
+creation task itself.
+
+## [ ] Dockerfile/entrypoint deviations from PART 26
+Read: AI.md PART 26, `docker/Dockerfile`, `docker/rootfs/usr/local/bin/entrypoint.sh`
+Flagged by `docker-rules.md` authoring, three known deviations: (1)
+`docker/Dockerfile` may contain `LABEL`/`ENV MODE` content the spec says
+belongs only in CI-applied `--label`/`docker/metadata-action` annotations
+and per-environment compose files, not the Dockerfile; (2)
+`entrypoint.sh` performs `setup_directories()` (mkdir + chown/chmod for
+Tor) and starts Tor itself, where PART 26 says the binary owns all
+directory setup and Tor startup and the entrypoint should only set env
+defaults, trap signals, and `exec "$@"`. Needs verification against the
+actual current Dockerfile content and a fix pass once confirmed.
+
+## [ ] ci.yml missing `workflow-policy` and `image-scan` jobs; `vuln-check` vs spec's `vuln-scan` naming
+Read: AI.md PART 27, `.github/workflows/ci.yml`
+Flagged by `cicd-rules.md` authoring: actual `ci.yml` has `secret-scan`,
+`lint`, `test`, `build`, `vuln-check`, but PART 27's security-jobs note
+calls for `workflow-policy` and `image-scan` jobs too, and names the
+vuln job `vuln-scan`. Needs verification and a fix pass (job rename may
+just be a naming difference; `workflow-policy`/`image-scan` may be a real
+missing-job gap).
+
+## [ ] API docs routes non-compliant with PART 14 canonical paths
+Read: AI.md PART 14, `src/server/server.go`
+`src/server/server.go` still registers `/openapi.json`, `/swagger`, and
+`/graphql` (GET+POST) at root, and does not yet register the canonical
+`/server/docs/swagger`, `/server/docs/graphql`, or `/api/autodiscover`
+paths. PART 14 explicitly states the old root paths are "no longer
+served." Flagged by `api-rules.md` authoring; not fixed here.
+
+## [ ] SSL: DNS-01 ACME, `ssl.Manager` wiring, and scheduler renewal path gaps
+Read: AI.md PART 15, `src/ssl/acme.go`, `src/ssl/ssl.go`,
+`src/scheduler/tasks.go`, AUDIT.AI.md
+Three related open items already tracked in AUDIT.AI.md as NEEDS DECISION/
+open gaps, reconfirmed during `api-rules.md` authoring: (1) DNS-01
+multi-provider ACME challenge is unimplemented and needs a product/
+dependency scoping decision before any code; (2) `ssl.Manager`/autocert is
+not wired into `main.go` (no `ListenAndServeTLS`/`:443` call found); (3)
+`sslRenewalTask()` in `src/scheduler/tasks.go` uses a hardcoded flat
+`{data_dir}/ssl/cert.pem` path inconsistent with the tiered cert layout.
+
+## [ ] Scheduler missing 3 of 11 PART-18-required tasks
+Read: AI.md PART 18, `src/scheduler/tasks.go`
+`RegisterDefaultTasks()` registers only 7 of 11 required tasks
+(`backup_daily`, `ssl_renewal`, `geoip_update`, `token_cleanup`,
+`log_rotation`, `healthcheck_self`, `tor_health`). Missing:
+`blocklist_update`, `cve_update`, `update_check`, `backup_hourly`
+(disabled by default). Flagged by `features-rules.md` authoring.
+
+## [ ] Self-update (PART 22) unimplemented
+Read: AI.md PART 22
+No `src/update`/`updater` package exists anywhere in the codebase — the
+entire self-update flow (GitHub release check, checksum verify,
+platform-specific binary replacement, branch storage in `server.yml`) is
+missing. `--update` CLI behavior should be verified against this gap
+before assuming it works. Flagged by `features-rules.md` authoring.
+
+## [ ] Metrics: no bearer-token auth, no config struct
+Read: AI.md PART 20, `src/server/server.go`, `src/metrics/metrics.go`,
+`src/config/`
+PART 20 allows optional bearer-token auth on `/metrics`; the current
+`metricsPrometheusHandler` has no token check and no `server.metrics.*`
+config struct exists under `src/config/` at all. Operators must rely on
+firewall/proxy restriction only until token auth is added. Flagged by
+`features-rules.md` authoring.
+
+## [ ] Backup: flat retention only, no compliance-mode gating
+Read: AI.md PART 21, `src/backup/backup.go`
+`CleanupOldBackups(backupDir, keepCount)` supports only a flat count — no
+`keep_weekly`/`keep_monthly`/`keep_yearly`/`max_total_size` tiered
+retention. No `server.compliance.enabled` gating exists to block
+unencrypted backups in compliance mode. Flagged by `features-rules.md`
+authoring.
+
+## [ ] Service manager detection missing OpenRC and SysVinit
+Read: AI.md PART 24, `src/sysservice/service.go`
+`DetectServiceManager()` on Linux only recognizes systemd
+(`/run/systemd/system` or `/etc/systemd`) and runit (`/run/runit`) — no
+OpenRC or SysVinit detection/install path exists. Linux hosts running
+OpenRC or SysVinit-only fall through to `ServiceUnknown` and error with
+"unsupported service manager." Flagged by `service-rules.md` authoring
+(also noted independently by the binary/backend-rules.md pass).
+
+## [ ] Database schema conflicts with IDEA.md non-goals (flagged by backend-rules.md authoring)
+Read: `src/database/database.go`, IDEA.md non-goals, project `CLAUDE.md`
+`src/database/database.go` creates a `users.db` with `admins`, `users`,
+`password_resets`, `email_verifications`, `totp_secrets` tables, and a
+`server.db` with a `sessions` table and a `config`/`config_meta`
+key-value store. This contradicts (a) IDEA.md's non-goals (no accounts,
+no admin panel, no auth/sessions), (b) this project's own `CLAUDE.md` note
+that `src/admin/` and `src/session/` were already removed, and (c)
+`config-rules.md`'s rule that config must never live in the database
+(`server.yml` is sole source of truth). Needs a user/spec decision: delete
+the dead schema, or confirm it's mid-removal and finish the job. Not fixed
+here — flagged only, per `backend-rules.md`'s banner note.
+
+## [ ] Tor hidden service (PART 31) not implemented
+Read: AI.md PART 31
+PART 31 mandates auto-enabled Tor hidden-service support (dedicated child
+Tor process, never system Tor, `{config_dir}/tor/`/`{data_dir}/tor/`/
+`{log_dir}/tor.log`) for every project. No `src/tor` package exists and
+`github.com/cretz/bine` is not in `go.mod`. This is a spec-mandatory gap,
+not an opted-out feature.
+
+## [ ] TUI terminal-breakpoint package (`SizeMode`, PART 7/32) not implemented
+Read: AI.md PART 7, PART 32 (Terminal Size Breakpoints)
+`bubbletea`/`bubbles`/`lipgloss` are present in `go.mod`, but no
+`src/common/terminal` (or equivalent `SizeMode`/`GetTerminalSize()`)
+package exists yet to implement the spec-mandated responsive TUI
+breakpoint behavior (Massive → Micro).
 
 ## [ ] Missing required `tests/` scripts (`run_tests.sh`, `docker.sh`, `incus.sh`)
 Read: AI.md PART 3 (structure requirement), PART 28 (behavioral spec —
