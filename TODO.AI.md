@@ -781,17 +781,21 @@ width in `applyLayout()` — there is no actual sidebar pane/widget rendered
 yet. Track building a real sidebar view (category tree alongside command
 list) as separate future TUI work if/when the product wants it.
 
-## [ ] Missing required `tests/` scripts (`run_tests.sh`, `docker.sh`, `incus.sh`)
+## [x] Missing required `tests/` scripts (`run_tests.sh`, `docker.sh`, `incus.sh`) — RESOLVED
 Read: AI.md PART 3 (structure requirement), PART 28 (behavioral spec —
 auto-detect Docker/Incus, `docker.sh` against `alpine:latest`, `incus.sh`
 against `debian:latest` preferred for full systemd testing)
-`tests/` currently contains only `.gitkeep` — the three REQUIRED
-repository-root integration-test scripts from the PART 3 directory
-structure table are absent. PART 28 defines their expected behavior in
-more detail (see "Phase 2 — Binary Validation" table and "Typical
-workflow" example around AI.md line 31599-31627) and must be read in full
-before authoring them, since they must run against the compiled binary
-(not `go test`) and pick the right container backend.
+Stale entry — all three scripts already exist and are committed
+(`7f591f774a8e`): `tests/run_tests.sh` auto-detects incus > docker and
+`exec`s the matching script; `tests/docker.sh` builds via `make local`
+(or a direct `casjaysdev/go:latest` fallback) and tests the compiled
+binaries inside `alpine:latest` (version/help/binary-info/health/API
+endpoint/content-negotiation/binary-rename/CLI checks); `tests/incus.sh`
+does the same against a full `images:debian/trixie` systemd container
+(adds `--service --install`/`systemctl start`/`stop` coverage) with a
+`trap __cleanup EXIT` that force-deletes the container. Both use
+persistent host `GO_CACHE`/`GO_BUILD` dirs and project-scoped
+`--name`/container names, matching `testing-rules.md`.
 
 ## [x] AUDIT.AI.md follow-up items flagged but not fixed (out of prior pass scope)
 Several already-`[x]`-marked AUDIT.AI.md entries contain embedded notes for
