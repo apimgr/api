@@ -730,14 +730,29 @@ platform-specific binary replacement, branch storage in `server.yml`) is
 missing. `--update` CLI behavior should be verified against this gap
 before assuming it works. Flagged by `features-rules.md` authoring.
 
-## [ ] Metrics: no bearer-token auth, no config struct
+## [x] Metrics: no bearer-token auth, no config struct — RESOLVED
 Read: AI.md PART 20, `src/server/server.go`, `src/metrics/metrics.go`,
-`src/config/`
-PART 20 allows optional bearer-token auth on `/metrics`; the current
-`metricsPrometheusHandler` has no token check and no `server.metrics.*`
-config struct exists under `src/config/` at all. Operators must rely on
-firewall/proxy restriction only until token auth is added. Flagged by
-`features-rules.md` authoring.
+`src/config/config.go`.
+Fixed:
+- Added `MetricsConfig` (`Enabled`, `Endpoint`, `Token`) to `ServerConfig`
+  in `src/config/config.go`, wired into `defaultConfig()`
+  (`enabled: true`, `endpoint: /metrics`, `token: ""`).
+- `/metrics` route registration in `src/server/server.go` now gates on
+  `cfg.Server.Metrics.Enabled` and reads the path from
+  `cfg.Server.Metrics.Endpoint` (falls back to `/metrics` if empty)
+  instead of a hardcoded route.
+- `metricsPrometheusHandler` now takes `*config.Config`; when
+  `server.metrics.token` is set, requires a matching
+  `Authorization: Bearer <token>` header, compared via
+  `crypto/subtle.ConstantTimeCompare` (never `==`/`bytes.Equal`), with a
+  `401` + `WWW-Authenticate: Bearer` on mismatch. Empty token = no auth
+  check, endpoint still relies on firewall/proxy/NetworkPolicy
+  restriction alone per PART 20 Access Control.
+Verified: `go build ./...`, `go vet ./...`, and
+`go test ./src/config/... ./src/server/...` all pass inside
+`casjaysdev/go:latest`; `go-lint` agent reported both changed files
+clean. Committed `3aa07cee05af`; CI run `30585109063` fully green (all 7
+jobs).
 
 ## [ ] Backup: flat retention only, no compliance-mode gating
 Read: AI.md PART 21, `src/backup/backup.go`
