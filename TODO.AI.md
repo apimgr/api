@@ -688,7 +688,7 @@ live only inside AUDIT.AI.md's changelog prose, not as actionable items:
   Data emission, Server-Timing, and the IDEA.md → Header Tightening
   Auto-Map first-run pre-fill.
 
-## [ ] Security-header follow-ups deferred from config-header wiring pass
+## [x] Security-header follow-ups deferred from config-header wiring pass
 - [x] **CSP source auto-detection**: FIXED — new `src/server/origins.go`
   implements the AI.md PART 16 "CORS Allow-list Resolution Order" and its
   shared `{learned_origins}` set (steps 2+3: every `DOMAIN` env hostname as
