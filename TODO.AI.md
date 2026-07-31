@@ -38,3 +38,33 @@ library AI.md names. Evaluate whether adopting `validator/v10` for
 consistency is worth the handler-by-handler refactor, or whether the manual
 approach should be documented in AI.md as the accepted implementation for
 this project's request shape.
+
+## [ ] Wire backup.encryption_password config schema
+AI.md PART 21 "Setting/Changing Backup Password" documents the backup
+encryption password as `backup.encryption_password` in `server.yml` (set at
+initial config, changeable later, mandatory when
+`server.compliance.enabled: true`). `src/config/config.go` has no `Backup`
+struct / `encryption_password` field at all, and `src/scheduler/tasks.go`'s
+`backupTask()` instead reads the password from an `API_BACKUP_PASSWORD`
+environment variable that appears nowhere in AI.md. Result: the documented
+config surface doesn't exist, and there is an undocumented env var acting as
+a stand-in. Nothing is broken today (backups run unencrypted when unset, per
+PART 21's "optional unless compliance"), but the compliance-mandatory
+encryption path (block backups / warn when compliance is on and no password
+set) is also absent. When implementing: add the `backup.*` config struct
+(including `encryption_password`), have `backupTask()` read
+`cfg.Server.Backup.EncryptionPassword` (env override optional, but then
+document `API_BACKUP_PASSWORD` in AI.md), and enforce the compliance-mode
+mandatory-encryption behavior from PART 21.
+
+## [ ] Block DNS lookups that resolve to non-routable targets
+IDEA.md "Threat model" states private/loopback/link-local targets are
+blocked "before any DNS/WHOIS/TLS call is made." `src/service/osint/osint.go`
+`DNSLookup()` blocks only *literal* private-IP inputs (line ~179); a hostname
+that resolves to an RFC 1918 / loopback address is looked up and its A/AAAA
+records returned unfiltered, unlike `WHOISLookup`/`SSLInfo`/`TechStack` which
+all call `validateTarget()`. Low severity (DNS resolution does not connect to
+the target), but it is a minor internal-address disclosure vector and an
+inconsistency with the other OSINT functions. Fix: for A/AAAA, drop any
+resolved address for which `isBlockedIP` is true (or error if all are
+blocked); keep MX/TXT/NS/CNAME as-is.
