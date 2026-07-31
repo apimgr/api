@@ -1,13 +1,55 @@
-            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE  
-                    Version 2, December 2004  
+MIT License
 
- Copyright (C) 2025 casjay <git-admin@casjaysdev.pro>  
-  
- Everyone is permitted to copy and distribute verbatim or modified  
- copies of this license document, and changing it is allowed as long  
- as the name is changed.  
-  
-            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE  
-   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION  
-  
-  1. You just DO WHAT THE FUCK YOU WANT TO.  
+Copyright (c) 2025 apimgr
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Third-Party Licenses
+
+This software includes the following third-party libraries:
+
+| Library | Version | License | Copyright |
+|---------|---------|---------|-----------|
+| github.com/ProtonMail/go-crypto | v1.4.1 | BSD-3-Clause | 2009 The Go Authors |
+| github.com/biter777/countries | v1.7.5 | BSD-2-Clause | 2019 Biter, biter2004@yandex.ru |
+| github.com/boombuler/barcode | v1.1.0 | MIT | 2014 Florian Sundermann |
+| github.com/charmbracelet/bubbles | v1.0.0 | MIT | 2020-2026 Charmbracelet, Inc. |
+| github.com/charmbracelet/bubbletea | v1.3.10 | MIT | 2020-2026 Charmbracelet, Inc. |
+| github.com/charmbracelet/lipgloss | v1.1.0 | MIT | 2021-2026 Charmbracelet, Inc. |
+| github.com/cretz/bine | v0.2.0 | MIT | 2018 Chad Retz |
+| github.com/go-chi/chi/v5 | v5.1.0 | MIT | 2015-present Peter Kieltyka, Google Inc. |
+| github.com/google/open-location-code/go | v0.0.0-20250620134813-83986da0156b | Apache-2.0 | 2015 Tamás Gulácsi (Go port); Google LLC |
+| github.com/google/uuid | v1.6.0 | BSD-3-Clause | 2009,2014 Google Inc. |
+| github.com/oschwald/maxminddb-golang | v1.13.1 | ISC | 2015 Gregory J. Oschwald |
+| github.com/prometheus/client_golang | v1.24.0 | Apache-2.0 | 2012-2015 The Prometheus Authors |
+| github.com/stretchr/testify | v1.11.1 | MIT | 2012-2020 Mat Ryer, Tyler Bunnell and contributors |
+| github.com/ziprecruiter/h3-go | v0.5.0 | Apache-2.0 | ZipRecruiter, Inc. |
+| golang.org/x/crypto | v0.53.0 | BSD-3-Clause | 2009 The Go Authors |
+| golang.org/x/net | v0.56.0 | BSD-3-Clause | 2009 The Go Authors |
+| golang.org/x/sys | v0.47.0 | BSD-3-Clause | 2009 The Go Authors |
+| golang.org/x/term | v0.44.0 | BSD-3-Clause | 2009 The Go Authors |
+| golang.org/x/text | v0.39.0 | BSD-3-Clause | 2009 The Go Authors |
+| gopkg.in/yaml.v3 | v3.0.1 | MIT / Apache-2.0 | 2006-2011 Kirill Simonov; 2011-2019 Canonical Ltd |
+| modernc.org/sqlite | v1.34.5 | BSD-3-Clause | 2017 The Sqlite Authors |
+
+Full license texts available at: https://spdx.org/licenses/
+
+---
