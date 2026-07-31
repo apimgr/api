@@ -211,6 +211,95 @@ if len(input) > maxLength {
 db.Query("SELECT * FROM users WHERE id = ?", userID)
 ```
 
+## Frontend Templates
+
+Frontend pages live under `src/server/template/` and are embedded into the
+binary. There are no frameworks or bundlers - one shared `app.js`, four CSS
+files (`common.css`, `components.css`, `public.css`, `admin.css`), and Go
+`html/template` files.
+
+```
+src/server/template/
+├── layout/            # public.tmpl, admin.tmpl
+├── partial/           # shared head, scripts, header/nav/footer
+├── page/              # one template per category (text.tmpl, crypto.tmpl, ...)
+└── page/tools/         # one subdirectory per category
+    └── {category}/{tool}.tmpl
+```
+
+### Category page pattern
+
+A category page (`page/{category}.tmpl`) lists every tool in that category
+as a card linking to `/{category}/{tool}`:
+
+```go
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">{Icon} {Category Name}</h1>
+    <p class="hero-subtitle">{Count} tools for {purpose}</p>
+  </div>
+</section>
+<section>
+  <div class="container">
+    <div class="category-grid">
+      <a href="/{category}/{tool}" class="category-card">
+        <div class="category-icon">{Icon}</div>
+        <h3 class="category-title">{Tool Name}</h3>
+        <p class="category-description">{Description}</p>
+      </a>
+      {{/* Repeat for each tool */}}
+    </div>
+  </div>
+</section>
+{{end}}
+```
+
+### Tool page pattern
+
+A tool page (`page/tools/{category}/{tool}.tmpl`) shows a breadcrumb, a form
+that calls the matching API endpoint via `fetch`, a result panel, and a copy
+of the `curl` invocation:
+
+```go
+{{define "content"}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2"><a href="/">Home</a> / <a href="/{category}">{Category}</a> / {Tool Name}</nav>
+    <div class="tool-card">
+      <h1 class="tool-title">{Tool Name}</h1>
+      <p class="tool-description">{Description}</p>
+      <form id="{tool}-form" onsubmit="event.preventDefault(); execute{Tool}();">
+        <div class="form-group">
+          <label class="form-label">{Input Label}</label>
+          <input type="text" name="{field}" class="form-input">
+        </div>
+        <button type="submit" class="btn btn-primary">Execute</button>
+      </form>
+      <div id="{tool}-result" class="tool-result" style="display:none;"></div>
+    </div>
+  </div>
+</section>
+<script>
+function execute{Tool}() {
+  const form = document.getElementById('{tool}-form');
+  const resultDiv = document.getElementById('{tool}-result');
+  const params = new URLSearchParams(new FormData(form));
+  resultDiv.style.display = 'block';
+  fetch(`/api/v1/{category}/{endpoint}?${params}`)
+    .then(r => r.text())
+    .then(result => { resultDiv.textContent = result; addToHistory('{category}-{tool}'); })
+    .catch(err => showToast(`Request failed: ${err.message}`, 'danger'));
+}
+</script>
+{{end}}
+```
+
+See `page/text.tmpl` and `page/tools/text/uuid.tmpl` for a complete working
+example of each pattern. All routes support [content negotiation](api.md#content-negotiation) -
+the same tool endpoint serves HTML to browsers, plain text to `curl`, and
+JSON to API clients.
+
 ## Debugging
 
 ### Debug Mode

@@ -15,6 +15,27 @@ Most utility endpoints do not require authentication. Admin endpoints require au
 - **Bearer Token** - `Authorization: Bearer <token>` header
 - **Session Cookie** - For web admin panel
 
+## Content Negotiation
+
+Most routes serve three representations of the same data and pick one
+automatically based on the request - no separate endpoints or `?format=`
+query parameters needed:
+
+| Client | How it's detected | Response |
+|--------|--------------------|----------|
+| Browser | `Accept: text/html`, or a browser `User-Agent` | HTML page (frontend routes only) |
+| `curl` / `wget` / scripts | Non-interactive `User-Agent`, or `Accept: text/plain` | Plain text |
+| API / JSON client | Default when neither of the above match | JSON |
+
+A `.txt` path suffix always forces plain text on API routes, regardless of
+`Accept` or `User-Agent`. Example:
+
+```bash
+# Browser visit /text/uuid            -> HTML page with a form
+curl /api/v1/text/uuid                 # -> plain text UUID
+curl -H "Accept: application/json" /api/v1/text/uuid  # -> JSON
+```
+
 ## Response Format
 
 ### Success Response
