@@ -3,7 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,8 +110,7 @@ func Init(dbCfg config.DatabaseConfig, dataDir string) error {
 		return fmt.Errorf("failed to ping server database: %w", err)
 	}
 
-	log.Printf("Database: Initialized %s database", driver)
-	log.Printf("  Server DB: %s", displayPath)
+	slog.Info("database: initialized", "driver", driver, "path", displayPath)
 
 	// Create schema
 	if err := createSchema(); err != nil {
@@ -226,6 +225,6 @@ func createServerSchema() error {
 		return fmt.Errorf("failed to create server schema: %w", err)
 	}
 
-	log.Println("Database: Server schema created/verified")
+	slog.Info("database: server schema created/verified")
 	return nil
 }
