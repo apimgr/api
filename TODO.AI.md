@@ -57,14 +57,19 @@ set) is also absent. When implementing: add the `backup.*` config struct
 document `API_BACKUP_PASSWORD` in AI.md), and enforce the compliance-mode
 mandatory-encryption behavior from PART 21.
 
-## [ ] Block DNS lookups that resolve to non-routable targets
-IDEA.md "Threat model" states private/loopback/link-local targets are
-blocked "before any DNS/WHOIS/TLS call is made." `src/service/osint/osint.go`
-`DNSLookup()` blocks only *literal* private-IP inputs (line ~179); a hostname
-that resolves to an RFC 1918 / loopback address is looked up and its A/AAAA
-records returned unfiltered, unlike `WHOISLookup`/`SSLInfo`/`TechStack` which
-all call `validateTarget()`. Low severity (DNS resolution does not connect to
-the target), but it is a minor internal-address disclosure vector and an
-inconsistency with the other OSINT functions. Fix: for A/AAAA, drop any
-resolved address for which `isBlockedIP` is true (or error if all are
-blocked); keep MX/TXT/NS/CNAME as-is.
+## [ ] Fix release.yml BUILD_DATE format
+`.github/workflows/release.yml` line 57 stamps `BUILD_DATE` with the custom
+format `"%a %b %d, %Y at %H:%M:%S %Z"` instead of ISO 8601 UTC
+(`YYYY-MM-DDTHH:MM:SSZ`), inconsistent with `Makefile` line 10 and AI.md
+PART 27's CI/CD conventions. Fix: change the `date` invocation to
+`date -u +%Y-%m-%dT%H:%M:%SZ`.
+
+## [ ] Fix docker-compose volume mount paths
+`docker/docker-compose.yml` (lines 20-21), `docker/docker-compose.dev.yml`
+(lines 21-22), and `docker/docker-compose.test.yml` (lines 19-20) all mount
+`./rootfs/config`/`./rootfs/data` instead of the standard
+`./volumes/config`/`./volumes/data` required by
+`.claude/rules/docker-rules.md` ("Always mount exactly two volumes in
+compose: `./volumes/config:/config`... and `./volumes/data:/data`...").
+Fix: update all three compose files' volume mounts to `./volumes/config` /
+`./volumes/data`, keeping the `:z` suffix on the production file only.

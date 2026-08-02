@@ -169,8 +169,9 @@ func parseWHOISResponse(raw string) *DomainInfo {
 
 // DNSLookup performs a DNS lookup for the given record type via the system
 // resolver. Only DNS records are returned — no connection is made to the
-// resolved addresses, so the SSRF surface is limited to a literal-IP input
-// check.
+// resolved addresses. A/AAAA results are filtered against isBlockedIP so a
+// hostname resolving to a private/loopback/link-local address never
+// discloses that address; MX/TXT/NS/CNAME are returned as-is.
 func (s *Service) DNSLookup(domain, recordType string) ([]string, error) {
 	domain = strings.TrimSpace(domain)
 	if domain == "" {
@@ -192,7 +193,13 @@ func (s *Service) DNSLookup(domain, recordType string) ([]string, error) {
 		}
 		results := make([]string, 0, len(ips))
 		for _, ip := range ips {
+			if isBlockedIP(ip) {
+				continue
+			}
 			results = append(results, ip.String())
+		}
+		if len(results) == 0 && len(ips) > 0 {
+			return nil, fmt.Errorf("target %q resolves to a non-routable address", domain)
 		}
 		return results, nil
 
@@ -203,7 +210,13 @@ func (s *Service) DNSLookup(domain, recordType string) ([]string, error) {
 		}
 		results := make([]string, 0, len(ips))
 		for _, ip := range ips {
+			if isBlockedIP(ip) {
+				continue
+			}
 			results = append(results, ip.String())
+		}
+		if len(results) == 0 && len(ips) > 0 {
+			return nil, fmt.Errorf("target %q resolves to a non-routable address", domain)
 		}
 		return results, nil
 

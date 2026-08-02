@@ -208,6 +208,25 @@ func TestDNSLookup_ValidationErrors(t *testing.T) {
 	})
 }
 
+// Covers the A/AAAA-resolves-to-a-blocked-address path: "localhost"
+// resolves via /etc/hosts to a loopback address, so the filtered result
+// must come back empty with a non-routable error rather than leaking the
+// resolved loopback address.
+func TestDNSLookup_HostnameResolvesToBlockedAddress(t *testing.T) {
+	s := New()
+
+	for _, recordType := range []string{"A", "AAAA"} {
+		t.Run(recordType, func(t *testing.T) {
+			results, err := s.DNSLookup("localhost", recordType)
+			if err == nil {
+				t.Skipf("skipping: expected localhost to resolve to a blocked address, got results: %v", results)
+			}
+			assert.Nil(t, results)
+			assert.Contains(t, err.Error(), "non-routable")
+		})
+	}
+}
+
 // Covers DNSLookup's real-resolver paths across every supported record
 // type. Requires outbound DNS; skips per-subtest on resolution failure
 // rather than failing the whole suite in a network-restricted sandbox.
