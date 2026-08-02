@@ -51,6 +51,33 @@ type ServerConfig struct {
 	Update         UpdateConfig         `yaml:"update"`
 	Tor            TorConfig            `yaml:"tor"`
 	Metrics        MetricsConfig        `yaml:"metrics"`
+	Backup         BackupConfig         `yaml:"backup"`
+	Compliance     ComplianceConfig     `yaml:"compliance"`
+}
+
+// BackupConfig holds backup encryption settings per AI.md PART 21
+// "Backup Encryption". Encryption is optional unless Compliance.Enabled is
+// true, in which case EncryptionPassword is mandatory and scheduled backups
+// are blocked until it is set.
+type BackupConfig struct {
+	Encryption BackupEncryptionConfig `yaml:"encryption"`
+	// EncryptionPassword derives an AES-256-GCM key via Argon2id when
+	// non-empty. Never logged, never returned by any API. The interactive
+	// CLI/WebUI/API restore and manual-backup flows always prompt for this
+	// rather than accepting it as a flag (PART 21 "no password CLI flag").
+	EncryptionPassword string `yaml:"encryption_password"`
+}
+
+// BackupEncryptionConfig mirrors PART 21's "true if password was set" flag,
+// shown to operators as backup encryption status.
+type BackupEncryptionConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// ComplianceConfig gates mandatory backup encryption per AI.md PART 21
+// "Compliance Mode Enforcement" (HIPAA, SOC2, etc.).
+type ComplianceConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // MetricsConfig holds Prometheus metrics endpoint settings, per AI.md
@@ -638,6 +665,15 @@ func defaultConfig() *Config {
 				Enabled:  true,
 				Endpoint: "/metrics",
 				Token:    "",
+			},
+			Backup: BackupConfig{
+				Encryption: BackupEncryptionConfig{
+					Enabled: false,
+				},
+				EncryptionPassword: "",
+			},
+			Compliance: ComplianceConfig{
+				Enabled: false,
 			},
 			Tor: TorConfig{
 				Binary:                    "",

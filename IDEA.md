@@ -127,6 +127,10 @@ Failure mode for GeoIP: if databases unavailable, the geo/network tools return I
 - **All responses include `Access-Control-Allow-Origin: *`**: intentional. Public API designed for cross-origin browser use.
 - **MD5 and SHA-1 available in hash tool**: intentional. These are provided as utility tools for interoperability (legacy systems, checksum verification), not for password hashing. The API documentation explicitly notes they are cryptographically broken for security purposes.
 
+### Environment variable overrides
+
+- **`API_BACKUP_PASSWORD`**: optional override for `server.backup.encryption_password` (AI.md PART 21), read only by the unattended `backup_daily` scheduler task since it cannot prompt interactively. When set, it takes precedence over the config-file value for that scheduled run; this does not apply to the interactive CLI `--maintenance backup`/`--maintenance restore` flows, which always prompt per PART 21 (no password CLI flag, ever).
+
 ## Compliance declarations
 
 This project declares no `audience`, `compliance`, `data_class`,

@@ -47,19 +47,36 @@ func (s *Scheduler) RegisterDefaultTasks() {
 func backupTask() error {
 	log.Println("Scheduler: Running backup task...")
 
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Scheduler: Backup skipped, failed to load config: %v", err)
+		return err
+	}
+
 	// Determine backup path
 	backupDir := filepath.Join(paths.DataDir(), "backup")
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("backup-%s.tar.gz", time.Now().Format("20060102-150405")))
 
-	// Sources to backup
+	// Sources to backup: databases, then the config file
 	sources := []string{
-		filepath.Join(paths.DataDir(), "db"),           // Databases
-		filepath.Join(paths.ConfigDir(), "server.yml"), // Config file
+		filepath.Join(paths.DataDir(), "db"),
+		filepath.Join(paths.ConfigDir(), "server.yml"),
 	}
 
-	// Get encryption password from environment (API_BACKUP_PASSWORD)
-	// If not set, backups are unencrypted (per AI.md, encryption is optional)
-	password := os.Getenv("API_BACKUP_PASSWORD")
+	// Password is read from server.backup.encryption_password (AI.md PART
+	// 21). API_BACKUP_PASSWORD overrides it for this unattended run only -
+	// the scheduler cannot prompt interactively the way the CLI/WebUI can.
+	password := cfg.Server.Backup.EncryptionPassword
+	if envPassword := os.Getenv("API_BACKUP_PASSWORD"); envPassword != "" {
+		password = envPassword
+	}
+
+	// Compliance mode makes encryption mandatory: block the scheduled
+	// backup entirely rather than writing an unencrypted archive.
+	if cfg.Server.Compliance.Enabled && password == "" {
+		log.Println("Scheduler: Backup skipped, compliance mode requires server.backup.encryption_password to be set")
+		return fmt.Errorf("backup blocked: compliance mode enabled but no backup encryption password is set")
+	}
 
 	// Create backup (with optional encryption)
 	if err := backup.Create(backupFile, sources, password); err != nil {
