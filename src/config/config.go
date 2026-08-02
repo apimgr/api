@@ -42,6 +42,7 @@ type ServerConfig struct {
 	TrustedProxies TrustedProxiesConfig `yaml:"trusted_proxies"`
 	RateLimit      RateLimitConfig      `yaml:"rate_limit"`
 	Database       DatabaseConfig       `yaml:"database"`
+	Cache          CacheConfig          `yaml:"cache"`
 	Healthz        HealthzConfig        `yaml:"healthz"`
 	Logs           LogsConfig           `yaml:"logs"`
 	Users          UsersConfig          `yaml:"users"`
@@ -177,6 +178,39 @@ type RateLimitClassConfig struct {
 type DatabaseConfig struct {
 	Driver string `yaml:"driver"`
 	URL    string `yaml:"url"`
+}
+
+// CacheConfig holds server.cache.* settings per AI.md PART 12 "Cache
+// Configuration". Cache is optional; Type "none" disables it, "memory"
+// (default) is in-process, "valkey"/"redis" connect to an external cache
+// used for sessions, rate-limit counters, and optional response caching.
+// Timeout and TTL are Go duration strings (e.g. "5s", "1h"), parsed with
+// time.ParseDuration by consumers; an invalid value falls back to the
+// documented default rather than failing startup.
+type CacheConfig struct {
+	Type string `yaml:"type"`
+	// URL, when set, takes precedence over Host/Port/Username/Password/DB.
+	// Format: redis://[[username:]password@]host[:port][/database] or
+	// valkey://... ; rediss://... for TLS.
+	URL      string `yaml:"url"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	DB       int    `yaml:"db"`
+	// TLS enables a TLS connection; TLSSkipVerify disables certificate
+	// verification (never recommended, available for self-signed setups).
+	TLS           bool `yaml:"tls"`
+	TLSSkipVerify bool `yaml:"tls_skip_verify"`
+	PoolSize      int  `yaml:"pool_size"`
+	MinIdle       int  `yaml:"min_idle"`
+	// Timeout is the connection/command timeout as a duration string.
+	Timeout string `yaml:"timeout"`
+	// Prefix is prepended to every cache key to avoid collisions between
+	// applications sharing the same Valkey/Redis instance.
+	Prefix string `yaml:"prefix"`
+	// TTL is the default entry lifetime as a duration string.
+	TTL string `yaml:"ttl"`
 }
 
 // LogsConfig holds logging settings
@@ -566,6 +600,16 @@ func defaultConfig() *Config {
 			Database: DatabaseConfig{
 				Driver: "sqlite",
 				URL:    filepath.Join(paths.DataDir(), "db", "server.db"),
+			},
+			Cache: CacheConfig{
+				Type:     "memory",
+				Host:     "localhost",
+				Port:     6379,
+				PoolSize: 10,
+				MinIdle:  2,
+				Timeout:  "5s",
+				Prefix:   "api:",
+				TTL:      "1h",
 			},
 			Healthz: HealthzConfig{
 				Root: HealthzRootConfig{

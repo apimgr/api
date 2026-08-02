@@ -1,116 +1,57 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/apimgr/api/src/cache"
 	"github.com/apimgr/api/src/config"
 )
 
 // classLimiter implements a sliding window rate limiter for a single
-// request class (read, write, health, or the absolute global burst ceiling)
+// request class (read, write, health, or the absolute global burst
+// ceiling), backed by a cache.Store - in-process by default, or a shared
+// valkey/redis store when server.cache.type is configured, per AI.md
+// PART 12 "Cache Usage in Application" (rate limiting uses the cache).
 type classLimiter struct {
-	mu       sync.RWMutex
-	requests map[string]*clientRequests
-	limit    int
-	window   time.Duration
+	store  cache.Store
+	prefix string
+	limit  int
+	window time.Duration
 }
 
-// clientRequests tracks requests for a single client
-type clientRequests struct {
-	timestamps []time.Time
-	mu         sync.Mutex
-}
-
-// newClassLimiter creates a sliding-window limiter for one rate limit class
-func newClassLimiter(limit int, windowSeconds int) *classLimiter {
+// newClassLimiter creates a sliding-window limiter for one rate limit
+// class, keying its counters in store under a class-specific prefix so
+// read/write/health/global don't collide on a shared cache instance.
+func newClassLimiter(store cache.Store, class string, limit int, windowSeconds int) *classLimiter {
 	return &classLimiter{
-		requests: make(map[string]*clientRequests),
-		limit:    limit,
-		window:   time.Duration(windowSeconds) * time.Second,
+		store:  store,
+		prefix: class + ":",
+		limit:  limit,
+		window: time.Duration(windowSeconds) * time.Second,
 	}
 }
 
 // allow checks if a request is allowed for the given client IP under this class
 func (cl *classLimiter) allow(clientIP string) (bool, int, int, time.Time) {
-	cl.mu.Lock()
-	client, exists := cl.requests[clientIP]
-	if !exists {
-		client = &clientRequests{
-			timestamps: make([]time.Time, 0, cl.limit),
-		}
-		cl.requests[clientIP] = client
-	}
-	cl.mu.Unlock()
-
-	client.mu.Lock()
-	defer client.mu.Unlock()
-
-	now := time.Now()
-	windowStart := now.Add(-cl.window)
-
-	// Remove expired timestamps
-	validTimestamps := make([]time.Time, 0, len(client.timestamps))
-	for _, ts := range client.timestamps {
-		if ts.After(windowStart) {
-			validTimestamps = append(validTimestamps, ts)
-		}
-	}
-	client.timestamps = validTimestamps
-
-	// Check if limit exceeded
-	remaining := cl.limit - len(client.timestamps)
-	if remaining <= 0 {
-		// Calculate reset time (oldest timestamp + window)
-		resetTime := client.timestamps[0].Add(cl.window)
-		return false, 0, cl.limit, resetTime
+	count, resetTime, err := cl.store.SlidingWindow(context.Background(), cl.prefix+clientIP, time.Now(), cl.window)
+	if err != nil {
+		// Fail open on a cache backend error - never let a transient cache
+		// outage take the whole server down; the error is logged so an
+		// operator sees a degraded shared cache.
+		slog.Warn("ratelimit: cache store error, allowing request", "class", cl.prefix, "error", err)
+		return true, cl.limit, cl.limit, time.Time{}
 	}
 
-	// Add current request
-	client.timestamps = append(client.timestamps, now)
-	remaining--
-
-	// Calculate reset time
-	resetTime := now.Add(cl.window)
-	if len(client.timestamps) > 0 {
-		resetTime = client.timestamps[0].Add(cl.window)
+	remaining := cl.limit - count
+	if remaining < 0 {
+		remaining = 0
 	}
-
-	return true, remaining, cl.limit, resetTime
-}
-
-// cleanup periodically removes stale entries
-func (cl *classLimiter) cleanup() {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		cl.mu.Lock()
-		now := time.Now()
-		windowStart := now.Add(-cl.window)
-
-		for ip, client := range cl.requests {
-			client.mu.Lock()
-			// Remove expired timestamps
-			validTimestamps := make([]time.Time, 0, len(client.timestamps))
-			for _, ts := range client.timestamps {
-				if ts.After(windowStart) {
-					validTimestamps = append(validTimestamps, ts)
-				}
-			}
-			client.timestamps = validTimestamps
-
-			// Remove client if no recent requests
-			if len(client.timestamps) == 0 {
-				delete(cl.requests, ip)
-			}
-			client.mu.Unlock()
-		}
-		cl.mu.Unlock()
-	}
+	return count <= cl.limit, remaining, cl.limit, resetTime
 }
 
 // RateLimiter enforces the per-class (read/write/health) sliding window
@@ -128,23 +69,19 @@ type RateLimiter struct {
 // so it shares the same 60s window as the other rate limit classes
 const globalBurstWindowSeconds = 60
 
-// NewRateLimiter creates a new rate limiter from server.rate_limit config
+// NewRateLimiter creates a new rate limiter from server.rate_limit config,
+// backed by the server.cache.* store (in-process memory by default, or a
+// shared valkey/redis instance when configured).
 func NewRateLimiter(cfg *config.Config) *RateLimiter {
-	rl := &RateLimiter{
+	store := cache.New(cfg.Server.Cache)
+
+	return &RateLimiter{
 		enabled: cfg.Server.RateLimit.Enabled,
-		read:    newClassLimiter(cfg.Server.RateLimit.Read.Requests, cfg.Server.RateLimit.Read.Window),
-		write:   newClassLimiter(cfg.Server.RateLimit.Write.Requests, cfg.Server.RateLimit.Write.Window),
-		health:  newClassLimiter(cfg.Server.RateLimit.Health.Requests, cfg.Server.RateLimit.Health.Window),
-		global:  newClassLimiter(cfg.Server.RateLimit.GlobalBurst, globalBurstWindowSeconds),
+		read:    newClassLimiter(store, "read", cfg.Server.RateLimit.Read.Requests, cfg.Server.RateLimit.Read.Window),
+		write:   newClassLimiter(store, "write", cfg.Server.RateLimit.Write.Requests, cfg.Server.RateLimit.Write.Window),
+		health:  newClassLimiter(store, "health", cfg.Server.RateLimit.Health.Requests, cfg.Server.RateLimit.Health.Window),
+		global:  newClassLimiter(store, "global", cfg.Server.RateLimit.GlobalBurst, globalBurstWindowSeconds),
 	}
-
-	// Start cleanup goroutines
-	go rl.read.cleanup()
-	go rl.write.cleanup()
-	go rl.health.cleanup()
-	go rl.global.cleanup()
-
-	return rl
 }
 
 // RateLimitMiddleware creates a rate limiting middleware

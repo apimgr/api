@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apimgr/api/src/cache"
 	"github.com/apimgr/api/src/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,7 @@ import (
 // block the next one with remaining=0 and the class limit echoed back,
 // and allow again once the window has elapsed.
 func TestClassLimiterAllow(t *testing.T) {
-	cl := newClassLimiter(2, 1) // 2 requests per 1 second
+	cl := newClassLimiter(cache.New(config.CacheConfig{Type: "memory"}), "test", 2, 1) // 2 requests per 1 second
 
 	allowed, remaining, limit, _ := cl.allow("1.2.3.4")
 	assert.True(t, allowed)
@@ -45,7 +46,7 @@ func TestClassLimiterAllow(t *testing.T) {
 // classLimiter.allow must track distinct clients independently - one
 // client hitting its limit must not affect another client's quota.
 func TestClassLimiterAllowPerClient(t *testing.T) {
-	cl := newClassLimiter(1, 60)
+	cl := newClassLimiter(cache.New(config.CacheConfig{Type: "memory"}), "test", 1, 60)
 
 	allowed, _, _, _ := cl.allow("1.1.1.1")
 	assert.True(t, allowed)
@@ -62,7 +63,7 @@ func TestClassLimiterAllowPerClient(t *testing.T) {
 // requests within the window regardless of concurrency.
 func TestClassLimiterAllowConcurrent(t *testing.T) {
 	limit := 10
-	cl := newClassLimiter(limit, 60)
+	cl := newClassLimiter(cache.New(config.CacheConfig{Type: "memory"}), "test", limit, 60)
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
