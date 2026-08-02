@@ -180,8 +180,17 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Load configuration first so the database driver/URL/token it
+	// specifies (server.cache.* sibling, server.database.*) are known
+	// before opening the database connection.
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Failed to load configuration: %v", err)
+		os.Exit(exConfig)
+	}
+
 	// Initialize database
-	if err := database.Init(paths.DataDir()); err != nil {
+	if err := database.Init(cfg.Server.Database, paths.DataDir()); err != nil {
 		log.Printf("Failed to initialize database: %v", err)
 		os.Exit(exUnavailable)
 	}
@@ -189,13 +198,6 @@ func main() {
 
 	// Set database for health checks
 	handler.SetDatabase(database.GetServerDB())
-
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		log.Printf("Failed to load configuration: %v", err)
-		os.Exit(exConfig)
-	}
 
 	// Re-resolve --color/NO_COLOR now that config is available, applying the
 	// output.color/output.emoji config-file tier per AI.md PART 8's

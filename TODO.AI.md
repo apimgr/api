@@ -1,16 +1,24 @@
-## [ ] Wire libSQL/Turso database driver
-AI.md PART 3 "Required Go Libraries" → Database Drivers documents
-`github.com/tursodatabase/libsql-client-go` as a required driver (aliases
-`libsql`, `turso`) alongside `modernc.org/sqlite`, with a `normalizeDriver()`
-example. `src/config/config.go` has a `DatabaseConfig.Driver` field (and a
-`DATABASE_DRIVER` env override) but `src/database/database.go`'s `Init()`
-ignores it entirely — it hardcodes `sql.Open("sqlite", ...)` against a path
-derived from `paths.GetDatabaseDir(dataDir)`, never `cfg.Server.Database.URL`
-or `.Driver`. Needs: driver normalization (sqlite/sqlite2/sqlite3 ->
-sqlite, libsql/turso -> libsql), a libsql open path requiring a remote URL
-(no embedded/local mode, per AI.md), and validation per the
-`validateLibSQL` example in AI.md PART 3. Add `go get
-github.com/tursodatabase/libsql-client-go` when implementing.
+## [ ] Fix go-lint findings surfaced during libSQL driver wiring pass
+go-lint flagged 10 pre-existing issues in files touched by the libSQL/Turso
+driver work (none introduced by that change — carried-over patterns in
+untouched regions of the same files). Fix each:
+- `src/config/config.go` ~line 552: `rand.Read()` return error is not
+  checked — must handle it.
+- `src/config/config.go` ~line 904: hardcoded branding string "CasTools"
+  and URL "https://api.apimgr.us" in a comment — must come from config or
+  be removed.
+- `src/config/config.go` ~line 554-556: `generateRandomPort()` builds a
+  string via rune arithmetic instead of `strconv.Itoa()` — fragile, should
+  be rewritten for clarity.
+- `src/database/database.go`: uses stdlib `log` package throughout
+  (`log.Printf`/`log.Println`) instead of `log/slog` with `NewTextHandler`
+  for structured logging per PART 11.
+- `src/main.go` ~lines 356, 361, 455: emojis (`✅`, `🔄`) in `log.Println`/
+  `log.Printf` calls — log FILES must be raw plain text only, no
+  emojis/ANSI; emojis are allowed in console output (`cprintf`/`cprintln`)
+  only, per PART 11.
+- `src/main.go` ~line 632: `config.Load()` error is ignored in
+  `checkStatus()` — must check and handle the returned error.
 
 ## [ ] Evaluate go-playground/validator/v10 adoption
 AI.md PART 3 "Required Go Libraries" lists `github.com/go-playground/validator/v10`

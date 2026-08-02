@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 )
 
@@ -19,7 +20,7 @@ import (
 func initTestDB(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, database.Init(dir))
+	require.NoError(t, database.Init(config.DatabaseConfig{Driver: "sqlite"}, dir))
 	t.Cleanup(func() {
 		_ = database.Close()
 	})

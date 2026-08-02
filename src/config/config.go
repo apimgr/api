@@ -174,10 +174,17 @@ type RateLimitClassConfig struct {
 	Window   int `yaml:"window"`
 }
 
-// DatabaseConfig holds database/storage settings
+// DatabaseConfig holds database/storage settings. Driver accepts the
+// friendly config aliases from AI.md PART 3 ("sqlite"/"sqlite2"/"sqlite3"
+// all normalize to sqlite; "libsql"/"turso" both normalize to libsql).
+// For the sqlite driver, URL is the on-disk database file path. For the
+// libsql driver (remote-only, per AI.md), URL is the server URL
+// (libsql://host?authToken=xxx or https://host) and Token is an optional
+// separate auth token appended to the URL when the URL itself has none.
 type DatabaseConfig struct {
 	Driver string `yaml:"driver"`
 	URL    string `yaml:"url"`
+	Token  string `yaml:"token"`
 }
 
 // CacheConfig holds server.cache.* settings per AI.md PART 12 "Cache
