@@ -1,10 +1,3 @@
-## [ ] Fix release.yml BUILD_DATE format
-`.github/workflows/release.yml` line 57 stamps `BUILD_DATE` with the custom
-format `"%a %b %d, %Y at %H:%M:%S %Z"` instead of ISO 8601 UTC
-(`YYYY-MM-DDTHH:MM:SSZ`), inconsistent with `Makefile` line 10 and AI.md
-PART 27's CI/CD conventions. Fix: change the `date` invocation to
-`date -u +%Y-%m-%dT%H:%M:%SZ`.
-
 ## [ ] Fix docker-compose environment list-style and missing x-logging/cache
 Found while fixing the volume-mount-path item above (same three files):
 `docker/docker-compose.yml`, `docker/docker-compose.dev.yml`, and
