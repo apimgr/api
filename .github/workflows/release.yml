@@ -54,7 +54,7 @@ jobs:
             echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
           fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
           # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
           # Never guess or assume - must be explicitly defined by user
           if [ -f site.txt ]; then

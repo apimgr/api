@@ -14,10 +14,10 @@ services:
       # Test: accessible from all interfaces on different port
       - "64581:80"
     volumes:
-      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
+      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
       # Test data is ephemeral - temp dir cleaned after tests
-      - ./rootfs/config:/config
-      - ./rootfs/data:/data
+      - ./volumes/config:/config
+      - ./volumes/data:/data
     networks:
       - api-test
 

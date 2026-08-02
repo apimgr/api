@@ -15,10 +15,10 @@ services:
       - "172.17.0.1:64580:80"
     volumes:
       # Volume paths relative to where docker-compose runs from (temp dir)
-      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
+      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
       # SELinux: :z suffix for shared label
-      - ./rootfs/config:/config:z
-      - ./rootfs/data:/data:z
+      - ./volumes/config:/config:z
+      - ./volumes/data:/data:z
     networks:
       - api
 
