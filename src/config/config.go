@@ -2,8 +2,10 @@ package config
 
 import (
 	"crypto/rand"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -548,11 +550,15 @@ var (
 
 // generateRandomPort generates a random port in the 64xxx range
 func generateRandomPort() string {
-	bytes := make([]byte, 2)
-	rand.Read(bytes)
+	buf := make([]byte, 2)
+	if _, err := rand.Read(buf); err != nil {
+		// crypto/rand read failure: fall back to a fixed in-range port
+		// rather than silently continuing with a zeroed/partial buffer.
+		return "64000"
+	}
 	// Generate port between 64000-64999
-	port := 64000 + (int(bytes[0])<<8|int(bytes[1]))%1000
-	return string(rune('0'+port/10000)) + string(rune('0'+(port/1000)%10)) + string(rune('0'+(port/100)%10)) + string(rune('0'+(port/10)%10)) + string(rune('0'+port%10))
+	port := 64000 + (int(buf[0])<<8|int(buf[1]))%1000
+	return strconv.Itoa(port)
 }
 
 // DefaultConfig returns a fully populated default configuration. Exported
@@ -900,8 +906,8 @@ func Save(cfg *Config) error {
 		return err
 	}
 
-	// Add header comment
-	content := "# CasTools Configuration\n# https://api.apimgr.us\n\n" + string(data)
+	// Add header comment (app name sourced from branding config, never hardcoded)
+	content := fmt.Sprintf("# %s Configuration\n\n", cfg.Server.Branding.Title) + string(data)
 
 	return os.WriteFile(configFile, []byte(content), 0644)
 }
