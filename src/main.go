@@ -629,7 +629,11 @@ func getDisplayAddress(cfg *config.Config) string {
 
 func checkStatus() {
 	// Try to connect to the server
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		cprintf("❌ Failed to load config: %v\n", err)
+		os.Exit(2)
+	}
 	addr := fmt.Sprintf("http://localhost:%s/healthz", cfg.Server.Port)
 
 	client := &http.Client{Timeout: 2 * time.Second}

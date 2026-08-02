@@ -1,25 +1,3 @@
-## [ ] Fix go-lint findings surfaced during libSQL driver wiring pass
-go-lint flagged 10 pre-existing issues in files touched by the libSQL/Turso
-driver work (none introduced by that change — carried-over patterns in
-untouched regions of the same files). Fix each:
-- `src/config/config.go` ~line 552: `rand.Read()` return error is not
-  checked — must handle it.
-- `src/config/config.go` ~line 904: hardcoded branding string "CasTools"
-  and URL "https://api.apimgr.us" in a comment — must come from config or
-  be removed.
-- `src/config/config.go` ~line 554-556: `generateRandomPort()` builds a
-  string via rune arithmetic instead of `strconv.Itoa()` — fragile, should
-  be rewritten for clarity.
-- `src/database/database.go`: uses stdlib `log` package throughout
-  (`log.Printf`/`log.Println`) instead of `log/slog` with `NewTextHandler`
-  for structured logging per PART 11.
-- `src/main.go` ~lines 356, 361, 455: emojis (`✅`, `🔄`) in `log.Println`/
-  `log.Printf` calls — log FILES must be raw plain text only, no
-  emojis/ANSI; emojis are allowed in console output (`cprintf`/`cprintln`)
-  only, per PART 11.
-- `src/main.go` ~line 632: `config.Load()` error is ignored in
-  `checkStatus()` — must check and handle the returned error.
-
 ## [ ] Wire backup.encryption_password config schema
 AI.md PART 21 "Setting/Changing Backup Password" documents the backup
 encryption password as `backup.encryption_password` in `server.yml` (set at
