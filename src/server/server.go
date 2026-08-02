@@ -1355,9 +1355,17 @@ func apiHashMultiHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type encodeParams struct {
+	Encoding string `validate:"required,oneof=base64 base64url base32 hex base16 url"`
+}
+
 func apiEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	encoding := strings.ToLower(chi.URLParam(r, "encoding"))
 	input := chi.URLParam(r, "input")
+
+	if !validateStruct(w, encodeParams{Encoding: encoding}) {
+		return
+	}
 
 	var output string
 	var err error
@@ -1373,9 +1381,6 @@ func apiEncodeHandler(w http.ResponseWriter, r *http.Request) {
 		output = text.HexEncode(input)
 	case "url":
 		output = text.URLEncode(input)
-	default:
-		errorResponse(w, "unsupported encoding: "+encoding, http.StatusBadRequest)
-		return
 	}
 
 	if err != nil {
@@ -1415,9 +1420,17 @@ func apiEncodeTextHandler(w http.ResponseWriter, r *http.Request) {
 	textResponse(w, output)
 }
 
+type decodeParams struct {
+	Encoding string `validate:"required,oneof=base64 base64url base32 hex base16 url"`
+}
+
 func apiDecodeHandler(w http.ResponseWriter, r *http.Request) {
 	encoding := strings.ToLower(chi.URLParam(r, "encoding"))
 	input := chi.URLParam(r, "input")
+
+	if !validateStruct(w, decodeParams{Encoding: encoding}) {
+		return
+	}
 
 	var output string
 	var err error
@@ -1433,9 +1446,6 @@ func apiDecodeHandler(w http.ResponseWriter, r *http.Request) {
 		output, err = text.HexDecode(input)
 	case "url":
 		output, err = text.URLDecode(input)
-	default:
-		errorResponse(w, "unsupported encoding: "+encoding, http.StatusBadRequest)
-		return
 	}
 
 	if err != nil {
@@ -1481,9 +1491,17 @@ func apiDecodeTextHandler(w http.ResponseWriter, r *http.Request) {
 	textResponse(w, output)
 }
 
+type caseParams struct {
+	Style string `validate:"required,oneof=lower upper title camel snake kebab"`
+}
+
 func apiCaseHandler(w http.ResponseWriter, r *http.Request) {
 	style := strings.ToLower(chi.URLParam(r, "style"))
 	input := chi.URLParam(r, "input")
+
+	if !validateStruct(w, caseParams{Style: style}) {
+		return
+	}
 
 	var output string
 
@@ -1500,9 +1518,6 @@ func apiCaseHandler(w http.ResponseWriter, r *http.Request) {
 		output = text.ToSnakeCase(input)
 	case "kebab":
 		output = text.ToKebabCase(input)
-	default:
-		errorResponse(w, "unsupported style: "+style, http.StatusBadRequest)
-		return
 	}
 
 	jsonResponse(w, map[string]interface{}{

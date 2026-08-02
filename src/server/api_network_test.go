@@ -109,7 +109,7 @@ func TestAPINetworkSubnetHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_CIDR", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid cidr", func(t *testing.T) {
@@ -178,7 +178,7 @@ func TestAPINetworkPingHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_HOST", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid count", func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestAPINetworkPingHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_COUNT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -203,7 +203,7 @@ func TestAPINetworkSSLHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "MISSING_HOST", env["error"])
+	assert.Equal(t, "VALIDATION_FAILED", env["error"])
 }
 
 // apiNetworkURLHandler must 400 with MISSING_URL when ?url= is absent, 400
@@ -219,7 +219,7 @@ func TestAPINetworkURLHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_URL", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid url", func(t *testing.T) {
@@ -263,7 +263,7 @@ func TestAPINetworkWhoisHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+	assert.Equal(t, "VALIDATION_FAILED", env["error"])
 }
 
 // apiNetworkTracerouteHandler honestly reports 501 NOT_SUPPORTED, matching

@@ -61,7 +61,7 @@ func TestAPIDockerVersionHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_IMAGE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid image", func(t *testing.T) {
@@ -145,7 +145,7 @@ func TestAPIMathCalculateHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_OPERATION", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("add", func(t *testing.T) {
@@ -180,7 +180,7 @@ func TestAPIMathCalculateHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "UNSUPPORTED_OPERATION", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -220,7 +220,7 @@ func TestAPIMathFibonacciHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_COUNT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -233,7 +233,7 @@ func TestAPIMathBaseHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PARAMS", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("decimal to hex", func(t *testing.T) {
@@ -270,7 +270,7 @@ func TestAPIMathMatrixHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_MATRIX", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("add", func(t *testing.T) {
@@ -318,7 +318,7 @@ func TestAPIMathMatrixHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_OPERATION", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -331,7 +331,7 @@ func TestAPIMathSequenceHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PARAMS", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("arithmetic", func(t *testing.T) {
@@ -619,7 +619,7 @@ func TestAPIConvertColorHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_VALUE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("missing format", func(t *testing.T) {
@@ -629,7 +629,7 @@ func TestAPIConvertColorHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_FORMAT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid color", func(t *testing.T) {
@@ -654,7 +654,7 @@ func TestAPIConvertCurrencyHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_CURRENCY", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid amount", func(t *testing.T) {
@@ -868,7 +868,7 @@ func TestAPIGenerateQRHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DATA", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("plain data renders PNG", func(t *testing.T) {
@@ -947,7 +947,7 @@ func TestAPIValidateEmailHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_EMAIL", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid email via query", func(t *testing.T) {
@@ -971,7 +971,7 @@ func TestAPIValidateCreditCardHandler(t *testing.T) {
 		apiValidateCreditCardHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_NUMBER", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid number", func(t *testing.T) {
@@ -993,7 +993,7 @@ func TestAPIValidateDomainHandler(t *testing.T) {
 		apiValidateDomainHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DOMAIN", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid domain via query", func(t *testing.T) {
@@ -1015,7 +1015,7 @@ func TestAPIValidateIPHandler(t *testing.T) {
 		apiValidateIPHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_IP", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid ipv4", func(t *testing.T) {
@@ -1062,7 +1062,7 @@ func TestAPIValidateMACHandler(t *testing.T) {
 		apiValidateMACHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_MAC", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid mac", func(t *testing.T) {
@@ -1084,7 +1084,7 @@ func TestAPIValidatePhoneHandler(t *testing.T) {
 		apiValidatePhoneHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PHONE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid phone", func(t *testing.T) {
@@ -1106,7 +1106,7 @@ func TestAPIValidateURLHandler(t *testing.T) {
 		apiValidateURLHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_URL", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid url", func(t *testing.T) {
@@ -1128,7 +1128,7 @@ func TestAPIValidateUUIDHandler(t *testing.T) {
 		apiValidateUUIDHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_UUID", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid uuid", func(t *testing.T) {
@@ -1150,7 +1150,7 @@ func TestAPIValidateIBANHandler(t *testing.T) {
 		apiValidateIBANHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_IBAN", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid iban", func(t *testing.T) {
@@ -1183,7 +1183,7 @@ func TestAPIValidateISBNHandler(t *testing.T) {
 		apiValidateISBNHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_ISBN", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid isbn-13", func(t *testing.T) {
@@ -1227,7 +1227,7 @@ func TestAPIValidateVATHandler(t *testing.T) {
 		apiValidateVATHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_VAT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid vat format", func(t *testing.T) {
@@ -1288,7 +1288,7 @@ func TestAPIParseXMLHandler(t *testing.T) {
 		apiParseXMLHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_XML", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid xml", func(t *testing.T) {
@@ -1310,7 +1310,7 @@ func TestAPIParseCSVHandler(t *testing.T) {
 		apiParseCSVHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_CSV", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid csv", func(t *testing.T) {
@@ -1369,7 +1369,7 @@ func TestAPIParseEnvHandler(t *testing.T) {
 		apiParseEnvHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_ENV", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid env", func(t *testing.T) {
@@ -1394,7 +1394,7 @@ func TestAPIParseHTMLHandler(t *testing.T) {
 		apiParseHTMLHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_HTML", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid html", func(t *testing.T) {
@@ -1418,7 +1418,7 @@ func TestAPIParseINIHandler(t *testing.T) {
 		apiParseINIHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_INI", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid ini", func(t *testing.T) {
@@ -1444,7 +1444,7 @@ func TestAPIParseLogHandler(t *testing.T) {
 		apiParseLogHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_LOG", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid log", func(t *testing.T) {
@@ -1471,7 +1471,7 @@ func TestAPIParseMarkdownHandler(t *testing.T) {
 		apiParseMarkdownHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_MARKDOWN", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid markdown", func(t *testing.T) {
@@ -1504,7 +1504,7 @@ func TestAPIParseSQLHandler(t *testing.T) {
 		apiParseSQLHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_SQL", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid sql", func(t *testing.T) {
@@ -1531,7 +1531,7 @@ func TestAPIParseTOMLHandler(t *testing.T) {
 		apiParseTOMLHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_TOML", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid toml", func(t *testing.T) {
@@ -1557,7 +1557,7 @@ func TestAPIParseYAMLHandler(t *testing.T) {
 		apiParseYAMLHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_YAML", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid yaml", func(t *testing.T) {
@@ -1629,7 +1629,7 @@ func TestAPILanguageDictionaryHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_WORD", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -1645,7 +1645,7 @@ func TestAPILanguageThesaurusHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_WORD", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -1660,7 +1660,7 @@ func TestAPILanguagePhoneticHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_WORD", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid word", func(t *testing.T) {
@@ -1689,7 +1689,7 @@ func TestAPILanguageWordCountHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_TEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid text", func(t *testing.T) {
@@ -1719,7 +1719,7 @@ func TestAPILanguageKeywordsHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_TEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid text", func(t *testing.T) {
@@ -1764,7 +1764,7 @@ func TestAPILanguageReadabilityHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_TEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid text", func(t *testing.T) {
@@ -1795,7 +1795,7 @@ func TestAPILanguageReadingTimeHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_TEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid text with wpm override", func(t *testing.T) {
@@ -1836,7 +1836,7 @@ func TestAPILanguageSentimentHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_TEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("positive text", func(t *testing.T) {
@@ -1889,7 +1889,7 @@ func TestAPITestAssertHandler(t *testing.T) {
 		apiTestAssertHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_FIELDS", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid op", func(t *testing.T) {
@@ -1898,7 +1898,7 @@ func TestAPITestAssertHandler(t *testing.T) {
 		apiTestAssertHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_OP", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -2159,7 +2159,7 @@ func TestAPITestFakeDataHandler(t *testing.T) {
 		apiTestFakeDataHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_TYPE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -2246,7 +2246,7 @@ func TestAPIWeatherHistoricalHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DATE_RANGE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid date range", func(t *testing.T) {
@@ -2352,7 +2352,7 @@ func TestAPIOsintEmailHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_EMAIL", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid email", func(t *testing.T) {
@@ -2380,7 +2380,7 @@ func TestAPIOsintDomainHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+	assert.Equal(t, "VALIDATION_FAILED", env["error"])
 }
 
 // apiOsintIPHandler must reject an invalid IP address. It reuses the same
@@ -2410,7 +2410,7 @@ func TestAPIOsintCertHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+	assert.Equal(t, "VALIDATION_FAILED", env["error"])
 }
 
 // apiOsintSubdomainHandler must 400 MISSING_DOMAIN when the {domain} path
@@ -2425,7 +2425,7 @@ func TestAPIOsintSubdomainHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "MISSING_DOMAIN", env["error"])
+	assert.Equal(t, "VALIDATION_FAILED", env["error"])
 }
 
 // apiOsintTechStackHandler must 400 MISSING_URL when ?url= is absent. A
@@ -2440,7 +2440,7 @@ func TestAPIOsintTechStackHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	env := decodeEnvelope(t, w.Body.Bytes())
-	assert.Equal(t, "MISSING_URL", env["error"])
+	assert.Equal(t, "VALIDATION_FAILED", env["error"])
 }
 
 // apiOsintBreachHandler, apiOsintCompanyHandler, apiOsintMetadataHandler,
@@ -2532,7 +2532,7 @@ func TestAPIResearchArxivHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_ID", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -2548,7 +2548,7 @@ func TestAPIResearchIsbnHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_ISBN", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -2562,7 +2562,7 @@ func TestAPIResearchCitationHandler(t *testing.T) {
 		apiResearchCitationHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_FIELDS", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("default style", func(t *testing.T) {
@@ -3042,7 +3042,7 @@ func TestAPIImagePlaceholderHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_WIDTH", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid height", func(t *testing.T) {
@@ -3052,7 +3052,7 @@ func TestAPIImagePlaceholderHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_HEIGHT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid dimensions", func(t *testing.T) {
@@ -3089,7 +3089,7 @@ func TestAPIImageResizeHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_WIDTH", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("multipart upload", func(t *testing.T) {
@@ -3136,7 +3136,7 @@ func TestAPIImageCropHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_WIDTH", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("multipart upload", func(t *testing.T) {
@@ -3214,7 +3214,7 @@ func TestAPIImageConvertHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_FORMAT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("convert to jpeg", func(t *testing.T) {
@@ -3237,7 +3237,7 @@ func TestAPIImageAvatarHandler(t *testing.T) {
 		apiImageAvatarHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_INITIALS", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid initials", func(t *testing.T) {
@@ -3261,7 +3261,7 @@ func TestAPIImageBarcodeHandler(t *testing.T) {
 		apiImageBarcodeHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DATA", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid code128", func(t *testing.T) {
@@ -3293,7 +3293,7 @@ func TestAPIImageIdenticonHandler(t *testing.T) {
 		apiImageIdenticonHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_SEED", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid seed", func(t *testing.T) {
@@ -3317,7 +3317,7 @@ func TestAPIImageQRHandler(t *testing.T) {
 		apiImageQRHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DATA", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("plain data renders PNG", func(t *testing.T) {
@@ -3353,7 +3353,7 @@ func TestAPIImageFilterHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_FILTER", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("unknown filter", func(t *testing.T) {
@@ -3438,7 +3438,7 @@ func TestAPIImageWatermarkHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_TEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid text", func(t *testing.T) {
@@ -3463,7 +3463,7 @@ func TestAPITextCompressHandler(t *testing.T) {
 		apiTextCompressHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DATA", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("round trip gzip", func(t *testing.T) {
@@ -3493,7 +3493,7 @@ func TestAPITextCompressHandler(t *testing.T) {
 		apiTextCompressHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_MODE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -3540,7 +3540,7 @@ func TestAPITextExtractHandler(t *testing.T) {
 		apiTextExtractHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_TYPE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -3579,7 +3579,7 @@ func TestAPITextRegexHandler(t *testing.T) {
 		apiTextRegexHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PATTERN", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("match", func(t *testing.T) {
@@ -3632,7 +3632,7 @@ func TestAPITextRegexHandler(t *testing.T) {
 		apiTextRegexHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_MODE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 }
 
@@ -3643,7 +3643,7 @@ func TestAPICryptoEncryptDecryptHandlers(t *testing.T) {
 		apiCryptoEncryptHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PLAINTEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("encrypt missing key", func(t *testing.T) {
@@ -3652,7 +3652,7 @@ func TestAPICryptoEncryptDecryptHandlers(t *testing.T) {
 		apiCryptoEncryptHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_KEY", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("decrypt missing ciphertext", func(t *testing.T) {
@@ -3661,7 +3661,7 @@ func TestAPICryptoEncryptDecryptHandlers(t *testing.T) {
 		apiCryptoDecryptHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_CIPHERTEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("decrypt missing key", func(t *testing.T) {
@@ -3670,7 +3670,7 @@ func TestAPICryptoEncryptDecryptHandlers(t *testing.T) {
 		apiCryptoDecryptHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_KEY", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("decrypt with wrong key fails", func(t *testing.T) {
@@ -3724,7 +3724,7 @@ func TestAPICryptoRSAHandler(t *testing.T) {
 		apiCryptoRSAHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PLAINTEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("encrypt missing public key", func(t *testing.T) {
@@ -3733,7 +3733,7 @@ func TestAPICryptoRSAHandler(t *testing.T) {
 		apiCryptoRSAHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PUBLIC_KEY", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("decrypt missing ciphertext", func(t *testing.T) {
@@ -3742,7 +3742,7 @@ func TestAPICryptoRSAHandler(t *testing.T) {
 		apiCryptoRSAHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_CIPHERTEXT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("decrypt missing private key", func(t *testing.T) {
@@ -3751,7 +3751,7 @@ func TestAPICryptoRSAHandler(t *testing.T) {
 		apiCryptoRSAHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_PRIVATE_KEY", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
@@ -3760,7 +3760,7 @@ func TestAPICryptoRSAHandler(t *testing.T) {
 		apiCryptoRSAHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_MODE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("round trip", func(t *testing.T) {
@@ -3817,7 +3817,7 @@ func TestAPICryptoHMACHandler(t *testing.T) {
 		apiCryptoHMACHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_KEY", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("default algorithm sha256", func(t *testing.T) {
@@ -3861,7 +3861,7 @@ func TestAPICryptoCertificateHandler(t *testing.T) {
 		apiCryptoCertificateHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_COMMON_NAME", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
@@ -3870,7 +3870,7 @@ func TestAPICryptoCertificateHandler(t *testing.T) {
 		apiCryptoCertificateHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_MODE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("generate then parse round trip", func(t *testing.T) {
@@ -3929,7 +3929,7 @@ func TestAPICryptoEd25519Handler(t *testing.T) {
 		apiCryptoEd25519Handler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_MODE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("sign then verify round trip", func(t *testing.T) {
@@ -3987,7 +3987,7 @@ func TestAPICryptoPGPHandler(t *testing.T) {
 		apiCryptoPGPHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_IDENTITY", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
@@ -3996,7 +3996,7 @@ func TestAPICryptoPGPHandler(t *testing.T) {
 		apiCryptoPGPHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "INVALID_MODE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("generate encrypt decrypt round trip", func(t *testing.T) {
@@ -4057,7 +4057,7 @@ func TestAPIDockerLintHandler(t *testing.T) {
 		apiDockerLintHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DOCKERFILE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid dockerfile", func(t *testing.T) {
@@ -4094,7 +4094,7 @@ func TestAPIDockerComposeValidateHandler(t *testing.T) {
 		apiDockerComposeValidateHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_COMPOSE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid compose", func(t *testing.T) {
@@ -4119,7 +4119,7 @@ func TestAPIDockerComposeToRunHandler(t *testing.T) {
 		apiDockerComposeToRunHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_COMPOSE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("invalid compose", func(t *testing.T) {
@@ -4152,7 +4152,7 @@ func TestAPIDockerRunToComposeHandler(t *testing.T) {
 		apiDockerRunToComposeHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_COMMAND", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid command", func(t *testing.T) {
@@ -4176,7 +4176,7 @@ func TestAPIDockerEnvParserHandler(t *testing.T) {
 		apiDockerEnvParserHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_ENV", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid env", func(t *testing.T) {
@@ -4226,7 +4226,7 @@ func TestAPIDockerSecurityScanHandler(t *testing.T) {
 		apiDockerSecurityScanHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_CONTENT", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid content", func(t *testing.T) {
@@ -4248,7 +4248,7 @@ func TestAPIDockerSizeOptimizerHandler(t *testing.T) {
 		apiDockerSizeOptimizerHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DOCKERFILE", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid dockerfile", func(t *testing.T) {
@@ -4272,7 +4272,7 @@ func TestAPIGenerateBarcodeHandler(t *testing.T) {
 		apiGenerateBarcodeHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_DATA", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid code128", func(t *testing.T) {
@@ -4302,7 +4302,7 @@ func TestAPIGenerateAvatarHandler(t *testing.T) {
 		apiGenerateAvatarHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_INITIALS", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid initials", func(t *testing.T) {
@@ -4324,7 +4324,7 @@ func TestAPIGenerateIdenticonHandler(t *testing.T) {
 		apiGenerateIdenticonHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "MISSING_SEED", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid seed", func(t *testing.T) {
@@ -4531,7 +4531,7 @@ func TestAPIGeoCountryHandler(t *testing.T) {
 		apiGeoCountryHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "QUERY_REQUIRED", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("valid country", func(t *testing.T) {
@@ -4669,7 +4669,7 @@ func TestAPIGeoBBoxHandler(t *testing.T) {
 		apiGeoBBoxHandler(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
-		assert.Equal(t, "RADIUS_REQUIRED", env["error"])
+		assert.Equal(t, "VALIDATION_FAILED", env["error"])
 	})
 
 	t.Run("coords list mode", func(t *testing.T) {

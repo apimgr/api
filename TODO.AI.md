@@ -20,18 +20,6 @@ untouched regions of the same files). Fix each:
 - `src/main.go` ~line 632: `config.Load()` error is ignored in
   `checkStatus()` — must check and handle the returned error.
 
-## [ ] Evaluate go-playground/validator/v10 adoption
-AI.md PART 3 "Required Go Libraries" lists `github.com/go-playground/validator/v10`
-for input validation. Current handlers (e.g. `src/server/handler/*.go`) use
-manual ad hoc checks (length caps, type parsing, `net/mail`, `net/url`,
-etc.) rather than struct-tag validation — this matches `docs/development.md`'s
-documented "Code Guidelines" convention and works correctly for this
-project's simple scalar-parameter tool endpoints, but doesn't match the
-library AI.md names. Evaluate whether adopting `validator/v10` for
-consistency is worth the handler-by-handler refactor, or whether the manual
-approach should be documented in AI.md as the accepted implementation for
-this project's request shape.
-
 ## [ ] Wire backup.encryption_password config schema
 AI.md PART 21 "Setting/Changing Backup Password" documents the backup
 encryption password as `backup.encryption_password` in `server.yml` (set at

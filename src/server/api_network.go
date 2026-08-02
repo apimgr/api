@@ -41,15 +41,19 @@ func apiNetworkMACVendorHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"mac": mac, "vendor": vendor})
 }
 
+// networkSubnetParams validates apiNetworkSubnetHandler's ?cidr= input.
+type networkSubnetParams struct {
+	CIDR string `validate:"required"`
+}
+
 // apiNetworkSubnetHandler computes network/broadcast/host details for a
 // CIDR block passed as ?cidr=.
 func apiNetworkSubnetHandler(w http.ResponseWriter, r *http.Request) {
-	cidr := r.URL.Query().Get("cidr")
-	if cidr == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CIDR", "cidr query parameter is required", nil)
+	params := networkSubnetParams{CIDR: r.URL.Query().Get("cidr")}
+	if !validateStruct(w, params) {
 		return
 	}
-	info, err := networkService.SubnetCalculate(cidr)
+	info, err := networkService.SubnetCalculate(params.CIDR)
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CIDR", err.Error(), nil)
 		return
@@ -78,26 +82,30 @@ func apiNetworkPortHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, map[string]int{"port": port})
 }
 
+// networkPingParams validates apiNetworkPingHandler's ?host= and ?count=
+// input.
+type networkPingParams struct {
+	Host  string `validate:"required"`
+	Count int    `validate:"gte=1,lte=20"`
+}
+
 // apiNetworkPingHandler measures TCP connect round-trip latency to ?host=
 // (optionally ?count=, default 4, max 20) using network.Service.Ping.
 func apiNetworkPingHandler(w http.ResponseWriter, r *http.Request) {
-	host := r.URL.Query().Get("host")
-	if host == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_HOST", "host query parameter is required", nil)
-		return
-	}
-
-	count := 4
+	params := networkPingParams{Host: r.URL.Query().Get("host"), Count: 4}
 	if countParam := r.URL.Query().Get("count"); countParam != "" {
 		parsed, err := strconv.Atoi(countParam)
-		if err != nil || parsed <= 0 {
+		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a positive integer", nil)
 			return
 		}
-		count = parsed
+		params.Count = parsed
+	}
+	if !validateStruct(w, params) {
+		return
 	}
 
-	result, err := networkService.Ping(host, count)
+	result, err := networkService.Ping(params.Host, params.Count)
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "PING_FAILED", err.Error(), nil)
 		return
@@ -106,16 +114,20 @@ func apiNetworkPingHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
+// networkSSLParams validates apiNetworkSSLHandler's ?host= input.
+type networkSSLParams struct {
+	Host string `validate:"required"`
+}
+
 // apiNetworkSSLHandler reports the leaf TLS certificate details for ?host=
 // using network.Service.SSLInfo.
 func apiNetworkSSLHandler(w http.ResponseWriter, r *http.Request) {
-	host := r.URL.Query().Get("host")
-	if host == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_HOST", "host query parameter is required", nil)
+	params := networkSSLParams{Host: r.URL.Query().Get("host")}
+	if !validateStruct(w, params) {
 		return
 	}
 
-	result, err := networkService.SSLInfo(host)
+	result, err := networkService.SSLInfo(params.Host)
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "SSL_LOOKUP_FAILED", err.Error(), nil)
 		return
@@ -124,16 +136,20 @@ func apiNetworkSSLHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
+// networkURLParams validates apiNetworkURLHandler's ?url= input.
+type networkURLParams struct {
+	URL string `validate:"required"`
+}
+
 // apiNetworkURLHandler parses ?url= into its component parts using
 // network.Service.ParseURL.
 func apiNetworkURLHandler(w http.ResponseWriter, r *http.Request) {
-	rawURL := r.URL.Query().Get("url")
-	if rawURL == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_URL", "url query parameter is required", nil)
+	params := networkURLParams{URL: r.URL.Query().Get("url")}
+	if !validateStruct(w, params) {
 		return
 	}
 
-	result, err := networkService.ParseURL(rawURL)
+	result, err := networkService.ParseURL(params.URL)
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_URL", err.Error(), nil)
 		return
@@ -142,23 +158,27 @@ func apiNetworkURLHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
+// networkWhoisParams validates apiNetworkWhoisHandler's ?domain= input.
+type networkWhoisParams struct {
+	Domain string `validate:"required"`
+}
+
 // apiNetworkWhoisHandler looks up WHOIS information for ?domain= using
 // network.Service.Whois.
 func apiNetworkWhoisHandler(w http.ResponseWriter, r *http.Request) {
-	domain := r.URL.Query().Get("domain")
-	if domain == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain query parameter is required", nil)
+	params := networkWhoisParams{Domain: r.URL.Query().Get("domain")}
+	if !validateStruct(w, params) {
 		return
 	}
 
-	result, err := networkService.Whois(domain)
+	result, err := networkService.Whois(params.Domain)
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "WHOIS_LOOKUP_FAILED", err.Error(), nil)
 		return
 	}
 
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"domain": domain,
+		"domain": params.Domain,
 		"raw":    result,
 	})
 }

@@ -29,7 +29,7 @@ import (
 	"github.com/apimgr/api/src/service/research"
 	"github.com/apimgr/api/src/service/test"
 	"github.com/apimgr/api/src/service/text"
-	"github.com/apimgr/api/src/service/validate"
+	svcvalidate "github.com/apimgr/api/src/service/validate"
 	"github.com/apimgr/api/src/service/weather"
 	"github.com/go-chi/chi/v5"
 )
@@ -40,7 +40,7 @@ var (
 	weatherService  = weather.New()
 	mathService     = math.New()
 	convertService  = convert.New()
-	validateService = validate.New()
+	validateService = svcvalidate.New()
 	parseService    = parse.New()
 	testService     = test.New()
 	osintService    = osint.New()
@@ -80,18 +80,35 @@ func queryOrJSONField(r *http.Request, queryKey string) string {
 	return ""
 }
 
+// dockerVersionParams validates the ?image= query parameter for
+// apiDockerVersionHandler.
+type dockerVersionParams struct {
+	Image string `validate:"required"`
+}
+
 // apiDockerVersionHandler parses a docker image reference passed as
 // ?image= and reports its registry/namespace/repository/tag breakdown.
 // docker.Service has no daemon-version concept; the closest available
 // "version" is the parsed image tag.
 func apiDockerVersionHandler(w http.ResponseWriter, r *http.Request) {
-	image := r.URL.Query().Get("image")
-	if image == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_IMAGE", "image query parameter is required", nil)
+	params := dockerVersionParams{Image: r.URL.Query().Get("image")}
+	if !validateStruct(w, params) {
 		return
 	}
-	info := dockerService.ParseImageName(image)
+	info := dockerService.ParseImageName(params.Image)
 	writeEnvelopeOK(w, http.StatusOK, info)
+}
+
+// dockerPortMappingParams validates the ?action= query parameter for
+// apiDockerPortMappingHandler, after the "format" default has been applied.
+type dockerPortMappingParams struct {
+	Action string `validate:"oneof=format parse"`
+}
+
+// dockerPortMappingMappingParams validates the ?mapping= query parameter
+// required by apiDockerPortMappingHandler's "parse" action.
+type dockerPortMappingMappingParams struct {
+	Mapping string `validate:"required"`
 }
 
 // apiDockerPortMappingHandler formats a host/container/protocol triple into
@@ -103,6 +120,9 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 	action := q.Get("action")
 	if action == "" {
 		action = "format"
+	}
+	if !validateStruct(w, dockerPortMappingParams{Action: action}) {
+		return
 	}
 
 	switch action {
@@ -121,8 +141,7 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"mapping": mapping})
 	case "parse":
 		mapping := q.Get("mapping")
-		if mapping == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MAPPING", "mapping query parameter is required", nil)
+		if !validateStruct(w, dockerPortMappingMappingParams{Mapping: mapping}) {
 			return
 		}
 		hostPort, containerPort, protocol, err := dockerService.ParsePortMapping(mapping)
@@ -135,9 +154,14 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 			"container_port": containerPort,
 			"protocol":       protocol,
 		})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ACTION", "action must be format or parse", nil)
 	}
+}
+
+// dockerVolumeParams validates the ?host= and ?container= query parameters
+// for apiDockerVolumeHandler.
+type dockerVolumeParams struct {
+	Host      string `validate:"required"`
+	Container string `validate:"required"`
 }
 
 // apiDockerVolumeHandler formats a host/container path pair into a
@@ -145,16 +169,20 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 // docker.Service.FormatVolumeMount.
 func apiDockerVolumeHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	hostPath := q.Get("host")
-	containerPath := q.Get("container")
-	if hostPath == "" || containerPath == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PATH", "host and container query parameters are required", nil)
+	params := dockerVolumeParams{Host: q.Get("host"), Container: q.Get("container")}
+	if !validateStruct(w, params) {
 		return
 	}
 	readOnly := config.IsTruthy(q.Get("readonly"))
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"mount": dockerService.FormatVolumeMount(hostPath, containerPath, readOnly),
+		"mount": dockerService.FormatVolumeMount(params.Host, params.Container, readOnly),
 	})
+}
+
+// dockerfileGenerateParams validates the fields of the decoded
+// docker.DockerfileConfig that apiDockerfileGenerateHandler manually checked.
+type dockerfileGenerateParams struct {
+	BaseImage string `validate:"required"`
 }
 
 // apiDockerfileGenerateHandler decodes a JSON docker.DockerfileConfig from
@@ -166,13 +194,18 @@ func apiDockerfileGenerateHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if cfg.BaseImage == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_BASE_IMAGE", "base_image is required", nil)
+	if !validateStruct(w, dockerfileGenerateParams{BaseImage: cfg.BaseImage}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
 		"dockerfile": dockerService.GenerateDockerfile(cfg),
 	})
+}
+
+// dockerLintParams validates the trimmed request body for
+// apiDockerLintHandler.
+type dockerLintParams struct {
+	Body string `validate:"required"`
 }
 
 // apiDockerLintHandler lints the Dockerfile text supplied in the request
@@ -183,11 +216,11 @@ func apiDockerLintHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOCKERFILE", "request body must contain Dockerfile content", nil)
+	body := strings.TrimSpace(string(raw))
+	if !validateStruct(w, dockerLintParams{Body: body}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, dockerService.LintDockerfile(string(raw)))
+	writeEnvelopeOK(w, http.StatusOK, dockerService.LintDockerfile(body))
 }
 
 // apiDockerBestPracticesHandler returns the static curated Docker best
@@ -198,6 +231,12 @@ func apiDockerBestPracticesHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// dockerComposeValidateParams validates the trimmed request body for
+// apiDockerComposeValidateHandler.
+type dockerComposeValidateParams struct {
+	Body string `validate:"required"`
+}
+
 // apiDockerComposeValidateHandler validates the docker-compose YAML text
 // supplied in the request body, using docker.Service.ValidateCompose.
 func apiDockerComposeValidateHandler(w http.ResponseWriter, r *http.Request) {
@@ -206,11 +245,17 @@ func apiDockerComposeValidateHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMPOSE", "request body must contain docker-compose YAML content", nil)
+	body := strings.TrimSpace(string(raw))
+	if !validateStruct(w, dockerComposeValidateParams{Body: body}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, dockerService.ValidateCompose(string(raw)))
+	writeEnvelopeOK(w, http.StatusOK, dockerService.ValidateCompose(body))
+}
+
+// dockerComposeToRunParams validates the trimmed request body for
+// apiDockerComposeToRunHandler.
+type dockerComposeToRunParams struct {
+	Body string `validate:"required"`
 }
 
 // apiDockerComposeToRunHandler converts the docker-compose YAML text
@@ -223,16 +268,22 @@ func apiDockerComposeToRunHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMPOSE", "request body must contain docker-compose YAML content", nil)
+	body := strings.TrimSpace(string(raw))
+	if !validateStruct(w, dockerComposeToRunParams{Body: body}) {
 		return
 	}
-	cmd, err := dockerService.ComposeToRunCommand(string(raw), r.URL.Query().Get("service"))
+	cmd, err := dockerService.ComposeToRunCommand(body, r.URL.Query().Get("service"))
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COMPOSE", err.Error(), nil)
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"command": cmd})
+}
+
+// dockerRunToComposeParams validates the trimmed request body for
+// apiDockerRunToComposeHandler.
+type dockerRunToComposeParams struct {
+	Body string `validate:"required"`
 }
 
 // apiDockerRunToComposeHandler converts the docker run command line
@@ -244,16 +295,22 @@ func apiDockerRunToComposeHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMMAND", "request body must contain a docker run command", nil)
+	body := strings.TrimSpace(string(raw))
+	if !validateStruct(w, dockerRunToComposeParams{Body: body}) {
 		return
 	}
-	compose, err := dockerService.RunCommandToCompose(string(raw))
+	compose, err := dockerService.RunCommandToCompose(body)
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COMMAND", err.Error(), nil)
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"compose": compose})
+}
+
+// dockerEnvParserParams validates the trimmed request body for
+// apiDockerEnvParserHandler.
+type dockerEnvParserParams struct {
+	Body string `validate:"required"`
 }
 
 // apiDockerEnvParserHandler parses the .env file text supplied in the
@@ -265,11 +322,11 @@ func apiDockerEnvParserHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ENV", "request body must contain .env file content", nil)
+	body := strings.TrimSpace(string(raw))
+	if !validateStruct(w, dockerEnvParserParams{Body: body}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, dockerService.ParseEnvFile(string(raw)))
+	writeEnvelopeOK(w, http.StatusOK, dockerService.ParseEnvFile(body))
 }
 
 // apiDockerNetworkHelperHandler generates a docker network create command
@@ -292,6 +349,12 @@ func apiDockerNetworkHelperHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
+// dockerSecurityScanParams validates the trimmed request body for
+// apiDockerSecurityScanHandler.
+type dockerSecurityScanParams struct {
+	Body string `validate:"required"`
+}
+
 // apiDockerSecurityScanHandler statically scans the Dockerfile or compose
 // text supplied in the request body for common security anti-patterns,
 // using docker.Service.ScanSecurity.
@@ -301,11 +364,17 @@ func apiDockerSecurityScanHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CONTENT", "request body must contain Dockerfile or compose content", nil)
+	body := strings.TrimSpace(string(raw))
+	if !validateStruct(w, dockerSecurityScanParams{Body: body}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, dockerService.ScanSecurity(string(raw)))
+	writeEnvelopeOK(w, http.StatusOK, dockerService.ScanSecurity(body))
+}
+
+// dockerSizeOptimizerParams validates the trimmed request body for
+// apiDockerSizeOptimizerHandler.
+type dockerSizeOptimizerParams struct {
+	Body string `validate:"required"`
 }
 
 // apiDockerSizeOptimizerHandler statically analyzes the Dockerfile text
@@ -317,8 +386,7 @@ func apiDockerSizeOptimizerHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOCKERFILE", "request body must contain Dockerfile content", nil)
+	if !validateStruct(w, dockerSizeOptimizerParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, dockerService.OptimizeSize(string(raw)))
@@ -336,6 +404,12 @@ func apiWeatherCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, weatherData)
 }
 
+// weatherForecastParams validates the ?days= query parameter for
+// apiWeatherForecastHandler.
+type weatherForecastParams struct {
+	Days int `validate:"gte=1,lte=16"`
+}
+
 // apiWeatherForecastHandler returns a daily weather forecast for the
 // {location} path parameter. The number of days (1-16) is read from the
 // ?days= query parameter, defaulting to 5.
@@ -349,6 +423,9 @@ func apiWeatherForecastHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		days = parsed
+	}
+	if !validateStruct(w, weatherForecastParams{Days: days}) {
+		return
 	}
 	forecast, err := weatherService.GetForecast(location, days)
 	if err != nil {
@@ -402,6 +479,14 @@ func apiWeatherAstronomyHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, data)
 }
 
+// weatherHistoricalParams validates the ?start= and ?end= query parameters
+// for apiWeatherHistoricalHandler; End must not be before Start (ISO 8601
+// YYYY-MM-DD strings compare lexically in chronological order).
+type weatherHistoricalParams struct {
+	Start string `validate:"required"`
+	End   string `validate:"required,gtefield=Start"`
+}
+
 // apiWeatherHistoricalHandler returns historical daily weather for the
 // {location} path parameter between the required ?start= and ?end= query
 // parameters (each YYYY-MM-DD).
@@ -409,8 +494,7 @@ func apiWeatherHistoricalHandler(w http.ResponseWriter, r *http.Request) {
 	location := chi.URLParam(r, "location")
 	start := r.URL.Query().Get("start")
 	end := r.URL.Query().Get("end")
-	if start == "" || end == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATE_RANGE", "start and end query parameters are required (YYYY-MM-DD)", nil)
+	if !validateStruct(w, weatherHistoricalParams{Start: start, End: end}) {
 		return
 	}
 	data, err := weatherService.GetHistorical(location, start, end)
@@ -426,6 +510,12 @@ func apiWeatherHistoricalHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// weatherHourlyParams validates the ?hours= query parameter for
+// apiWeatherHourlyHandler.
+type weatherHourlyParams struct {
+	Hours int `validate:"gte=1,lte=48"`
+}
+
 // apiWeatherHourlyHandler returns an hourly weather forecast for the
 // {location} path parameter. The number of hours (1-48) is read from the
 // ?hours= query parameter, defaulting to 24.
@@ -439,6 +529,9 @@ func apiWeatherHourlyHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		hours = parsed
+	}
+	if !validateStruct(w, weatherHourlyParams{Hours: hours}) {
+		return
 	}
 	data, err := weatherService.GetHourly(location, hours)
 	if err != nil {
@@ -548,6 +641,12 @@ func parseGeoCoordinateParams(q url.Values) (lat1, lon1, lat2, lon2 float64, err
 	return
 }
 
+// geoDistanceParams validates the ?unit= query parameter for
+// apiGeoDistanceHandler.
+type geoDistanceParams struct {
+	Unit string `validate:"required,oneof=km mi"`
+}
+
 // apiGeoDistanceHandler computes the great-circle distance between two
 // coordinates, in kilometers (default) or miles via ?unit=mi.
 func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
@@ -562,6 +661,9 @@ func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
 	if unit == "" {
 		unit = "km"
 	}
+	if !validateStruct(w, geoDistanceParams{Unit: unit}) {
+		return
+	}
 
 	var distance float64
 	switch unit {
@@ -569,9 +671,6 @@ func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
 		distance = geoService.Distance(lat1, lon1, lat2, lon2)
 	case "mi":
 		distance = geoService.DistanceInMiles(lat1, lon1, lat2, lon2)
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_UNIT", "unit must be km or mi", nil)
-		return
 	}
 
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -630,12 +729,17 @@ func parseGeoSingleCoordinateParams(q url.Values) (lat, lon float64, err error) 
 	return
 }
 
+// geoGeocodeParams validates the ?q= query parameter for
+// apiGeoGeocodeHandler.
+type geoGeocodeParams struct {
+	Query string `validate:"required"`
+}
+
 // apiGeoGeocodeHandler converts an address or place name to coordinates
 // using the free, keyless Nominatim (OpenStreetMap) search API.
 func apiGeoGeocodeHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
-	if query == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "QUERY_REQUIRED", "q query parameter is required", nil)
+	if !validateStruct(w, geoGeocodeParams{Query: query}) {
 		return
 	}
 
@@ -690,8 +794,7 @@ func apiGeoTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 // a country name, alpha-2 code, or alpha-3 code.
 func apiGeoCountryHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
-	if query == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "QUERY_REQUIRED", "q query parameter is required", nil)
+	if !validateStruct(w, geoGeocodeParams{Query: query}) {
 		return
 	}
 
@@ -811,6 +914,12 @@ func apiGeoPlusCodeHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
+// geoBBoxParams validates the ?radius= query parameter for
+// apiGeoBBoxHandler's center-plus-radius mode.
+type geoBBoxParams struct {
+	Radius string `validate:"required"`
+}
+
 // apiGeoBBoxHandler computes a bounding box either from a center coordinate
 // plus radius in kilometers (?lat/?lon/?radius) or from a list of
 // coordinates (?coords=lat1,lon1|lat2,lon2|...).
@@ -851,8 +960,7 @@ func apiGeoBBoxHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	radiusRaw := q.Get("radius")
-	if radiusRaw == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "RADIUS_REQUIRED", "radius query parameter is required", nil)
+	if !validateStruct(w, geoBBoxParams{Radius: radiusRaw}) {
 		return
 	}
 	radius, err := strconv.ParseFloat(radiusRaw, 64)
@@ -869,6 +977,12 @@ func apiGeoBBoxHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, box)
 }
 
+// mathCalculateParams validates the ?operation= query parameter for
+// apiMathCalculateHandler.
+type mathCalculateParams struct {
+	Operation string `validate:"required,oneof=add subtract multiply divide power percentage_of percentage_change modulo gcd lcm sqrt cbrt abs round floor ceil log log10 log2 exp sin cos tan factorial"`
+}
+
 // apiMathCalculateHandler dispatches to a math.Service operation selected
 // by ?operation=, composing the existing named methods rather than
 // evaluating a generic expression (no expression evaluator exists or may
@@ -876,8 +990,7 @@ func apiGeoBBoxHandler(w http.ResponseWriter, r *http.Request) {
 func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	operation := strings.ToLower(q.Get("operation"))
-	if operation == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_OPERATION", "operation query parameter is required", nil)
+	if !validateStruct(w, mathCalculateParams{Operation: operation}) {
 		return
 	}
 
@@ -993,8 +1106,6 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": mathService.Factorial(n).String()})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_OPERATION", "unsupported operation: "+operation, nil)
 	}
 }
 
@@ -1014,6 +1125,13 @@ func apiMathPrimeHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// mathRandomParams validates that {max} is not less than {min} for
+// apiMathRandomHandler.
+type mathRandomParams struct {
+	Min int64
+	Max int64 `validate:"gtefield=Min"`
+}
+
 // apiMathRandomHandler returns a random integer in the inclusive range
 // [{min}, {max}] using math.Service.RandomInt.
 func apiMathRandomHandler(w http.ResponseWriter, r *http.Request) {
@@ -1030,8 +1148,7 @@ func apiMathRandomHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "max must be an integer", nil)
 		return
 	}
-	if minVal > maxVal {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_RANGE", "min must be less than or equal to max", nil)
+	if !validateStruct(w, mathRandomParams{Min: minVal, Max: maxVal}) {
 		return
 	}
 
@@ -1042,13 +1159,18 @@ func apiMathRandomHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// mathStatsParams validates the ?numbers= query parameter for
+// apiMathStatsHandler.
+type mathStatsParams struct {
+	Numbers string `validate:"required"`
+}
+
 // apiMathStatsHandler computes min/max/sum/average/median over the
 // comma-separated ?numbers= query parameter, using the corresponding
 // math.Service methods.
 func apiMathStatsHandler(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("numbers")
-	if raw == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_NUMBERS", "numbers query parameter is required (comma-separated)", nil)
+	if !validateStruct(w, mathStatsParams{Numbers: raw}) {
 		return
 	}
 
@@ -1081,6 +1203,12 @@ func apiMathStatsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// mathFibonacciParams validates that ?count= is non-negative for
+// apiMathFibonacciHandler.
+type mathFibonacciParams struct {
+	Count int `validate:"gte=0"`
+}
+
 // apiMathFibonacciHandler returns the first {count} Fibonacci numbers using
 // math.Service.Fibonacci; ?count= is required and must be a non-negative
 // integer.
@@ -1091,8 +1219,11 @@ func apiMathFibonacciHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	count, err := strconv.Atoi(countParam)
-	if err != nil || count < 0 {
+	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a non-negative integer", nil)
+		return
+	}
+	if !validateStruct(w, mathFibonacciParams{Count: count}) {
 		return
 	}
 
@@ -1112,6 +1243,14 @@ func apiMathFibonacciHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// mathBaseParams validates the ?number=, ?from_base=, and ?to_base= query
+// parameters for apiMathBaseHandler.
+type mathBaseParams struct {
+	Number   string `validate:"required"`
+	FromBase string `validate:"required"`
+	ToBase   string `validate:"required"`
+}
+
 // apiMathBaseHandler converts ?number= from ?from_base= to ?to_base= using
 // math.Service.BaseConvert; both bases must be between 2 and 36.
 func apiMathBaseHandler(w http.ResponseWriter, r *http.Request) {
@@ -1119,8 +1258,7 @@ func apiMathBaseHandler(w http.ResponseWriter, r *http.Request) {
 	number := q.Get("number")
 	fromBaseParam := q.Get("from_base")
 	toBaseParam := q.Get("to_base")
-	if number == "" || fromBaseParam == "" || toBaseParam == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PARAMS", "number, from_base, and to_base query parameters are required", nil)
+	if !validateStruct(w, mathBaseParams{Number: number, FromBase: fromBaseParam, ToBase: toBaseParam}) {
 		return
 	}
 
@@ -1152,8 +1290,8 @@ func apiMathBaseHandler(w http.ResponseWriter, r *http.Request) {
 // matrixRequest is the shared JSON body shape for apiMathMatrixHandler:
 // two matrices ("a" required always, "b" required for add/multiply).
 type matrixRequest struct {
-	Operation string      `json:"operation"`
-	A         [][]float64 `json:"a"`
+	Operation string      `json:"operation" validate:"required,oneof=add multiply determinant"`
+	A         [][]float64 `json:"a" validate:"required,min=1"`
 	B         [][]float64 `json:"b"`
 }
 
@@ -1166,8 +1304,7 @@ func apiMathMatrixHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be JSON with operation, a, and (for add/multiply) b", nil)
 		return
 	}
-	if len(req.A) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MATRIX", "matrix a is required", nil)
+	if !validateStruct(w, req) {
 		return
 	}
 
@@ -1193,9 +1330,16 @@ func apiMathMatrixHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_OPERATION", "operation must be one of: add, multiply, determinant", nil)
 	}
+}
+
+// mathSequenceParams validates the ?type=, ?start=, ?step=, and ?count=
+// query parameters for apiMathSequenceHandler.
+type mathSequenceParams struct {
+	Type  string `validate:"required"`
+	Start string `validate:"required"`
+	Step  string `validate:"required"`
+	Count string `validate:"required"`
 }
 
 // apiMathSequenceHandler generates ?count= numbers of ?type= (arithmetic or
@@ -1207,8 +1351,7 @@ func apiMathSequenceHandler(w http.ResponseWriter, r *http.Request) {
 	startParam := q.Get("start")
 	stepParam := q.Get("step")
 	countParam := q.Get("count")
-	if seqType == "" || startParam == "" || stepParam == "" || countParam == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PARAMS", "type, start, step, and count query parameters are required", nil)
+	if !validateStruct(w, mathSequenceParams{Type: seqType, Start: startParam, Step: stepParam, Count: countParam}) {
 		return
 	}
 
@@ -1223,8 +1366,11 @@ func apiMathSequenceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	count, err := strconv.Atoi(countParam)
-	if err != nil || count < 0 {
+	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a non-negative integer", nil)
+		return
+	}
+	if !validateStruct(w, mathFibonacciParams{Count: count}) {
 		return
 	}
 
@@ -1663,6 +1809,14 @@ func apiConvertSpeedHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// convertColorParams validates the required value/from/to fields for
+// apiConvertColorHandler.
+type convertColorParams struct {
+	Value string `validate:"required"`
+	From  string `validate:"required"`
+	To    string `validate:"required"`
+}
+
 // apiConvertColorHandler converts a color value between hex, RGB
 // ("r,g,b"), and HSL ("h,s,l") representations using ?value=&from=&to=.
 func apiConvertColorHandler(w http.ResponseWriter, r *http.Request) {
@@ -1670,12 +1824,8 @@ func apiConvertColorHandler(w http.ResponseWriter, r *http.Request) {
 	from := strings.ToLower(r.URL.Query().Get("from"))
 	to := strings.ToLower(r.URL.Query().Get("to"))
 
-	if value == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_VALUE", "value is required", nil)
-		return
-	}
-	if from == "" || to == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FORMAT", "from and to are required (hex, rgb, hsl)", nil)
+	params := convertColorParams{Value: value, From: from, To: to}
+	if !validateStruct(w, params) {
 		return
 	}
 
@@ -1758,6 +1908,13 @@ func parseTriple(value string) (float64, float64, float64, error) {
 	return nums[0], nums[1], nums[2], nil
 }
 
+// convertCurrencyParams validates the required from/to currency codes for
+// apiConvertCurrencyHandler.
+type convertCurrencyParams struct {
+	From string `validate:"required"`
+	To   string `validate:"required"`
+}
+
 // apiConvertCurrencyHandler converts ?amount= from ?from= to ?to= using
 // live ECB reference rates from the free, keyless Frankfurter API.
 func apiConvertCurrencyHandler(w http.ResponseWriter, r *http.Request) {
@@ -1765,8 +1922,8 @@ func apiConvertCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 
-	if from == "" || to == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CURRENCY", "from and to currency codes are required", nil)
+	params := convertCurrencyParams{From: from, To: to}
+	if !validateStruct(w, params) {
 		return
 	}
 
@@ -1930,6 +2087,12 @@ func apiGenerateQRHandler(w http.ResponseWriter, r *http.Request) {
 	handleQRRequest(w, r)
 }
 
+// validateEmailParams validates the required email field for
+// apiValidateEmailHandler.
+type validateEmailParams struct {
+	Email string `validate:"required"`
+}
+
 // apiValidateEmailHandler validates the email address supplied in the
 // JSON body ({"email":"..."}) or as an ?email= query parameter.
 func apiValidateEmailHandler(w http.ResponseWriter, r *http.Request) {
@@ -1942,8 +2105,7 @@ func apiValidateEmailHandler(w http.ResponseWriter, r *http.Request) {
 			email = body.Email
 		}
 	}
-	if email == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_EMAIL", "email is required (JSON body or ?email= query parameter)", nil)
+	if !validateStruct(w, validateEmailParams{Email: email}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -1952,12 +2114,17 @@ func apiValidateEmailHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateCreditCardParams validates the required number field for
+// apiValidateCreditCardHandler.
+type validateCreditCardParams struct {
+	Number string `validate:"required"`
+}
+
 // apiValidateCreditCardHandler validates a credit card number (Luhn check)
 // supplied as ?number= or a JSON {"number":"..."} body.
 func apiValidateCreditCardHandler(w http.ResponseWriter, r *http.Request) {
 	number := queryOrJSONField(r, "number")
-	if number == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_NUMBER", "number is required (JSON body or ?number= query parameter)", nil)
+	if !validateStruct(w, validateCreditCardParams{Number: number}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -1966,12 +2133,17 @@ func apiValidateCreditCardHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateDomainParams validates the required domain field for
+// apiValidateDomainHandler.
+type validateDomainParams struct {
+	Domain string `validate:"required"`
+}
+
 // apiValidateDomainHandler validates a domain name supplied as ?domain= or
 // a JSON {"domain":"..."} body.
 func apiValidateDomainHandler(w http.ResponseWriter, r *http.Request) {
 	domain := queryOrJSONField(r, "domain")
-	if domain == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required (JSON body or ?domain= query parameter)", nil)
+	if !validateStruct(w, validateDomainParams{Domain: domain}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -1980,12 +2152,16 @@ func apiValidateDomainHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateIPParams validates the required ip field for apiValidateIPHandler.
+type validateIPParams struct {
+	IP string `validate:"required"`
+}
+
 // apiValidateIPHandler validates an IPv4 or IPv6 address supplied as ?ip=
 // or a JSON {"ip":"..."} body.
 func apiValidateIPHandler(w http.ResponseWriter, r *http.Request) {
 	ip := queryOrJSONField(r, "ip")
-	if ip == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_IP", "ip is required (JSON body or ?ip= query parameter)", nil)
+	if !validateStruct(w, validateIPParams{IP: ip}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2009,12 +2185,17 @@ func apiValidateJSONHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateMACParams validates the required mac field for
+// apiValidateMACHandler.
+type validateMACParams struct {
+	MAC string `validate:"required"`
+}
+
 // apiValidateMACHandler validates a MAC address supplied as ?mac= or a
 // JSON {"mac":"..."} body.
 func apiValidateMACHandler(w http.ResponseWriter, r *http.Request) {
 	mac := queryOrJSONField(r, "mac")
-	if mac == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MAC", "mac is required (JSON body or ?mac= query parameter)", nil)
+	if !validateStruct(w, validateMACParams{MAC: mac}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2023,12 +2204,17 @@ func apiValidateMACHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validatePhoneParams validates the required phone field for
+// apiValidatePhoneHandler.
+type validatePhoneParams struct {
+	Phone string `validate:"required"`
+}
+
 // apiValidatePhoneHandler validates a phone number supplied as ?phone= or
 // a JSON {"phone":"..."} body.
 func apiValidatePhoneHandler(w http.ResponseWriter, r *http.Request) {
 	phone := queryOrJSONField(r, "phone")
-	if phone == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PHONE", "phone is required (JSON body or ?phone= query parameter)", nil)
+	if !validateStruct(w, validatePhoneParams{Phone: phone}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2037,12 +2223,19 @@ func apiValidatePhoneHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateURLParams validates the required url field for
+// apiValidateURLHandler. Only presence is enforced here (not format) since
+// the handler's job is to report whether an arbitrary string is a valid
+// URL, including reporting invalid ones as valid:false.
+type validateURLParams struct {
+	URL string `validate:"required"`
+}
+
 // apiValidateURLHandler validates a URL supplied as ?url= or a JSON
 // {"url":"..."} body.
 func apiValidateURLHandler(w http.ResponseWriter, r *http.Request) {
 	rawURL := queryOrJSONField(r, "url")
-	if rawURL == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_URL", "url is required (JSON body or ?url= query parameter)", nil)
+	if !validateStruct(w, validateURLParams{URL: rawURL}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2051,12 +2244,17 @@ func apiValidateURLHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateUUIDParams validates the required uuid field for
+// apiValidateUUIDHandler.
+type validateUUIDParams struct {
+	UUID string `validate:"required"`
+}
+
 // apiValidateUUIDHandler validates a UUID supplied as ?uuid= or a JSON
 // {"uuid":"..."} body.
 func apiValidateUUIDHandler(w http.ResponseWriter, r *http.Request) {
 	uuidStr := queryOrJSONField(r, "uuid")
-	if uuidStr == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_UUID", "uuid is required (JSON body or ?uuid= query parameter)", nil)
+	if !validateStruct(w, validateUUIDParams{UUID: uuidStr}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2065,12 +2263,17 @@ func apiValidateUUIDHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateIBANParams validates the required iban field for
+// apiValidateIBANHandler.
+type validateIBANParams struct {
+	IBAN string `validate:"required"`
+}
+
 // apiValidateIBANHandler validates an IBAN supplied as ?iban= or a JSON
 // {"iban":"..."} body against the ISO 13616 mod-97 checksum.
 func apiValidateIBANHandler(w http.ResponseWriter, r *http.Request) {
 	iban := queryOrJSONField(r, "iban")
-	if iban == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_IBAN", "iban is required (JSON body or ?iban= query parameter)", nil)
+	if !validateStruct(w, validateIBANParams{IBAN: iban}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2079,12 +2282,17 @@ func apiValidateIBANHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateISBNParams validates the required isbn field for
+// apiValidateISBNHandler.
+type validateISBNParams struct {
+	ISBN string `validate:"required"`
+}
+
 // apiValidateISBNHandler validates an ISBN-10 or ISBN-13 supplied as
 // ?isbn= or a JSON {"isbn":"..."} body.
 func apiValidateISBNHandler(w http.ResponseWriter, r *http.Request) {
 	isbn := queryOrJSONField(r, "isbn")
-	if isbn == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ISBN", "isbn is required (JSON body or ?isbn= query parameter)", nil)
+	if !validateStruct(w, validateISBNParams{ISBN: isbn}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2093,12 +2301,17 @@ func apiValidateISBNHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validateVATParams validates the required vat field for
+// apiValidateVATHandler.
+type validateVATParams struct {
+	VAT string `validate:"required"`
+}
+
 // apiValidateVATHandler validates the structural format of an EU/UK/CH/NO
 // VAT registration number supplied as ?vat= or a JSON {"vat":"..."} body.
 func apiValidateVATHandler(w http.ResponseWriter, r *http.Request) {
 	vat := queryOrJSONField(r, "vat")
-	if vat == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_VAT", "vat is required (JSON body or ?vat= query parameter)", nil)
+	if !validateStruct(w, validateVATParams{VAT: vat}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2123,6 +2336,12 @@ func apiParseJSONHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseXMLParams validates that the request body is non-empty for
+// apiParseXMLHandler.
+type parseXMLParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseXMLHandler parses the raw XML document supplied in the request
 // body into a generic map, reusing the existing parseService.ParseXML.
 func apiParseXMLHandler(w http.ResponseWriter, r *http.Request) {
@@ -2131,8 +2350,7 @@ func apiParseXMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_XML", "request body must contain an XML document", nil)
+	if !validateStruct(w, parseXMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseXML(string(raw))
@@ -2143,6 +2361,12 @@ func apiParseXMLHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseCSVParams validates that the request body is non-empty for
+// apiParseCSVHandler.
+type parseCSVParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseCSVHandler parses the raw CSV document supplied in the request
 // body (first row treated as headers) via parseService.ParseCSV.
 func apiParseCSVHandler(w http.ResponseWriter, r *http.Request) {
@@ -2151,8 +2375,7 @@ func apiParseCSVHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CSV", "request body must contain a CSV document", nil)
+	if !validateStruct(w, parseCSVParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseCSV(string(raw))
@@ -2163,6 +2386,12 @@ func apiParseCSVHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseEnvParams validates that the request body is non-empty for
+// apiParseEnvHandler.
+type parseEnvParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseEnvHandler parses the raw .env-style document supplied in the
 // request body via parseService.ParseEnv.
 func apiParseEnvHandler(w http.ResponseWriter, r *http.Request) {
@@ -2171,8 +2400,7 @@ func apiParseEnvHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ENV", "request body must contain a .env document", nil)
+	if !validateStruct(w, parseEnvParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseEnv(string(raw))
@@ -2183,6 +2411,12 @@ func apiParseEnvHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseHTMLParams validates that the request body is non-empty for
+// apiParseHTMLHandler.
+type parseHTMLParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseHTMLHandler parses the raw HTML document supplied in the request
 // body into a structural summary via parseService.ParseHTML.
 func apiParseHTMLHandler(w http.ResponseWriter, r *http.Request) {
@@ -2191,8 +2425,7 @@ func apiParseHTMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_HTML", "request body must contain an HTML document", nil)
+	if !validateStruct(w, parseHTMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseHTML(string(raw))
@@ -2203,6 +2436,12 @@ func apiParseHTMLHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseINIParams validates that the request body is non-empty for
+// apiParseINIHandler.
+type parseINIParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseINIHandler parses the raw INI document supplied in the request
 // body via parseService.ParseINI.
 func apiParseINIHandler(w http.ResponseWriter, r *http.Request) {
@@ -2211,8 +2450,7 @@ func apiParseINIHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_INI", "request body must contain an INI document", nil)
+	if !validateStruct(w, parseINIParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseINI(string(raw))
@@ -2223,6 +2461,12 @@ func apiParseINIHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseLogParams validates that the request body is non-empty for
+// apiParseLogHandler.
+type parseLogParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseLogHandler parses the raw log document supplied in the request
 // body, one best-effort entry per line, via parseService.ParseLogLines.
 func apiParseLogHandler(w http.ResponseWriter, r *http.Request) {
@@ -2231,8 +2475,7 @@ func apiParseLogHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_LOG", "request body must contain log lines", nil)
+	if !validateStruct(w, parseLogParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseLogLines(string(raw))
@@ -2241,6 +2484,12 @@ func apiParseLogHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// parseMarkdownParams validates that the request body is non-empty for
+// apiParseMarkdownHandler.
+type parseMarkdownParams struct {
+	Body string `validate:"required"`
 }
 
 // apiParseMarkdownHandler parses the raw Markdown document supplied in the
@@ -2252,8 +2501,7 @@ func apiParseMarkdownHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MARKDOWN", "request body must contain a Markdown document", nil)
+	if !validateStruct(w, parseMarkdownParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseMarkdownStructure(string(raw))
@@ -2262,6 +2510,12 @@ func apiParseMarkdownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
+}
+
+// parseSQLParams validates that the request body is non-empty for
+// apiParseSQLHandler.
+type parseSQLParams struct {
+	Body string `validate:"required"`
 }
 
 // apiParseSQLHandler parses the raw SQL statement supplied in the request
@@ -2273,8 +2527,7 @@ func apiParseSQLHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SQL", "request body must contain a SQL statement", nil)
+	if !validateStruct(w, parseSQLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseSQLStructure(string(raw))
@@ -2285,6 +2538,12 @@ func apiParseSQLHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseTOMLParams validates that the request body is non-empty for
+// apiParseTOMLHandler.
+type parseTOMLParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseTOMLHandler parses the raw TOML document supplied in the request
 // body via parseService.ParseTOML.
 func apiParseTOMLHandler(w http.ResponseWriter, r *http.Request) {
@@ -2293,8 +2552,7 @@ func apiParseTOMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TOML", "request body must contain a TOML document", nil)
+	if !validateStruct(w, parseTOMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseTOML(string(raw))
@@ -2305,6 +2563,12 @@ func apiParseTOMLHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, parsed)
 }
 
+// parseYAMLParams validates that the request body is non-empty for
+// apiParseYAMLHandler.
+type parseYAMLParams struct {
+	Body string `validate:"required"`
+}
+
 // apiParseYAMLHandler parses the raw YAML document supplied in the request
 // body via parseService.ParseYAML.
 func apiParseYAMLHandler(w http.ResponseWriter, r *http.Request) {
@@ -2313,8 +2577,7 @@ func apiParseYAMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_YAML", "request body must contain a YAML document", nil)
+	if !validateStruct(w, parseYAMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseYAML(string(raw))
@@ -2365,12 +2628,17 @@ func apiLanguageDetectHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "language auto-detection is a declared non-goal for this project; only language code/name lookup is supported", nil)
 }
 
+// languageDictionaryParams validates the required word field for
+// apiLanguageDictionaryHandler.
+type languageDictionaryParams struct {
+	Word string `validate:"required"`
+}
+
 // apiLanguageDictionaryHandler looks up a word's definitions using the
 // free, keyless Free Dictionary API (dictionaryapi.dev).
 func apiLanguageDictionaryHandler(w http.ResponseWriter, r *http.Request) {
 	word := r.URL.Query().Get("word")
-	if strings.TrimSpace(word) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_WORD", "word query parameter is required", nil)
+	if !validateStruct(w, languageDictionaryParams{Word: strings.TrimSpace(word)}) {
 		return
 	}
 
@@ -2383,12 +2651,17 @@ func apiLanguageDictionaryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, result)
 }
 
+// languageThesaurusParams validates the required word field for
+// apiLanguageThesaurusHandler.
+type languageThesaurusParams struct {
+	Word string `validate:"required"`
+}
+
 // apiLanguageThesaurusHandler looks up a word's synonyms and antonyms
 // using the free, keyless Datamuse API.
 func apiLanguageThesaurusHandler(w http.ResponseWriter, r *http.Request) {
 	word := r.URL.Query().Get("word")
-	if strings.TrimSpace(word) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_WORD", "word query parameter is required", nil)
+	if !validateStruct(w, languageThesaurusParams{Word: strings.TrimSpace(word)}) {
 		return
 	}
 
@@ -2422,12 +2695,17 @@ func apiLanguageTranslateHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "machine translation is a declared non-goal for this project", nil)
 }
 
+// languagePhoneticParams validates the required word field for
+// apiLanguagePhoneticHandler.
+type languagePhoneticParams struct {
+	Word string `validate:"required"`
+}
+
 // apiLanguagePhoneticHandler returns the Soundex and Metaphone phonetic
 // codes for a word supplied via ?word=.
 func apiLanguagePhoneticHandler(w http.ResponseWriter, r *http.Request) {
 	word := r.URL.Query().Get("word")
-	if strings.TrimSpace(word) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_WORD", "word query parameter is required", nil)
+	if !validateStruct(w, languagePhoneticParams{Word: strings.TrimSpace(word)}) {
 		return
 	}
 
@@ -2436,6 +2714,12 @@ func apiLanguagePhoneticHandler(w http.ResponseWriter, r *http.Request) {
 		"soundex":   languageService.Soundex(word),
 		"metaphone": languageService.Metaphone(word),
 	})
+}
+
+// languageWordCountParams validates the required text field for
+// apiLanguageWordCountHandler.
+type languageWordCountParams struct {
+	Text string `validate:"required"`
 }
 
 // apiLanguageWordCountHandler returns word/character/line/sentence counts
@@ -2450,12 +2734,25 @@ func apiLanguageWordCountHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		text = string(body)
 	}
-	if strings.TrimSpace(text) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+	if !validateStruct(w, languageWordCountParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
 	writeEnvelopeOK(w, http.StatusOK, languageService.WordCount(text))
+}
+
+// languageKeywordsParams validates the required text field for
+// apiLanguageKeywordsHandler.
+type languageKeywordsParams struct {
+	Text string `validate:"required"`
+}
+
+// languageKeywordsLimitParams validates the optional limit field for
+// apiLanguageKeywordsHandler. It is only validated when the caller actually
+// supplied a limit query parameter, since a struct-level omitempty on an int
+// cannot distinguish an explicit 0 from an absent field.
+type languageKeywordsLimitParams struct {
+	Limit int `validate:"gt=0"`
 }
 
 // apiLanguageKeywordsHandler returns the most frequent non-stopword words in
@@ -2471,16 +2768,18 @@ func apiLanguageKeywordsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		text = string(body)
 	}
-	if strings.TrimSpace(text) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+	if !validateStruct(w, languageKeywordsParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
 	limit := 10
 	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
 		parsed, err := strconv.Atoi(limitParam)
-		if err != nil || parsed <= 0 {
+		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LIMIT", "limit query parameter must be a positive integer", nil)
+			return
+		}
+		if !validateStruct(w, languageKeywordsLimitParams{Limit: parsed}) {
 			return
 		}
 		limit = parsed
@@ -2489,6 +2788,12 @@ func apiLanguageKeywordsHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
 		"keywords": languageService.Keywords(text, limit),
 	})
+}
+
+// languageReadabilityParams validates the required text field for
+// apiLanguageReadabilityHandler.
+type languageReadabilityParams struct {
+	Text string `validate:"required"`
 }
 
 // apiLanguageReadabilityHandler returns Flesch Reading Ease, Flesch-Kincaid
@@ -2504,12 +2809,25 @@ func apiLanguageReadabilityHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		text = string(body)
 	}
-	if strings.TrimSpace(text) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+	if !validateStruct(w, languageReadabilityParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
 	writeEnvelopeOK(w, http.StatusOK, languageService.Readability(text))
+}
+
+// languageReadingTimeParams validates the required text field for
+// apiLanguageReadingTimeHandler.
+type languageReadingTimeParams struct {
+	Text string `validate:"required"`
+}
+
+// languageReadingTimeWpmParams validates the optional wpm field for
+// apiLanguageReadingTimeHandler. It is only validated when the caller
+// actually supplied a wpm query parameter, since a struct-level omitempty on
+// an int cannot distinguish an explicit 0 from an absent field.
+type languageReadingTimeWpmParams struct {
+	Wpm int `validate:"gt=0"`
 }
 
 // apiLanguageReadingTimeHandler estimates reading time for text supplied via
@@ -2525,16 +2843,18 @@ func apiLanguageReadingTimeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		text = string(body)
 	}
-	if strings.TrimSpace(text) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+	if !validateStruct(w, languageReadingTimeParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
 	wpm := 0
 	if wpmParam := r.URL.Query().Get("wpm"); wpmParam != "" {
 		parsed, err := strconv.Atoi(wpmParam)
-		if err != nil || parsed <= 0 {
+		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WPM", "wpm query parameter must be a positive integer", nil)
+			return
+		}
+		if !validateStruct(w, languageReadingTimeWpmParams{Wpm: parsed}) {
 			return
 		}
 		wpm = parsed
@@ -2542,6 +2862,12 @@ func apiLanguageReadingTimeHandler(w http.ResponseWriter, r *http.Request) {
 
 	wordCount := len(strings.Fields(text))
 	writeEnvelopeOK(w, http.StatusOK, languageService.ReadingTime(wordCount, wpm))
+}
+
+// languageSentimentParams validates the required text field for
+// apiLanguageSentimentHandler.
+type languageSentimentParams struct {
+	Text string `validate:"required"`
 }
 
 // apiLanguageSentimentHandler scores text supplied via ?text= or the raw
@@ -2556,8 +2882,7 @@ func apiLanguageSentimentHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		text = string(body)
 	}
-	if strings.TrimSpace(text) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text query parameter or request body is required", nil)
+	if !validateStruct(w, languageSentimentParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
@@ -2593,6 +2918,14 @@ type testAssertRequest struct {
 	Value    bool        `json:"value,omitempty"`
 }
 
+// testAssertParams is the validated subset of testAssertRequest used by
+// apiTestAssertHandler: op must be one of the five supported assertion
+// kinds, and haystack is only required when op is "contains".
+type testAssertParams struct {
+	Op       string `validate:"required,oneof=equal not_equal contains true false"`
+	Haystack string `validate:"required_if=Op contains"`
+}
+
 // apiTestAssertHandler runs one of the five test.Service assertion
 // helpers (equal/not_equal/contains/true/false) against caller-supplied
 // values and returns the resulting pass/fail TestResult. It dispatches
@@ -2605,26 +2938,23 @@ func apiTestAssertHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
+	op := strings.ToLower(body.Op)
+	if !validateStruct(w, testAssertParams{Op: op, Haystack: body.Haystack}) {
+		return
+	}
 
 	var result *test.TestResult
-	switch strings.ToLower(body.Op) {
+	switch op {
 	case "equal":
 		result = testService.AssertEqual(body.Expected, body.Actual)
 	case "not_equal":
 		result = testService.AssertNotEqual(body.Expected, body.Actual)
 	case "contains":
-		if body.Haystack == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FIELDS", "haystack and needle are required for the contains op", nil)
-			return
-		}
 		result = testService.AssertContains(body.Haystack, body.Needle)
 	case "true":
 		result = testService.AssertTrue(body.Value)
 	case "false":
 		result = testService.AssertFalse(body.Value)
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_OP", "op must be one of: equal, not_equal, contains, true, false", nil)
-		return
 	}
 
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2634,13 +2964,17 @@ func apiTestAssertHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// testFixtureParams is the validated input to apiTestFixtureHandler.
+type testFixtureParams struct {
+	Type string `validate:"required"`
+}
+
 // apiTestFixtureHandler returns a named test fixture, dispatching to
 // test.Service.GenerateFixture rather than re-implementing per-type
 // fixture shapes here.
 func apiTestFixtureHandler(w http.ResponseWriter, r *http.Request) {
 	fixtureType := chi.URLParam(r, "type")
-	if fixtureType == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TYPE", "fixture type path parameter is required", nil)
+	if !validateStruct(w, testFixtureParams{Type: fixtureType}) {
 		return
 	}
 
@@ -2648,6 +2982,11 @@ func apiTestFixtureHandler(w http.ResponseWriter, r *http.Request) {
 		"type":    fixtureType,
 		"fixture": testService.GenerateFixture(fixtureType),
 	})
+}
+
+// testFakeDataParams is the validated input to apiTestFakeDataHandler.
+type testFakeDataParams struct {
+	Type string `validate:"required,oneof=email username user"`
 }
 
 // apiTestFakeDataHandler generates fake test data (email, username, or a
@@ -2661,6 +3000,9 @@ func apiTestFakeDataHandler(w http.ResponseWriter, r *http.Request) {
 	prefix := r.URL.Query().Get("prefix")
 	if prefix == "" {
 		prefix = "test"
+	}
+	if !validateStruct(w, testFakeDataParams{Type: dataType}) {
+		return
 	}
 
 	switch dataType {
@@ -2679,8 +3021,6 @@ func apiTestFakeDataHandler(w http.ResponseWriter, r *http.Request) {
 			"type": dataType,
 			"user": testService.GenerateMockUser(),
 		})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be one of: email, username, user", nil)
 	}
 }
 
@@ -3043,6 +3383,11 @@ func apiTestMockServerHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "mock-server is a permanent gap: a configurable dynamic mock server requires either a runtime-managed listening socket or persisted caller-defined response rules, both outside this project's declared scope", nil)
 }
 
+// osintEmailParams is the validated input to apiOsintEmailHandler.
+type osintEmailParams struct {
+	Email string `validate:"required,email"`
+}
+
 // apiOsintEmailHandler validates the {email} path parameter's format and
 // checks whether its domain has mail-exchange (MX) records, composing
 // validate.IsEmail, parse.ParseEmail, and osint.DNSLookup — all free,
@@ -3050,8 +3395,7 @@ func apiTestMockServerHandler(w http.ResponseWriter, r *http.Request) {
 // exists in src/service/osint.
 func apiOsintEmailHandler(w http.ResponseWriter, r *http.Request) {
 	email := chi.URLParam(r, "email")
-	if !validateService.IsEmail(email) {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_EMAIL", "not a valid email address", nil)
+	if !validateStruct(w, osintEmailParams{Email: email}) {
 		return
 	}
 	parts, err := parseService.ParseEmail(email)
@@ -3079,12 +3423,16 @@ func apiOsintEmailHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// osintDomainParams is the validated input to apiOsintDomainHandler.
+type osintDomainParams struct {
+	Domain string `validate:"required"`
+}
+
 // apiOsintDomainHandler performs a free, keyless WHOIS lookup for the
 // {domain} path parameter via osint.WHOISLookup.
 func apiOsintDomainHandler(w http.ResponseWriter, r *http.Request) {
 	domain := chi.URLParam(r, "domain")
-	if domain == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required", nil)
+	if !validateStruct(w, osintDomainParams{Domain: domain}) {
 		return
 	}
 	info, err := osintService.WHOISLookup(domain)
@@ -3108,13 +3456,17 @@ func apiOsintIPHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, info)
 }
 
+// osintCertParams is the validated input to apiOsintCertHandler.
+type osintCertParams struct {
+	Domain string `validate:"required"`
+}
+
 // apiOsintCertHandler connects to the {domain} path parameter (host:443 by
 // default, or host:port if a port is present) and reports the peer TLS
 // certificate's details via osint.SSLInfo.
 func apiOsintCertHandler(w http.ResponseWriter, r *http.Request) {
 	domain := chi.URLParam(r, "domain")
-	if domain == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required", nil)
+	if !validateStruct(w, osintCertParams{Domain: domain}) {
 		return
 	}
 	info, err := osintService.SSLInfo(domain)
@@ -3125,14 +3477,18 @@ func apiOsintCertHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, info)
 }
 
+// osintSubdomainParams is the validated input to apiOsintSubdomainHandler.
+type osintSubdomainParams struct {
+	Domain string `validate:"required"`
+}
+
 // apiOsintSubdomainHandler discovers subdomains of the {domain} path
 // parameter by resolving a small fixed wordlist of common subdomain labels
 // via the system DNS resolver (osint.SubdomainEnum) — the same trust
 // boundary already used by osint.DNSLookup.
 func apiOsintSubdomainHandler(w http.ResponseWriter, r *http.Request) {
 	domain := chi.URLParam(r, "domain")
-	if domain == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOMAIN", "domain is required", nil)
+	if !validateStruct(w, osintSubdomainParams{Domain: domain}) {
 		return
 	}
 	found, err := osintService.SubdomainEnum(domain)
@@ -3146,15 +3502,19 @@ func apiOsintSubdomainHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// osintTechStackParams is the validated input to apiOsintTechStackHandler.
+type osintTechStackParams struct {
+	URL string `validate:"required,http_url"`
+}
+
 // apiOsintTechStackHandler performs a single direct HTTP GET to the ?url=
 // query parameter and reports technology signatures observed in the
 // response headers/cookies/HTML via osint.TechStack — analogous in shape to
 // apiOsintCertHandler's direct TLS handshake, one direct user-directed
 // connection only.
 func apiOsintTechStackHandler(w http.ResponseWriter, r *http.Request) {
-	target := r.URL.Query().Get("url")
-	if strings.TrimSpace(target) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_URL", "url query parameter is required", nil)
+	target := strings.TrimSpace(r.URL.Query().Get("url"))
+	if !validateStruct(w, osintTechStackParams{URL: target}) {
 		return
 	}
 	info, err := osintService.TechStack(target)
@@ -3230,6 +3590,13 @@ type researchCitationRequest struct {
 	Style  string `json:"style"`
 }
 
+// researchCitationParams is the validated subset of researchCitationRequest
+// used by apiResearchCitationHandler.
+type researchCitationParams struct {
+	Title  string `validate:"required"`
+	Author string `validate:"required"`
+}
+
 // apiResearchCitationHandler formats a single caller-supplied reference
 // into a citation string. It reuses research.Service.GenerateBibliography
 // with a one-element slice rather than re-implementing the APA/MLA/Chicago
@@ -3241,8 +3608,7 @@ func apiResearchCitationHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if body.Title == "" || body.Author == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FIELDS", "title and author are required", nil)
+	if !validateStruct(w, researchCitationParams{Title: body.Title, Author: body.Author}) {
 		return
 	}
 	if body.Style == "" {
@@ -3259,6 +3625,11 @@ func apiResearchCitationHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// researchDoiParams is the validated input to apiResearchDOIHandler.
+type researchDoiParams struct {
+	Doi string `validate:"required"`
+}
+
 // apiResearchDOIHandler validates the wildcard path suffix as a DOI and
 // returns its canonical resolver URL, using
 // research.Service.ValidateDOI/FormatDOI. A wildcard route (rather than a
@@ -3267,8 +3638,7 @@ func apiResearchCitationHandler(w http.ResponseWriter, r *http.Request) {
 // parameter cannot capture.
 func apiResearchDOIHandler(w http.ResponseWriter, r *http.Request) {
 	doi := chi.URLParam(r, "*")
-	if doi == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DOI", "doi is required", nil)
+	if !validateStruct(w, researchDoiParams{Doi: doi}) {
 		return
 	}
 	valid := researchService.ValidateDOI(doi)
@@ -3292,13 +3662,17 @@ func apiResearchExtractHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "citation/reference extraction from unstructured text is not implemented; only formatting of caller-supplied citation fields is supported", nil)
 }
 
+// researchArxivParams is the validated input to apiResearchArxivHandler.
+type researchArxivParams struct {
+	ID string `validate:"required"`
+}
+
 // apiResearchArxivHandler looks up an arXiv paper by ID (JSON body
 // {"id":"..."} or ?id= query parameter) using the free, keyless arXiv
 // query API.
 func apiResearchArxivHandler(w http.ResponseWriter, r *http.Request) {
 	id := queryOrJSONField(r, "id")
-	if id == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ID", "id is required (JSON body or ?id= query parameter)", nil)
+	if !validateStruct(w, researchArxivParams{ID: id}) {
 		return
 	}
 
@@ -3325,13 +3699,17 @@ func apiResearchFootnotesHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "footnote/endnote formatting is outside this project's declared Research scope (citation formatting, bibliography generation, DOI only); not supported", nil)
 }
 
+// researchIsbnParams is the validated input to apiResearchIsbnHandler.
+type researchIsbnParams struct {
+	ISBN string `validate:"required"`
+}
+
 // apiResearchIsbnHandler looks up a book's metadata by ISBN (JSON body
 // {"isbn":"..."} or ?isbn= query parameter) using the free, keyless Open
 // Library Books API.
 func apiResearchIsbnHandler(w http.ResponseWriter, r *http.Request) {
 	isbn := queryOrJSONField(r, "isbn")
-	if isbn == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_ISBN", "isbn is required (JSON body or ?isbn= query parameter)", nil)
+	if !validateStruct(w, researchIsbnParams{ISBN: isbn}) {
 		return
 	}
 
@@ -3566,6 +3944,12 @@ func apiLoremCompanyHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiDevFormatJSONHandler pretty-prints the raw JSON document supplied in
 // the request body.
+// devBase64Params validates the ?action= query parameter accepted by
+// apiDevBase64Handler.
+type devBase64Params struct {
+	Action string `validate:"oneof=encode decode"`
+}
+
 // apiDevBase64Handler encodes or decodes the raw request body as base64
 // (standard or URL-safe, per ?urlsafe=) depending on the ?action= query
 // parameter (encode, the default, or decode).
@@ -3578,6 +3962,9 @@ func apiDevBase64Handler(w http.ResponseWriter, r *http.Request) {
 	action := r.URL.Query().Get("action")
 	if action == "" {
 		action = "encode"
+	}
+	if !validateStruct(w, devBase64Params{Action: action}) {
+		return
 	}
 	urlSafe := config.IsTruthy(r.URL.Query().Get("urlsafe"))
 
@@ -3603,9 +3990,13 @@ func apiDevBase64Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ACTION", "action must be encode or decode", nil)
 	}
+}
+
+// devURLEncodeParams validates the ?action= query parameter accepted by
+// apiDevURLEncodeHandler.
+type devURLEncodeParams struct {
+	Action string `validate:"oneof=encode decode"`
 }
 
 // apiDevURLEncodeHandler URL-encodes or URL-decodes the raw request body
@@ -3621,6 +4012,9 @@ func apiDevURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	if action == "" {
 		action = "encode"
 	}
+	if !validateStruct(w, devURLEncodeParams{Action: action}) {
+		return
+	}
 
 	switch action {
 	case "encode":
@@ -3632,8 +4026,6 @@ func apiDevURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ACTION", "action must be encode or decode", nil)
 	}
 }
 
@@ -3803,6 +4195,13 @@ func apiDevFormatXMLHandler(w http.ResponseWriter, r *http.Request) {
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
 }
 
+// imagePlaceholderParams validates the {width}/{height} path parameters
+// accepted by apiImagePlaceholderHandler.
+type imagePlaceholderParams struct {
+	Width  int `validate:"gt=0"`
+	Height int `validate:"gt=0"`
+}
+
 // apiImagePlaceholderHandler generates a placeholder image of
 // {width}x{height} and writes it as raw binary content. PART 14's JSON
 // envelope is scoped to application/json bodies; a binary image payload
@@ -3812,13 +4211,16 @@ func apiImagePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 	heightParam := chi.URLParam(r, "height")
 
 	width, err := strconv.Atoi(widthParam)
-	if err != nil || width <= 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be an integer", nil)
 		return
 	}
 	height, err := strconv.Atoi(heightParam)
-	if err != nil || height <= 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be an integer", nil)
+		return
+	}
+	if !validateStruct(w, imagePlaceholderParams{Width: width, Height: height}) {
 		return
 	}
 
@@ -3882,6 +4284,13 @@ func readUploadedImage(r *http.Request) ([]byte, error) {
 
 // apiImageResizeHandler decodes an uploaded image and returns it resized
 // to the requested width x height, in the requested (or original) format.
+// imageResizeParams validates the width/height form fields accepted by
+// apiImageResizeHandler.
+type imageResizeParams struct {
+	Width  int `validate:"gt=0"`
+	Height int `validate:"gt=0"`
+}
+
 func apiImageResizeHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
@@ -3890,13 +4299,16 @@ func apiImageResizeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	width, err := strconv.Atoi(r.FormValue("width"))
-	if err != nil || width <= 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be an integer", nil)
 		return
 	}
 	height, err := strconv.Atoi(r.FormValue("height"))
-	if err != nil || height <= 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be an integer", nil)
+		return
+	}
+	if !validateStruct(w, imageResizeParams{Width: width, Height: height}) {
 		return
 	}
 
@@ -3925,6 +4337,14 @@ func apiImageResizeHandler(w http.ResponseWriter, r *http.Request) {
 // apiImageCropHandler decodes an uploaded image and returns the
 // x,y,width,height region cropped from it, in the requested (or original)
 // format.
+// imageCropParams validates the width/height form fields accepted by
+// apiImageCropHandler. x/y are unrestricted offsets and are parsed but
+// not range-validated, matching the original behavior.
+type imageCropParams struct {
+	Width  int `validate:"gt=0"`
+	Height int `validate:"gt=0"`
+}
+
 func apiImageCropHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
@@ -3943,13 +4363,16 @@ func apiImageCropHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	width, err := strconv.Atoi(r.FormValue("width"))
-	if err != nil || width <= 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be an integer", nil)
 		return
 	}
 	height, err := strconv.Atoi(r.FormValue("height"))
-	if err != nil || height <= 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+	if err != nil {
+		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be an integer", nil)
+		return
+	}
+	if !validateStruct(w, imageCropParams{Width: width, Height: height}) {
 		return
 	}
 
@@ -4001,6 +4424,12 @@ func apiImageMetadataHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiImageConvertHandler decodes an uploaded image and re-encodes it in
 // the requested output format.
+// imageConvertParams validates the format form field accepted by
+// apiImageConvertHandler.
+type imageConvertParams struct {
+	Format string `validate:"required"`
+}
+
 func apiImageConvertHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
@@ -4009,8 +4438,7 @@ func apiImageConvertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	format := r.FormValue("format")
-	if format == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FORMAT", "format query parameter is required", nil)
+	if !validateStruct(w, imageConvertParams{Format: format}) {
 		return
 	}
 
@@ -4044,11 +4472,16 @@ func orDefaultOutputFormat(format string) string {
 // under the image/ tool category. It is a thin wrapper around the same
 // generateService.Avatar used by apiGenerateAvatarHandler — no duplicated
 // logic.
+// imageAvatarParams validates the initials query field accepted by
+// apiImageAvatarHandler.
+type imageAvatarParams struct {
+	Initials string `validate:"required"`
+}
+
 func apiImageAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	initials := q.Get("initials")
-	if initials == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_INITIALS", "initials is required", nil)
+	if !validateStruct(w, imageAvatarParams{Initials: initials}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -4070,12 +4503,17 @@ func apiImageAvatarHandler(w http.ResponseWriter, r *http.Request) {
 // code39) as a PNG image under the image/ tool category. It is a thin
 // wrapper around the same generateService.Barcode used by
 // apiGenerateBarcodeHandler — no duplicated logic.
+// imageBarcodeParams validates the data query field accepted by
+// apiImageBarcodeHandler.
+type imageBarcodeParams struct {
+	Data string `validate:"required"`
+}
+
 func apiImageBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	format := q.Get("format")
 	data := q.Get("data")
-	if data == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data is required", nil)
+	if !validateStruct(w, imageBarcodeParams{Data: data}) {
 		return
 	}
 	width, err := strconv.Atoi(q.Get("width"))
@@ -4101,11 +4539,16 @@ func apiImageBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 // identicon as a PNG image under the image/ tool category. It is a thin
 // wrapper around the same generateService.Identicon used by
 // apiGenerateIdenticonHandler — no duplicated logic.
+// imageIdenticonParams validates the seed query field accepted by
+// apiImageIdenticonHandler.
+type imageIdenticonParams struct {
+	Seed string `validate:"required"`
+}
+
 func apiImageIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	seed := q.Get("seed")
-	if seed == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SEED", "seed is required", nil)
+	if !validateStruct(w, imageIdenticonParams{Seed: seed}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -4131,6 +4574,13 @@ func apiImageQRHandler(w http.ResponseWriter, r *http.Request) {
 	handleQRRequest(w, r)
 }
 
+// qrRequestParams validates that at least one of data/ssid is present,
+// as accepted by handleQRRequest.
+type qrRequestParams struct {
+	Data string `validate:"required_without=Ssid"`
+	Ssid string `validate:"required_without=Data"`
+}
+
 // handleQRRequest implements the shared body of apiGenerateQRHandler and
 // apiImageQRHandler: either ?data=... is encoded directly, or ?ssid=...
 // (with optional password/security/hidden) is built into a standard
@@ -4139,6 +4589,9 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	data := q.Get("data")
 	ssid := q.Get("ssid")
+	if !validateStruct(w, qrRequestParams{Data: data, Ssid: ssid}) {
+		return
+	}
 
 	var content string
 	switch {
@@ -4149,11 +4602,8 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		content = payload
-	case data != "":
-		content = data
 	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data (or ssid for a Wi-Fi QR code) is required", nil)
-		return
+		content = data
 	}
 
 	width, err := strconv.Atoi(q.Get("width"))
@@ -4177,6 +4627,12 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request) {
 
 // apiImageFilterHandler decodes an uploaded image and applies a named
 // filter (grayscale, sepia, invert, blur, brighten, darken) to it.
+// imageFilterParams validates the name form field accepted by
+// apiImageFilterHandler.
+type imageFilterParams struct {
+	Name string `validate:"required"`
+}
+
 func apiImageFilterHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
@@ -4185,8 +4641,7 @@ func apiImageFilterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := r.FormValue("name")
-	if name == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_FILTER", "name is required", nil)
+	if !validateStruct(w, imageFilterParams{Name: name}) {
 		return
 	}
 	amount, err := strconv.ParseFloat(r.FormValue("amount"), 64)
@@ -4256,6 +4711,12 @@ func apiImageOptimizeHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiImageWatermarkHandler decodes an uploaded image and tiles the given
 // text across it as a semi-transparent watermark.
+// imageWatermarkParams validates the text form field accepted by
+// apiImageWatermarkHandler.
+type imageWatermarkParams struct {
+	Text string `validate:"required"`
+}
+
 func apiImageWatermarkHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
@@ -4264,8 +4725,7 @@ func apiImageWatermarkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	text := r.FormValue("text")
-	if text == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_TEXT", "text is required", nil)
+	if !validateStruct(w, imageWatermarkParams{Text: text}) {
 		return
 	}
 	opacity, err := strconv.ParseFloat(r.FormValue("opacity"), 64)
@@ -4375,6 +4835,13 @@ type textCompressRequest struct {
 	Mode      string `json:"mode"`
 }
 
+// textCompressParams validates the data/mode fields accepted by
+// apiTextCompressHandler, after Mode's default has been applied.
+type textCompressParams struct {
+	Data string `validate:"required"`
+	Mode string `validate:"oneof=compress decompress"`
+}
+
 // apiTextCompressHandler compresses or decompresses data using
 // text.Compress/text.Decompress, both base64-encoded on the wire so the
 // result is always safe JSON. Mode defaults to "compress"; Algorithm
@@ -4386,15 +4853,14 @@ func apiTextCompressHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if body.Data == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data is required", nil)
-		return
-	}
 	if body.Algorithm == "" {
 		body.Algorithm = "gzip"
 	}
 	if body.Mode == "" {
 		body.Mode = "compress"
+	}
+	if !validateStruct(w, textCompressParams{Data: body.Data, Mode: body.Mode}) {
+		return
 	}
 
 	var result string
@@ -4404,9 +4870,6 @@ func apiTextCompressHandler(w http.ResponseWriter, r *http.Request) {
 		result, err = text.Compress(body.Data, body.Algorithm)
 	case "decompress":
 		result, err = text.Decompress(body.Data, body.Algorithm)
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be compress or decompress", nil)
-		return
 	}
 	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "COMPRESS_FAILED", err.Error(), nil)
@@ -4448,6 +4911,12 @@ type textExtractRequest struct {
 	Type string `json:"type"`
 }
 
+// textExtractParams validates the type field accepted by
+// apiTextExtractHandler, after Type's default has been applied.
+type textExtractParams struct {
+	Type string `validate:"oneof=emails email urls url ips ip phones phone"`
+}
+
 // apiTextExtractHandler pulls emails, URLs, IPs, or phone numbers out of
 // free-form text using the matching text.Extract* function.
 func apiTextExtractHandler(w http.ResponseWriter, r *http.Request) {
@@ -4458,6 +4927,9 @@ func apiTextExtractHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Type == "" {
 		body.Type = "emails"
+	}
+	if !validateStruct(w, textExtractParams{Type: body.Type}) {
+		return
 	}
 
 	var matches []string
@@ -4470,9 +4942,6 @@ func apiTextExtractHandler(w http.ResponseWriter, r *http.Request) {
 		matches = text.ExtractIPs(body.Text)
 	case "phones", "phone":
 		matches = text.ExtractPhones(body.Text)
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be emails, urls, ips, or phones", nil)
-		return
 	}
 
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -4504,6 +4973,13 @@ type textRegexRequest struct {
 	Mode        string `json:"mode"`
 }
 
+// textRegexParams validates the pattern/mode fields accepted by
+// apiTextRegexHandler, after Mode's default has been applied.
+type textRegexParams struct {
+	Pattern string `validate:"required"`
+	Mode    string `validate:"oneof=match replace explain"`
+}
+
 // apiTextRegexHandler tests a regular expression against input text. Mode
 // "match" (the default) returns every match via text.RegexMatch; mode
 // "replace" substitutes Replacement via text.RegexReplace; mode "explain"
@@ -4514,12 +4990,11 @@ func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if body.Pattern == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PATTERN", "pattern is required", nil)
-		return
-	}
 	if body.Mode == "" {
 		body.Mode = "match"
+	}
+	if !validateStruct(w, textRegexParams{Pattern: body.Pattern, Mode: body.Mode}) {
+		return
 	}
 
 	switch strings.ToLower(body.Mode) {
@@ -4548,8 +5023,6 @@ func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
 			"mode":        body.Mode,
 			"explanation": text.RegexExplain(body.Pattern),
 		})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be match, replace, or explain", nil)
 	}
 }
 
@@ -4561,6 +5034,13 @@ type cryptoEncryptRequest struct {
 	Key        string `json:"key"`
 }
 
+// cryptoEncryptParams validates the plaintext/key fields accepted by
+// apiCryptoEncryptHandler.
+type cryptoEncryptParams struct {
+	Plaintext string `validate:"required"`
+	Key       string `validate:"required"`
+}
+
 // apiCryptoEncryptHandler encrypts plaintext with AES-256-GCM using a key
 // derived from the supplied passphrase via Argon2id, composing
 // crypto.AESEncrypt.
@@ -4570,12 +5050,7 @@ func apiCryptoEncryptHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if body.Plaintext == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PLAINTEXT", "plaintext is required", nil)
-		return
-	}
-	if body.Key == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_KEY", "key is required", nil)
+	if !validateStruct(w, cryptoEncryptParams{Plaintext: body.Plaintext, Key: body.Key}) {
 		return
 	}
 
@@ -4591,6 +5066,13 @@ func apiCryptoEncryptHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// cryptoDecryptParams validates the ciphertext/key fields accepted by
+// apiCryptoDecryptHandler.
+type cryptoDecryptParams struct {
+	Ciphertext string `validate:"required"`
+	Key        string `validate:"required"`
+}
+
 // apiCryptoDecryptHandler decrypts a base64-encoded AES-256-GCM payload
 // produced by apiCryptoEncryptHandler, composing crypto.AESDecrypt.
 func apiCryptoDecryptHandler(w http.ResponseWriter, r *http.Request) {
@@ -4599,12 +5081,7 @@ func apiCryptoDecryptHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if body.Ciphertext == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CIPHERTEXT", "ciphertext is required", nil)
-		return
-	}
-	if body.Key == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_KEY", "key is required", nil)
+	if !validateStruct(w, cryptoDecryptParams{Ciphertext: body.Ciphertext, Key: body.Key}) {
 		return
 	}
 
@@ -4629,6 +5106,16 @@ type cryptoRSARequest struct {
 	Bits       int    `json:"bits"`
 }
 
+// cryptoRSAParams validates the mode-dependent fields accepted by
+// apiCryptoRSAHandler, after Mode's default has been applied.
+type cryptoRSAParams struct {
+	Mode       string `validate:"oneof=generate encrypt decrypt"`
+	Plaintext  string `validate:"required_if=Mode encrypt"`
+	PublicKey  string `validate:"required_if=Mode encrypt"`
+	Ciphertext string `validate:"required_if=Mode decrypt"`
+	PrivateKey string `validate:"required_if=Mode decrypt"`
+}
+
 // apiCryptoRSAHandler handles RSA keypair generation, RSA-OAEP encryption,
 // and RSA-OAEP decryption in one endpoint, selected by Mode. Composes
 // crypto.GenerateRSAKeys, crypto.RSAEncrypt, and crypto.RSADecrypt.
@@ -4640,6 +5127,15 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Mode == "" {
 		body.Mode = "generate"
+	}
+	if !validateStruct(w, cryptoRSAParams{
+		Mode:       body.Mode,
+		Plaintext:  body.Plaintext,
+		PublicKey:  body.PublicKey,
+		Ciphertext: body.Ciphertext,
+		PrivateKey: body.PrivateKey,
+	}) {
+		return
 	}
 
 	switch strings.ToLower(body.Mode) {
@@ -4660,14 +5156,6 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 			"bits":        bits,
 		})
 	case "encrypt":
-		if body.Plaintext == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PLAINTEXT", "plaintext is required", nil)
-			return
-		}
-		if body.PublicKey == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PUBLIC_KEY", "public_key is required", nil)
-			return
-		}
 		ciphertext, err := crypto.RSAEncrypt(body.Plaintext, body.PublicKey)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "ENCRYPT_FAILED", err.Error(), nil)
@@ -4678,14 +5166,6 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 			"ciphertext": ciphertext,
 		})
 	case "decrypt":
-		if body.Ciphertext == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CIPHERTEXT", "ciphertext is required", nil)
-			return
-		}
-		if body.PrivateKey == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PRIVATE_KEY", "private_key is required", nil)
-			return
-		}
 		plaintext, err := crypto.RSADecrypt(body.Ciphertext, body.PrivateKey)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
@@ -4695,8 +5175,6 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 			"mode":      body.Mode,
 			"plaintext": plaintext,
 		})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate, encrypt, or decrypt", nil)
 	}
 }
 
@@ -4705,6 +5183,12 @@ type cryptoHMACRequest struct {
 	Algorithm string `json:"algorithm"`
 	Key       string `json:"key"`
 	Message   string `json:"message"`
+}
+
+// cryptoHMACParams validates the key field accepted by
+// apiCryptoHMACHandler.
+type cryptoHMACParams struct {
+	Key string `validate:"required"`
 }
 
 // apiCryptoHMACHandler computes an HMAC of Message using Key, composing
@@ -4716,8 +5200,7 @@ func apiCryptoHMACHandler(w http.ResponseWriter, r *http.Request) {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
 		return
 	}
-	if body.Key == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_KEY", "key is required", nil)
+	if !validateStruct(w, cryptoHMACParams{Key: body.Key}) {
 		return
 	}
 	if body.Algorithm == "" {
@@ -4745,6 +5228,14 @@ type cryptoCertificateRequest struct {
 	Certificate string `json:"certificate"`
 }
 
+// cryptoCertificateParams validates the mode-dependent fields accepted by
+// apiCryptoCertificateHandler, after Mode's default has been applied.
+type cryptoCertificateParams struct {
+	Mode        string `validate:"oneof=generate parse"`
+	CommonName  string `validate:"required_if=Mode generate"`
+	Certificate string `validate:"required_if=Mode parse"`
+}
+
 // apiCryptoCertificateHandler handles self-signed X.509 certificate
 // generation and PEM certificate parsing in one endpoint, selected by Mode.
 // Composes crypto.GenerateCertificate and crypto.ParseCertificate.
@@ -4757,13 +5248,16 @@ func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
 	if body.Mode == "" {
 		body.Mode = "generate"
 	}
+	if !validateStruct(w, cryptoCertificateParams{
+		Mode:        body.Mode,
+		CommonName:  body.CommonName,
+		Certificate: body.Certificate,
+	}) {
+		return
+	}
 
 	switch strings.ToLower(body.Mode) {
 	case "generate":
-		if body.CommonName == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COMMON_NAME", "common_name is required", nil)
-			return
-		}
 		certPEM, keyPEM, err := crypto.GenerateCertificate(body.CommonName, body.ValidDays)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "GENERATE_FAILED", err.Error(), nil)
@@ -4775,10 +5269,6 @@ func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
 			"private_key": keyPEM,
 		})
 	case "parse":
-		if body.Certificate == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CERTIFICATE", "certificate is required", nil)
-			return
-		}
 		details, err := crypto.ParseCertificate(body.Certificate)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "PARSE_FAILED", err.Error(), nil)
@@ -4786,8 +5276,6 @@ func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		details["mode"] = body.Mode
 		writeEnvelopeOK(w, http.StatusOK, details)
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate or parse", nil)
 	}
 }
 
@@ -4801,6 +5289,18 @@ type cryptoEd25519Request struct {
 	PrivateKey string `json:"private_key"`
 }
 
+// cryptoEd25519Params validates the mode-dependent fields accepted by
+// apiCryptoEd25519Handler, after Mode's default has been applied. Message
+// is required for both sign and verify, expressed as "not required only
+// when Mode is generate" since required_if only ANDs field/value pairs.
+type cryptoEd25519Params struct {
+	Mode       string `validate:"oneof=generate sign verify"`
+	Message    string `validate:"required_unless=Mode generate"`
+	PrivateKey string `validate:"required_if=Mode sign"`
+	Signature  string `validate:"required_if=Mode verify"`
+	PublicKey  string `validate:"required_if=Mode verify"`
+}
+
 // apiCryptoEd25519Handler handles Ed25519 keypair generation, signing, and
 // signature verification in one endpoint, selected by Mode. Composes
 // crypto.GenerateEd25519Keys, crypto.Ed25519Sign, and crypto.Ed25519Verify.
@@ -4812,6 +5312,15 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Mode == "" {
 		body.Mode = "generate"
+	}
+	if !validateStruct(w, cryptoEd25519Params{
+		Mode:       body.Mode,
+		Message:    body.Message,
+		PrivateKey: body.PrivateKey,
+		Signature:  body.Signature,
+		PublicKey:  body.PublicKey,
+	}) {
+		return
 	}
 
 	switch strings.ToLower(body.Mode) {
@@ -4827,14 +5336,6 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 			"public_key":  publicKey,
 		})
 	case "sign":
-		if body.Message == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MESSAGE", "message is required", nil)
-			return
-		}
-		if body.PrivateKey == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PRIVATE_KEY", "private_key is required", nil)
-			return
-		}
 		signature, err := crypto.Ed25519Sign(body.Message, body.PrivateKey)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "SIGN_FAILED", err.Error(), nil)
@@ -4845,18 +5346,6 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 			"signature": signature,
 		})
 	case "verify":
-		if body.Message == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_MESSAGE", "message is required", nil)
-			return
-		}
-		if body.Signature == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SIGNATURE", "signature is required", nil)
-			return
-		}
-		if body.PublicKey == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PUBLIC_KEY", "public_key is required", nil)
-			return
-		}
 		valid, err := crypto.Ed25519Verify(body.Message, body.Signature, body.PublicKey)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "VERIFY_FAILED", err.Error(), nil)
@@ -4866,8 +5355,6 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 			"mode":  body.Mode,
 			"valid": valid,
 		})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate, sign, or verify", nil)
 	}
 }
 
@@ -4882,6 +5369,18 @@ type cryptoPGPRequest struct {
 	PrivateKey string `json:"private_key"`
 }
 
+// cryptoPGPParams validates the mode-dependent fields accepted by
+// apiCryptoPGPHandler, after Mode's default has been applied.
+type cryptoPGPParams struct {
+	Mode       string `validate:"oneof=generate encrypt decrypt"`
+	Name       string `validate:"required_if=Mode generate"`
+	Email      string `validate:"required_if=Mode generate,omitempty,email"`
+	Plaintext  string `validate:"required_if=Mode encrypt"`
+	PublicKey  string `validate:"required_if=Mode encrypt"`
+	Ciphertext string `validate:"required_if=Mode decrypt"`
+	PrivateKey string `validate:"required_if=Mode decrypt"`
+}
+
 // apiCryptoPGPHandler handles PGP keypair generation, encryption, and
 // decryption in one endpoint, selected by Mode. Composes
 // crypto.GeneratePGPKeys, crypto.PGPEncrypt, and crypto.PGPDecrypt.
@@ -4894,13 +5393,20 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 	if body.Mode == "" {
 		body.Mode = "generate"
 	}
+	if !validateStruct(w, cryptoPGPParams{
+		Mode:       body.Mode,
+		Name:       body.Name,
+		Email:      body.Email,
+		Plaintext:  body.Plaintext,
+		PublicKey:  body.PublicKey,
+		Ciphertext: body.Ciphertext,
+		PrivateKey: body.PrivateKey,
+	}) {
+		return
+	}
 
 	switch strings.ToLower(body.Mode) {
 	case "generate":
-		if body.Name == "" || body.Email == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_IDENTITY", "name and email are required", nil)
-			return
-		}
 		publicKey, privateKey, err := crypto.GeneratePGPKeys(body.Name, body.Email)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "GENERATE_FAILED", err.Error(), nil)
@@ -4912,14 +5418,6 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 			"private_key": privateKey,
 		})
 	case "encrypt":
-		if body.Plaintext == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PLAINTEXT", "plaintext is required", nil)
-			return
-		}
-		if body.PublicKey == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PUBLIC_KEY", "public_key is required", nil)
-			return
-		}
 		ciphertext, err := crypto.PGPEncrypt(body.Plaintext, body.PublicKey)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "ENCRYPT_FAILED", err.Error(), nil)
@@ -4930,14 +5428,6 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 			"ciphertext": ciphertext,
 		})
 	case "decrypt":
-		if body.Ciphertext == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_CIPHERTEXT", "ciphertext is required", nil)
-			return
-		}
-		if body.PrivateKey == "" {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_PRIVATE_KEY", "private_key is required", nil)
-			return
-		}
 		plaintext, err := crypto.PGPDecrypt(body.Ciphertext, body.PrivateKey)
 		if err != nil {
 			writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
@@ -4947,19 +5437,20 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 			"mode":      body.Mode,
 			"plaintext": plaintext,
 		})
-	default:
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MODE", "mode must be generate, encrypt, or decrypt", nil)
 	}
 }
 
 // apiGenerateBarcodeHandler renders a 1D barcode (ean13, upca, code128, or
 // code39) as a PNG image using generateService.Barcode.
+type generateBarcodeParams struct {
+	Data string `validate:"required"`
+}
+
 func apiGenerateBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	format := q.Get("format")
 	data := q.Get("data")
-	if data == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_DATA", "data is required", nil)
+	if !validateStruct(w, generateBarcodeParams{Data: data}) {
 		return
 	}
 	width, err := strconv.Atoi(q.Get("width"))
@@ -4983,11 +5474,14 @@ func apiGenerateBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiGenerateAvatarHandler renders an initials-based avatar as a PNG image
 // using generateService.Avatar.
+type generateAvatarParams struct {
+	Initials string `validate:"required"`
+}
+
 func apiGenerateAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	initials := q.Get("initials")
-	if initials == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_INITIALS", "initials is required", nil)
+	if !validateStruct(w, generateAvatarParams{Initials: initials}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -5007,11 +5501,14 @@ func apiGenerateAvatarHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiGenerateIdenticonHandler renders a deterministic sha256-derived
 // identicon as a PNG image using generateService.Identicon.
+type generateIdenticonParams struct {
+	Seed string `validate:"required"`
+}
+
 func apiGenerateIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	seed := q.Get("seed")
-	if seed == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_SEED", "seed is required", nil)
+	if !validateStruct(w, generateIdenticonParams{Seed: seed}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -5178,18 +5675,26 @@ func apiGenerateAPIDocsHandler(w http.ResponseWriter, r *http.Request) {
 // {width}x{height} under the generate/ tool category. It is a thin wrapper
 // around the same imageService.GeneratePlaceholder used by
 // apiImagePlaceholderHandler — no duplicated logic.
+type generatePlaceholderParams struct {
+	Width  int `validate:"gt=0"`
+	Height int `validate:"gt=0"`
+}
+
 func apiGeneratePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 	widthParam := chi.URLParam(r, "width")
 	heightParam := chi.URLParam(r, "height")
 
 	width, err := strconv.Atoi(widthParam)
-	if err != nil || width <= 0 {
+	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
 		return
 	}
 	height, err := strconv.Atoi(heightParam)
-	if err != nil || height <= 0 {
+	if err != nil {
 		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+		return
+	}
+	if !validateStruct(w, generatePlaceholderParams{Width: width, Height: height}) {
 		return
 	}
 
