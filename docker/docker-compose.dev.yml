@@ -1,29 +1,43 @@
-name: api-dev
+# nginx proxy address - http://172.17.0.1:64580
+# api - development
+
+name: api
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
 
 services:
   api:
-    image: ghcr.io/apimgr/api:latest
-    container_name: api-dev
-    restart: unless-stopped
+    image: ghcr.io/apimgr/api:devel
+    container_name: api-app
+    hostname: api
+    restart: always
+    pull_policy: always
+    logging: *default-logging
     environment:
-      # Development: relaxed security, verbose logging, no caching
-      # Does NOT enable debug endpoints - uncomment DEBUG=true for that
-      - MODE=development
-      - TZ=America/New_York
-      # DEBUG: Uncomment to enable pprof, expvar, detailed request logging
-      # - DEBUG=true
-    ports:
-      # Development: accessible from all interfaces
-      - "64580:80"
+      PORT: 80
+      DEBUG: 1
+      MODE: dev
+      TZ: America/New_York
     volumes:
-      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
-      # NEVER run from project directory - always use temp dir workflow
-      - ./volumes/config:/config
-      - ./volumes/data:/data
+      - './volumes/config:/config:z'
+      - './volumes/data:/data:z'
+    ports:
+      # Development: accessible from all interfaces, no 172.17.0.1 bind
+      - '64580:80'
+    healthcheck:
+      test: /usr/local/bin/api --status
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     networks:
-      - api-dev
+      - api
 
 networks:
-  api-dev:
-    name: api-dev
+  api:
+    name: api
     external: false

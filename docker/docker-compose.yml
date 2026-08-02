@@ -1,24 +1,60 @@
+# nginx proxy address - http://172.17.0.1:64580
+# api - Efficient loader for AI.md
+
 name: api
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
 
 services:
   api:
     image: ghcr.io/apimgr/api:latest
-    container_name: api
-    restart: unless-stopped
+    container_name: api-app
+    hostname: api
+    restart: always
+    pull_policy: always
+    logging: *default-logging
     environment:
-      # Hardcoded with sane defaults - NO .env files
-      - MODE=production
-      - TZ=America/New_York
-      # Tor is auto-enabled (tor binary installed in image)
-    ports:
-      # Production: bound to Docker bridge only
-      - "172.17.0.1:64580:80"
+      PORT: 80
+      TZ: America/New_York
+      CACHE_URL: valkey://api-cache:6379
+      # For remote libsql/Turso: set DATABASE_DRIVER and DATABASE_URL
+      # DATABASE_DRIVER: libsql
+      # DATABASE_URL: libsql://your-db.turso.io?authToken={token}
     volumes:
-      # Volume paths relative to where docker-compose runs from (temp dir)
-      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
-      # SELinux: :z suffix for shared label
-      - ./volumes/config:/config:z
-      - ./volumes/data:/data:z
+      - './volumes/config:/config:z'
+      - './volumes/data:/data:z'
+    ports:
+      - '172.17.0.1:64580:80'
+    healthcheck:
+      test: /usr/local/bin/api --status
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    depends_on:
+      api-cache:
+        condition: service_healthy
+    networks:
+      - api
+
+  api-cache:
+    image: valkey/valkey:alpine
+    pull_policy: always
+    container_name: api-cache
+    restart: always
+    logging: *default-logging
+    volumes:
+      - './volumes/data/db/valkey:/data:z'
+    healthcheck:
+      test: valkey-cli ping || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - api
 
