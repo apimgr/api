@@ -353,12 +353,12 @@ func main() {
 		sched.RegisterDefaultTasks()
 		sched.Start()
 		defer sched.Stop()
-		log.Println("✅ Scheduler started with default tasks")
+		log.Println("Scheduler started with default tasks")
 	}
 
 	// Start config file watcher for hot reload
 	configWatcher := config.NewConfigWatcher(func(newCfg *config.Config) {
-		log.Printf("🔄 Configuration reloaded")
+		log.Printf("Configuration reloaded")
 		// Update global config - server will pick up changes via config.Get()
 		config.Set(newCfg)
 	})
@@ -448,11 +448,11 @@ func main() {
 		select {
 		case sig := <-quit:
 			if sig == syscall.SIGHUP {
-				log.Printf("🔄 SIGHUP received, reloading configuration...")
+				log.Printf("SIGHUP received, reloading configuration...")
 				if err := config.Reload(); err != nil {
 					log.Printf("Failed to reload config: %v", err)
 				} else {
-					log.Printf("✅ Configuration reloaded")
+					log.Printf("Configuration reloaded")
 				}
 				continue
 			}
