@@ -32,9 +32,10 @@ var staticFS embed.FS
 
 // Version information
 var (
-	Version   = "1.0.0"
-	CommitID  = "unknown"
-	BuildDate = "unknown"
+	Version      = "1.0.0"
+	CommitID     = "unknown"
+	BuildDate    = "unknown"
+	OfficialSite = ""
 )
 
 // New creates a new HTTP server

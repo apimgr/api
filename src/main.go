@@ -290,6 +290,7 @@ func main() {
 	server.Version = Version
 	server.CommitID = CommitID
 	server.BuildDate = BuildDate
+	server.OfficialSite = OfficialSite
 
 	// Pass build version info to the metrics app_info gauge
 	metrics.Get().SetBuildInfo(Version, CommitID, BuildDate)
