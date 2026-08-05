@@ -35,12 +35,6 @@ import (
 	"golang.org/x/text/language"
 )
 
-var rng *rand.Rand
-
-func init() {
-	rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-}
-
 // UUID generates a UUID of the specified version
 func UUID(version int) (string, error) {
 	var id uuid.UUID
@@ -296,7 +290,7 @@ func LoremWords(count int) []string {
 
 	words := make([]string, count)
 	for i := 0; i < count; i++ {
-		words[i] = loremWords[rng.Intn(len(loremWords))]
+		words[i] = loremWords[rand.Intn(len(loremWords))]
 	}
 
 	return words
@@ -313,7 +307,8 @@ func LoremSentences(count int) []string {
 
 	sentences := make([]string, count)
 	for i := 0; i < count; i++ {
-		wordCount := 8 + rng.Intn(10) // 8-17 words per sentence
+		// 8-17 words per sentence
+		wordCount := 8 + rand.Intn(10)
 		words := LoremWords(wordCount)
 		words[0] = titleCaser.String(words[0])
 		sentences[i] = strings.Join(words, " ") + "."
@@ -333,7 +328,8 @@ func LoremParagraphs(count int) []string {
 
 	paragraphs := make([]string, count)
 	for i := 0; i < count; i++ {
-		sentenceCount := 3 + rng.Intn(4) // 3-6 sentences per paragraph
+		// 3-6 sentences per paragraph
+		sentenceCount := 3 + rand.Intn(4)
 		sentences := LoremSentences(sentenceCount)
 		paragraphs[i] = strings.Join(sentences, " ")
 	}
@@ -1348,7 +1344,7 @@ func Sort(lines []string) []string {
 func Shuffle(lines []string) []string {
 	result := make([]string, len(lines))
 	copy(result, lines)
-	rng.Shuffle(len(result), func(i, j int) {
+	rand.Shuffle(len(result), func(i, j int) {
 		result[i], result[j] = result[j], result[i]
 	})
 	return result
@@ -1452,10 +1448,10 @@ func themedSentences(words []string, count int) string {
 	}
 	sentences := make([]string, count)
 	for i := 0; i < count; i++ {
-		wc := 6 + rng.Intn(8)
+		wc := 6 + rand.Intn(8)
 		w := make([]string, wc)
 		for j := range w {
-			w[j] = words[rng.Intn(len(words))]
+			w[j] = words[rand.Intn(len(words))]
 		}
 		w[0] = strings.ToUpper(w[0][:1]) + w[0][1:]
 		sentences[i] = strings.Join(w, " ") + "."
@@ -1474,13 +1470,13 @@ func themedText(words []string, count int, typ string) string {
 	case "word", "words":
 		out := make([]string, count)
 		for i := range out {
-			out[i] = words[rng.Intn(len(words))]
+			out[i] = words[rand.Intn(len(words))]
 		}
 		return strings.Join(out, " ")
 	case "paragraph", "paragraphs":
 		paras := make([]string, count)
 		for i := range paras {
-			paras[i] = themedSentences(words, 3+rng.Intn(3))
+			paras[i] = themedSentences(words, 3+rand.Intn(3))
 		}
 		return strings.Join(paras, "\n\n")
 	default:
