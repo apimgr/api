@@ -163,7 +163,7 @@ api --config /etc/apimgr/api --data /var/lib/apimgr/api \
 - [Configuration Reference](https://apimgr-api.readthedocs.io/en/latest/configuration/)
 - [API Reference](https://apimgr-api.readthedocs.io/en/latest/api/)
 - [CLI Reference](https://apimgr-api.readthedocs.io/en/latest/cli/)
-- [Admin Panel Guide](https://apimgr-api.readthedocs.io/en/latest/admin/)
+- [Security Guide](https://apimgr-api.readthedocs.io/en/latest/security/)
 - [Development Guide](https://apimgr-api.readthedocs.io/en/latest/development/)
 
 ## Interactive Documentation
@@ -235,7 +235,7 @@ All binaries are statically compiled with no external dependencies.
 - **Language:** Go 1.24+
 - **Web Framework:** Chi router
 - **Template Engine:** Go html/template
-- **Database:** SQLite (default), PostgreSQL/MySQL (cluster mode)
+- **Database:** SQLite (default), libSQL/Turso (remote)
 - **Caching:** In-memory (default), Valkey/Redis (cluster mode)
 - **Deployment:** Docker, systemd, standalone binary
 
