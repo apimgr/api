@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
@@ -208,19 +209,27 @@ func VerifyTOTP(secret, code string, digits int, period int64, window int) bool 
 	if window <= 0 {
 		window = 1
 	}
+	if period <= 0 {
+		period = 30
+	}
 
-	// Check current and adjacent time periods
+	// Check current and adjacent time periods. Every offset is evaluated
+	// without an early return so verification time does not depend on which
+	// window the match falls in, and each candidate is compared with a
+	// constant-time compare (AI.md PART 11: TOTP codes require
+	// crypto/subtle.ConstantTimeCompare, never ==).
+	matched := false
 	for i := -window; i <= window; i++ {
 		expectedCode, err := generateTOTPAtOffset(secret, digits, period, int64(i))
 		if err != nil {
 			continue
 		}
-		if expectedCode == code {
-			return true
+		if subtle.ConstantTimeCompare([]byte(expectedCode), []byte(code)) == 1 {
+			matched = true
 		}
 	}
 
-	return false
+	return matched
 }
 
 func generateTOTPAtOffset(secret string, digits int, period int64, offset int64) (string, error) {
