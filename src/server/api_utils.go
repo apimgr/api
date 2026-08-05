@@ -3238,7 +3238,7 @@ func apiTestPostmanHandler(w http.ResponseWriter, r *http.Request) {
 // (IDEA.md's declared caller/header-inspection scope) — no storage, no
 // outbound call.
 func apiTestRequestInspectorHandler(w http.ResponseWriter, r *http.Request) {
-	bodyBytes, _ := io.ReadAll(r.Body)
+	bodyBytes, _ := readRequestBody(r)
 
 	headers := make(map[string]string, len(r.Header))
 	for key := range r.Header {
@@ -3340,7 +3340,7 @@ func apiTestResponseGeneratorHandler(w http.ResponseWriter, r *http.Request) {
 // storage of user-submitted data, so no payload is retained past this
 // request.
 func apiTestWebhookHandler(w http.ResponseWriter, r *http.Request) {
-	bodyBytes, _ := io.ReadAll(r.Body)
+	bodyBytes, _ := readRequestBody(r)
 
 	headers := make(map[string]string, len(r.Header))
 	for key := range r.Header {

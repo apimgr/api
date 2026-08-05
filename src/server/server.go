@@ -1616,7 +1616,7 @@ func apiTextStatsHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Text string `json:"text"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeJSONBody(r, &input); err != nil {
 		errorResponse(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -1693,7 +1693,7 @@ func apiBcryptVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 		Hash     string `json:"hash"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeJSONBody(r, &input); err != nil {
 		errorResponse(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -1905,7 +1905,7 @@ func apiPasswordStrengthPostHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeJSONBody(r, &input); err != nil {
 		errorResponse(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
