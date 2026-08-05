@@ -36,11 +36,14 @@ This software includes the following third-party libraries:
 | github.com/charmbracelet/lipgloss | v1.1.0 | MIT | 2021-2026 Charmbracelet, Inc. |
 | github.com/cretz/bine | v0.2.0 | MIT | 2018 Chad Retz |
 | github.com/go-chi/chi/v5 | v5.1.0 | MIT | 2015-present Peter Kieltyka, Google Inc. |
+| github.com/go-playground/validator/v10 | v10.30.3 | MIT | 2015 Dean Karn |
 | github.com/google/open-location-code/go | v0.0.0-20250620134813-83986da0156b | Apache-2.0 | 2015 Tamás Gulácsi (Go port); Google LLC |
 | github.com/google/uuid | v1.6.0 | BSD-3-Clause | 2009,2014 Google Inc. |
 | github.com/oschwald/maxminddb-golang | v1.13.1 | ISC | 2015 Gregory J. Oschwald |
 | github.com/prometheus/client_golang | v1.24.0 | Apache-2.0 | 2012-2015 The Prometheus Authors |
+| github.com/redis/go-redis/v9 | v9.21.0 | BSD-2-Clause | 2013 The github.com/redis/go-redis Authors |
 | github.com/stretchr/testify | v1.11.1 | MIT | 2012-2020 Mat Ryer, Tyler Bunnell and contributors |
+| github.com/tursodatabase/libsql-client-go | v0.0.0-20260528064733-9d5d30a29a60 | MIT | 2023 Turso / ChiselStrike, Inc. |
 | github.com/ziprecruiter/h3-go | v0.5.0 | Apache-2.0 | ZipRecruiter, Inc. |
 | golang.org/x/crypto | v0.53.0 | BSD-3-Clause | 2009 The Go Authors |
 | golang.org/x/net | v0.56.0 | BSD-3-Clause | 2009 The Go Authors |
