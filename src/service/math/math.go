@@ -232,12 +232,32 @@ func (s *Service) GCD(a, b int64) int64 {
 }
 
 func (s *Service) LCM(a, b int64) int64 {
+	// LCM(0, x) is defined as 0; guarding also avoids a divide-by-zero
+	// panic since GCD(0, 0) is 0.
+	if a == 0 || b == 0 {
+		return 0
+	}
 	return (a * b) / s.GCD(a, b)
 }
 
 // Random numbers
 func (s *Service) RandomInt(min, max int64) int64 {
-	return min + rand.Int63n(max-min+1)
+	// Normalize an inverted range so callers can pass bounds in any order
+	// without triggering a panic from a non-positive argument.
+	if max < min {
+		min, max = max, min
+	}
+	if min == max {
+		return min
+	}
+	// span is max-min+1; when that would overflow int64 (an effectively
+	// full-width range), fall back to an unbounded 63-bit draw rather than
+	// panicking on the overflowed argument.
+	span := max - min
+	if span == math.MaxInt64 {
+		return min + rand.Int63()
+	}
+	return min + rand.Int63n(span+1)
 }
 
 func (s *Service) RandomFloat(min, max float64) float64 {
