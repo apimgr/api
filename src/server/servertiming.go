@@ -167,15 +167,10 @@ func recordServerTiming(w http.ResponseWriter, name string, d time.Duration) {
 // execution error part-way through a page write still gets flushed
 // (implicit 200, truncated body) because bytes already reached the
 // ResponseWriter before the error surfaced. Buffering instead makes that
-// error a clean 500, which is more correct — but it also exposed a
-// pre-existing, unrelated bug (`server.PageData` has no `Layout` field,
-// while `partial/head.tmpl` unconditionally reads `.Layout`) that was
-// previously masked by the truncated-200 behavior, breaking ~150
-// pre-existing template-route tests. Fixing that bug is out of scope for
-// this change; recordServerTiming/findServerTimingWriter remain here,
-// fully implemented and unit-tested, ready for renderPage (or any other
-// call site) to opt into a "render"/other named span once that bug is
-// fixed separately (tracked in TODO.AI.md).
+// error a clean 500, which is more correct but a larger behavioral change
+// than this header warrants. recordServerTiming/findServerTimingWriter
+// remain here, fully implemented and unit-tested, ready for renderPage (or
+// any other call site) to opt into a "render"/other named span later.
 func serverTimingMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
