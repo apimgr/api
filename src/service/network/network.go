@@ -301,6 +301,13 @@ func (s *Service) Ping(host string, count int) (*PingResult, error) {
 		count = 20
 	}
 
+	// Reject loopback/link-local/private/non-routable targets before any
+	// TCP connect to prevent SSRF / internal-network scanning (IDEA.md
+	// threat model).
+	if err := validateTarget(host); err != nil {
+		return nil, err
+	}
+
 	target := host
 	if _, _, err := net.SplitHostPort(host); err != nil {
 		target = net.JoinHostPort(host, "80")
@@ -367,6 +374,13 @@ const sslDialTimeout = 5 * time.Second
 func (s *Service) SSLInfo(host string) (*SSLCertInfo, error) {
 	if host == "" {
 		return nil, fmt.Errorf("host is required")
+	}
+
+	// Reject loopback/link-local/private/non-routable targets before the
+	// TLS handshake to prevent SSRF / internal-network scanning (IDEA.md
+	// threat model).
+	if err := validateTarget(host); err != nil {
+		return nil, err
 	}
 
 	target := host
@@ -496,6 +510,13 @@ func (s *Service) Whois(domain string) (string, error) {
 		}
 	}
 	if referServer == "" {
+		return raw, nil
+	}
+
+	// The referral server comes from the IANA response, so validate it
+	// against the same non-routable-target rules before connecting — a
+	// crafted referral must not become an SSRF pivot into internal hosts.
+	if err := validateTarget(referServer); err != nil {
 		return raw, nil
 	}
 

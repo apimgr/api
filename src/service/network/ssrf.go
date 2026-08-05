@@ -1,4 +1,4 @@
-package osint
+package network
 
 import (
 	"context"
@@ -8,16 +8,16 @@ import (
 	"time"
 )
 
-// resolveTimeout bounds every system-resolver lookup performed before an
-// OSINT function is allowed to reach out to a caller-supplied target
-const resolveTimeout = 5 * time.Second
+// ssrfResolveTimeout bounds every system-resolver lookup performed before a
+// network function is allowed to connect to a caller-supplied target.
+const ssrfResolveTimeout = 5 * time.Second
 
-// extraBlockedCIDRs covers non-routable ranges that net.IP's built-in
+// ssrfExtraBlockedCIDRs covers non-routable ranges that net.IP's built-in
 // predicates miss: RFC 6598 carrier-grade NAT shared address space
 // (100.64.0.0/10) and RFC 2544 benchmarking space (198.18.0.0/15), both of
 // which can front internal infrastructure and must be blocked to prevent
 // SSRF / internal-network scanning.
-var extraBlockedCIDRs = func() []*net.IPNet {
+var ssrfExtraBlockedCIDRs = func() []*net.IPNet {
 	nets := make([]*net.IPNet, 0, 2)
 	for _, cidr := range []string{"100.64.0.0/10", "198.18.0.0/15"} {
 		if _, n, err := net.ParseCIDR(cidr); err == nil {
@@ -30,8 +30,8 @@ var extraBlockedCIDRs = func() []*net.IPNet {
 // isBlockedIP reports whether ip is loopback, link-local, private
 // (RFC 1918/RFC 4193), unspecified, multicast, carrier-grade NAT
 // (RFC 6598), or benchmarking (RFC 2544) — none of these are legitimate
-// OSINT targets and all are blocked to prevent SSRF / internal-network
-// scanning
+// targets for a caller-directed lookup, and all are blocked to prevent
+// SSRF / internal-network scanning per the IDEA.md threat model.
 func isBlockedIP(ip net.IP) bool {
 	if ip == nil {
 		return true
@@ -44,7 +44,7 @@ func isBlockedIP(ip net.IP) bool {
 		ip.IsMulticast() {
 		return true
 	}
-	for _, n := range extraBlockedCIDRs {
+	for _, n := range ssrfExtraBlockedCIDRs {
 		if n.Contains(ip) {
 			return true
 		}
@@ -52,14 +52,19 @@ func isBlockedIP(ip net.IP) bool {
 	return false
 }
 
-// validateTarget ensures a caller-supplied host is safe to resolve and
-// connect to. Literal IP inputs are checked directly; hostnames are
+// validateTarget ensures a caller-supplied host (optionally with a port) is
+// safe to connect to. Literal IP inputs are checked directly; hostnames are
 // resolved through the system resolver (with a hard timeout) and every
-// returned address is checked. This runs before any DNS/WHOIS/TLS call.
-func validateTarget(ctx context.Context, host string) error {
+// returned address is checked. This runs before any TCP/TLS/WHOIS connect.
+func validateTarget(host string) error {
 	host = strings.TrimSpace(host)
 	if host == "" {
 		return fmt.Errorf("target host is required")
+	}
+
+	// Strip an optional port so bare host:port inputs validate correctly.
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
 	}
 
 	trimmed := strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
@@ -75,11 +80,11 @@ func validateTarget(ctx context.Context, host string) error {
 		return fmt.Errorf("target %q resolves to a non-routable address", host)
 	}
 
-	resolveCtx, cancel := context.WithTimeout(ctx, resolveTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), ssrfResolveTimeout)
 	defer cancel()
 
 	resolver := net.Resolver{}
-	addrs, err := resolver.LookupIPAddr(resolveCtx, trimmed)
+	addrs, err := resolver.LookupIPAddr(ctx, trimmed)
 	if err != nil {
 		return fmt.Errorf("failed to resolve %q: %w", host, err)
 	}
