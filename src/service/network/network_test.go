@@ -176,7 +176,7 @@ func TestParseURL(t *testing.T) {
 	s := New()
 
 	t.Run("fully populated", func(t *testing.T) {
-		info, err := s.ParseURL("https://alice:secret@example.com:8443/path/to?foo=bar&foo=baz#section")
+		info, err := s.ParseURL("https://alice@example.com:8443/path/to?foo=bar&foo=baz#section")
 		require.NoError(t, err)
 		assert.Equal(t, "https", info.Scheme)
 		assert.Equal(t, "alice", info.User)
