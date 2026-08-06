@@ -271,7 +271,9 @@ Run first-time setup wizard.
 api --maintenance setup
 ```
 
-Creates admin account and initializes configuration.
+Generates project secrets, writes default `server.yml`, and initializes the
+database. There are no user/admin accounts to create — see
+[Administration](#administration).
 
 ## Update Commands
 
@@ -315,6 +317,62 @@ api --update branch daily
 - `stable` - Stable releases only (recommended)
 - `beta` - Beta releases
 - `daily` - Daily builds (development only)
+
+## Administration
+
+There is no web-based admin panel or admin UI. All server administration —
+service lifecycle, backup/restore, mode changes, and update management — is
+performed through this CLI, either interactively or via a service manager
+(systemd, launchd, rc.d, etc.). The sections above (Service Management,
+Maintenance Commands, Update Commands) are the complete administration
+surface.
+
+### Monitoring
+
+- **Health endpoint:** `GET /server/healthz` (and its unversioned/JSON
+  aliases) — public-safe status only, no credentials or internal detail.
+- **Status check:** `api --status` — reports whether the service is
+  running, its port, and config path.
+- **Metrics:** `GET /metrics` (Prometheus format) — internal-only, not
+  meant to be exposed publicly.
+
+### Logs
+
+Logs are files on disk, not a web view:
+
+| Log | Default location |
+|-----|-------------------|
+| Access log | `{log_dir}/access.log` |
+| Server log | `{log_dir}/server.log` |
+| Error log | `{log_dir}/error.log` |
+| Audit log | `{log_dir}/audit.log` |
+| Security log | `{log_dir}/security.log` |
+
+```bash
+tail -f /var/log/apimgr/api/server.log
+```
+
+### Troubleshooting
+
+**Check service status:**
+
+```bash
+api --status
+```
+
+**Check logs:**
+
+```bash
+tail -f /var/log/apimgr/api/server.log
+```
+
+**Reload configuration without restarting:**
+
+```bash
+sudo api --service reload
+# or
+kill -HUP $(cat /var/run/apimgr/api.pid)
+```
 
 ## Environment Variables
 
@@ -379,5 +437,5 @@ docker run -d \
 ## Next Steps
 
 - [API Reference](api.md)
-- [Admin Panel](admin.md)
+- [Security](security.md)
 - [Configuration Guide](configuration.md)

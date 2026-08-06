@@ -30,7 +30,6 @@ api/
 │   ├── server/             # HTTP server
 │   ├── swagger/            # OpenAPI/Swagger
 │   ├── graphql/            # GraphQL API
-│   ├── admin/              # Admin panel
 │   ├── services/           # Business logic
 │   ├── mode/               # Application mode detection
 │   ├── paths/              # Path resolution
@@ -220,7 +219,7 @@ files (`common.css`, `components.css`, `public.css`, `admin.css`), and Go
 
 ```
 src/server/template/
-├── layout/            # public.tmpl, admin.tmpl
+├── layout/            # public.tmpl
 ├── partial/           # shared head, scripts, header/nav/footer
 ├── page/              # one template per category (text.tmpl, crypto.tmpl, ...)
 └── page/tools/         # one subdirectory per category

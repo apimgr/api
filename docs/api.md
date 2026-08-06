@@ -10,10 +10,12 @@ http://localhost:64580/api/v1
 
 ## Authentication
 
-Most utility endpoints do not require authentication. Admin endpoints require authentication via:
-
-- **Bearer Token** - `Authorization: Bearer <token>` header
-- **Session Cookie** - For web admin panel
+Most utility endpoints do not require authentication. Resource-owning
+endpoints accept a token via the `Authorization: Bearer <token>` header (or
+the supported alternate headers plus `?token=` for protected API routes).
+There is no admin web UI, and `/api/*` routes never accept cookie-based
+auth — cookies are only used as a fallback for existing plain-POST web
+management forms.
 
 ## Content Negotiation
 
@@ -572,5 +574,5 @@ For interactive API exploration, visit:
 ## Next Steps
 
 - [Configure the server](configuration.md)
-- [Set up admin panel](admin.md)
+- [Security](security.md)
 - [CLI reference](cli.md)

@@ -39,17 +39,40 @@ mechanical have already been applied in-tree and are not listed here.
   ignored. Decision: build real resolvers backed by the same services the REST
   handlers use, or remove the GraphQL surface until it can be implemented.
 
-## Docs completeness (ReadTheDocs)
+## Docs completeness (ReadTheDocs) — resolved 2026-08-06
 
-- Missing required pages per testing-rules: `docs/security.md` and
-  `docs/integrations.md` do not exist. Required set is index, installation,
-  configuration, api, cli, security, integrations, development.
-- `docs/admin.md` exists but contradicts the IDEA.md non-goal "no admin web
-  panel / no admin UI". Decision: remove it, or repurpose its content into
-  operator-CLI documentation (`--service`, `--maintenance`) which is the actual
-  administration surface.
-- `docs/configuration.md` should document the `API_BACKUP_PASSWORD` and
-  `SMTP_*` environment overrides (verify current coverage while there).
+- Created `docs/security.md` (rate limiting, `security.txt`/
+  `.well-known/security.txt`, `/server/contact`) and `docs/integrations.md`
+  (`.well-known` discovery, API description formats, outbound providers),
+  grounded in `src/server/server.go`/`ratelimit.go`/`config.go`.
+- Deleted `docs/admin.md` (fictional web admin panel content — dashboard,
+  2FA, multi-user admin accounts). Its legitimate operator-CLI surface
+  (`--service`, `--maintenance`, monitoring, logs, troubleshooting) was
+  folded into a new "Administration" section in `docs/cli.md`. Removed all
+  other `docs/*.md` references to a web admin panel/UI (`index.md`,
+  `api.md`, `configuration.md`, `installation.md`, `development.md`).
+- `docs/configuration.md` now documents `API_BACKUP_PASSWORD` (real,
+  `src/scheduler/tasks.go`). `SMTP_*` env vars are explicitly documented as
+  NOT implemented (see gap below) rather than fabricated.
+
+## SMTP env var / config wiring gap (code, not docs)
+
+- `src/email/email.go` implements an SMTP client (`SMTPHost`, `SMTPPort`,
+  `Username`, `Password`, `AutoDetectSMTP()`) but it is never wired into
+  `src/config/config.go` or server startup — zero call sites outside the
+  package itself. `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD`/
+  `SMTP_TLS`/`SMTP_FROM_NAME`/`SMTP_FROM_EMAIL` (features-rules.md Email
+  section) are not read anywhere. This means every SMTP-auto-detect/email
+  notification feature in features-rules.md is currently unimplemented.
+  Needs a decision: implement the config wiring, or scope it out for now.
+
+## `--maintenance update`/`setup` reference a nonexistent `/admin` URL (code bug)
+
+- `src/main.go`'s `--maintenance update` and `--maintenance setup` command
+  handlers print messages pointing at `/admin` and `/admin/setup` web paths.
+  No such routes exist (confirmed via `src/server/server.go`), and this
+  contradicts the IDEA.md non-goal "no admin web panel". Needs a fix to the
+  printed message text (point at the CLI/API instead).
 
 ## Low test coverage (below the 60% gate)
 

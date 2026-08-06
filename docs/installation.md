@@ -171,7 +171,7 @@ Expected response:
 
 - [Configure the server](configuration.md)
 - [Explore the API](api.md)
-- [Set up the admin panel](admin.md)
+- [Security](security.md)
 
 ## Ports
 

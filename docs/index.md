@@ -22,8 +22,9 @@ API Toolkit is a universal API platform that offers various utility services thr
 ### Modern Web Interface
 
 - Responsive web UI with dark/light/auto theme support
-- Admin panel for server configuration
 - Real-time API testing and exploration
+- No web-based admin panel — server administration is done via the CLI
+  (see [CLI Reference](cli.md#administration))
 
 ### Production Ready
 
@@ -53,7 +54,8 @@ Visit `http://localhost:64580` to access the web interface.
 - **[Configuration](configuration.md)** - Server configuration options
 - **[API Reference](api.md)** - Complete API endpoint documentation
 - **[CLI Reference](cli.md)** - Command-line interface usage
-- **[Admin Panel](admin.md)** - Web admin interface guide
+- **[Security](security.md)** - Rate limiting and security reporting
+- **[Integrations](integrations.md)** - Discovery endpoints and API formats
 - **[Development](development.md)** - Contributing and development guide
 
 ## Use Cases

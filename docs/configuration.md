@@ -113,8 +113,7 @@ web:
     allow:
       - "/"
     deny:
-      - "/admin"
-      - "/api/v1/admin"
+      - "/api/v1"
 
   # Security settings
   security:
@@ -159,7 +158,20 @@ export API_SSL_LETSENCRYPT_EMAIL=ssl@example.com
 export API_DATABASE_DRIVER=postgres
 export API_DATABASE_HOST=localhost
 export API_DATABASE_PORT=5432
+
+# Scheduled backup encryption password (overrides
+# server.backup.encryption_password for unattended scheduled backup runs
+# only - the scheduler cannot prompt interactively the way the CLI/WebUI
+# restore flow can)
+export API_BACKUP_PASSWORD=changeme
 ```
+
+!!! note
+    SMTP/email settings are not yet exposed via `server.yml` or
+    environment variables in this build - there is no `SMTP_HOST`,
+    `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`,
+    `SMTP_FROM_NAME`, or `SMTP_FROM_EMAIL` override wired up yet, so
+    email-dependent notification features stay disabled.
 
 ## Command-Line Flags
 
@@ -276,14 +288,18 @@ Supported challenges:
 
 ## First-Run Setup
 
-On first run, the setup wizard will:
+There is no web-based setup wizard or admin panel. On first run, the binary
+itself:
 
-1. Generate admin credentials
-2. Create default configuration
-3. Initialize database
-4. Set up SSL (if configured)
+1. Generates the project secrets (`installation_secret`, `cookie_signing_key`,
+   `csrf_token_secret`, `server.security.encryption_key`)
+2. Writes a default `server.yml` with sane defaults
+3. Initializes the database (`server.db`)
+4. Sets up SSL (if configured)
 
-Access the setup wizard at: `http://localhost:64580/admin/setup`
+Run `api --maintenance setup` to (re-)run this first-run initialization from
+the CLI. See [CLI Reference](cli.md#administration) for the full
+administration surface.
 
 ## Backup Configuration
 
@@ -298,5 +314,5 @@ api --maintenance restore /path/to/backup.json
 ## Next Steps
 
 - [Explore the API](api.md)
-- [Set up the admin panel](admin.md)
+- [Security](security.md)
 - [CLI reference](cli.md)
