@@ -2,8 +2,15 @@ package graphql
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
-	"strings"
+	"strconv"
+
+	"github.com/apimgr/api/src/server/handler"
+	"github.com/apimgr/api/src/service/crypto"
+	"github.com/apimgr/api/src/service/datetime"
+	"github.com/apimgr/api/src/service/text"
 )
 
 // Schema represents a basic GraphQL schema
@@ -65,8 +72,8 @@ func BuildSchema() *Schema {
 					Description: "Health check",
 					Resolve: func(args map[string]interface{}) (interface{}, error) {
 						return map[string]interface{}{
-							"status": "ok",
-							"uptime": 3600,
+							"status": handler.Status(),
+							"uptime": handler.UptimeSeconds(),
 						}, nil
 					},
 				},
@@ -75,9 +82,9 @@ func BuildSchema() *Schema {
 					Description: "Version information",
 					Resolve: func(args map[string]interface{}) (interface{}, error) {
 						return map[string]interface{}{
-							"version":    "1.0.0",
-							"commit_id":  "unknown",
-							"build_date": "unknown",
+							"version":    handler.Version,
+							"commit_id":  handler.CommitID,
+							"build_date": handler.BuildDate,
 						}, nil
 					},
 				},
@@ -88,15 +95,18 @@ func BuildSchema() *Schema {
 						"text": {Type: "String!", Description: "Text to convert"},
 					},
 					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						text := args["text"].(string)
-						return strings.ToUpper(text), nil
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
+						return text.ToUpper(input), nil
 					},
 				},
 				"generateUUID": {
 					Type:        "String",
 					Description: "Generate UUID",
 					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						return "550e8400-e29b-41d4-a716-446655440000", nil // Placeholder
+						return text.UUID(4)
 					},
 				},
 			},
@@ -114,9 +124,12 @@ func BuildSchema() *Schema {
 						},
 					},
 					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						text := args["text"].(string)
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
 						return map[string]interface{}{
-							"result": strings.ToUpper(text),
+							"result": text.ToUpper(input),
 						}, nil
 					},
 				},
@@ -127,8 +140,11 @@ func BuildSchema() *Schema {
 						"text": {Type: "String!", Description: "Text to convert"},
 					},
 					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						text := args["text"].(string)
-						return map[string]interface{}{"result": strings.ToLower(text)}, nil
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
+						return map[string]interface{}{"result": text.ToLower(input)}, nil
 					},
 				},
 				"bcryptHash": {
@@ -138,8 +154,125 @@ func BuildSchema() *Schema {
 						"password": {Type: "String!", Description: "Password to hash"},
 					},
 					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						// Placeholder - would call crypto service
-						return map[string]interface{}{"result": "hashed"}, nil
+						password, ok := args["password"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"password\" is required")
+						}
+						hash, err := crypto.BcryptHash(password, 12)
+						if err != nil {
+							return nil, err
+						}
+						return map[string]interface{}{"result": hash}, nil
+					},
+				},
+				"textReverse": {
+					Type:        "TextResult",
+					Description: "Reverse text",
+					Args: map[string]*Argument{
+						"text": {Type: "String!", Description: "Text to reverse"},
+					},
+					Resolve: func(args map[string]interface{}) (interface{}, error) {
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
+						return map[string]interface{}{"result": text.Reverse(input)}, nil
+					},
+				},
+				"textBase64Encode": {
+					Type:        "TextResult",
+					Description: "Base64-encode text",
+					Args: map[string]*Argument{
+						"text": {Type: "String!", Description: "Text to encode"},
+					},
+					Resolve: func(args map[string]interface{}) (interface{}, error) {
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
+						return map[string]interface{}{"result": text.Base64Encode(input)}, nil
+					},
+				},
+				"textBase64Decode": {
+					Type:        "TextResult",
+					Description: "Base64-decode text",
+					Args: map[string]*Argument{
+						"text": {Type: "String!", Description: "Text to decode"},
+					},
+					Resolve: func(args map[string]interface{}) (interface{}, error) {
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
+						result, err := text.Base64Decode(input)
+						if err != nil {
+							return nil, err
+						}
+						return map[string]interface{}{"result": result}, nil
+					},
+				},
+				"textSlug": {
+					Type:        "TextResult",
+					Description: "Slugify text",
+					Args: map[string]*Argument{
+						"text": {Type: "String!", Description: "Text to slugify"},
+					},
+					Resolve: func(args map[string]interface{}) (interface{}, error) {
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
+						return map[string]interface{}{"result": text.Slugify(input)}, nil
+					},
+				},
+				"textHash": {
+					Type:        "TextResult",
+					Description: "Hash text with SHA-256",
+					Args: map[string]*Argument{
+						"text": {Type: "String!", Description: "Text to hash"},
+					},
+					Resolve: func(args map[string]interface{}) (interface{}, error) {
+						input, ok := args["text"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"text\" is required")
+						}
+						result, err := text.Hash("sha256", input)
+						if err != nil {
+							return nil, err
+						}
+						return map[string]interface{}{"result": result}, nil
+					},
+				},
+				"convertTimezone": {
+					Type:        "TextResult",
+					Description: "Convert a Unix timestamp between timezones",
+					Args: map[string]*Argument{
+						"timestamp": {Type: "String!", Description: "Unix timestamp (seconds)"},
+						"from":      {Type: "String!", Description: "Source IANA timezone"},
+						"to":        {Type: "String!", Description: "Target IANA timezone"},
+					},
+					Resolve: func(args map[string]interface{}) (interface{}, error) {
+						ts, ok := args["timestamp"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"timestamp\" is required")
+						}
+						from, ok := args["from"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"from\" is required")
+						}
+						to, ok := args["to"].(string)
+						if !ok {
+							return nil, fmt.Errorf("argument \"to\" is required")
+						}
+						unix, err := strconv.ParseInt(ts, 10, 64)
+						if err != nil {
+							return nil, fmt.Errorf("invalid timestamp %q", ts)
+						}
+						converted, err := datetime.ConvertTimezone(unix, from, to)
+						if err != nil {
+							return nil, err
+						}
+						return map[string]interface{}{"result": converted["to"]}, nil
 					},
 				},
 			},
@@ -223,53 +356,114 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Basic query execution (simplified - real implementation would use graphql-go library)
 	resp := executeQuery(req.Query, req.Variables)
 
+	body, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		slog.Error("graphql: failed to marshal response", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	body = append(body, '\n')
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if _, err := w.Write(body); err != nil {
+		slog.Error("graphql: failed to write response", "error", err)
+	}
 }
 
-// executeQuery executes a GraphQL query (simplified implementation)
+// executeQuery parses and resolves a GraphQL query/mutation against the
+// schema built by BuildSchema(), returning real resolver output rather than
+// pattern-matched placeholders.
 func executeQuery(query string, variables map[string]interface{}) Response {
-	// Simplified GraphQL execution
-	// For full implementation, use github.com/graphql-go/graphql library
+	op, err := newDocParser(query).parseDocument()
+	if err != nil {
+		return Response{Errors: []Error{{Message: err.Error()}}}
+	}
 
-	// Handle basic queries by pattern matching
-	if strings.Contains(query, "health") {
-		return Response{
-			Data: map[string]interface{}{
-				"health": map[string]interface{}{
-					"status": "ok",
-					"uptime": 3600,
-				},
-			},
+	schema := BuildSchema()
+	root := schema.Query
+	rootName := "Query"
+	if op.Type == "mutation" {
+		root = schema.Mutation
+		rootName = "Mutation"
+	}
+
+	if variables == nil {
+		variables = map[string]interface{}{}
+	}
+
+	data := map[string]interface{}{}
+	var errs []Error
+
+	for _, sel := range op.Selections {
+		field, ok := root.Fields[sel.Name]
+		if !ok {
+			errs = append(errs, Error{
+				Message: fmt.Sprintf("Cannot query field %q on type %q.", sel.Name, rootName),
+				Path:    []string{sel.Name},
+			})
+			continue
 		}
-	}
 
-	if strings.Contains(query, "version") {
-		return Response{
-			Data: map[string]interface{}{
-				"version": map[string]interface{}{
-					"version":    "1.0.0",
-					"commit_id":  "unknown",
-					"build_date": "unknown",
-				},
-			},
+		args := map[string]interface{}{}
+		for name, val := range sel.Arguments {
+			args[name] = val.resolve(variables)
 		}
+
+		result, err := field.Resolve(args)
+		if err != nil {
+			errs = append(errs, Error{Message: err.Error(), Path: []string{sel.Name}})
+			continue
+		}
+
+		key := sel.Name
+		if sel.Alias != "" {
+			key = sel.Alias
+		}
+		data[key] = applySelection(result, sel.Selections)
 	}
 
-	// Default response for unimplemented queries
-	return Response{
-		Data: map[string]interface{}{
-			"message": "Query executed - full resolver implementation in progress",
-		},
+	resp := Response{Errors: errs}
+	if len(data) > 0 {
+		resp.Data = data
 	}
+	return resp
+}
+
+// applySelection filters a resolver's result down to only the requested
+// GraphQL sub-fields, mirroring the query shape. Scalars and results with no
+// requested sub-selection are returned as-is.
+func applySelection(result interface{}, sels []selection) interface{} {
+	if len(sels) == 0 {
+		return result
+	}
+
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		return result
+	}
+
+	filtered := map[string]interface{}{}
+	for _, sel := range sels {
+		value, present := m[sel.Name]
+		if !present {
+			continue
+		}
+		key := sel.Name
+		if sel.Alias != "" {
+			key = sel.Alias
+		}
+		filtered[key] = applySelection(value, sel.Selections)
+	}
+	return filtered
 }
 
 // ServeSchema serves the GraphQL schema (introspection)
 func ServeSchema(w http.ResponseWriter, r *http.Request) {
 	schema := GenerateSchemaSDL()
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(schema))
+	if _, err := w.Write([]byte(schema)); err != nil {
+		slog.Error("graphql: failed to write schema", "error", err)
+	}
 }

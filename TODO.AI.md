@@ -27,17 +27,19 @@ mechanical have already been applied in-tree and are not listed here.
   design — listed here only so the `src/server/server.go` references resolve.
   Do NOT "implement" them; doing so would violate IDEA.md scope.
 
-## GraphQL resolver is a stub (decision needed)
+## GraphQL resolver is a stub (resolved 2026-08-06)
 
-- `src/graphql/graphql.go` `executeQuery()` is a hardcoded placeholder: it
-  pattern-matches on the query string and returns fixed values (uptime `3600`,
-  version `1.0.0`, commit `unknown`) plus a default "full resolver
-  implementation in progress" message. `ResolveFunc` (line 35) is effectively
-  dead — the resolver tree is never used. This violates api-rules (GraphQL must
-  be real and stay in sync with REST) and ai-rules (no stubs/placeholders).
-  Also: the `json.NewEncoder(w).Encode(resp)` return error at the handler is
-  ignored. Decision: build real resolvers backed by the same services the REST
-  handlers use, or remove the GraphQL surface until it can be implemented.
+- Replaced the hardcoded `executeQuery()` placeholder with a real hand-rolled
+  GraphQL document parser (`src/graphql/parser.go`) and an executor that
+  resolves selections against `BuildSchema()`'s actual `ResolveFunc` tree
+  (aliases, nested selection filtering, literal/variable arguments). Added
+  the previously SDL-only, resolver-missing mutations (`textReverse`,
+  `textBase64Encode`, `textBase64Decode`, `textSlug`, `textHash`,
+  `convertTimezone`) so the introspection SDL matches the executable schema,
+  backed by the real `service/text` and `service/datetime` packages. The
+  response-write error at the handler is now logged instead of ignored.
+  `go test -cover ./src/graphql/...` passes at 75.4% coverage; full-project
+  `go test ./...` and `gofmt`/`go vet` are clean.
 
 ## Docs completeness (ReadTheDocs) — resolved 2026-08-06
 

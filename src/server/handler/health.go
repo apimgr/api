@@ -323,6 +323,26 @@ func HandleVersion(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// UptimeSeconds returns server uptime in whole seconds, for callers (such as
+// the GraphQL resolvers) that need a numeric value rather than the
+// human-readable string used by the REST/HTML health endpoint.
+func UptimeSeconds() int64 {
+	return int64(time.Since(startTime).Seconds())
+}
+
+// Status reports the overall health status using the same component checks
+// as the REST health endpoint, for callers that don't have a *config.Config
+// (such as the GraphQL resolvers).
+func Status() string {
+	checks := ChecksInfo{
+		Database:  checkDatabase(),
+		Cache:     checkCache(),
+		Disk:      checkDisk(),
+		Scheduler: checkScheduler(),
+	}
+	return overallStatus(checks)
+}
+
 // checkDatabase checks database connectivity
 func checkDatabase() string {
 	if dbPinger == nil {
