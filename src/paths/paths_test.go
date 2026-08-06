@@ -269,6 +269,16 @@ func TestIsWritable_CreatesMissingDir(t *testing.T) {
 	assert.True(t, info.IsDir())
 }
 
+func TestGetDatabaseDir_EnvOverride(t *testing.T) {
+	t.Setenv("DATABASE_DIR", "/custom/db")
+	assert.Equal(t, "/custom/db", GetDatabaseDir("/some/data"))
+}
+
+func TestGetDatabaseDir_DefaultsToDataDbSubdir(t *testing.T) {
+	t.Setenv("DATABASE_DIR", "")
+	assert.Equal(t, filepath.Join("/some/data", "db"), GetDatabaseDir("/some/data"))
+}
+
 func TestIsWritable_ReadOnlyDirFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission bits behave differently on Windows")

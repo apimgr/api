@@ -220,3 +220,383 @@ func TestParseEmail(t *testing.T) {
 	_, err = s.ParseEmail("a@b@c")
 	assert.Error(t, err)
 }
+
+// ParseCSV covers a well-formed document, short rows padded with empty
+// strings, an empty document, and malformed CSV.
+func TestParseCSV(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		check   func(t *testing.T, rows []map[string]string)
+	}{
+		{
+			name:  "well formed",
+			input: "name,age\nAlice,30\nBob,25\n",
+			check: func(t *testing.T, rows []map[string]string) {
+				require.Len(t, rows, 2)
+				assert.Equal(t, "Alice", rows[0]["name"])
+				assert.Equal(t, "30", rows[0]["age"])
+				assert.Equal(t, "Bob", rows[1]["name"])
+			},
+		},
+		{
+			name:  "short row padded",
+			input: "a,b,c\n1,2\n",
+			check: func(t *testing.T, rows []map[string]string) {
+				require.Len(t, rows, 1)
+				assert.Equal(t, "1", rows[0]["a"])
+				assert.Equal(t, "2", rows[0]["b"])
+				assert.Equal(t, "", rows[0]["c"])
+			},
+		},
+		{
+			name:    "empty document",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:    "malformed quoting",
+			input:   "a,b\n\"unterminated,x\n",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows, err := s.ParseCSV(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			tt.check(t, rows)
+		})
+	}
+}
+
+// ParseEnv covers comments, blank lines, export prefix, quoted values, and
+// the all-invalid-input error path.
+func TestParseEnv(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		want    map[string]string
+	}{
+		{
+			name: "typical env file",
+			input: "# comment\n\nexport FOO=bar\nBAZ=\"quoted value\"\nSINGLE='q'\nNOEQUALS\n",
+			want: map[string]string{
+				"FOO":    "bar",
+				"BAZ":    "quoted value",
+				"SINGLE": "q",
+			},
+		},
+		{
+			name:  "empty input",
+			input: "",
+			want:  map[string]string{},
+		},
+		{
+			name:    "only invalid lines",
+			input:   "not a valid line at all",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.ParseEnv(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// ParseHTML covers title, meta tags, headings, deduped links/images, and
+// form count, plus malformed HTML which the tolerant parser still handles.
+func TestParseHTML(t *testing.T) {
+	s := New()
+
+	html := `<html><head><title>  My Page  </title>
+<meta name="description" content="a page">
+</head><body>
+<h1>Heading One</h1>
+<h2>Heading Two</h2>
+<a href="/a">A</a>
+<a href="/a">A again</a>
+<img src="/img.png">
+<form></form>
+<form></form>
+</body></html>`
+
+	summary, err := s.ParseHTML(html)
+	require.NoError(t, err)
+	assert.Equal(t, "My Page", summary.Title)
+	assert.Equal(t, "a page", summary.Meta["description"])
+	require.Len(t, summary.Headings, 2)
+	assert.Equal(t, 1, summary.Headings[0].Level)
+	assert.Equal(t, "Heading One", summary.Headings[0].Text)
+	assert.Equal(t, []string{"/a"}, summary.Links)
+	assert.Equal(t, []string{"/img.png"}, summary.Images)
+	assert.Equal(t, 2, summary.FormCount)
+
+	// html.Parse is tolerant and rarely errors even on malformed markup;
+	// verify it degrades gracefully rather than panicking.
+	summary, err = s.ParseHTML("<html><body><p>unterminated")
+	require.NoError(t, err)
+	assert.NotNil(t, summary)
+}
+
+// ParseINI covers sections, pre-section keys, comments, and the
+// all-invalid-input error path.
+func TestParseINI(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		check   func(t *testing.T, result map[string]map[string]string)
+	}{
+		{
+			name: "sections and pre-section keys",
+			input: "; comment\nroot=1\n[section1]\n# comment\nkey=value\n[section2]\nother = thing\n",
+			check: func(t *testing.T, result map[string]map[string]string) {
+				assert.Equal(t, "1", result[""]["root"])
+				assert.Equal(t, "value", result["section1"]["key"])
+				assert.Equal(t, "thing", result["section2"]["other"])
+			},
+		},
+		{
+			name:  "empty input",
+			input: "",
+			check: func(t *testing.T, result map[string]map[string]string) {
+				assert.Empty(t, result)
+			},
+		},
+		{
+			name:    "no valid content",
+			input:   "just some text",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.ParseINI(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			tt.check(t, got)
+		})
+	}
+}
+
+// ParseLogLines covers a timestamped/leveled line, a bare-message line
+// with no timestamp/level, and the empty-input error path.
+func TestParseLogLines(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		check   func(t *testing.T, entries []LogEntry)
+	}{
+		{
+			name:  "timestamp and level",
+			input: "2024-03-15 10:30:00 ERROR something broke\nplain message with no metadata\n",
+			check: func(t *testing.T, entries []LogEntry) {
+				require.Len(t, entries, 2)
+				require.NotNil(t, entries[0].Timestamp)
+				assert.Equal(t, "ERROR", entries[0].Level)
+				assert.Equal(t, "something broke", entries[0].Message)
+
+				assert.Nil(t, entries[1].Timestamp)
+				assert.Equal(t, "", entries[1].Level)
+				assert.Equal(t, "plain message with no metadata", entries[1].Message)
+			},
+		},
+		{
+			name:  "warning alias normalizes to WARN",
+			input: "WARNING disk almost full",
+			check: func(t *testing.T, entries []LogEntry) {
+				require.Len(t, entries, 1)
+				assert.Equal(t, "WARN", entries[0].Level)
+			},
+		},
+		{
+			name:    "empty input",
+			input:   "   \n  \n",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.ParseLogLines(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			tt.check(t, got)
+		})
+	}
+}
+
+// ParseMarkdownStructure covers headings, links, fenced code blocks, and
+// the empty-input error path.
+func TestParseMarkdownStructure(t *testing.T) {
+	s := New()
+
+	md := "# Title\n\nSee [docs](https://example.com/docs) for more.\n\n## Sub\n\n```go\nfmt.Println(\"hi\")\n```\n"
+
+	structure, err := s.ParseMarkdownStructure(md)
+	require.NoError(t, err)
+	require.Len(t, structure.Headings, 2)
+	assert.Equal(t, 1, structure.Headings[0].Level)
+	assert.Equal(t, "Title", structure.Headings[0].Text)
+	assert.Equal(t, 2, structure.Headings[1].Level)
+	require.Len(t, structure.Links, 1)
+	assert.Equal(t, "docs", structure.Links[0].Text)
+	assert.Equal(t, "https://example.com/docs", structure.Links[0].URL)
+	require.Len(t, structure.CodeBlocks, 1)
+	assert.Equal(t, "go", structure.CodeBlocks[0].Language)
+	assert.Contains(t, structure.CodeBlocks[0].Code, "fmt.Println")
+
+	_, err = s.ParseMarkdownStructure("   ")
+	assert.Error(t, err)
+}
+
+// ParseSQLStructure covers a SELECT with explicit columns, SELECT *,
+// other statement types, an unrecognized statement, and the empty-input
+// error path.
+func TestParseSQLStructure(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name        string
+		input       string
+		wantType    string
+		wantTables  []string
+		wantColumns []string
+	}{
+		{
+			name:        "select with columns",
+			input:       "SELECT id, name FROM users WHERE id = 1",
+			wantType:    "SELECT",
+			wantTables:  []string{"users"},
+			wantColumns: []string{"id", "name"},
+		},
+		{
+			name:       "select star has no columns",
+			input:      "select * from `orders`",
+			wantType:   "SELECT",
+			wantTables: []string{"orders"},
+		},
+		{
+			name:       "insert statement",
+			input:      "INSERT INTO logs (msg) VALUES ('hi')",
+			wantType:   "INSERT",
+			wantTables: []string{"logs"},
+		},
+		{
+			name:       "join across tables",
+			input:      "SELECT a.id FROM a JOIN b ON a.id = b.id",
+			wantType:   "SELECT",
+			wantTables: []string{"a", "b"},
+			wantColumns: []string{"a.id"},
+		},
+		{
+			name:     "unrecognized statement",
+			input:    "EXPLAIN SELECT 1",
+			wantType: "UNKNOWN",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.ParseSQLStructure(tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantType, got.StatementType)
+			assert.Equal(t, tt.wantTables, got.Tables)
+			assert.Equal(t, tt.wantColumns, got.Columns)
+		})
+	}
+
+	_, err := s.ParseSQLStructure("   ")
+	assert.Error(t, err)
+}
+
+// ParseTOML covers root keys, nested table headers, scalar types, and a
+// simple array.
+func TestParseTOML(t *testing.T) {
+	s := New()
+
+	toml := `
+title = "Example"
+enabled = true
+disabled = false
+count = 42
+ratio = 3.14
+tags = ["a", "b", "c"]
+
+[server]
+host = "localhost"
+port = 8080
+
+[server.tls]
+enabled = true
+`
+
+	got, err := s.ParseTOML(toml)
+	require.NoError(t, err)
+	assert.Equal(t, "Example", got["title"])
+	assert.Equal(t, true, got["enabled"])
+	assert.Equal(t, false, got["disabled"])
+	assert.Equal(t, int64(42), got["count"])
+	assert.InDelta(t, 3.14, got["ratio"], 1e-9)
+	assert.Equal(t, []interface{}{"a", "b", "c"}, got["tags"])
+
+	server, ok := got["server"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "localhost", server["host"])
+	assert.Equal(t, int64(8080), server["port"])
+
+	tls, ok := server["tls"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, true, tls["enabled"])
+
+	// Empty input yields an empty (non-nil) root table, never an error.
+	empty, err := s.ParseTOML("")
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+}
+
+// ParseYAML covers a nested mapping and malformed YAML.
+func TestParseYAML(t *testing.T) {
+	s := New()
+
+	got, err := s.ParseYAML("a: 1\nb:\n  c: two\n")
+	require.NoError(t, err)
+	assert.Equal(t, 1, got["a"])
+	nested, ok := got["b"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "two", nested["c"])
+
+	_, err = s.ParseYAML("a: [1, 2\n")
+	assert.Error(t, err)
+}

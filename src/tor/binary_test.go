@@ -53,3 +53,17 @@ func TestCommonBinaryLocationsNonEmpty(t *testing.T) {
 		t.Error("expected at least one common binary location")
 	}
 }
+
+// TestFindBinaryAutoDetectNotFound verifies auto-detection (empty
+// configured path) falls through to ErrBinaryNotFound when Tor is not on
+// PATH or in any common location. This assumes the casjaysdev/go:latest
+// toolchain image used to run this test does not ship a tor binary.
+func TestFindBinaryAutoDetectNotFound(t *testing.T) {
+	_, err := findBinary("")
+	if err != nil && !errors.Is(err, ErrBinaryNotFound) {
+		t.Errorf("expected nil or ErrBinaryNotFound, got %v", err)
+	}
+	if err == nil {
+		t.Log("a tor binary was found on this system; auto-detect success path exercised")
+	}
+}

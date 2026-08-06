@@ -74,10 +74,36 @@ mechanical have already been applied in-tree and are not listed here.
   contradicts the IDEA.md non-goal "no admin web panel". Needs a fix to the
   printed message text (point at the CLI/API instead).
 
-## Low test coverage (below the 60% gate)
+## Low test coverage (below the 60% gate) — resolved 2026-08-06
 
-- Several service packages are under the 60% coverage gate and need tests
-  (baseline pre-fix figures): `language` ~2%, `sysservice` ~6%, `tor` ~18%,
-  `research` ~21%, `parse` ~28%, `convert` ~32%, `paths` ~32%, `datetime`
-  ~33%, `network` ~44%, `math` ~53%, `geoip` ~55%. Add table-driven tests to
-  bring each to >=60%.
+- Added table-driven tests to all 11 packages. Overall project coverage is
+  now 75.6% (`go test -cover ./...`). Ten of eleven packages clear 60%:
+  `language` 2.2%→84.1%, `sysservice` 6.3%→63.1%, `tor` 17.8%→60.7%,
+  `research` 21.3%→97.3%, `parse` 27.6%→91.6%, `convert` 31.8%→94.4%,
+  `datetime` 33.0%→98.2%, `network` 47.3%→63.2%, `math` 53.3%→97.8%,
+  `geoip` 55.0%→79.3%.
+- `src/paths` remains below the gate (31.6%→33.2%): `GetDefaultDirs`,
+  `GetCacheDir`, `GetBackupDir`, `DefaultPIDPath` early-return via
+  `IsRunningInContainer()`, which is unconditionally true inside the
+  mandated `casjaysdev/go:latest` test container (`/.dockerenv` present) —
+  their OS-specific (Windows/macOS/BSD/Linux) and root-vs-user branches are
+  structurally unreachable in-container without mocking `os.Stat`/
+  `os.Geteuid`, which would require touching source logic (out of scope for
+  a test-only pass). Needs either an injectable filesystem/euid abstraction
+  in `src/paths` (source change, own commit) or an accepted permanent
+  exception documented in IDEA.md.
+
+## Bugs found during coverage work (not fixed, need triage)
+
+- `src/service/parse/parse.go` `parseLogLine`: timestamp layouts are
+  matched via a fixed-width prefix slice (`remaining[:len(layout)]`) sized
+  to the layout string's length, not the actual value's length — RFC3339
+  timestamps with a `Z` suffix (shorter than the 25-char layout) are
+  silently unparseable.
+- `src/sysservice/service.go` `installRunit()` (~line 249): discards the
+  `os.Symlink` return value — a failed symlink still reports install
+  success while leaving the service unlinked from `/var/service`.
+- `src/service/network/network.go` `whoisQuery`: hardcodes port 43
+  internally via `net.JoinHostPort(server, "43")`, so a `server` argument
+  that already contains a port fails. May be intentional (WHOIS convention
+  is always port 43) — needs a design decision, not an assumed fix.

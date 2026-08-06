@@ -256,3 +256,210 @@ func TestPercentageFunctions(t *testing.T) {
 	assert.Equal(t, -50.0, s.PercentageChange(10, 5))
 	assert.Equal(t, 0.0, s.PercentageChange(0, 20))
 }
+
+// Fibonacci covers zero/one/several counts (verifying the full generated
+// sequence) plus the negative-count error path.
+func TestFibonacci(t *testing.T) {
+	s := New()
+
+	got, err := s.Fibonacci(0)
+	assert.NoError(t, err)
+	assert.Empty(t, got)
+
+	got, err = s.Fibonacci(1)
+	assert.NoError(t, err)
+	assert.Equal(t, []*big.Int{big.NewInt(0)}, got)
+
+	got, err = s.Fibonacci(10)
+	assert.NoError(t, err)
+	want := []int64{0, 1, 1, 2, 3, 5, 8, 13, 21, 34}
+	if assert.Len(t, got, len(want)) {
+		for i, w := range want {
+			assert.Equal(t, big.NewInt(w), got[i], "index %d", i)
+		}
+	}
+
+	_, err = s.Fibonacci(-1)
+	assert.Error(t, err)
+}
+
+// BaseConvert covers digit-base conversion happy paths, whitespace
+// trimming, and every documented error path (bounds on both bases, and an
+// invalid number string for the source base).
+func TestBaseConvert(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name     string
+		number   string
+		fromBase int
+		toBase   int
+		want     string
+		wantErr  bool
+	}{
+		{"decimal to hex", "255", 10, 16, "ff", false},
+		{"hex to decimal", "ff", 16, 10, "255", false},
+		{"binary to decimal", "1010", 2, 10, "10", false},
+		{"whitespace trimmed", "  255  ", 10, 16, "ff", false},
+		{"fromBase too low", "10", 1, 10, "", true},
+		{"fromBase too high", "10", 37, 10, "", true},
+		{"toBase too low", "10", 10, 1, "", true},
+		{"toBase too high", "10", 10, 37, "", true},
+		{"invalid number for base", "zz", 10, 16, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.BaseConvert(tt.number, tt.fromBase, tt.toBase)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// MatrixAdd covers the happy path plus every dimension-mismatch error path.
+func TestMatrixAdd(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		a       [][]float64
+		b       [][]float64
+		want    [][]float64
+		wantErr bool
+	}{
+		{
+			name: "2x2 add",
+			a:    [][]float64{{1, 2}, {3, 4}},
+			b:    [][]float64{{5, 6}, {7, 8}},
+			want: [][]float64{{6, 8}, {10, 12}},
+		},
+		{"empty a", [][]float64{}, [][]float64{{1}}, nil, true},
+		{"empty b", [][]float64{{1}}, [][]float64{}, nil, true},
+		{"mismatched rows", [][]float64{{1, 2}}, [][]float64{{1, 2}, {3, 4}}, nil, true},
+		{"mismatched cols", [][]float64{{1, 2}}, [][]float64{{1, 2, 3}}, nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.MatrixAdd(tt.a, tt.b)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// MatrixMultiply covers a non-square multiplication, an identity-matrix
+// pass-through, and the empty/dimension-mismatch error paths.
+func TestMatrixMultiply(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		a       [][]float64
+		b       [][]float64
+		want    [][]float64
+		wantErr bool
+	}{
+		{
+			name: "2x3 by 3x2",
+			a:    [][]float64{{1, 2, 3}, {4, 5, 6}},
+			b:    [][]float64{{7, 8}, {9, 10}, {11, 12}},
+			want: [][]float64{{58, 64}, {139, 154}},
+		},
+		{
+			name: "identity matrix",
+			a:    [][]float64{{1, 2}, {3, 4}},
+			b:    [][]float64{{1, 0}, {0, 1}},
+			want: [][]float64{{1, 2}, {3, 4}},
+		},
+		{"empty a", [][]float64{}, [][]float64{{1}}, nil, true},
+		{"empty b", [][]float64{{1}}, [][]float64{}, nil, true},
+		{"dimension mismatch", [][]float64{{1, 2}}, [][]float64{{1, 2}}, nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.MatrixMultiply(tt.a, tt.b)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// MatrixDeterminant covers the 1x1/2x2/3x3 base cases plus the
+// empty/non-square error paths.
+func TestMatrixDeterminant(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		m       [][]float64
+		want    float64
+		wantErr bool
+	}{
+		{"1x1", [][]float64{{5}}, 5, false},
+		{"2x2", [][]float64{{4, 6}, {3, 8}}, 14, false},
+		{"3x3", [][]float64{{6, 1, 1}, {4, -2, 5}, {2, 8, 7}}, -306, false},
+		{"empty", [][]float64{}, 0, true},
+		{"non-square", [][]float64{{1, 2}, {3, 4}, {5, 6}}, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.MatrixDeterminant(tt.m)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.InDelta(t, tt.want, got, 1e-9)
+		})
+	}
+}
+
+// Sequence covers arithmetic and geometric generation, the zero-count
+// boundary, and both error paths (negative count, unknown sequence type).
+func TestSequence(t *testing.T) {
+	s := New()
+
+	tests := []struct {
+		name    string
+		seqType string
+		start   float64
+		step    float64
+		count   int
+		want    []float64
+		wantErr bool
+	}{
+		{"arithmetic", "arithmetic", 1, 2, 5, []float64{1, 3, 5, 7, 9}, false},
+		{"geometric", "geometric", 1, 2, 5, []float64{1, 2, 4, 8, 16}, false},
+		{"zero count", "arithmetic", 1, 2, 0, []float64{}, false},
+		{"negative count errors", "arithmetic", 1, 2, -1, nil, true},
+		{"unknown type errors", "unknown", 1, 2, 3, nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.Sequence(tt.seqType, tt.start, tt.step, tt.count)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
