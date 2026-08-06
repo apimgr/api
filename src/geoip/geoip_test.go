@@ -189,3 +189,62 @@ func TestDownloadFile_UnreachableHost(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "download failed")
 }
+
+// Download's MkdirAll failure path is exercised by pointing dataDir at a
+// location where the required geoip subdirectory cannot be created (its
+// parent already exists as a regular file, not a directory).
+func TestDownload_MkdirAllFailure(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "security")
+	require.NoError(t, os.WriteFile(blocker, []byte("not a dir"), 0644))
+
+	err := Download(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create geoip directory")
+}
+
+// Download's real network path (fetching from the live ip-location-db CDN)
+// is not exercised here - it requires outbound internet access, which is
+// unavailable/unreliable inside the sandboxed test container per project
+// testing rules (mock/skip cleanly rather than depending on a real
+// network fetch or a real MMDB file).
+func TestDownload_NetworkPath(t *testing.T) {
+	t.Skip("requires outbound network access to the real ip-location-db CDN; not available in sandboxed test container")
+}
+
+// Lookup exercises the loaded-database branches using a minimal
+// synthetic MMDB built entirely in-memory, so no real GeoIP database
+// file is required.
+func TestLookup_WithLoadedCountryDB(t *testing.T) {
+	writer, err := mmdbwriter.New(mmdbwriter.Options{
+		DatabaseType: "geo-whois-asn-country",
+		RecordSize:   24,
+	})
+	require.NoError(t, err)
+
+	_, network, err := net.ParseCIDR("8.8.8.8/32")
+	require.NoError(t, err)
+	require.NoError(t, writer.Insert(network, mmdbtype.Map{
+		"country_code": mmdbtype.String("US"),
+	}))
+
+	dir := t.TempDir()
+	geoDir := geoipDir(dir)
+	require.NoError(t, os.MkdirAll(geoDir, 0755))
+	dbPath := filepath.Join(geoDir, "country.mmdb")
+	f, err := os.Create(dbPath)
+	require.NoError(t, err)
+	_, err = writer.WriteTo(f)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	g := &GeoIPDB{}
+	require.NoError(t, g.Load(dir))
+	require.True(t, g.loaded)
+	require.NotNil(t, g.countryDB)
+
+	entry, err := g.Lookup("8.8.8.8")
+	require.NoError(t, err)
+	assert.Equal(t, "US", entry.CountryCode)
+	assert.Equal(t, "US", entry.Country)
+}

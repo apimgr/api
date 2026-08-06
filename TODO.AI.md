@@ -5,13 +5,17 @@ either decision-level (need an owner call before implementing) or larger than
 a safe mechanical audit fix. Security/logic/doc fixes that were safe and
 mechanical have already been applied in-tree and are not listed here.
 
-## Frontend sub-tool pages
+## Frontend sub-tool pages (resolved — stale)
 
-- Remaining ~240 per-tool detail pages linked from the 21 category pages have
-  neither a template (`template/page/tools/{category}/{tool}.tmpl`) nor a route
-  yet. PART 16 requires a frontend route mirroring every API route. Referenced
-  from `src/server/server.go` (`toolPages()` docstring and the category-page
-  loop). Wire each remaining sub-tool page to its API route.
+- Verified 2026-08-06: all 239 entries in `toolPages()` (215 working tools +
+  24 permanent `501` stubs) already have both a route (`server.go`) and a
+  template (`template/page/tools/{category}/{tool}.tmpl`) on disk. Diffed
+  every `href="/{category}/{tool}"` link in all 21 category templates against
+  `toolPages()` — zero missing. The "~240 missing" figure was a stale
+  carryover from an earlier repo state. The `Count` badges in
+  `allCategories()` (server.go) overstate per-category totals (e.g. crypto
+  claims 147, 12 are named) — that's future scope/marketing copy, not a
+  missing-route bug, and is out of scope for this item.
 
 ## Known permanent API gaps (documentation, not work)
 
