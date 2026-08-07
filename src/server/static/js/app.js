@@ -95,8 +95,9 @@ function executeTool(toolId, endpoint) {
   // Show loading state
   submitBtn.disabled = true;
   submitBtn.textContent = 'Processing...';
+  resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
-  
+
   // Make API request
   fetch(`${endpoint}?${params}`)
     .then(response => response.text())
@@ -129,7 +130,7 @@ function executeToolTemplate(toolId, urlTemplate) {
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Processing...';
-  resultDiv.style.display = 'block';
+  resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
   fetch(url)
@@ -172,7 +173,7 @@ function executeToolBody(toolId, endpoint) {
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Processing...';
-  resultDiv.style.display = 'block';
+  resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
   fetch(url, { method: 'POST', body: body })
@@ -219,7 +220,7 @@ function executeToolImage(toolId, urlTemplate) {
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Processing...';
-  resultDiv.style.display = 'block';
+  resultDiv.hidden = false;
   resultDiv.innerHTML = `<img src="${url}" alt="Generated image" class="tool-result-image">`;
   submitBtn.disabled = false;
   submitBtn.textContent = 'Execute';
@@ -237,7 +238,7 @@ function executeToolQueryPost(toolId, endpoint) {
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Processing...';
-  resultDiv.style.display = 'block';
+  resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
   fetch(`${endpoint}?${params}`, { method: 'POST' })

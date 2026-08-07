@@ -3,7 +3,7 @@
 {{with $tool}}
 <section>
   <div class="container container-sm">
-    <nav class="mb-2" style="color: var(--text-muted); font-size: 0.875rem;">
+    <nav class="mb-2 tool-note">
       <a href="/">Home</a> / <a href="/testing">Testing Tools</a> / Mock Response Generator
     </nav>
     <div class="tool-card">
@@ -17,7 +17,7 @@
       <form id="response-generator-form" class="tool-form" data-template="/api/v1/test/response-generator">
         <button type="submit" class="btn btn-primary">Generate</button>
       </form>
-      <div id="response-generator-form-result" class="tool-result" style="display:none;"></div>
+      <div id="response-generator-form-result" class="tool-result" hidden></div>
       <div class="mt-3">
         <h3>API Endpoint</h3>
         <div class="code-block">

@@ -95,24 +95,19 @@ mechanical have already been applied in-tree and are not listed here.
   in `src/paths` (source change, own commit) or an accepted permanent
   exception documented in IDEA.md.
 
-## Inline `style=""` across tool page templates (CSS/theming audit, 2026-08-07)
+## Inline `style=""` across tool page templates — resolved 2026-08-07
 
-- `grep -rl 'style="' src/server/template/page/tools/` matches ~230
-  `.tmpl` files (every `convert/`, `generate/`, `datetime/`, `dev/`,
-  `network/`, `weather/`, `math/`, `crypto/`, `parse/`, `validate/`,
-  `text/`, `image/`, `geo/`, `docker/`, `testing/`, `osint/`, `language/`,
-  `research/`, `fun/`, `lorem/` tool page). This violates frontend-rules.md
-  CRITICAL NEVER DO: "Never use inline `style=""`... CSP blocks them."
-  Recurring patterns seen: breadcrumb-style notes
-  (`style="color: var(--text-muted); font-size: 0.875rem;"`) and
-  hide/show result containers (`style="display:none;"`). Both already
-  reference real CSS variables (not hardcoded colors), so this is a CSP/
-  markup-hygiene violation, not a broken-theming one. Fix is mechanical but
-  large: move the note style to a shared `.tool-note`-type class in
-  `components.css`, and swap `style="display:none;"` toggling for a
-  `hidden` attribute / CSS class toggled from `app.js` (already the
-  designated home for such logic). Left unfixed — out of safe single-session
-  scope; needs its own pass across all ~230 files.
+- All 216 `src/server/template/page/tools/**/*.tmpl` files converted:
+  breadcrumb-style notes (`style="color: var(--text-muted); font-size:
+  0.875rem;"`) moved to a shared `.tool-note` class in `public.css`; result
+  containers using `style="display:none;"` swapped for the `hidden`
+  attribute. `app.js` updated to set `resultDiv.hidden = false` instead of
+  `resultDiv.style.display = 'block'` in all 5 tool-execution functions
+  (also fixed a pre-existing bug: `executeTool()` was missing the unhide
+  call its 4 sibling functions had). Also deduplicated the modal-backdrop/
+  mobile-nav-overlay scrim color into a new theme-invariant
+  `--overlay-color` CSS variable in `common.css`. Verified
+  `grep -rl 'style="' src/server/template` returns zero matches project-wide.
 
 ## Bugs found during coverage work (not fixed, need triage)
 

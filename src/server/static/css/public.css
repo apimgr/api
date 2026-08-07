@@ -269,6 +269,13 @@ footer .container {
   font-size: var(--font-size-sm);
 }
 
+/* Tool breadcrumb note, shared by every tool page in place of a repeated
+   inline style="" attribute (frontend-rules.md: never use inline style). */
+.tool-note {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
 /* Tool Card */
 .tool-card {
   padding: var(--spacing-lg);
