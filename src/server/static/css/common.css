@@ -27,6 +27,9 @@
   --on-color: #ffffff;
   /* Focus ring shadow color, matches --primary-color at low alpha. */
   --focus-ring: rgba(122, 162, 247, 0.35);
+  /* Theme-invariant: modal/dialog/nav-drawer backdrop scrim, same in both
+     themes (universal dimming convention), never swapped. */
+  --overlay-color: rgba(0, 0, 0, 0.5);
 
   /* Background & Text */
   --bg-color: #1a1b26;
