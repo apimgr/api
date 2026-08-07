@@ -3,6 +3,8 @@ package graphql
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/apimgr/api/src/common/theme"
 )
 
 // ServeUI serves the GraphiQL UI with theme support
@@ -30,40 +32,34 @@ func ServeUI(endpointURL string) http.HandlerFunc {
 	}
 }
 
-// generateGraphiQLHTML creates the GraphiQL UI HTML with theme support
-func generateGraphiQLHTML(endpointURL, theme string) string {
-	// GraphiQL theme colors
-	darkTheme := `
-		body { margin: 0; background-color: #1e1e1e; color: #d4d4d4; }
-		.graphiql-container { background-color: #1e1e1e; color: #d4d4d4; }
-		.graphiql-container .topBar { background-color: #2d2d2d; border-bottom: 1px solid #3e3e42; }
-		.graphiql-container .doc-explorer-title { background: #2d2d2d; border-bottom: 1px solid #3e3e42; color: #d4d4d4; }
-		.graphiql-container .doc-explorer-contents { background-color: #1e1e1e; color: #d4d4d4; }
-		.CodeMirror { background-color: #1e1e1e; color: #d4d4d4; }
-		.CodeMirror-gutters { background-color: #2d2d2d; border-right: 1px solid #3e3e42; }
-		.CodeMirror-linenumber { color: #858585; }
-		.graphiql-container .execute-button { background: #0e639c; fill: #ffffff; }
-		.graphiql-container .result-window { background-color: #1e1e1e; }
-	`
+// graphiQLPaletteCSS renders one GraphiQL theme block from a shared
+// theme.ThemePalette, so dark/light values always trace back to
+// src/common/theme/colors.go instead of being hardcoded per-surface.
+func graphiQLPaletteCSS(p theme.ThemePalette) string {
+	return fmt.Sprintf(`
+		body { margin: 0; background-color: %[1]s; color: %[2]s; }
+		.graphiql-container { background-color: %[1]s; color: %[2]s; }
+		.graphiql-container .topBar { background-color: %[3]s; border-bottom: 1px solid %[4]s; }
+		.graphiql-container .doc-explorer-title { background: %[3]s; border-bottom: 1px solid %[4]s; color: %[2]s; }
+		.graphiql-container .doc-explorer-contents { background-color: %[1]s; color: %[2]s; }
+		.CodeMirror { background-color: %[1]s; color: %[2]s; }
+		.CodeMirror-gutters { background-color: %[3]s; border-right: 1px solid %[4]s; }
+		.CodeMirror-linenumber { color: %[5]s; }
+		.graphiql-container .execute-button { background: %[6]s; fill: #ffffff; }
+		.graphiql-container .result-window { background-color: %[1]s; }
+	`, p.Background, p.Foreground, p.Surface, p.Border, p.Muted, p.Primary)
+}
 
-	lightTheme := `
-		body { margin: 0; background-color: #ffffff; color: #1e1e1e; }
-		.graphiql-container { background-color: #ffffff; color: #1e1e1e; }
-		.graphiql-container .topBar { background-color: #f5f5f5; border-bottom: 1px solid #e0e0e0; }
-		.graphiql-container .doc-explorer-title { background: #f5f5f5; border-bottom: 1px solid #e0e0e0; color: #1e1e1e; }
-		.graphiql-container .doc-explorer-contents { background-color: #ffffff; color: #1e1e1e; }
-		.CodeMirror { background-color: #ffffff; color: #1e1e1e; }
-		.CodeMirror-gutters { background-color: #f5f5f5; border-right: 1px solid #e0e0e0; }
-		.CodeMirror-linenumber { color: #858585; }
-		.graphiql-container .execute-button { background: #0078d4; fill: #ffffff; }
-		.graphiql-container .result-window { background-color: #ffffff; }
-	`
+// generateGraphiQLHTML creates the GraphiQL UI HTML with theme support
+func generateGraphiQLHTML(endpointURL, themeMode string) string {
+	darkTheme := graphiQLPaletteCSS(theme.ThemePaletteDark)
+	lightTheme := graphiQLPaletteCSS(theme.ThemePaletteLight)
 
 	// Select theme CSS
 	themeCSS := darkTheme
-	if theme == "light" {
+	if themeMode == "light" {
 		themeCSS = lightTheme
-	} else if theme == "auto" {
+	} else if themeMode == "auto" {
 		// Auto theme uses prefers-color-scheme media query
 		themeCSS = `
 			@media (prefers-color-scheme: dark) {` + darkTheme + `}

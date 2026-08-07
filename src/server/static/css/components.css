@@ -39,14 +39,13 @@
 
 /* Button Types */
 .btn-primary {
-  color: #fff;
+  color: var(--on-color);
   background-color: var(--primary-color);
   border-color: var(--primary-color);
 }
 
 .btn-primary:hover {
-  background-color: #0056b3;
-  border-color: #0056b3;
+  filter: brightness(0.9);
 }
 
 .btn-secondary {
@@ -60,14 +59,13 @@
 }
 
 .btn-danger {
-  color: #fff;
+  color: var(--on-color);
   background-color: var(--danger-color);
   border-color: var(--danger-color);
 }
 
 .btn-danger:hover {
-  background-color: #c82333;
-  border-color: #bd2130;
+  filter: brightness(0.9);
 }
 
 /* Button Sizes */
@@ -96,10 +94,13 @@
   justify-content: center;
 }
 
-/* Copy button with feedback (per PART 17 app.js integration) */
+/* Copy button with feedback (per PART 17 app.js integration)
+   .btn.copied has two-class specificity, which already outranks any
+   single-class .btn-primary/.btn-secondary/.btn-danger type selector -
+   no !important needed. */
 .btn.copied {
-  background-color: var(--success-color) !important;
-  border-color: var(--success-color) !important;
+  background-color: var(--success-color);
+  border-color: var(--success-color);
 }
 
 /* ============================================================================
@@ -136,7 +137,7 @@
 .form-textarea:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .form-textarea {
@@ -185,7 +186,7 @@
   left: 2px;
   width: 20px;
   height: 20px;
-  background-color: white;
+  background-color: var(--on-color);
   border-radius: 50%;
   transition: transform var(--transition-base);
 }
@@ -199,7 +200,7 @@
 }
 
 .toggle input:focus + .slider {
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 /* ============================================================================
@@ -306,7 +307,7 @@ dialog::backdrop {
   right: var(--spacing-lg);
   padding: var(--spacing-md) var(--spacing-lg);
   background-color: var(--dark-color);
-  color: white;
+  color: var(--on-color);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-lg);
   z-index: 9999;
@@ -361,7 +362,7 @@ dialog::backdrop {
 .code-content {
   padding: var(--spacing-md);
   background-color: var(--dark-color);
-  color: #e4e4e7;
+  color: var(--on-color);
   overflow-x: auto;
 }
 
@@ -386,11 +387,11 @@ dialog::backdrop {
   border-radius: var(--border-radius);
 }
 
-.badge-primary { background-color: var(--primary-color); color: white; }
-.badge-success { background-color: var(--success-color); color: white; }
+.badge-primary { background-color: var(--primary-color); color: var(--on-color); }
+.badge-success { background-color: var(--success-color); color: var(--on-color); }
 .badge-warning { background-color: var(--warning-color); color: var(--dark-color); }
-.badge-danger { background-color: var(--danger-color); color: white; }
-.badge-secondary { background-color: var(--secondary-color); color: white; }
+.badge-danger { background-color: var(--danger-color); color: var(--on-color); }
+.badge-secondary { background-color: var(--secondary-color); color: var(--on-color); }
 
 /* ============================================================================
    Alerts
@@ -403,27 +404,27 @@ dialog::backdrop {
 }
 
 .alert-info {
-  color: #004085;
-  background-color: #cce5ff;
-  border-color: #b8daff;
+  color: var(--info-color);
+  background-color: var(--surface-alt-color);
+  border-color: var(--info-color);
 }
 
 .alert-success {
-  color: #155724;
-  background-color: #d4edda;
-  border-color: #c3e6cb;
+  color: var(--success-color);
+  background-color: var(--surface-alt-color);
+  border-color: var(--success-color);
 }
 
 .alert-warning {
-  color: #856404;
-  background-color: #fff3cd;
-  border-color: #ffeaa7;
+  color: var(--warning-color);
+  background-color: var(--surface-alt-color);
+  border-color: var(--warning-color);
 }
 
 .alert-danger {
-  color: #721c24;
-  background-color: #f8d7da;
-  border-color: #f5c6cb;
+  color: var(--danger-color);
+  background-color: var(--surface-alt-color);
+  border-color: var(--danger-color);
 }
 
 /* ============================================================================
@@ -433,7 +434,7 @@ dialog::backdrop {
   display: inline-block;
   width: 1.5rem;
   height: 1.5rem;
-  border: 3px solid rgba(0, 0, 0, 0.1);
+  border: 3px solid var(--border-color);
   border-top-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;

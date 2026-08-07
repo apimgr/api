@@ -2,24 +2,38 @@
 
 /* ============================================================================
    CSS Variables - Define in :root per PART 17
+   Values are sourced from the single canonical palette in
+   src/common/theme/colors.go (ThemePaletteDark/ThemePaletteLight) - never
+   hardcode a color here that doesn't trace back to that palette.
+   :root defaults to the dark palette (dark is the project-wide default
+   theme); html.theme-light overrides to the light palette below.
    ============================================================================ */
 :root {
-  /* Colors */
-  --primary-color: #007bff;
-  --secondary-color: #6c757d;
-  --success-color: #28a745;
-  --warning-color: #ffc107;
-  --danger-color: #dc3545;
-  --info-color: #17a2b8;
-  --light-color: #f8f9fa;
-  --dark-color: #343a40;
-  
+  /* Colors - ThemePaletteDark */
+  --primary-color: #7aa2f7;
+  --secondary-color: #9ece6a;
+  --accent-color: #bb9af7;
+  --success-color: #9ece6a;
+  --warning-color: #e0af68;
+  --danger-color: #f7768e;
+  --info-color: #7dcfff;
+  --light-color: #24283b;
+  --surface-alt-color: #1f2335;
+  /* Theme-invariant: always a dark chip background regardless of site
+     theme (toast/code-block/badge decoration), never swapped per theme. */
+  --dark-color: #1a1b26;
+  /* Theme-invariant: readable foreground for text placed on a saturated
+     palette-color background (buttons/badges/toast), never swapped. */
+  --on-color: #ffffff;
+  /* Focus ring shadow color, matches --primary-color at low alpha. */
+  --focus-ring: rgba(122, 162, 247, 0.35);
+
   /* Background & Text */
-  --bg-color: #ffffff;
-  --text-color: #212529;
-  --text-muted: #6c757d;
-  --border-color: #dee2e6;
-  
+  --bg-color: #1a1b26;
+  --text-color: #c0caf5;
+  --text-muted: #565f89;
+  --border-color: #414868;
+
   /* Typography */
   --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
@@ -54,15 +68,52 @@
   --header-height: 64px;
 }
 
-/* Dark mode colors (auto-detected) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-color: #1a1a1a;
-    --text-color: #e4e4e7;
-    --text-muted: #a1a1aa;
-    --border-color: #3f3f46;
-    --light-color: #27272a;
-    --dark-color: #fafafa;
+/* ============================================================================
+   Explicit light theme override - ThemePaletteLight
+   Applied when the server renders class="theme-light" on <html> from the
+   theme cookie (src/server/theme.go ThemeClass). Never depends on OS
+   preference - an explicit user choice always wins.
+   ============================================================================ */
+html.theme-light {
+  --primary-color: #2e7de9;
+  --secondary-color: #587539;
+  --accent-color: #7847bd;
+  --success-color: #587539;
+  --warning-color: #8c6c3e;
+  --danger-color: #c64343;
+  --info-color: #007197;
+  --light-color: #f5f5f5;
+  --surface-alt-color: #e9e9ec;
+  --focus-ring: rgba(46, 125, 233, 0.35);
+
+  --bg-color: #ffffff;
+  --text-color: #1a1b26;
+  --text-muted: #6172b0;
+  --border-color: #c0caf5;
+}
+
+/* ============================================================================
+   Auto theme - class="theme-auto" (no cookie preference set)
+   Pure CSS via prefers-color-scheme, no detection JS. :root already
+   defaults to dark, so only the light branch needs to override here.
+   ============================================================================ */
+@media (prefers-color-scheme: light) {
+  html.theme-auto {
+    --primary-color: #2e7de9;
+    --secondary-color: #587539;
+    --accent-color: #7847bd;
+    --success-color: #587539;
+    --warning-color: #8c6c3e;
+    --danger-color: #c64343;
+    --info-color: #007197;
+    --light-color: #f5f5f5;
+    --surface-alt-color: #e9e9ec;
+    --focus-ring: rgba(46, 125, 233, 0.35);
+
+    --bg-color: #ffffff;
+    --text-color: #1a1b26;
+    --text-muted: #6172b0;
+    --border-color: #c0caf5;
   }
 }
 
@@ -130,7 +181,7 @@ a {
 }
 
 a:hover {
-  color: #0056b3;
+  color: var(--accent-color);
   text-decoration: underline;
 }
 

@@ -3,6 +3,8 @@ package swagger
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/apimgr/api/src/common/theme"
 )
 
 // ServeUI serves the Swagger UI with theme support
@@ -30,52 +32,40 @@ func ServeUI(specURL string) http.HandlerFunc {
 	}
 }
 
-// generateSwaggerHTML creates the Swagger UI HTML with theme support
-func generateSwaggerHTML(specURL, theme string) string {
-	// Swagger UI theme colors
-	darkTheme := `
-		.swagger-ui { background-color: #1e1e1e; color: #d4d4d4; }
-		.swagger-ui .topbar { background-color: #2d2d2d; border-bottom: 1px solid #3e3e42; }
-		.swagger-ui .info .title { color: #d4d4d4; }
-		.swagger-ui .opblock-tag { color: #d4d4d4; background: #2d2d2d; border-color: #3e3e42; }
-		.swagger-ui .opblock { background: #2d2d2d; border-color: #3e3e42; }
-		.swagger-ui .opblock .opblock-summary { background: #252526; }
-		.swagger-ui .opblock .opblock-summary-description { color: #d4d4d4; }
-		.swagger-ui .btn { background: #0e639c; color: #ffffff; border-color: #1177bb; }
-		.swagger-ui .model-box { background: #2d2d2d; }
-		.swagger-ui section.models { border-color: #3e3e42; }
-		.swagger-ui .model { color: #d4d4d4; }
-		.swagger-ui .parameter__name { color: #9cdcfe; }
-		.swagger-ui .parameter__type { color: #4ec9b0; }
-		.swagger-ui .response-col_status { color: #d4d4d4; }
-		.swagger-ui table thead tr th { color: #d4d4d4; border-color: #3e3e42; }
-		.swagger-ui table tbody tr td { color: #d4d4d4; border-color: #3e3e42; }
-	`
+// swaggerPaletteCSS renders one Swagger UI theme block from a shared
+// theme.ThemePalette, so dark/light values always trace back to
+// src/common/theme/colors.go instead of being hardcoded per-surface.
+func swaggerPaletteCSS(p theme.ThemePalette) string {
+	return fmt.Sprintf(`
+		.swagger-ui { background-color: %[1]s; color: %[2]s; }
+		.swagger-ui .topbar { background-color: %[3]s; border-bottom: 1px solid %[4]s; }
+		.swagger-ui .info .title { color: %[2]s; }
+		.swagger-ui .opblock-tag { color: %[2]s; background: %[3]s; border-color: %[4]s; }
+		.swagger-ui .opblock { background: %[3]s; border-color: %[4]s; }
+		.swagger-ui .opblock .opblock-summary { background: %[5]s; }
+		.swagger-ui .opblock .opblock-summary-description { color: %[2]s; }
+		.swagger-ui .btn { background: %[6]s; color: #ffffff; border-color: %[7]s; }
+		.swagger-ui .model-box { background: %[5]s; }
+		.swagger-ui section.models { border-color: %[4]s; }
+		.swagger-ui .model { color: %[2]s; }
+		.swagger-ui .parameter__name { color: %[8]s; }
+		.swagger-ui .parameter__type { color: %[9]s; }
+		.swagger-ui .response-col_status { color: %[2]s; }
+		.swagger-ui table thead tr th { color: %[2]s; border-color: %[4]s; }
+		.swagger-ui table tbody tr td { color: %[2]s; border-color: %[4]s; }
+	`, p.Background, p.Foreground, p.Surface, p.Border, p.SurfaceAlt, p.Primary, p.Accent, p.Info, p.Success)
+}
 
-	lightTheme := `
-		.swagger-ui { background-color: #ffffff; color: #1e1e1e; }
-		.swagger-ui .topbar { background-color: #f5f5f5; border-bottom: 1px solid #e0e0e0; }
-		.swagger-ui .info .title { color: #1e1e1e; }
-		.swagger-ui .opblock-tag { color: #1e1e1e; background: #f5f5f5; border-color: #e0e0e0; }
-		.swagger-ui .opblock { background: #ffffff; border-color: #e0e0e0; }
-		.swagger-ui .opblock .opblock-summary { background: #fafafa; }
-		.swagger-ui .opblock .opblock-summary-description { color: #1e1e1e; }
-		.swagger-ui .btn { background: #0078d4; color: #ffffff; border-color: #005a9e; }
-		.swagger-ui .model-box { background: #fafafa; }
-		.swagger-ui section.models { border-color: #e0e0e0; }
-		.swagger-ui .model { color: #1e1e1e; }
-		.swagger-ui .parameter__name { color: #0000ff; }
-		.swagger-ui .parameter__type { color: #008000; }
-		.swagger-ui .response-col_status { color: #1e1e1e; }
-		.swagger-ui table thead tr th { color: #1e1e1e; border-color: #e0e0e0; }
-		.swagger-ui table tbody tr td { color: #1e1e1e; border-color: #e0e0e0; }
-	`
+// generateSwaggerHTML creates the Swagger UI HTML with theme support
+func generateSwaggerHTML(specURL, themeMode string) string {
+	darkTheme := swaggerPaletteCSS(theme.ThemePaletteDark)
+	lightTheme := swaggerPaletteCSS(theme.ThemePaletteLight)
 
 	// Select theme CSS
 	themeCSS := darkTheme
-	if theme == "light" {
+	if themeMode == "light" {
 		themeCSS = lightTheme
-	} else if theme == "auto" {
+	} else if themeMode == "auto" {
 		// Auto theme uses prefers-color-scheme media query
 		themeCSS = `
 			@media (prefers-color-scheme: dark) {` + darkTheme + `}

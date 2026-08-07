@@ -95,6 +95,25 @@ mechanical have already been applied in-tree and are not listed here.
   in `src/paths` (source change, own commit) or an accepted permanent
   exception documented in IDEA.md.
 
+## Inline `style=""` across tool page templates (CSS/theming audit, 2026-08-07)
+
+- `grep -rl 'style="' src/server/template/page/tools/` matches ~230
+  `.tmpl` files (every `convert/`, `generate/`, `datetime/`, `dev/`,
+  `network/`, `weather/`, `math/`, `crypto/`, `parse/`, `validate/`,
+  `text/`, `image/`, `geo/`, `docker/`, `testing/`, `osint/`, `language/`,
+  `research/`, `fun/`, `lorem/` tool page). This violates frontend-rules.md
+  CRITICAL NEVER DO: "Never use inline `style=""`... CSP blocks them."
+  Recurring patterns seen: breadcrumb-style notes
+  (`style="color: var(--text-muted); font-size: 0.875rem;"`) and
+  hide/show result containers (`style="display:none;"`). Both already
+  reference real CSS variables (not hardcoded colors), so this is a CSP/
+  markup-hygiene violation, not a broken-theming one. Fix is mechanical but
+  large: move the note style to a shared `.tool-note`-type class in
+  `components.css`, and swap `style="display:none;"` toggling for a
+  `hidden` attribute / CSS class toggled from `app.js` (already the
+  designated home for such logic). Left unfixed — out of safe single-session
+  scope; needs its own pass across all ~230 files.
+
 ## Bugs found during coverage work (not fixed, need triage)
 
 - `src/service/parse/parse.go` `parseLogLine`: timestamp layouts are

@@ -16,7 +16,16 @@
 {{end}}
 
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#007bff">
+{{/* theme-color mirrors the resolved theme's Background (src/common/theme/colors.go)
+     instead of a hardcoded brand color, so browser chrome matches the active theme. */}}
+{{if eq .Theme "light"}}
+<meta name="theme-color" content="#ffffff">
+{{else if eq .Theme "auto"}}
+<meta name="theme-color" content="#1a1b26" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+{{else}}
+<meta name="theme-color" content="#1a1b26">
+{{end}}
 
 <meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}CasTools{{end}}">
 <meta property="og:description" content="Universal API toolkit with 1,418 utility endpoints">

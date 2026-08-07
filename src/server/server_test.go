@@ -409,11 +409,13 @@ func TestNewPageData(t *testing.T) {
 			cfg.Server.Branding.Title = "Test Title"
 			cfg.Web.UI.Theme = "dark"
 
-			data := newPageData(cfg, "home")
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			data := newPageData(cfg, req, "home")
 
 			assert.Equal(t, tt.wantURL, data.BaseURL)
 			assert.Equal(t, "Test Title", data.SiteTitle)
 			assert.Equal(t, "dark", data.Theme)
+			assert.Equal(t, "theme-dark", data.ThemeClass)
 			assert.Equal(t, "home", data.ActivePage)
 			assert.Equal(t, "🛠️", data.SiteIcon)
 		})

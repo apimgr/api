@@ -15,15 +15,15 @@ import (
 func TestGenerateSwaggerHTMLDark(t *testing.T) {
 	html := generateSwaggerHTML("/openapi.json", "dark")
 	assert.Contains(t, html, "url: '/openapi.json'")
-	assert.Contains(t, html, "#1e1e1e")
+	assert.Contains(t, html, "#1a1b26")
 	assert.Contains(t, html, "<title>API Documentation - Swagger UI</title>")
 }
 
 // The light theme must swap in the light palette instead of the dark one.
 func TestGenerateSwaggerHTMLLight(t *testing.T) {
 	html := generateSwaggerHTML("/openapi.json", "light")
-	assert.Contains(t, html, "#ffffff; color: #1e1e1e")
-	assert.NotContains(t, html, "#1e1e1e; color: #d4d4d4")
+	assert.Contains(t, html, "#ffffff; color: #1a1b26")
+	assert.NotContains(t, html, "#1a1b26; color: #c0caf5")
 }
 
 // The auto theme must wrap both palettes in prefers-color-scheme media
@@ -38,7 +38,7 @@ func TestGenerateSwaggerHTMLAuto(t *testing.T) {
 // themeCSS is only ever reassigned for "light" and "auto".
 func TestGenerateSwaggerHTMLUnknownFallsBackToDark(t *testing.T) {
 	html := generateSwaggerHTML("/openapi.json", "not-a-theme")
-	assert.Contains(t, html, "#1e1e1e; color: #d4d4d4")
+	assert.Contains(t, html, "#1a1b26; color: #c0caf5")
 }
 
 // ServeUI must default to the dark theme when no cookie is present.
@@ -53,7 +53,7 @@ func TestServeUINoCookie(t *testing.T) {
 	assert.Equal(t, "text/html; charset=utf-8", res.Header.Get("Content-Type"))
 
 	body := rec.Body.String()
-	assert.Contains(t, body, "#1e1e1e; color: #d4d4d4")
+	assert.Contains(t, body, "#1a1b26; color: #c0caf5")
 	assert.Contains(t, body, "url: '/spec.json'")
 }
 
@@ -66,7 +66,7 @@ func TestServeUILightCookie(t *testing.T) {
 	handler(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, "#ffffff; color: #1e1e1e")
+	assert.Contains(t, body, "#ffffff; color: #1a1b26")
 }
 
 // An invalid cookie value must not crash the handler and must keep the
@@ -79,5 +79,5 @@ func TestServeUIInvalidCookieValue(t *testing.T) {
 	handler(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.True(t, strings.Contains(rec.Body.String(), "#1e1e1e; color: #d4d4d4"))
+	assert.True(t, strings.Contains(rec.Body.String(), "#1a1b26; color: #c0caf5"))
 }

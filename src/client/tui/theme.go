@@ -3,10 +3,15 @@
 // or no arguments in a real terminal, per AI.md PART 32.
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
 
-// TUITheme defines lipgloss colors for TUI rendering. Colors match
-// ThemePalette from the server frontend (see AI.md PART 16).
+	sharedtheme "github.com/apimgr/api/src/common/theme"
+)
+
+// TUITheme defines lipgloss colors for TUI rendering. Colors are derived
+// from the single canonical ThemePalette in src/common/theme/colors.go
+// (see AI.md PART 16) rather than hardcoded here.
 type TUITheme struct {
 	Name       string
 	Background lipgloss.Color
@@ -20,33 +25,28 @@ type TUITheme struct {
 	Muted      lipgloss.Color
 }
 
-// TUIThemeDark is the dark theme (default), matching ThemePaletteDark.
-var TUIThemeDark = TUITheme{
-	Name:       "dark",
-	Background: lipgloss.Color("#282a36"),
-	Foreground: lipgloss.Color("#f8f8f2"),
-	Primary:    lipgloss.Color("#bd93f9"),
-	Secondary:  lipgloss.Color("#6272a4"),
-	Accent:     lipgloss.Color("#8be9fd"),
-	Error:      lipgloss.Color("#ff5555"),
-	Success:    lipgloss.Color("#50fa7b"),
-	Warning:    lipgloss.Color("#f1fa8c"),
-	Muted:      lipgloss.Color("#44475a"),
+// tuiThemeFromPalette converts a shared theme.ThemePalette into lipgloss
+// colors, keeping the TUI in lockstep with Web/Swagger/GraphQL.
+func tuiThemeFromPalette(name string, p sharedtheme.ThemePalette) TUITheme {
+	return TUITheme{
+		Name:       name,
+		Background: lipgloss.Color(p.Background),
+		Foreground: lipgloss.Color(p.Foreground),
+		Primary:    lipgloss.Color(p.Primary),
+		Secondary:  lipgloss.Color(p.Secondary),
+		Accent:     lipgloss.Color(p.Accent),
+		Error:      lipgloss.Color(p.Error),
+		Success:    lipgloss.Color(p.Success),
+		Warning:    lipgloss.Color(p.Warning),
+		Muted:      lipgloss.Color(p.Muted),
+	}
 }
 
+// TUIThemeDark is the dark theme (default), matching ThemePaletteDark.
+var TUIThemeDark = tuiThemeFromPalette("dark", sharedtheme.ThemePaletteDark)
+
 // TUIThemeLight is the light theme (optional), matching ThemePaletteLight.
-var TUIThemeLight = TUITheme{
-	Name:       "light",
-	Background: lipgloss.Color("#ffffff"),
-	Foreground: lipgloss.Color("#282a36"),
-	Primary:    lipgloss.Color("#6c5ce7"),
-	Secondary:  lipgloss.Color("#636e72"),
-	Accent:     lipgloss.Color("#0984e3"),
-	Error:      lipgloss.Color("#d63031"),
-	Success:    lipgloss.Color("#00b894"),
-	Warning:    lipgloss.Color("#fdcb6e"),
-	Muted:      lipgloss.Color("#dfe6e9"),
-}
+var TUIThemeLight = tuiThemeFromPalette("light", sharedtheme.ThemePaletteLight)
 
 // themeByName resolves a cli.yml tui.theme value to a TUITheme, defaulting
 // to dark for anything unrecognized.

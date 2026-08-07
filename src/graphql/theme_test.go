@@ -20,11 +20,11 @@ func TestServeUI(t *testing.T) {
 		cookie     *http.Cookie
 		wantSubstr string
 	}{
-		{"no cookie defaults to dark", nil, "#1e1e1e"},
-		{"dark cookie", &http.Cookie{Name: "theme", Value: "dark"}, "#1e1e1e"},
+		{"no cookie defaults to dark", nil, "#1a1b26"},
+		{"dark cookie", &http.Cookie{Name: "theme", Value: "dark"}, "#1a1b26"},
 		{"light cookie", &http.Cookie{Name: "theme", Value: "light"}, "#ffffff"},
 		{"auto cookie uses media queries", &http.Cookie{Name: "theme", Value: "auto"}, "prefers-color-scheme: dark"},
-		{"unrecognized cookie value falls back to dark", &http.Cookie{Name: "theme", Value: "purple"}, "#1e1e1e"},
+		{"unrecognized cookie value falls back to dark", &http.Cookie{Name: "theme", Value: "purple"}, "#1a1b26"},
 	}
 
 	for _, tc := range tests {

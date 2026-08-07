@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/common/theme"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/graphql"
 	"github.com/apimgr/api/src/metrics"
@@ -612,6 +613,7 @@ type PageData struct {
 	SiteIcon           string
 	BaseURL            string
 	Theme              string
+	ThemeClass         string
 	Layout             string
 	ActivePage         string
 	PageTitle          string
@@ -638,16 +640,23 @@ type CategoryInfo struct {
 	Count       int
 }
 
-func newPageData(cfg *config.Config, activePage string) PageData {
+// newPageData builds the common template data for a page render. Theme is
+// resolved per-request from the "theme" cookie (GetTheme/ThemeClass in
+// theme.go) so the server-rendered class="theme-dark|theme-light|theme-auto"
+// on <html> reflects the visitor's actual saved preference, never a global
+// config default.
+func newPageData(cfg *config.Config, r *http.Request, activePage string) PageData {
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
 	if cfg.Server.FQDN == "" || cfg.Server.FQDN == "localhost" {
 		baseURL = fmt.Sprintf("http://localhost:%s", cfg.Server.Port)
 	}
+	theme := GetTheme(r)
 	return PageData{
 		SiteTitle:  cfg.Server.Branding.Title,
 		SiteIcon:   "🛠️",
 		BaseURL:    baseURL,
-		Theme:      cfg.Web.UI.Theme,
+		Theme:      string(theme),
+		ThemeClass: ThemeClass(theme),
 		Layout:     "public",
 		ActivePage: activePage,
 	}
@@ -986,7 +995,7 @@ func toolPages() []toolPage {
 // toolPageHandler renders a per-tool detail page under a category
 func toolPageHandler(cfg *config.Config, category, tool, title, description, reason string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, category)
+		data := newPageData(cfg, r, category)
 		data.PageTitle = title
 		data.PageDescription = description
 		data.NotSupportedReason = reason
@@ -1011,7 +1020,7 @@ func renderPage(w http.ResponseWriter, page string, data PageData) {
 // Web handlers
 func homeHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "home")
+		data := newPageData(cfg, r, "home")
 		data.PageTitle = ""
 		data.PageDescription = "Universal API Toolkit with text, crypto, datetime, and network utilities"
 		renderPage(w, "index", data)
@@ -1020,7 +1029,7 @@ func homeHandler(cfg *config.Config) http.HandlerFunc {
 
 func textPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "text")
+		data := newPageData(cfg, r, "text")
 		data.PageTitle = "Text Utilities"
 		data.PageDescription = "UUID generation, hashing, encoding, and text manipulation"
 		renderPage(w, "text", data)
@@ -1029,7 +1038,7 @@ func textPageHandler(cfg *config.Config) http.HandlerFunc {
 
 func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "crypto")
+		data := newPageData(cfg, r, "crypto")
 		data.PageTitle = "Cryptography Tools"
 		data.PageDescription = "Password hashing, TOTP generation, and secure passwords"
 		renderPage(w, "crypto", data)
@@ -1038,7 +1047,7 @@ func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
 
 func categoryPageHandler(cfg *config.Config, category, title, description string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, category)
+		data := newPageData(cfg, r, category)
 		data.PageTitle = title
 		data.PageDescription = description
 		renderPage(w, category, data)
@@ -1074,7 +1083,7 @@ func allCategories() []CategoryInfo {
 
 func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "categories")
+		data := newPageData(cfg, r, "categories")
 		data.PageTitle = "Browse All Categories"
 		data.PageDescription = "All tool categories available in " + cfg.Server.Branding.Title
 		data.Categories = allCategories()
@@ -1084,7 +1093,7 @@ func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
 
 func datetimePageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "datetime")
+		data := newPageData(cfg, r, "datetime")
 		data.PageTitle = "DateTime Tools"
 		data.PageDescription = "Timestamp conversion, timezone handling, and date calculations"
 		renderPage(w, "datetime", data)
@@ -1093,7 +1102,7 @@ func datetimePageHandler(cfg *config.Config) http.HandlerFunc {
 
 func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "about")
+		data := newPageData(cfg, r, "about")
 		data.PageTitle = "About"
 		data.PageDescription = "About " + cfg.Server.Branding.Title
 		data.Tagline = cfg.Server.Branding.Tagline
@@ -1107,7 +1116,7 @@ func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
 
 func privacyPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "privacy")
+		data := newPageData(cfg, r, "privacy")
 		data.PageTitle = "Privacy Policy"
 		data.PageDescription = "Privacy policy for " + cfg.Server.Branding.Title
 		data.UpdatedAt = time.Now().Format("January 2006")
@@ -1117,7 +1126,7 @@ func privacyPageHandler(cfg *config.Config) http.HandlerFunc {
 
 func contactPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "contact")
+		data := newPageData(cfg, r, "contact")
 		data.PageTitle = "Contact"
 		data.PageDescription = "Contact information"
 		data.SecurityEmail = cfg.Web.Security.Contact
@@ -1127,7 +1136,7 @@ func contactPageHandler(cfg *config.Config) http.HandlerFunc {
 
 func helpPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "help")
+		data := newPageData(cfg, r, "help")
 		data.PageTitle = "Help"
 		data.PageDescription = "Getting started with " + cfg.Server.Branding.Title
 		data.RateLimitRequests = cfg.Server.RateLimit.Read.Requests
@@ -1138,7 +1147,7 @@ func helpPageHandler(cfg *config.Config) http.HandlerFunc {
 
 func apiDocsHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, "api")
+		data := newPageData(cfg, r, "api")
 		data.PageTitle = "API Documentation"
 		data.PageDescription = "REST API documentation for CasTools - Universal API Toolkit"
 		renderPage(w, "openapi", data)
@@ -1230,14 +1239,17 @@ func securityHandler(cfg *config.Config) http.HandlerFunc {
 func manifestHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json")
+		// Manifest colors trace back to theme.ThemePaletteDark (the default
+		// theme) in src/common/theme/colors.go, rather than unrelated
+		// hardcoded hex values, so installed-PWA chrome matches the site.
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"name":             "CasTools",
 			"short_name":       "CasTools",
 			"description":      "Universal API Toolkit",
 			"start_url":        "/",
 			"display":          "standalone",
-			"background_color": "#1e1e2e",
-			"theme_color":      "#6366f1",
+			"background_color": theme.ThemePaletteDark.Background,
+			"theme_color":      theme.ThemePaletteDark.Primary,
 		})
 	}
 }
