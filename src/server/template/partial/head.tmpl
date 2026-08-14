@@ -6,6 +6,7 @@
 <title>{{if .PageTitle}}{{.PageTitle}} - {{end}}CasTools</title>
 
 <link rel="icon" href="/static/images/favicon.ico">
+<link rel="apple-touch-icon" href="/static/images/apple-touch-icon.png">
 
 <link rel="stylesheet" href="/static/css/common.css">
 <link rel="stylesheet" href="/static/css/components.css">
@@ -26,6 +27,13 @@
 {{else}}
 <meta name="theme-color" content="#1a1b26">
 {{end}}
+
+{{/* iOS has no beforeinstallprompt event, so home-screen install relies on
+     these meta tags plus the manual "Add to Home Screen" instructions in
+     app.js's install-prompt UI. */}}
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CasTools">
 
 <meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}CasTools{{end}}">
 <meta property="og:description" content="Universal API toolkit with 1,418 utility endpoints">

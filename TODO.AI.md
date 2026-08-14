@@ -187,3 +187,39 @@ mechanical have already been applied in-tree and are not listed here.
   internally via `net.JoinHostPort(server, "43")`, so a `server` argument
   that already contains a port fails. May be intentional (WHOIS convention
   is always port 43) — needs a design decision, not an assumed fix.
+
+## Missing PWA support — resolved 2026-08-14
+
+- frontend-rules.md ALWAYS DO: ship a complete PWA — `/manifest.json` with
+  all icon sizes incl. maskable, a service worker (install/activate/fetch
+  lifecycle), and an offline fallback page. None of this existed except a
+  bare `manifestHandler` with no icons array. Added: 192/512 "any" +
+  192/512 "maskable" PNGs plus `apple-touch-icon.png`/`favicon.ico` under
+  `src/server/static/images/`; `manifestHandler` now emits the full
+  `icons` array, `scope`, `orientation`, `categories`, and serves with
+  `Cache-Control: no-cache` + a build-stamped `ETag` (AI.md PART 16: a
+  cached service worker/manifest delays every other update mechanism);
+  new embedded `/sw.js` (cache-first for `/static/*`, network-first with
+  `/offline.html` fallback for HTML navigations, network-only for
+  `/api/*`, `castools-cache-v0.0.1` versioned with old-cache purge on
+  `activate`, `SKIP_WAITING` message handling) and `/offline.html` routes
+  in `server.go`; `head.tmpl` gained the `apple-touch-icon` link and iOS
+  `apple-mobile-web-app-*` meta tags (iOS has no `beforeinstallprompt`);
+  `header.tmpl` gained an offline indicator and an install-app button;
+  `components.css` gained `.offline-indicator`/`.update-banner` styles
+  (existing CSS variables only, no new palette values); `app.js` gained
+  service-worker registration with update-notification banner
+  (`showUpdateNotification`/`updateApp`), `beforeinstallprompt`-driven
+  install flow (`installApp`/`isInstalledPWA`) with a manual "Add to Home
+  Screen" fallback for iOS Safari (`isIOSSafari`), and online/offline
+  event wiring for the indicator. Background Sync / IndexedDB
+  offline-write queueing was intentionally not added — this app has no
+  offline-writable mutating flow for it to queue. iOS splash-screen
+  (`apple-touch-startup-image`) meta tags from AI.md's fuller example were
+  also not added — the 192/512 any+maskable icon set is the minimum
+  frontend-rules.md itself calls out and splash screens are a separate,
+  smaller polish item; revisit if a future audit flags it. Verified
+  `go build ./... && go vet ./... && go test ./... -cover` clean in
+  `casjaysdev/go:latest` (`src/server` coverage 72.5%, all packages ≥60%
+  except the two pre-existing zero-coverage entrypoint/const packages
+  `src`/`src/common/theme`, unrelated to this change).

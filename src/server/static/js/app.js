@@ -528,4 +528,140 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   });
+
+  // Offline indicator - reflects live connectivity state (data-* markup,
+  // no inline handlers)
+  const offlineIndicator = document.getElementById('offline-indicator');
+  if (offlineIndicator) {
+    if (!navigator.onLine) {
+      offlineIndicator.hidden = false;
+    }
+    window.addEventListener('online', function() {
+      offlineIndicator.hidden = true;
+    });
+    window.addEventListener('offline', function() {
+      offlineIndicator.hidden = false;
+    });
+  }
+
+  // Install prompt button per PART 16 "App Install Prompt" - hidden until
+  // beforeinstallprompt fires (Android/desktop) or shown with manual
+  // instructions on iOS, which never fires that event
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) {
+    installBtn.addEventListener('click', installApp);
+    if (isIOSSafari() && !isInstalledPWA()) {
+      installBtn.hidden = false;
+      installBtn.addEventListener('click', function() {
+        showToast('Tap Share, then "Add to Home Screen" to install.', 'info', 5000);
+      });
+    }
+  }
+});
+
+// ============================================================================
+// PWA support per AI.md PART 16 "PWA Support"
+// ============================================================================
+
+// Service worker registration - the site must be fully usable if this
+// never installs; the SW only enhances an already-working no-JS site.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async function() {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+
+      registration.addEventListener('updatefound', function() {
+        const newWorker = registration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function() {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateNotification();
+          }
+        });
+      });
+
+      // Check for a new service worker once an hour while the app is open
+      setInterval(function() {
+        registration.update();
+      }, 60 * 60 * 1000);
+    } catch (error) {
+      // Service worker is an enhancement only - failure is not fatal
+    }
+  });
+}
+
+// Show a dismissible banner prompting the user to activate a waiting SW
+function showUpdateNotification() {
+  if (document.querySelector('.update-banner')) return;
+  const banner = document.createElement('div');
+  banner.className = 'update-banner';
+  const label = document.createElement('span');
+  label.textContent = 'A new version is available';
+  const updateBtn = document.createElement('button');
+  updateBtn.className = 'btn btn-sm btn-primary';
+  updateBtn.textContent = 'Update Now';
+  updateBtn.addEventListener('click', updateApp);
+  const laterBtn = document.createElement('button');
+  laterBtn.className = 'btn btn-sm';
+  laterBtn.textContent = 'Later';
+  laterBtn.addEventListener('click', function() { banner.remove(); });
+  banner.append(label, updateBtn, laterBtn);
+  document.body.appendChild(banner);
+}
+
+// Tell the waiting service worker to activate, then reload once it takes
+// over
+function updateApp() {
+  navigator.serviceWorker.ready.then(function(reg) {
+    if (reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', function() {
+    window.location.reload();
+  });
+}
+
+// App install prompt (Android/desktop) - captured and replayed from the
+// header's Install App button instead of the browser's default mini-infobar
+let deferredInstallPrompt;
+
+window.addEventListener('beforeinstallprompt', function(event) {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) installBtn.hidden = false;
+});
+
+function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then(function() {
+    deferredInstallPrompt = null;
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) installBtn.hidden = true;
+  });
+}
+
+window.addEventListener('appinstalled', function() {
+  deferredInstallPrompt = null;
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) installBtn.hidden = true;
+});
+
+// Detect standalone/installed mode (Android/desktop display-mode, iOS
+// navigator.standalone)
+function isInstalledPWA() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+}
+
+// iOS Safari never fires beforeinstallprompt - detect it so the Install
+// App button can fall back to manual "Add to Home Screen" instructions
+function isIOSSafari() {
+  const ua = window.navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  return isIOS && isSafari;
+}
 });

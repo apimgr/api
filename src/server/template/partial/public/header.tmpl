@@ -3,7 +3,10 @@
   <div class="container">
     <a href="/" class="site-brand">CasTools</a>
     
+    <div id="offline-indicator" class="offline-indicator" role="status" aria-live="polite" hidden>You are offline. Some features may be unavailable.</div>
+
     <div class="user-menu">
+      <button id="pwa-install-btn" class="btn btn-sm" type="button" hidden>Install App</button>
       {{if .User}}
         <div class="dropdown">
           <button class="dropdown-toggle user-icon" aria-label="User menu">👤</button>

@@ -141,6 +141,8 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/security.txt", securityHandler(cfg))
 	r.Get("/.well-known/security.txt", securityHandler(cfg))
 	r.Get("/manifest.json", manifestHandler(cfg))
+	r.Get("/sw.js", serviceWorkerHandler())
+	r.Get("/offline.html", offlinePageHandler())
 
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -1239,6 +1241,10 @@ func securityHandler(cfg *config.Config) http.HandlerFunc {
 func manifestHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json")
+		// /manifest.json is never long-cached - a stale cached manifest
+		// (icons/theme colors) delays PWA update visibility.
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("ETag", buildETag())
 		// Manifest colors trace back to theme.ThemePaletteDark (the default
 		// theme) in src/common/theme/colors.go, rather than unrelated
 		// hardcoded hex values, so installed-PWA chrome matches the site.
@@ -1247,10 +1253,58 @@ func manifestHandler(cfg *config.Config) http.HandlerFunc {
 			"short_name":       "CasTools",
 			"description":      "Universal API Toolkit",
 			"start_url":        "/",
+			"scope":            "/",
 			"display":          "standalone",
+			"orientation":      "any",
 			"background_color": theme.ThemePaletteDark.Background,
 			"theme_color":      theme.ThemePaletteDark.Primary,
+			"categories":       []string{"utilities"},
+			"icons": []map[string]string{
+				{"src": "/static/images/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+				{"src": "/static/images/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+				{"src": "/static/images/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+				{"src": "/static/images/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+			},
 		})
+	}
+}
+
+// buildETag stamps a weak ETag from the running build so /sw.js and
+// /manifest.json responses (see PART 16 "Offline Behavior" caching table)
+// change identity on every new build without needing per-file hashing.
+func buildETag() string {
+	return fmt.Sprintf(`W/"%s-%s"`, Version, CommitID)
+}
+
+// serviceWorkerHandler serves the embedded /sw.js at the required root
+// scope with no-cache so browsers always see a new service worker promptly
+// after a build changes it.
+func serviceWorkerHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := staticFS.ReadFile("static/sw.js")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("ETag", buildETag())
+		w.Write(data)
+	}
+}
+
+// offlinePageHandler serves the embedded /offline.html fallback page that
+// the service worker returns when a navigation request fails offline and
+// no cached copy of the requested page exists.
+func offlinePageHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := staticFS.ReadFile("static/offline.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(data)
 	}
 }
 
