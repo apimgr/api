@@ -109,6 +109,50 @@ mechanical have already been applied in-tree and are not listed here.
   `--overlay-color` CSS variable in `common.css`. Verified
   `grep -rl 'style="' src/server/template` returns zero matches project-wide.
 
+## Inline event handlers / inline `<script>` blocks — resolved 2026-08-14
+
+- Removed all 6 remaining `onclick=`/`onsubmit=` inline handlers
+  (`page/error.tmpl`, `page/index.tmpl`, and the 4 legacy tool pages
+  `tools/datetime/now.tmpl`, `tools/network/ip.tmpl`,
+  `tools/crypto/password.tmpl`, `tools/text/uuid.tmpl`) in favor of
+  `data-back`/`data-favorite`/`data-copy` attributes wired centrally in
+  `app.js`. The 4 legacy tool pages also had a trailing inline `<script>`
+  block (also forbidden by frontend-rules.md) defining their own
+  `execute*Tool()` function — these were moved verbatim into `app.js` and
+  wired via a `legacyToolForms` id→handler map in the existing
+  `DOMContentLoaded` listener. `network/ip.tmpl`'s form/result ids were
+  renamed `ip-form`/`ip-result` → `network-ip-form`/`network-ip-result` to
+  avoid an id collision with `geo/ip.tmpl` and `osint/ip.tmpl` (both also
+  use `id="ip-form"` wired generically via `data-template`). Verified
+  `grep -rlE 'on(click|change|submit|input|load)=' src/server/template` and
+  `grep -rl '<script>' src/server/template` both return zero matches;
+  `go build ./... && go vet ./...` clean in `casjaysdev/go:latest`.
+
+## `network/ip.tmpl` arbitrary-IP lookup calls a nonexistent route (pre-existing bug)
+
+- The page's form allows entering any IP and calls
+  `/api/v1/network/ip/{ip}` when non-empty, but `src/server/server.go`
+  only registers `r.Get("/ip", apiNetworkCallerHandler)` under `/network/`
+  — there is no `/ip/{ip}` path-param route. `apiNetworkCallerHandler`
+  (`src/server/api_network.go`) takes no `ip` argument at all and only
+  ever returns the caller's own request info, so submitting any IP other
+  than blank silently returns caller info instead of a lookup for that
+  IP (or 404s, depending on router matching) — this predates the
+  2026-08-14 inline-handler cleanup, which preserved the existing (broken)
+  call shape unchanged since fixing it requires a product decision: add a
+  real `/network/ip/{ip}` backend route (and GeoIP-backed lookup), or
+  restrict the frontend field to caller-IP-only and drop the free-text
+  input. Needs an owner call before implementing.
+
+## `error.tmpl` inline `<style>` block (separate violation, not yet fixed)
+
+- `page/error.tmpl`'s `{{define "page-scripts"}}` block contains an inline
+  `<style>` tag (`.error-section`/`.error-content`/etc. rules) — a
+  frontend-rules.md violation distinct from the inline-event-handler/
+  inline-`<script>` cleanup done 2026-08-14 (out of scope for that fix).
+  Needs the rules moved into `public.css` (or a page-specific stylesheet
+  per the existing CSS-organization convention) as its own fix.
+
 ## Bugs found during coverage work (not fixed, need triage)
 
 - `src/service/parse/parse.go` `parseLogLine`: timestamp layouts are

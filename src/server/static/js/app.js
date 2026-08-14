@@ -257,6 +257,127 @@ function executeToolQueryPost(toolId, endpoint) {
 }
 
 // ============================================================================
+// Legacy per-page tool handlers (migrated from inline onsubmit/<script>
+// blocks so pages carry zero inline JS; the API call shape is unchanged)
+// ============================================================================
+function executeDateTimeTool() {
+  const form = document.getElementById('datetime-form');
+  const timezone = form.timezone.value;
+  const resultDiv = document.getElementById('datetime-result');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Loading...';
+  resultDiv.hidden = false;
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  const url = timezone ? `/api/v1/datetime/now?tz=${encodeURIComponent(timezone)}` : '/api/v1/datetime/now';
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Get Current Time';
+      addToHistory('datetime-now');
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Get Current Time';
+      showToast('Request failed', 'danger');
+    });
+}
+
+function executeIPTool() {
+  const form = document.getElementById('network-ip-form');
+  const ip = form.ip.value || '';
+  const resultDiv = document.getElementById('network-ip-result');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Looking up...';
+  resultDiv.hidden = false;
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  const url = ip ? `/api/v1/network/ip/${ip}` : '/api/v1/network/ip';
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Lookup IP';
+      addToHistory('network-ip');
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Lookup IP';
+      showToast('Request failed', 'danger');
+    });
+}
+
+function executePasswordTool() {
+  const form = document.getElementById('password-form');
+  const length = form.length.value;
+  const resultDiv = document.getElementById('password-result');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Generating...';
+  resultDiv.hidden = false;
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  fetch(`/api/v1/crypto/password/${length}.txt`)
+    .then(response => response.text())
+    .then(result => {
+      resultDiv.textContent = result;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate Password';
+      addToHistory('crypto-password');
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate Password';
+      showToast('Request failed', 'danger');
+    });
+}
+
+function executeUUIDTool() {
+  const form = document.getElementById('uuid-form');
+  const version = form.version.value;
+  const count = form.count.value;
+  const resultDiv = document.getElementById('uuid-result');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Generating...';
+  resultDiv.hidden = false;
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  const endpoint = count > 1
+    ? `/api/v1/text/uuid/${version}/${count}`
+    : `/api/v1/text/uuid/${version}`;
+
+  fetch(endpoint)
+    .then(response => response.text())
+    .then(result => {
+      resultDiv.textContent = result;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate UUID';
+      addToHistory('text-uuid');
+    })
+    .catch(error => {
+      resultDiv.textContent = `Error: ${error.message}`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate UUID';
+      showToast('Request failed', 'danger');
+    });
+}
+
+// ============================================================================
 // Search functionality
 // ============================================================================
 function filterTools(searchTerm) {
@@ -375,5 +496,31 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', function() {
       copyCode(btn);
     });
+  });
+
+  // Wire back buttons declared with data-back (no inline onclick)
+  document.querySelectorAll('[data-back]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      history.back();
+    });
+  });
+
+  // Wire legacy per-page tool forms migrated from inline onsubmit handlers
+  // (unique ids, no data-endpoint/data-template since their request shape
+  // is bespoke)
+  const legacyToolForms = {
+    'datetime-form': executeDateTimeTool,
+    'network-ip-form': executeIPTool,
+    'password-form': executePasswordTool,
+    'uuid-form': executeUUIDTool,
+  };
+  Object.keys(legacyToolForms).forEach(function(formId) {
+    const form = document.getElementById(formId);
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        legacyToolForms[formId]();
+      });
+    }
   });
 });

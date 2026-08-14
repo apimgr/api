@@ -177,7 +177,7 @@
     <div class="code-block">
       <div class="code-header">
         <span class="code-lang">Generate UUID</span>
-        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+        <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
         <pre>curl {{.BaseURL}}/api/v1/text/uuid</pre>
@@ -187,7 +187,7 @@
     <div class="code-block">
       <div class="code-header">
         <span class="code-lang">Hash Text (SHA256)</span>
-        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+        <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
         <pre>curl {{.BaseURL}}/api/v1/crypto/hash/sha256/hello</pre>
@@ -197,7 +197,7 @@
     <div class="code-block">
       <div class="code-header">
         <span class="code-lang">Current Timestamp</span>
-        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+        <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
         <pre>curl {{.BaseURL}}/api/v1/datetime/now</pre>
@@ -207,7 +207,7 @@
     <div class="code-block">
       <div class="code-header">
         <span class="code-lang">Convert Temperature</span>
-        <button class="btn btn-sm code-copy" onclick="copyCode(this)">Copy</button>
+        <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
         <pre>curl {{.BaseURL}}/api/v1/convert/temperature -d '{"value":32,"from":"f","to":"c"}'</pre>
