@@ -54,11 +54,16 @@ function closeModal(id) {
 // ============================================================================
 // Form helpers per PART 17
 // ============================================================================
-function confirmDelete(form, message = 'Are you sure you want to delete this?') {
-  if (confirm(message)) {
-    form.submit();
-  }
-}
+// Delete confirmation uses the native <dialog> pattern - never confirm().
+// Trigger buttons declare data-confirm-dialog="{dialog-id}"; the dialog's
+// Cancel button closes via <form method="dialog"> (zero JS), and its
+// Confirm button submits the real form via the HTML5 form="{form-id}"
+// attribute - no message/state passed through JS at all.
+document.querySelectorAll('[data-confirm-dialog]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.getElementById(btn.dataset.confirmDialog).showModal();
+  });
+});
 
 // Form validation helper
 function validateForm(formId) {

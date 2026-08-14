@@ -144,6 +144,26 @@ mechanical have already been applied in-tree and are not listed here.
   restrict the frontend field to caller-IP-only and drop the free-text
   input. Needs an owner call before implementing.
 
+## `confirm()` in `confirmDelete()` — resolved 2026-08-14
+
+- `app.js`'s `confirmDelete(form, message)` used `window.confirm()`
+  (frontend-rules.md: never `alert()`/`confirm()`/`prompt()`). It had zero
+  callers anywhere in the templates (dead code), so there was no markup to
+  migrate. Replaced it with the exact `data-confirm-dialog` pattern from
+  AI.md PART 16 ("Delete confirmation uses the native `<dialog>` pattern -
+  never `confirm()`"): a top-level `querySelectorAll('[data-confirm-dialog]')`
+  listener that opens the dialog named by the trigger button's
+  `data-confirm-dialog` attribute via `showModal()`; per the spec, the
+  dialog's Cancel button closes via `<form method="dialog">` (zero JS) and
+  its Confirm button submits the real delete form via the HTML5
+  `form="{form-id}"` attribute — no per-call message/state passed through
+  JS. No template currently declares a delete form, so this is
+  infrastructure only; the next feature that needs delete confirmation
+  should follow the exact markup shown at AI.md line ~23933. Verified
+  `grep -n "confirm(\|alert(\|prompt(" src/server/static/js/app.js` matches
+  only a comment; `go build ./... && go vet ./... && go test ./... -cover`
+  clean in `casjaysdev/go:latest`.
+
 ## `error.tmpl` inline `<style>` block (separate violation, not yet fixed)
 
 - `page/error.tmpl`'s `{{define "page-scripts"}}` block contains an inline
