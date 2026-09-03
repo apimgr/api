@@ -1,0 +1,30 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">ℹ️ About {{.SiteTitle}}</h1>
+    <p class="hero-subtitle">{{.Tagline}}</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">Build Information</div>
+      <div class="card-body">
+        <p><strong>Version:</strong> {{.Version}}</p>
+        <p><strong>Commit:</strong> {{.CommitID}}</p>
+        <p><strong>Build Date:</strong> {{.BuildDate}}</p>
+        <p><strong>Mode:</strong> {{.Mode}}</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Third-Party Attribution</div>
+      <div class="card-body">
+        <p><a href="https://db-ip.com/">IP Geolocation by DB-IP</a></p>
+        <p>Country and ASN data licensed CC BY 4.0 by the Number Resource Organization (NRO).</p>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

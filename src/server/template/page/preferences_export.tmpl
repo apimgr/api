@@ -1,0 +1,37 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">📤 Export Preferences</h1>
+    <p class="hero-subtitle">Carry your theme and language to another browser or device.</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">Current Settings</div>
+      <div class="card-body">
+        <dl>
+          <dt>Theme</dt>
+          <dd>{{.Theme}}</dd>
+          <dt>Language</dt>
+          <dd>{{.Lang}}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Transfer</div>
+      <div class="card-body">
+        <dl>
+          <dt>Link</dt>
+          <dd><code class="break-all">{{.PrefExportURL}}</code></dd>
+          <dt>Short code</dt>
+          <dd><code class="break-all">{{.PrefExportCode}}</code></dd>
+        </dl>
+        <p><a class="btn btn-secondary" href="/server/preferences">Back to preferences</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

@@ -1,0 +1,44 @@
+{{define "footer"}}
+{{/* role="contentinfo" per PART 30 landmarks. */}}
+<footer class="footer" role="contentinfo">
+  <div class="container">
+    {{/* Row order is fixed per PART 16: overlay addresses (Tor/I2P) -> page
+         links -> branding -> last update. Overlay rows are omitted entirely
+         when the address is not published, leaving no gap. */}}
+    {{if and .TorEnabled .TorRunning .OnionAddress}}
+    <p class="footer-onion">
+      <a href="/server/help#tor-access" aria-label="Tor Support"><span aria-hidden="true">🧅</span></a>
+      <code class="onion-address">{{.OnionAddress}}</code>
+      {{/* Icon-only copy button carries aria-live on itself per PART 16 so the
+           swapped label is announced without moving focus. */}}
+      <button type="button" class="copy-btn" data-copy="{{.OnionAddress}}" data-copied-label="{{t .Lang "common.copied"}}" aria-live="polite" aria-label="Copy onion address"><span aria-hidden="true">📋</span></button>
+    </p>
+    {{end}}
+    {{/* The bullet separators are purely visual - aria-hidden keeps screen
+         readers from reading "bullet" between every link. */}}
+    <p class="footer-links">
+      <a href="/server/about">{{t .Lang "nav.about"}}</a>
+      <span aria-hidden="true">•</span>
+      <a href="/server/privacy">{{t .Lang "nav.privacy"}}</a>
+      <span aria-hidden="true">•</span>
+      <a href="/server/contact">{{t .Lang "nav.contact"}}</a>
+      <span aria-hidden="true">•</span>
+      <a href="/server/help">{{t .Lang "nav.help"}}</a>
+      <span aria-hidden="true">•</span>
+      <a href="/server/preferences">Preferences</a>
+    </p>
+    <p class="footer-branding">
+      <a href="https://github.com/apimgr/api" target="_blank" rel="noopener">Made with</a> <span aria-hidden="true">❤️</span>
+      {{if .Version}}
+      <span aria-hidden="true">•</span>
+      <span>{{.Version}}</span>
+      {{end}}
+    </p>
+    {{if .BuildDate}}
+    <p class="footer-build">
+      <a href="/server/healthz">Last update: {{.BuildDate}}</a>
+    </p>
+    {{end}}
+  </div>
+</footer>
+{{end}}

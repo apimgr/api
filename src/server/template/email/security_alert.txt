@@ -1,0 +1,26 @@
+Subject: Security Alert - {app_name}
+---
+SECURITY ALERT
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+{event}
+
+Details:
+  Source IP: {ip}
+  {details}
+
+You are receiving this because a security event was recorded on this
+server and security_alert notifications are enabled.
+
+Reply to this message or contact: {notification_reply_to}
+
+────────────────────────────────────────────────────────────────────────
+{app_name}
+{app_url}
+────────────────────────────────────────────────────────────────────────
+
+--
+{app_name}
+{app_url}

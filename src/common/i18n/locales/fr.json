@@ -1,0 +1,529 @@
+{
+  "meta": {
+    "language": "fr",
+    "name": "French",
+    "native_name": "Français",
+    "direction": "ltr",
+    "version": "1.0.0"
+  },
+
+  "common": {
+    "select_language": "Sélectionner la langue",
+    "save": "Enregistrer",
+    "save_all": "Tout enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "update": "Mettre à jour",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "submit": "Envoyer",
+    "confirm": "Confirmer",
+    "search": "Rechercher",
+    "search_placeholder": "Rechercher...",
+    "filter": "Filtrer",
+    "refresh": "Actualiser",
+    "download": "Télécharger",
+    "upload": "Envoyer",
+    "copy": "Copier",
+    "copy_to_clipboard": "Copier dans le presse-papiers",
+    "copied": "Copié",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "warning": "Avertissement",
+    "info": "Information",
+    "yes": "Oui",
+    "no": "Non",
+    "on": "Activé",
+    "off": "Désactivé",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "required": "Obligatoire",
+    "optional": "Facultatif",
+    "none": "Aucun",
+    "all": "Tous",
+    "actions": "Actions",
+    "details": "Détails",
+    "settings": "Paramètres",
+    "preferences": "Préférences",
+    "view": "Afficher",
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "show": "Afficher",
+    "hide": "Masquer",
+    "more": "Plus",
+    "less": "Moins",
+    "done": "Terminé",
+    "unsaved_changes": "Modifications non enregistrées",
+    "requires_restart": "Nécessite un redémarrage",
+    "page_x_of_y": "Page {current} sur {total}",
+    "showing_x_of_y": "Affichage de {count} sur {total}",
+    "last_updated": "Dernière mise à jour : {datetime}",
+    "made_with": "Fait avec",
+    "go_home": "Retour à l'accueil",
+    "go_back": "Retour",
+    "github": "GitHub",
+    "mit_license": "Licence MIT"
+  },
+
+  "theme": {
+    "light": "Clair",
+    "dark": "Sombre",
+    "auto": "Automatique",
+    "toggle": "Changer de thème"
+  },
+
+  "nav": {
+    "home": "Accueil",
+    "categories": "Catégories",
+    "about": "À propos",
+    "contact": "Contact",
+    "help": "Aide",
+    "privacy": "Confidentialité",
+    "terms": "Conditions d'utilisation",
+    "docs": "Documentation",
+    "api_docs": "Documentation de l'API",
+    "status": "État",
+    "skip_to_content": "Aller au contenu principal",
+    "skip_to_navigation": "Aller à la navigation",
+    "main_navigation": "Navigation principale"
+  },
+
+  "health": {
+    "title": "État du système",
+    "all_operational": "Tous les systèmes sont opérationnels",
+    "degraded": "Dégradé",
+    "unhealthy": "Défaillant",
+    "healthy": "En bonne santé",
+    "version": "Version",
+    "go_version": "Version de Go",
+    "build": "Compilation",
+    "uptime": "Temps de fonctionnement",
+    "mode": "Mode",
+    "status": "État",
+    "features": "Fonctionnalités",
+    "component_status": "État des composants",
+    "server_statistics": "Statistiques du serveur",
+    "total_requests": "Requêtes totales",
+    "requests_24h": "Requêtes (24 heures)",
+    "active_connections": "Connexions actives",
+    "last_checked": "Dernière vérification :",
+    "auto_refresh": "Actualisation automatique dans {seconds}s",
+    "ok": "OK",
+    "connected": "Connecté",
+    "disconnected": "Déconnecté",
+    "production": "Production",
+    "development": "Développement",
+    "debug": "Débogage"
+  },
+
+  "status_values": {
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "maintenance": "Maintenance",
+    "starting": "Démarrage",
+    "stopping": "Arrêt",
+    "error": "Erreur",
+    "good": "Bon",
+    "warn": "Avertissement"
+  },
+
+  "contact": {
+    "title": "Contact",
+    "name": "Nom",
+    "email": "Adresse e-mail",
+    "subject": "Sujet",
+    "message": "Message",
+    "send": "Envoyer le message",
+    "success": "Merci pour votre message. Nous vous répondrons bientôt."
+  },
+
+  "help": {
+    "title": "Aide",
+    "getting_started": "Premiers pas",
+    "features": "Fonctionnalités",
+    "api_documentation": "Documentation de l'API",
+    "swagger_description": "Swagger UI - Explorateur interactif de l'API REST",
+    "graphql_description": "Explorateur interactif GraphQL",
+    "tor_access": "Accès Tor",
+    "onion_address": "Adresse Onion",
+    "how_to_connect": "Comment se connecter",
+    "download_tor": "Télécharger Tor Browser",
+    "open_tor": "Ouvrez Tor Browser et attendez la connexion",
+    "paste_onion": "Copiez l'adresse onion ci-dessus et collez-la dans la barre d'adresse de Tor Browser",
+    "tor_privacy": "L'utilisation de Tor offre une confidentialité supplémentaire...",
+    "i2p_access": "Accès I2P",
+    "i2p_address": "Adresse I2P",
+    "i2p_privacy": "L'utilisation d'I2P offre une confidentialité supplémentaire via le réseau I2P...",
+    "faq": "Foire aux questions",
+    "troubleshooting": "Dépannage"
+  },
+
+  "privacy": {
+    "title": "Politique de confidentialité",
+    "last_updated": "Dernière mise à jour :",
+    "summary": "Résumé",
+    "data_stored": "Vos données sont stockées sur nos serveurs",
+    "never_sell": "Nous ne vendons jamais vos données",
+    "may_sell": "Vos données peuvent être vendues",
+    "you_control": "Vous contrôlez vos données",
+    "cookie_policy": "Politique en matière de cookies",
+    "essential_cookies": "Cookies essentiels",
+    "preference_cookies": "Cookies de préférence",
+    "analytics_cookies": "Cookies analytiques",
+    "no_analytics": "Nous n'utilisons pas de suivi analytique sur ce site.",
+    "manage_cookies": "Gérer les préférences de cookies",
+    "data_we_collect": "Données que nous collectons",
+    "how_we_use": "Comment nous utilisons vos données",
+    "data_security": "Sécurité des données",
+    "data_storage": "Stockage des données et tiers",
+    "all_data_stored": "Toutes vos données sont stockées sur nos serveurs.",
+    "when_shared": "Quand les données peuvent être partagées",
+    "data_retention": "Conservation des données",
+    "your_rights": "Vos droits",
+    "right_access": "Accès",
+    "right_export": "Exportation",
+    "right_deletion": "Suppression",
+    "right_correction": "Rectification",
+    "right_cookie_control": "Contrôle des cookies",
+    "third_party_services": "Services tiers",
+    "service": "Service",
+    "purpose": "Objectif",
+    "data_sent": "Données envoyées",
+    "no_third_party": "Nous n'utilisons actuellement aucun service tiers recevant vos données.",
+    "view_policy": "Voir la politique",
+    "contact_us": "Nous contacter",
+    "privacy_inquiries": "Pour toute question relative à la confidentialité, contactez-nous.",
+    "ccpa_title": "Droits à la confidentialité en Californie (CCPA)",
+    "ccpa_do_not_sell": "Ne pas vendre mes informations personnelles",
+    "ccpa_opted_out": "Vous avez refusé la vente de données.",
+    "ccpa_opt_back_in": "Réactiver la vente de données"
+  },
+
+  "terms": {
+    "title": "Conditions d'utilisation",
+    "acceptance": "Acceptation",
+    "account_terms": "Conditions du compte",
+    "acceptable_use": "Utilisation acceptable",
+    "content": "Contenu",
+    "termination": "Résiliation",
+    "liability": "Responsabilité",
+    "changes": "Modifications",
+    "governing_law": "Droit applicable"
+  },
+
+  "cookie_consent": {
+    "message": "Conformément au RGPD de l'UE, ce message est affiché.",
+    "accept": "J'accepte",
+    "decline": "Refuser",
+    "manage_preferences": "Gérer les préférences",
+    "blocked_content": "Contenu externe bloqué en raison des préférences de cookies.",
+    "essential_description": "Nécessaires au fonctionnement du site. Ne peuvent pas être désactivés.",
+    "preference_description": "Mémorise vos paramètres tels que le thème (clair/sombre), la langue et les préférences d'interface. Les désactiver rétablira les valeurs par défaut à chaque visite.",
+    "analytics_description": "Nous aident à comprendre comment le site est utilisé."
+  },
+
+  "about": {
+    "title": "À propos",
+    "features": "Fonctionnalités",
+    "version": "Version",
+    "links": "Liens"
+  },
+
+  "announcements": {
+    "warning": "Avertissement",
+    "info": "Information",
+    "error": "Erreur",
+    "success": "Succès",
+    "scheduled_maintenance": "Maintenance planifiée"
+  },
+
+  "pwa": {
+    "install": "Installer l'application",
+    "installed": "Application installée",
+    "offline_message": "Aucune connexion Internet. Affichage du contenu mis en cache."
+  },
+
+  "errors": {
+    "required": "Ce champ est obligatoire",
+    "invalid_email": "Adresse e-mail invalide",
+    "too_short": "Doit comporter au moins {min} caractères",
+    "too_long": "Ne peut pas dépasser {max} caractères",
+    "passwords_dont_match": "Les mots de passe ne correspondent pas",
+    "invalid_format": "Format invalide",
+    "already_exists": "Existe déjà",
+    "not_found": "Introuvable",
+    "bad_request": "Format de requête invalide",
+    "validation_failed": "Échec de la validation : {details}",
+    "rate_limited": "Trop de requêtes, réessayez plus tard",
+    "forbidden": "Autorisation refusée",
+    "blocked_by_blocklist": "Accès refusé",
+    "blocked_by_country": "Accès indisponible dans votre région",
+    "account_locked": "Compte verrouillé",
+    "method_not_allowed": "Méthode non autorisée",
+    "conflict": "La ressource existe déjà",
+    "server_error": "Erreur interne du serveur",
+    "maintenance_mode": "Service indisponible"
+  },
+
+  "plurals": {
+    "items": {
+      "one": "{count} élément",
+      "other": "{count} éléments"
+    },
+    "results": {
+      "one": "{count} résultat",
+      "other": "{count} résultats"
+    },
+    "users": {
+      "one": "{count} utilisateur",
+      "other": "{count} utilisateurs"
+    },
+    "days": {
+      "one": "{count} jour",
+      "other": "{count} jours"
+    },
+    "hours": {
+      "one": "{count} heure",
+      "other": "{count} heures"
+    },
+    "minutes": {
+      "one": "{count} minute",
+      "other": "{count} minutes"
+    }
+  },
+
+  "notifications": {
+    "title": "Notifications",
+    "mark_all_read": "Tout marquer comme lu",
+    "clear_all": "Tout effacer",
+    "ssl_expiring": "Le certificat SSL expire dans {count} jours",
+    "ssl_renewal_failed": "Échec du renouvellement du certificat SSL",
+    "backup_completed": "Sauvegarde terminée",
+    "backup_failed": "Échec de la sauvegarde",
+    "update_available": "Mise à jour disponible",
+    "disk_space_low": "Espace disque faible",
+    "task_failed": "Échec de la tâche",
+    "task_triggered": "Tâche déclenchée manuellement",
+    "ssl_renewed": "Certificat SSL renouvelé",
+    "blocklist_updated": "Liste de blocage mise à jour : {name} ({count} règles)",
+    "blocklist_update_failed": "Échec de la mise à jour de la liste de blocage : {name}",
+    "geoip_updated": "Bases de données GeoIP mises à jour",
+    "geoip_update_failed": "Échec de la mise à jour GeoIP",
+    "ip_blocked": "IP bloquée : {ip} ({reason})",
+    "ip_allowlisted": "IP ajoutée à la liste blanche : {cidr}",
+    "country_blocked": "Requête bloquée par pays : {ip} ({country})",
+    "preferences": {
+      "webui": "Interface Web",
+      "email": "E-mail",
+      "security_cannot_disable": "Sécurité (ne peut pas être désactivée)",
+      "server": "Serveur",
+      "backup": "Sauvegarde",
+      "scheduler": "Planificateur",
+      "other_admins": "Autres administrateurs"
+    }
+  },
+
+  "email": {
+    "subjects": {
+      "security_alert": "Alerte de sécurité - {app_name}",
+      "backup_completed": "Sauvegarde terminée - {app_name}",
+      "backup_failed": "Échec de la sauvegarde - {app_name}",
+      "ssl_expiring": "Certificat SSL bientôt expiré - {app_name}",
+      "ssl_renewed": "Certificat SSL renouvelé - {app_name}",
+      "ssl_renewal_failed": "Échec du renouvellement SSL - {app_name}",
+      "task_failed": "Échec de la tâche planifiée - {app_name}",
+      "test_email": "E-mail de test - {app_name}"
+    },
+    "body": {
+      "security_alert_heading": "ALERTE DE SÉCURITÉ",
+      "recommended_actions": "ACTIONS RECOMMANDÉES",
+      "contact_information": "INFORMATIONS DE CONTACT",
+      "from": "De : {app_name} ({fqdn})"
+    }
+  },
+
+  "swagger": {
+    "title": "Documentation de l'API - {app_name}",
+    "description": "Explorateur interactif de l'API REST",
+    "try_it_out": "Essayer",
+    "authorize": "Autoriser",
+    "no_description": "Aucune description disponible",
+    "request_body": "Corps de la requête",
+    "responses": "Réponses",
+    "parameters": "Paramètres",
+    "example_value": "Valeur d'exemple",
+    "model": "Modèle",
+    "headers": "En-têtes",
+    "media_type": "Type de média",
+    "endpoint_descriptions": {
+      "health_check": "Vérifier l'état du serveur",
+      "get_version": "Obtenir les informations de version",
+      "get_config": "Obtenir la configuration actuelle",
+      "update_config": "Mettre à jour la configuration",
+      "list_items": "Lister les éléments",
+      "get_item": "Obtenir un élément par ID",
+      "create_item": "Créer un nouvel élément",
+      "update_item": "Mettre à jour un élément existant",
+      "delete_item": "Supprimer un élément"
+    },
+    "parameter_descriptions": {
+      "id": "Identifiant unique de la ressource",
+      "page": "Numéro de page pour la pagination",
+      "per_page": "Éléments par page",
+      "sort": "Champ de tri",
+      "order": "Sens du tri (asc/desc)",
+      "search": "Terme de recherche",
+      "filter": "Expression de filtre"
+    },
+    "error_descriptions": {
+      "400": "Requête incorrecte - La requête n'a pas pu être traitée",
+      "401": "Non autorisé - Authentification requise",
+      "403": "Interdit - Permissions insuffisantes",
+      "404": "Introuvable - La ressource n'existe pas",
+      "409": "Conflit - La ressource existe déjà",
+      "429": "Trop de requêtes - Limite de débit dépassée",
+      "500": "Erreur serveur - Erreur interne"
+    }
+  },
+
+  "graphql": {
+    "title": "Explorateur GraphQL - {app_name}",
+    "description": "Explorateur interactif GraphQL",
+    "query": "Requête",
+    "mutation": "Mutation",
+    "subscription": "Abonnement",
+    "variables": "Variables",
+    "docs": "Documentation",
+    "schema": "Schéma",
+    "type_descriptions": {
+      "query": "Requêtes disponibles pour obtenir des données",
+      "mutation": "Mutations disponibles pour modifier des données",
+      "subscription": "Abonnements pour les données en temps réel"
+    }
+  },
+
+  "users": {
+    "registration": {
+      "title": "S'inscrire",
+      "username": "Nom d'utilisateur",
+      "email": "Adresse e-mail",
+      "password": "Mot de passe",
+      "confirm_password": "Confirmer le mot de passe",
+      "register_button": "S'inscrire",
+      "already_have_account": "Vous avez déjà un compte ? Connectez-vous"
+    },
+    "profile": {
+      "title": "Profil",
+      "name": "Nom",
+      "avatar": "Avatar",
+      "bio": "Biographie",
+      "security": "Sécurité",
+      "sessions": "Sessions",
+      "login_history": "Historique des connexions",
+      "api_usage": "Utilisation de l'API"
+    },
+    "tokens": {
+      "title": "Jetons API",
+      "create_new": "Créer un nouveau jeton",
+      "name": "Nom",
+      "scopes": "Portées",
+      "scope_read": "Lecture",
+      "scope_write": "Écriture",
+      "expiry": "Expiration",
+      "revoke": "Révoquer",
+      "last_used": "Dernière utilisation : il y a {duration}"
+    },
+    "moderation": {
+      "title": "Modération des utilisateurs",
+      "delete_user": "Supprimer l'utilisateur",
+      "impersonate": "Emprunter l'identité",
+      "disable_user": "Désactiver l'utilisateur",
+      "enable_user": "Activer l'utilisateur",
+      "revoke_sessions": "Révoquer les sessions",
+      "profile_tab": "Profil",
+      "security_tab": "Sécurité",
+      "activity_tab": "Activité",
+      "actions_tab": "Actions"
+    },
+    "roles": {
+      "title": "Gestion des rôles",
+      "public": "Public",
+      "private": "Privé",
+      "disabled": "Désactivé"
+    }
+  },
+
+  "cli": {
+    "description": "{project_name} {project_version} - {project_description}",
+    "usage": "Usage :",
+    "information": "Informations :",
+    "shell_integration": "Intégration shell :",
+    "server_configuration": "Configuration du serveur :",
+    "service_management": "Gestion du service :",
+    "show_help": "Afficher l'aide",
+    "show_version": "Afficher la version",
+    "show_status": "Afficher l'état et la santé du serveur",
+    "print_completions": "Afficher les complétions shell",
+    "print_init": "Afficher la commande d'initialisation du shell",
+    "app_mode": "Mode de l'application",
+    "config_dir": "Répertoire de configuration",
+    "data_dir": "Répertoire de données",
+    "run_help": "Exécutez '{project_name} <command> --help' pour une aide détaillée sur toute commande.",
+    "running_pid": "{project_name} est en cours d'exécution (PID {pid})",
+    "daemon_started": "Démon démarré avec le PID {pid}",
+    "already_running": "Déjà en cours d'exécution (pid {pid})",
+    "running_in_mode": "Exécution en mode : {app_mode}",
+    "listening_on": "En écoute sur {proto}://{fqdn}:{port}",
+    "server_started_on": "Serveur démarré le {startup_datetime}",
+    "server_started_ok": "Serveur démarré avec succès",
+    "received_signal": "Signal {signal} reçu, arrêt gracieux en cours...",
+    "received_sigusr1": "SIGUSR1 reçu, réouverture des journaux...",
+    "received_sigusr2": "SIGUSR2 reçu, exportation de l'état...",
+    "graceful_shutdown": "Arrêt gracieux terminé",
+    "shutdown_error": "Erreur d'arrêt du serveur HTTP : {error}",
+    "windows_daemon_warning": "Avertissement : --daemon n'est pas pris en charge sous Windows",
+    "windows_service_hint": "Utilisez --service --install && --service start pour le Service Windows",
+    "error_create_dir": "Échec de la création du répertoire {path} : {error}",
+    "error_not_writable": "Le répertoire {path} n'est pas accessible en écriture : {error}",
+    "error_reserved_path": "'{path}' est un chemin réservé",
+    "error_route_conflict": "'{path}' est en conflit avec la route existante : {route}",
+    "error_corrupt_pid": "Fichier PID corrompu",
+    "error_unsupported_shell": "Shell non pris en charge : {shell}",
+    "requires_privileges": "{action} nécessite des privilèges élevés.",
+    "escalate_prompt": "Élever les privilèges ? [O/n] : ",
+    "running_in_mode_label": "Mode"
+  },
+
+  "version": {
+    "name_version": "{project_name} {project_version}",
+    "built": "Compilé : {build_date}",
+    "go": "Go : {go_version}",
+    "os_arch": "SE/Arch : {goos}/{goarch}"
+  },
+
+  "confirm": {
+    "delete_title": "Confirmer la suppression",
+    "delete_message": "Êtes-vous sûr de vouloir supprimer cet élément ?",
+    "action_irreversible": "Cette action est irréversible."
+  },
+
+  "form": {
+    "required_field": "(obligatoire)",
+    "optional_field": "(facultatif)",
+    "hint_email": "Nous ne partagerons jamais votre adresse e-mail.",
+    "errors_count": "Le formulaire contient {count} erreurs"
+  },
+
+  "a11y": {
+    "skip_to_content": "Aller au contenu principal",
+    "skip_to_navigation": "Aller à la navigation",
+    "loading": "Chargement...",
+    "item_saved": "Élément enregistré avec succès",
+    "search_results": "{count} résultats de recherche trouvés"
+  }
+}

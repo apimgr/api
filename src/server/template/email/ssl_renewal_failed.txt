@@ -1,0 +1,16 @@
+Subject: SSL Renewal Failed - {app_name}
+---
+SSL RENEWAL FAILED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+The SSL certificate renewal for {fqdn} failed.
+
+Error: {error}
+Expires in: {expires_in} day(s) ({expiry_date})
+Next retry: {next_retry}
+
+--
+{app_name}
+{app_url}

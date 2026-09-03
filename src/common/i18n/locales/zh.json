@@ -1,0 +1,523 @@
+{
+  "meta": {
+    "language": "zh",
+    "name": "Chinese",
+    "native_name": "中文",
+    "direction": "ltr",
+    "version": "1.0.0"
+  },
+
+  "common": {
+    "select_language": "选择语言",
+    "save": "保存",
+    "save_all": "全部保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "update": "更新",
+    "close": "关闭",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "submit": "提交",
+    "confirm": "确认",
+    "search": "搜索",
+    "search_placeholder": "搜索...",
+    "filter": "筛选",
+    "refresh": "刷新",
+    "download": "下载",
+    "upload": "上传",
+    "copy": "复制",
+    "copy_to_clipboard": "复制到剪贴板",
+    "copied": "已复制",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "warning": "警告",
+    "info": "信息",
+    "yes": "是",
+    "no": "否",
+    "on": "开启",
+    "off": "关闭",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "required": "必填",
+    "optional": "可选",
+    "none": "无",
+    "all": "全部",
+    "actions": "操作",
+    "details": "详情",
+    "settings": "设置",
+    "preferences": "偏好设置",
+    "view": "查看",
+    "expand": "展开",
+    "collapse": "收起",
+    "show": "显示",
+    "hide": "隐藏",
+    "more": "更多",
+    "less": "收起",
+    "done": "完成",
+    "unsaved_changes": "有未保存的更改",
+    "requires_restart": "需要重启",
+    "page_x_of_y": "第 {current} 页，共 {total} 页",
+    "showing_x_of_y": "显示 {count} / {total}",
+    "last_updated": "最后更新：{datetime}",
+    "made_with": "使用",
+    "go_home": "返回首页",
+    "go_back": "返回",
+    "github": "GitHub",
+    "mit_license": "MIT 许可证"
+  },
+
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "auto": "自动",
+    "toggle": "切换主题"
+  },
+
+  "nav": {
+    "home": "首页",
+    "categories": "分类",
+    "about": "关于",
+    "contact": "联系",
+    "help": "帮助",
+    "privacy": "隐私政策",
+    "terms": "服务条款",
+    "docs": "文档",
+    "api_docs": "API 文档",
+    "status": "状态",
+    "skip_to_content": "跳转到主要内容",
+    "skip_to_navigation": "跳转到导航",
+    "main_navigation": "主导航"
+  },
+
+  "health": {
+    "title": "系统状态",
+    "all_operational": "所有系统运行正常",
+    "degraded": "降级",
+    "unhealthy": "不健康",
+    "healthy": "健康",
+    "version": "版本",
+    "go_version": "Go 版本",
+    "build": "构建",
+    "uptime": "运行时间",
+    "mode": "模式",
+    "status": "状态",
+    "features": "功能",
+    "component_status": "组件状态",
+    "server_statistics": "服务器统计",
+    "total_requests": "总请求数",
+    "requests_24h": "请求数（24小时）",
+    "active_connections": "活动连接数",
+    "last_checked": "最后检查：",
+    "auto_refresh": "{seconds} 秒后自动刷新",
+    "ok": "正常",
+    "connected": "已连接",
+    "disconnected": "已断开",
+    "production": "生产环境",
+    "development": "开发环境",
+    "debug": "调试"
+  },
+
+  "status_values": {
+    "online": "在线",
+    "offline": "离线",
+    "maintenance": "维护中",
+    "starting": "启动中",
+    "stopping": "停止中",
+    "error": "错误",
+    "good": "良好",
+    "warn": "警告"
+  },
+
+  "contact": {
+    "title": "联系我们",
+    "name": "姓名",
+    "email": "电子邮箱",
+    "subject": "主题",
+    "message": "消息",
+    "send": "发送消息",
+    "success": "感谢您的留言，我们会尽快回复。"
+  },
+
+  "help": {
+    "title": "帮助",
+    "getting_started": "快速入门",
+    "features": "功能特性",
+    "api_documentation": "API 文档",
+    "swagger_description": "Swagger UI - 交互式 REST API 浏览器",
+    "graphql_description": "交互式 GraphQL 浏览器",
+    "tor_access": "Tor 访问",
+    "onion_address": "Onion 地址",
+    "how_to_connect": "如何连接",
+    "download_tor": "下载 Tor 浏览器",
+    "open_tor": "打开 Tor 浏览器并等待连接完成",
+    "paste_onion": "复制上方的 onion 地址并粘贴到 Tor 浏览器地址栏",
+    "tor_privacy": "使用 Tor 可提供额外的隐私保护……",
+    "i2p_access": "I2P 访问",
+    "i2p_address": "I2P 地址",
+    "i2p_privacy": "通过 I2P 网络使用可提供额外的隐私保护……",
+    "faq": "常见问题",
+    "troubleshooting": "故障排查"
+  },
+
+  "privacy": {
+    "title": "隐私政策",
+    "last_updated": "最后更新：",
+    "summary": "摘要",
+    "data_stored": "您的数据存储在我们的服务器上",
+    "never_sell": "我们绝不出售您的数据",
+    "may_sell": "您的数据可能被出售",
+    "you_control": "您可以控制自己的数据",
+    "cookie_policy": "Cookie 政策",
+    "essential_cookies": "必要 Cookie",
+    "preference_cookies": "偏好 Cookie",
+    "analytics_cookies": "分析 Cookie",
+    "no_analytics": "本站不使用分析跟踪。",
+    "manage_cookies": "管理 Cookie 偏好",
+    "data_we_collect": "我们收集的数据",
+    "how_we_use": "我们如何使用您的数据",
+    "data_security": "数据安全",
+    "data_storage": "数据存储与第三方",
+    "all_data_stored": "您的所有数据都存储在我们的服务器上。",
+    "when_shared": "数据在何种情况下可能被共享",
+    "data_retention": "数据保留",
+    "your_rights": "您的权利",
+    "right_access": "访问权",
+    "right_export": "导出权",
+    "right_deletion": "删除权",
+    "right_correction": "更正权",
+    "right_cookie_control": "Cookie 控制权",
+    "third_party_services": "第三方服务",
+    "service": "服务",
+    "purpose": "用途",
+    "data_sent": "发送的数据",
+    "no_third_party": "我们目前不使用会接收您数据的第三方服务。",
+    "view_policy": "查看政策",
+    "contact_us": "联系我们",
+    "privacy_inquiries": "有关隐私的咨询，请联系我们。",
+    "ccpa_title": "加州隐私权利（CCPA）",
+    "ccpa_do_not_sell": "不要出售我的个人信息",
+    "ccpa_opted_out": "您已选择退出数据销售。",
+    "ccpa_opt_back_in": "重新选择加入"
+  },
+
+  "terms": {
+    "title": "服务条款",
+    "acceptance": "接受条款",
+    "account_terms": "账户条款",
+    "acceptable_use": "可接受使用",
+    "content": "内容",
+    "termination": "终止",
+    "liability": "责任",
+    "changes": "条款变更",
+    "governing_law": "适用法律"
+  },
+
+  "cookie_consent": {
+    "message": "根据欧盟 GDPR 法规，显示此消息。",
+    "accept": "接受",
+    "decline": "拒绝",
+    "manage_preferences": "管理偏好设置",
+    "blocked_content": "由于 Cookie 偏好设置，外部内容已被屏蔽。",
+    "essential_description": "网站正常运行所必需，无法禁用。",
+    "preference_description": "记住您的设置，例如主题（浅色/深色）、语言和界面偏好。禁用后每次访问将恢复默认值。",
+    "analytics_description": "帮助我们了解网站的使用情况。"
+  },
+
+  "about": {
+    "title": "关于",
+    "features": "功能特性",
+    "version": "版本",
+    "links": "链接"
+  },
+
+  "announcements": {
+    "warning": "警告",
+    "info": "信息",
+    "error": "错误",
+    "success": "成功",
+    "scheduled_maintenance": "计划维护"
+  },
+
+  "pwa": {
+    "install": "安装应用",
+    "installed": "应用已安装",
+    "offline_message": "没有网络连接，正在显示缓存内容。"
+  },
+
+  "errors": {
+    "required": "此字段为必填项",
+    "invalid_email": "电子邮箱格式无效",
+    "too_short": "长度至少为 {min} 个字符",
+    "too_long": "长度不能超过 {max} 个字符",
+    "passwords_dont_match": "两次输入的密码不一致",
+    "invalid_format": "格式无效",
+    "already_exists": "已存在",
+    "not_found": "未找到",
+    "bad_request": "请求格式无效",
+    "validation_failed": "验证失败：{details}",
+    "rate_limited": "请求过于频繁，请稍后再试",
+    "forbidden": "权限被拒绝",
+    "blocked_by_blocklist": "访问被拒绝",
+    "blocked_by_country": "您所在的地区暂不可用",
+    "account_locked": "账户已锁定",
+    "method_not_allowed": "不允许该方法",
+    "conflict": "资源已存在",
+    "server_error": "服务器内部错误",
+    "maintenance_mode": "服务暂不可用"
+  },
+
+  "plurals": {
+    "items": {
+      "other": "{count} 个项目"
+    },
+    "results": {
+      "other": "{count} 个结果"
+    },
+    "users": {
+      "other": "{count} 个用户"
+    },
+    "days": {
+      "other": "{count} 天"
+    },
+    "hours": {
+      "other": "{count} 小时"
+    },
+    "minutes": {
+      "other": "{count} 分钟"
+    }
+  },
+
+  "notifications": {
+    "title": "通知",
+    "mark_all_read": "全部标为已读",
+    "clear_all": "清空全部",
+    "ssl_expiring": "SSL 证书将在 {count} 天后过期",
+    "ssl_renewal_failed": "SSL 证书续订失败",
+    "backup_completed": "备份已完成",
+    "backup_failed": "备份失败",
+    "update_available": "有可用更新",
+    "disk_space_low": "磁盘空间不足",
+    "task_failed": "任务失败",
+    "task_triggered": "任务已手动触发",
+    "ssl_renewed": "SSL 证书已续订",
+    "blocklist_updated": "黑名单已更新：{name}（{count} 条规则）",
+    "blocklist_update_failed": "黑名单更新失败：{name}",
+    "geoip_updated": "GeoIP 数据库已更新",
+    "geoip_update_failed": "GeoIP 更新失败",
+    "ip_blocked": "IP 已被封禁：{ip}（{reason}）",
+    "ip_allowlisted": "IP 已加入白名单：{cidr}",
+    "country_blocked": "因国家/地区限制而拒绝请求：{ip}（{country}）",
+    "preferences": {
+      "webui": "网页界面",
+      "email": "电子邮件",
+      "security_cannot_disable": "安全（无法禁用）",
+      "server": "服务器",
+      "backup": "备份",
+      "scheduler": "调度器",
+      "other_admins": "其他管理员"
+    }
+  },
+
+  "email": {
+    "subjects": {
+      "security_alert": "安全警报 - {app_name}",
+      "backup_completed": "备份已完成 - {app_name}",
+      "backup_failed": "备份失败 - {app_name}",
+      "ssl_expiring": "SSL 证书即将过期 - {app_name}",
+      "ssl_renewed": "SSL 证书已续订 - {app_name}",
+      "ssl_renewal_failed": "SSL 续订失败 - {app_name}",
+      "task_failed": "计划任务失败 - {app_name}",
+      "test_email": "测试邮件 - {app_name}"
+    },
+    "body": {
+      "security_alert_heading": "安全警报",
+      "recommended_actions": "建议操作",
+      "contact_information": "联系方式",
+      "from": "发件人：{app_name}（{fqdn}）"
+    }
+  },
+
+  "swagger": {
+    "title": "API 文档 - {app_name}",
+    "description": "交互式 REST API 浏览器",
+    "try_it_out": "试用",
+    "authorize": "授权",
+    "no_description": "暂无描述",
+    "request_body": "请求体",
+    "responses": "响应",
+    "parameters": "参数",
+    "example_value": "示例值",
+    "model": "模型",
+    "headers": "请求头",
+    "media_type": "媒体类型",
+    "endpoint_descriptions": {
+      "health_check": "检查服务器状态",
+      "get_version": "获取版本信息",
+      "get_config": "获取当前配置",
+      "update_config": "更新配置",
+      "list_items": "列出项目",
+      "get_item": "按 ID 获取项目",
+      "create_item": "创建新项目",
+      "update_item": "更新现有项目",
+      "delete_item": "删除项目"
+    },
+    "parameter_descriptions": {
+      "id": "资源的唯一标识符",
+      "page": "分页页码",
+      "per_page": "每页项目数",
+      "sort": "排序字段",
+      "order": "排序方向（asc/desc）",
+      "search": "搜索关键字",
+      "filter": "过滤表达式"
+    },
+    "error_descriptions": {
+      "400": "请求错误 - 无法处理该请求",
+      "401": "未授权 - 需要身份验证",
+      "403": "禁止访问 - 权限不足",
+      "404": "未找到 - 资源不存在",
+      "409": "冲突 - 资源已存在",
+      "429": "请求过多 - 超出速率限制",
+      "500": "服务器错误 - 内部错误"
+    }
+  },
+
+  "graphql": {
+    "title": "GraphQL 浏览器 - {app_name}",
+    "description": "交互式 GraphQL 浏览器",
+    "query": "查询",
+    "mutation": "变更",
+    "subscription": "订阅",
+    "variables": "变量",
+    "docs": "文档",
+    "schema": "架构",
+    "type_descriptions": {
+      "query": "用于获取数据的可用查询",
+      "mutation": "用于修改数据的可用变更",
+      "subscription": "用于实时数据的订阅"
+    }
+  },
+
+  "users": {
+    "registration": {
+      "title": "注册",
+      "username": "用户名",
+      "email": "电子邮箱",
+      "password": "密码",
+      "confirm_password": "确认密码",
+      "register_button": "注册",
+      "already_have_account": "已有账户？登录"
+    },
+    "profile": {
+      "title": "个人资料",
+      "name": "姓名",
+      "avatar": "头像",
+      "bio": "简介",
+      "security": "安全",
+      "sessions": "会话",
+      "login_history": "登录历史",
+      "api_usage": "API 使用情况"
+    },
+    "tokens": {
+      "title": "API 令牌",
+      "create_new": "创建新令牌",
+      "name": "名称",
+      "scopes": "权限范围",
+      "scope_read": "读取",
+      "scope_write": "写入",
+      "expiry": "过期时间",
+      "revoke": "撤销",
+      "last_used": "最后使用：{duration}前"
+    },
+    "moderation": {
+      "title": "用户管理",
+      "delete_user": "删除用户",
+      "impersonate": "模拟登录",
+      "disable_user": "禁用用户",
+      "enable_user": "启用用户",
+      "revoke_sessions": "撤销会话",
+      "profile_tab": "资料",
+      "security_tab": "安全",
+      "activity_tab": "活动",
+      "actions_tab": "操作"
+    },
+    "roles": {
+      "title": "角色管理",
+      "public": "公开",
+      "private": "私有",
+      "disabled": "已禁用"
+    }
+  },
+
+  "cli": {
+    "description": "{project_name} {project_version} - {project_description}",
+    "usage": "用法：",
+    "information": "信息：",
+    "shell_integration": "Shell 集成：",
+    "server_configuration": "服务器配置：",
+    "service_management": "服务管理：",
+    "show_help": "显示帮助",
+    "show_version": "显示版本",
+    "show_status": "显示服务器状态和健康状况",
+    "print_completions": "打印 Shell 自动补全",
+    "print_init": "打印 Shell 初始化命令",
+    "app_mode": "应用模式",
+    "config_dir": "配置目录",
+    "data_dir": "数据目录",
+    "run_help": "运行 '{project_name} <command> --help' 以获取任意命令的详细帮助。",
+    "running_pid": "{project_name} 正在运行（PID {pid}）",
+    "daemon_started": "守护进程已启动，PID {pid}",
+    "already_running": "已在运行（pid {pid}）",
+    "running_in_mode": "运行模式：{app_mode}",
+    "listening_on": "正在监听 {proto}://{fqdn}:{port}",
+    "server_started_on": "服务器启动于 {startup_datetime}",
+    "server_started_ok": "服务器启动成功",
+    "received_signal": "收到信号 {signal}，开始优雅关闭……",
+    "received_sigusr1": "收到 SIGUSR1，正在重新打开日志……",
+    "received_sigusr2": "收到 SIGUSR2，正在转储状态……",
+    "graceful_shutdown": "优雅关闭已完成",
+    "shutdown_error": "HTTP 服务器关闭错误：{error}",
+    "windows_daemon_warning": "警告：Windows 不支持 --daemon",
+    "windows_service_hint": "请使用 --service --install 和 --service start 安装 Windows 服务",
+    "error_create_dir": "创建目录 {path} 失败：{error}",
+    "error_not_writable": "目录 {path} 不可写：{error}",
+    "error_reserved_path": "'{path}' 是保留路径",
+    "error_route_conflict": "'{path}' 与现有路由冲突：{route}",
+    "error_corrupt_pid": "PID 文件已损坏",
+    "error_unsupported_shell": "不支持的 Shell：{shell}",
+    "requires_privileges": "{action} 需要提升的权限。",
+    "escalate_prompt": "是否提权？[Y/n]：",
+    "running_in_mode_label": "模式"
+  },
+
+  "version": {
+    "name_version": "{project_name} {project_version}",
+    "built": "构建时间：{build_date}",
+    "go": "Go：{go_version}",
+    "os_arch": "系统/架构：{goos}/{goarch}"
+  },
+
+  "confirm": {
+    "delete_title": "确认删除",
+    "delete_message": "您确定要删除此项目吗？",
+    "action_irreversible": "此操作无法撤销。"
+  },
+
+  "form": {
+    "required_field": "（必填）",
+    "optional_field": "（可选）",
+    "hint_email": "我们绝不会分享您的电子邮箱。",
+    "errors_count": "表单存在 {count} 个错误"
+  },
+
+  "a11y": {
+    "skip_to_content": "跳转到主要内容",
+    "skip_to_navigation": "跳转到导航",
+    "loading": "加载中……",
+    "item_saved": "项目已成功保存",
+    "search_results": "找到 {count} 条搜索结果"
+  }
+}

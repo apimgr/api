@@ -1,0 +1,38 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">✉️ Contact</h1>
+    <p class="hero-subtitle">Get in touch with the {{.SiteTitle}} team</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">Security &amp; Support</div>
+      <div class="card-body">
+        {{if .SecurityEmail}}
+        <p>
+          For security reports or general support, email
+          <a href="mailto:{{.SecurityEmail}}">{{.SecurityEmail}}</a>.
+        </p>
+        {{else}}
+        <p>
+          No contact address has been configured for this deployment yet.
+        </p>
+        {{end}}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Issues &amp; Feature Requests</div>
+      <div class="card-body">
+        <p>
+          Bug reports and feature requests are welcome via the project's
+          issue tracker.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

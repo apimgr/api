@@ -1,0 +1,438 @@
+/* public.css - Public layout styles per PART 16 */
+
+/* Header: one row, four zones - brand | centered links | preferences | theme.
+   Nav is NOT a second row; splitting them pushes the links flush right with no
+   centering, which is the layout bug PART 16 "Header Layout" calls out. */
+.header {
+  background-color: var(--bg-color);
+  border-bottom: var(--border-width) solid var(--border-color);
+  padding: var(--spacing-md) 0;
+  position: relative;
+}
+
+.header .container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.site-brand {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-color);
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.site-brand:hover {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.site-logo {
+  display: block;
+  max-height: 2.5rem;
+  width: auto;
+}
+
+/* Actions stay right-aligned without pushing .nav-links off-center */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: 0 0 auto;
+}
+
+/* 44x44 minimum tap target per PART 16 "Mobile Responsive Rules" */
+.header-link,
+.theme-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  border-radius: var(--border-radius);
+  background: none;
+  color: var(--text-color);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.header-link:hover,
+.theme-button:hover {
+  background-color: var(--light-color);
+  text-decoration: none;
+}
+
+.theme-toggle-form {
+  display: flex;
+  margin: 0;
+}
+
+.offline-indicator {
+  color: var(--warning-color);
+  font-size: 0.875rem;
+}
+
+/* Links cluster centers in the space left between brand and actions */
+.nav-links {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+  flex: 1;
+  justify-content: center;
+}
+
+.nav-links a {
+  color: var(--text-color);
+  font-weight: 500;
+  padding: var(--spacing-sm) 0;
+  transition: color var(--transition-fast);
+}
+
+.nav-links a:hover {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+/* Mobile menu per PART 17 - CSS-only, slides from RIGHT */
+
+/* The toggle checkbox carries .sr-only (common.css) rather than
+   display:none. display:none, or the hidden attribute, removes it from the
+   tab order and leaves the mobile menu operable by pointer only - a WCAG
+   2.1.1 keyboard failure. Clipped, it still focuses and toggles on Space. */
+
+.nav-toggle {
+  display: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  user-select: none;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The clipped checkbox cannot show its own ring, so the visible focus
+   indicator is drawn on the hamburger label it controls. */
+.nav-checkbox:focus-visible ~ .nav-toggle {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: var(--border-radius);
+}
+
+.nav-panel {
+  display: none;
+}
+
+.nav-overlay {
+  display: none;
+}
+
+/* Mobile responsive per PART 17 */
+@media (max-width: 720px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  /* visibility:hidden while closed keeps the off-screen drawer out of the
+     tab order and out of the accessibility tree - without it, keyboard and
+     screen-reader users land on invisible links parked at right: -280px.
+     It is animatable, so the slide-in transition is preserved. */
+  .nav-panel {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    right: -280px;
+    width: 280px;
+    height: 100vh;
+    background-color: var(--bg-color);
+    box-shadow: var(--shadow-lg);
+    visibility: hidden;
+    transition: right var(--transition-base), visibility var(--transition-base);
+    z-index: 1001;
+    padding: var(--spacing-lg);
+  }
+
+  .nav-close {
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    border: none;
+    background: none;
+  }
+  
+  .nav-panel a {
+    padding: var(--spacing-md);
+    color: var(--text-color);
+    text-decoration: none;
+    border-bottom: var(--border-width) solid var(--border-color);
+  }
+  
+  .nav-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background-color: var(--overlay-color);
+    z-index: 1000;
+    cursor: pointer;
+  }
+  
+  .nav-checkbox:checked ~ .nav-panel {
+    right: 0;
+    visibility: visible;
+  }
+  
+  .nav-checkbox:checked ~ .nav-overlay {
+    display: block;
+  }
+}
+
+/* Footer per PART 17 - ALWAYS at bottom, centered */
+footer {
+  background-color: var(--light-color);
+  border-top: var(--border-width) solid var(--border-color);
+  padding: var(--spacing-lg) 0;
+  text-align: center;
+  margin-top: var(--spacing-xl);
+}
+
+footer .container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  justify-content: center;
+}
+
+.footer-links a {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.footer-copyright {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Hero Section */
+.hero {
+  padding: var(--spacing-xl) 0;
+  text-align: center;
+}
+
+.hero-title {
+  font-size: 3rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Category Grid */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.category-card {
+  display: block;
+  padding: var(--spacing-lg);
+  background-color: var(--bg-color);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.category-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.category-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.category-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: var(--spacing-sm);
+}
+
+.category-description {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.category-count {
+  color: var(--primary-color);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+/* Tool breadcrumb note, shared by every tool page in place of a repeated
+   inline style="" attribute (frontend-rules.md: never use inline style). */
+.tool-note {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* Tool Card */
+.tool-card {
+  padding: var(--spacing-lg);
+  background-color: var(--bg-color);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-md);
+}
+
+.tool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.tool-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.tool-description {
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-md);
+}
+
+.tool-form {
+  margin-bottom: var(--spacing-md);
+}
+
+.tool-result {
+  padding: var(--spacing-md);
+  background-color: var(--light-color);
+  border-radius: var(--border-radius);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tool-result-image {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--border-radius);
+}
+
+/* Mobile adjustments */
+@media (max-width: 720px) {
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .hero-actions {
+    flex-direction: column;
+  }
+  
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Error page (page/error.tmpl) */
+.error-section {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.error-content {
+  text-align: center;
+}
+
+.error-code {
+  font-size: 8rem;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--space-4);
+}
+
+.error-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+
+.error-message {
+  color: var(--text-secondary);
+  font-size: 1.125rem;
+  margin-bottom: var(--space-6);
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.error-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+  .error-code {
+    font-size: 5rem;
+  }
+
+  .error-title {
+    font-size: 1.5rem;
+  }
+
+  .error-actions {
+    flex-direction: column;
+  }
+}

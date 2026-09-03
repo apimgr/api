@@ -1,0 +1,54 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2 tool-note">
+      <a href="/">Home</a> / <a href="/dev">Developer Tools</a> / JavaScript Formatter
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">JavaScript Formatter</h1>
+        <button class="btn btn-icon" data-favorite="dev-js-format" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Format/minify JavaScript.
+      </p>
+
+      <form id="js-format-form" class="tool-form" data-body-endpoint="/api/v1/dev/format/js">
+        <div class="form-group">
+          <label class="form-label">Raw JavaScript</label>
+          <textarea name="body" class="form-input" rows="8" required placeholder="function greet(){console.log('hi');}"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" name="minify" value="true">
+            Minify instead of format
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Format</button>
+      </form>
+
+      <div id="js-format-form-result" class="tool-result" hidden></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">POST Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl -X POST {{.BaseURL}}/api/v1/dev/format/js -d 'function greet(){console.log("hi");}'</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

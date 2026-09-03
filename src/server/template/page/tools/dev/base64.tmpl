@@ -1,0 +1,62 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2 tool-note">
+      <a href="/">Home</a> / <a href="/dev">Developer Tools</a> / Base64 Encode/Decode
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">Base64 Encode/Decode</h1>
+        <button class="btn btn-icon" data-favorite="dev-base64" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Encode or decode text using standard or URL-safe base64.
+      </p>
+
+      <form id="base64-form" class="tool-form" data-body-endpoint="/api/v1/dev/base64">
+        <div class="form-group">
+          <label class="form-label">Action</label>
+          <select name="action" class="form-input">
+            <option value="encode">Encode</option>
+            <option value="decode">Decode</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" name="urlsafe" value="true">
+            URL-safe base64
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Text</label>
+          <textarea name="body" class="form-input" rows="6" required placeholder="Hello, world!"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Run</button>
+      </form>
+
+      <div id="base64-form-result" class="tool-result" hidden></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">POST Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl -X POST "{{.BaseURL}}/api/v1/dev/base64?action=encode" -d 'Hello, world!'</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -1,0 +1,15 @@
+{{define "content"}}
+<section class="error-section">
+    <div class="container container-sm">
+        <div class="error-content">
+            <div class="error-code">{{.ErrorCode}}</div>
+            <h1 class="error-title">{{.ErrorTitle}}</h1>
+            <p class="error-message">{{.ErrorMessage}}</p>
+            <div class="error-actions">
+                <a href="/" class="btn btn-primary">Go Home</a>
+                <button class="btn btn-secondary" data-back>Go Back</button>
+            </div>
+        </div>
+    </div>
+</section>
+{{end}}

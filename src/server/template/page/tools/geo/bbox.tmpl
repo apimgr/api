@@ -1,0 +1,65 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2 tool-note">
+      <a href="/">Home</a> / <a href="/geo">Geolocation</a> / Bounding Box
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">Bounding Box</h1>
+        <button class="btn btn-icon" data-favorite="geo-bbox" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Calculate a bounding box from a center coordinate and radius, or
+        from a list of coordinates. Fill in center + radius, or a list of
+        coordinates.
+      </p>
+
+      <form id="bbox-form" class="tool-form" data-endpoint="/api/v1/geo/bbox" method="get" action="/api/v1/geo/bbox">
+        <div class="form-group">
+          <label class="form-label">Center latitude</label>
+          <input type="text" name="lat" class="form-input" value="40.7128">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Center longitude</label>
+          <input type="text" name="lon" class="form-input" value="-74.0060">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Radius (km)</label>
+          <input type="text" name="radius" class="form-input" value="10">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Coordinates (to use a list instead)</label>
+          <input type="text" name="coords" class="form-input" placeholder="40.7128,-74.0060|34.0522,-118.2437">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Calculate</button>
+      </form>
+
+      <div id="bbox-form-result" class="tool-result" hidden></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">GET Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl "{{.BaseURL}}/api/v1/geo/bbox?lat=40.7128&lon=-74.0060&radius=10"
+curl "{{.BaseURL}}/api/v1/geo/bbox?coords=40.7128,-74.0060|34.0522,-118.2437"</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

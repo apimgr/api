@@ -1,0 +1,47 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2 tool-note">
+      <a href="/">Home</a> / <a href="/parse">Parsers</a> / YAML Parser
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">YAML Parser</h1>
+        <button class="btn btn-icon" data-favorite="parse-yaml" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Parse a YAML document into a nested key/value structure.
+      </p>
+
+      <form id="yaml-form" class="tool-form" data-body-endpoint="/api/v1/parse/yaml">
+        <div class="form-group">
+          <label class="form-label">YAML document</label>
+          <textarea name="body" class="form-input" rows="8" required placeholder="key: value&#10;list:&#10;  - one&#10;  - two"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Parse</button>
+      </form>
+
+      <div id="yaml-form-result" class="tool-result" hidden></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">POST Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/yaml -d 'key: value'</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -1,0 +1,42 @@
+{{define "header"}}
+{{/* Single-row header with the four zones PART 16 "Header Layout" prescribes,
+     in order: brand, centered links, preferences, theme toggle. The nav partial
+     contributes the middle zone in place rather than rendering a second row
+     underneath, which is the layout bug that section exists to fix.
+     role="banner" is explicit so assistive tech maps the landmark even when
+     <header> is not a direct child of <body>. */}}
+<header class="header" role="banner">
+  <div class="container">
+    {{/* LogoURL is empty unless server.branding.logo is configured, in which
+         case the brand renders that image instead of the title text. */}}
+    <a href="/" class="site-brand">
+      {{if .LogoURL}}<img class="site-logo" src="{{.LogoURL}}" alt="{{.SiteTitle}}">{{else}}{{.SiteTitle}}{{end}}
+    </a>
+
+    {{template "nav" .}}
+
+    {{/* Actions stay in the header on mobile too - never inside the slide-in
+         menu (PART 16 "Mobile Responsive Rules"). */}}
+    <div class="header-actions">
+      {{/* No owner-token profile menu exists yet, so this is the plain
+           preferences link branch; the route is /server/preferences either way. */}}
+      <a href="/server/preferences" class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><span aria-hidden="true">⚙</span></a>
+
+      {{/* A real form submit, so switching themes works with JavaScript
+           disabled; static/js/theme.js only adds instant preview. The target is
+           nextTheme of the theme actually in effect, never a fixed value. */}}
+      <form action="/server/preferences" method="POST" class="theme-toggle-form">
+        {{csrfField .CSRFToken}}
+        <input type="hidden" name="theme" value="{{nextTheme .Theme}}">
+        <button type="submit" class="theme-button" aria-label="{{t .Lang "theme.toggle"}}" title="{{t .Lang "theme.toggle"}}">
+          <span class="theme-icon" aria-hidden="true">{{if eq .Theme "light"}}☀{{else if eq .Theme "auto"}}◐{{else}}☾{{end}}</span>
+        </button>
+      </form>
+
+      <button id="pwa-install-btn" class="btn btn-sm" type="button" hidden>{{t .Lang "pwa.install"}}</button>
+
+      <span id="offline-indicator" class="offline-indicator" role="status" aria-live="polite" hidden>{{t .Lang "pwa.offline_message"}}</span>
+    </div>
+  </div>
+</header>
+{{end}}

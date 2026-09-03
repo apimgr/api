@@ -1,0 +1,47 @@
+{{define "head"}}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="{{if .PageDescription}}{{.PageDescription}}{{else}}{{.SiteDescription}}{{end}}">
+<meta name="keywords" content="developer tools, api utilities, text tools, crypto tools, converters, validators">
+<title>{{if .PageTitle}}{{.PageTitle}} - {{end}}{{.SiteTitle}}</title>
+
+{{/* Every static asset is requested through the "asset" func so the URL carries
+     the running build stamp: a matching stamp is served immutable for a year,
+     while a stale one revalidates instead of pinning old bytes. */}}
+{{/* FaviconURL resolves server.branding.favicon: embedded default when unset,
+     the remote URL when configured, or the local serving route. */}}
+<link rel="icon" href="{{.FaviconURL}}">
+<link rel="apple-touch-icon" href="{{asset "/static/images/apple-touch-icon.png"}}">
+
+<link rel="stylesheet" href="{{asset "/static/css/common.css"}}">
+<link rel="stylesheet" href="{{asset "/static/css/components.css"}}">
+{{if eq .Layout "public"}}
+<link rel="stylesheet" href="{{asset "/static/css/public.css"}}">
+{{end}}
+
+<link rel="manifest" href="/manifest.json">
+{{/* theme-color mirrors the resolved theme's Background (src/common/theme/colors.go)
+     instead of a hardcoded brand color, so browser chrome matches the active theme. */}}
+{{if eq .Theme "light"}}
+<meta name="theme-color" content="#ffffff">
+{{else if eq .Theme "auto"}}
+<meta name="theme-color" content="#1a1b26" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+{{else}}
+<meta name="theme-color" content="#1a1b26">
+{{end}}
+
+{{/* iOS has no beforeinstallprompt event, so home-screen install relies on
+     these meta tags plus the manual "Add to Home Screen" instructions in
+     app.js's install-prompt UI. */}}
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="{{.SiteTitle}}">
+
+<meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}{{.SiteTitle}}{{end}}">
+<meta property="og:description" content="{{if .PageDescription}}{{.PageDescription}}{{else}}{{.SiteDescription}}{{end}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{.SiteTitle}}">
+
+{{block "head-extra" .}}{{end}}
+{{end}}

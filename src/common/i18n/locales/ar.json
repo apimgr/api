@@ -1,0 +1,553 @@
+{
+  "meta": {
+    "language": "ar",
+    "name": "Arabic",
+    "native_name": "العربية",
+    "direction": "rtl",
+    "version": "1.0.0"
+  },
+
+  "common": {
+    "select_language": "اختر اللغة",
+    "save": "حفظ",
+    "save_all": "حفظ الكل",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "create": "إنشاء",
+    "update": "تحديث",
+    "close": "إغلاق",
+    "back": "رجوع",
+    "next": "التالي",
+    "previous": "السابق",
+    "submit": "إرسال",
+    "confirm": "تأكيد",
+    "search": "بحث",
+    "search_placeholder": "بحث...",
+    "filter": "تصفية",
+    "refresh": "تحديث",
+    "download": "تنزيل",
+    "upload": "رفع",
+    "copy": "نسخ",
+    "copy_to_clipboard": "نسخ إلى الحافظة",
+    "copied": "تم النسخ",
+    "loading": "جارٍ التحميل...",
+    "error": "خطأ",
+    "success": "نجاح",
+    "warning": "تحذير",
+    "info": "معلومات",
+    "yes": "نعم",
+    "no": "لا",
+    "on": "تشغيل",
+    "off": "إيقاف",
+    "enabled": "مفعّل",
+    "disabled": "معطّل",
+    "required": "مطلوب",
+    "optional": "اختياري",
+    "none": "لا شيء",
+    "all": "الكل",
+    "actions": "الإجراءات",
+    "details": "التفاصيل",
+    "settings": "الإعدادات",
+    "preferences": "التفضيلات",
+    "view": "عرض",
+    "expand": "توسيع",
+    "collapse": "طي",
+    "show": "إظهار",
+    "hide": "إخفاء",
+    "more": "المزيد",
+    "less": "أقل",
+    "done": "تم",
+    "unsaved_changes": "تغييرات غير محفوظة",
+    "requires_restart": "يتطلب إعادة التشغيل",
+    "page_x_of_y": "صفحة {current} من {total}",
+    "showing_x_of_y": "عرض {count} من {total}",
+    "last_updated": "آخر تحديث: {datetime}",
+    "made_with": "صُنع باستخدام",
+    "go_home": "الذهاب إلى الرئيسية",
+    "go_back": "العودة",
+    "github": "GitHub",
+    "mit_license": "رخصة MIT"
+  },
+
+  "theme": {
+    "light": "فاتح",
+    "dark": "داكن",
+    "auto": "تلقائي",
+    "toggle": "تبديل السمة"
+  },
+
+  "nav": {
+    "home": "الرئيسية",
+    "categories": "الفئات",
+    "about": "حول",
+    "contact": "اتصل بنا",
+    "help": "مساعدة",
+    "privacy": "الخصوصية",
+    "terms": "الشروط",
+    "docs": "الوثائق",
+    "api_docs": "وثائق واجهة برمجة التطبيقات",
+    "status": "الحالة",
+    "skip_to_content": "الانتقال إلى المحتوى الرئيسي",
+    "skip_to_navigation": "الانتقال إلى التنقل",
+    "main_navigation": "التنقل الرئيسي"
+  },
+
+  "health": {
+    "title": "حالة النظام",
+    "all_operational": "جميع الأنظمة تعمل بشكل طبيعي",
+    "degraded": "أداء متدهور",
+    "unhealthy": "غير سليم",
+    "healthy": "سليم",
+    "version": "الإصدار",
+    "go_version": "إصدار Go",
+    "build": "البناء",
+    "uptime": "مدة التشغيل",
+    "mode": "الوضع",
+    "status": "الحالة",
+    "features": "الميزات",
+    "component_status": "حالة المكونات",
+    "server_statistics": "إحصائيات الخادم",
+    "total_requests": "إجمالي الطلبات",
+    "requests_24h": "الطلبات (24 ساعة)",
+    "active_connections": "الاتصالات النشطة",
+    "last_checked": "آخر فحص:",
+    "auto_refresh": "التحديث التلقائي خلال {seconds} ثانية",
+    "ok": "جيد",
+    "connected": "متصل",
+    "disconnected": "غير متصل",
+    "production": "الإنتاج",
+    "development": "التطوير",
+    "debug": "تصحيح الأخطاء"
+  },
+
+  "status_values": {
+    "online": "متصل",
+    "offline": "غير متصل",
+    "maintenance": "صيانة",
+    "starting": "قيد البدء",
+    "stopping": "قيد الإيقاف",
+    "error": "خطأ",
+    "good": "جيد",
+    "warn": "تحذير"
+  },
+
+  "contact": {
+    "title": "اتصل بنا",
+    "name": "الاسم",
+    "email": "البريد الإلكتروني",
+    "subject": "الموضوع",
+    "message": "الرسالة",
+    "send": "إرسال الرسالة",
+    "success": "شكرًا لرسالتك. سنتواصل معك قريبًا."
+  },
+
+  "help": {
+    "title": "مساعدة",
+    "getting_started": "البدء",
+    "features": "الميزات",
+    "api_documentation": "وثائق واجهة برمجة التطبيقات",
+    "swagger_description": "واجهة Swagger - مستعرض تفاعلي لواجهة REST",
+    "graphql_description": "مستعرض GraphQL التفاعلي",
+    "tor_access": "الوصول عبر Tor",
+    "onion_address": "عنوان Onion",
+    "how_to_connect": "كيفية الاتصال",
+    "download_tor": "تنزيل متصفح Tor",
+    "open_tor": "افتح متصفح Tor وانتظر حتى يتصل",
+    "paste_onion": "انسخ عنوان Onion أعلاه والصقه في شريط عنوان متصفح Tor",
+    "tor_privacy": "استخدام Tor يوفر خصوصية إضافية...",
+    "i2p_access": "الوصول عبر I2P",
+    "i2p_address": "عنوان I2P",
+    "i2p_privacy": "استخدام I2P عبر شبكة I2P يوفر خصوصية إضافية...",
+    "faq": "الأسئلة الشائعة",
+    "troubleshooting": "استكشاف الأخطاء وإصلاحها"
+  },
+
+  "privacy": {
+    "title": "سياسة الخصوصية",
+    "last_updated": "آخر تحديث:",
+    "summary": "ملخص",
+    "data_stored": "يتم تخزين بياناتك على خوادمنا",
+    "never_sell": "نحن لا نبيع بياناتك أبدًا",
+    "may_sell": "قد يتم بيع بياناتك",
+    "you_control": "أنت تتحكم في بياناتك",
+    "cookie_policy": "سياسة ملفات تعريف الارتباط",
+    "essential_cookies": "ملفات تعريف الارتباط الأساسية",
+    "preference_cookies": "ملفات تعريف ارتباط التفضيلات",
+    "analytics_cookies": "ملفات تعريف ارتباط التحليلات",
+    "no_analytics": "لا نستخدم أي تتبع تحليلي على هذا الموقع.",
+    "manage_cookies": "إدارة تفضيلات ملفات تعريف الارتباط",
+    "data_we_collect": "البيانات التي نجمعها",
+    "how_we_use": "كيف نستخدم بياناتك",
+    "data_security": "أمان البيانات",
+    "data_storage": "تخزين البيانات وأطراف ثالثة",
+    "all_data_stored": "يتم تخزين جميع بياناتك على خوادمنا.",
+    "when_shared": "متى يمكن مشاركة البيانات",
+    "data_retention": "مدة الاحتفاظ بالبيانات",
+    "your_rights": "حقوقك",
+    "right_access": "الوصول",
+    "right_export": "التصدير",
+    "right_deletion": "الحذف",
+    "right_correction": "التصحيح",
+    "right_cookie_control": "التحكم بملفات تعريف الارتباط",
+    "third_party_services": "خدمات الأطراف الثالثة",
+    "service": "الخدمة",
+    "purpose": "الغرض",
+    "data_sent": "البيانات المرسلة",
+    "no_third_party": "لا نستخدم حاليًا أي خدمات من أطراف ثالثة تتلقى بياناتك.",
+    "view_policy": "عرض السياسة",
+    "contact_us": "اتصل بنا",
+    "privacy_inquiries": "للاستفسارات المتعلقة بالخصوصية، يرجى التواصل معنا.",
+    "ccpa_title": "حقوق خصوصية كاليفورنيا (CCPA)",
+    "ccpa_do_not_sell": "عدم بيع بياناتي الشخصية",
+    "ccpa_opted_out": "لقد اخترت عدم بيع بياناتك.",
+    "ccpa_opt_back_in": "السماح بالبيع مجددًا"
+  },
+
+  "terms": {
+    "title": "شروط الاستخدام",
+    "acceptance": "القبول",
+    "account_terms": "شروط الحساب",
+    "acceptable_use": "الاستخدام المقبول",
+    "content": "المحتوى",
+    "termination": "الإنهاء",
+    "liability": "المسؤولية",
+    "changes": "التغييرات",
+    "governing_law": "القانون الحاكم"
+  },
+
+  "cookie_consent": {
+    "message": "تُعرض هذه الرسالة وفقًا للائحة العامة لحماية البيانات في الاتحاد الأوروبي.",
+    "accept": "قبول",
+    "decline": "رفض",
+    "manage_preferences": "إدارة التفضيلات",
+    "blocked_content": "تم حظر المحتوى الخارجي بسبب إعدادات ملفات تعريف الارتباط.",
+    "essential_description": "ضرورية لتشغيل الموقع. لا يمكن تعطيلها.",
+    "preference_description": "تحفظ تفضيلاتك مثل المظهر (فاتح/داكن) واللغة وتفضيلات الواجهة. عند التعطيل، تُستعاد الإعدادات الافتراضية في كل زيارة.",
+    "analytics_description": "تساعدنا على فهم كيفية استخدام الموقع."
+  },
+
+  "about": {
+    "title": "حول",
+    "features": "الميزات",
+    "version": "الإصدار",
+    "links": "الروابط"
+  },
+
+  "announcements": {
+    "warning": "تحذير",
+    "info": "معلومات",
+    "error": "خطأ",
+    "success": "نجاح",
+    "scheduled_maintenance": "صيانة مجدولة"
+  },
+
+  "pwa": {
+    "install": "تثبيت التطبيق",
+    "installed": "تم تثبيت التطبيق",
+    "offline_message": "لا يوجد اتصال بالإنترنت. يتم عرض المحتوى المخزن مؤقتًا."
+  },
+
+  "errors": {
+    "required": "هذا الحقل مطلوب",
+    "invalid_email": "عنوان بريد إلكتروني غير صالح",
+    "too_short": "يجب أن يكون {min} أحرف على الأقل",
+    "too_long": "يجب ألا يتجاوز {max} حرفًا",
+    "passwords_dont_match": "كلمتا المرور غير متطابقتين",
+    "invalid_format": "تنسيق غير صالح",
+    "already_exists": "موجود بالفعل",
+    "not_found": "غير موجود",
+    "bad_request": "تنسيق طلب غير صالح",
+    "validation_failed": "فشل التحقق: {details}",
+    "rate_limited": "طلبات كثيرة جدًا، يرجى المحاولة لاحقًا",
+    "forbidden": "الوصول ممنوع",
+    "blocked_by_blocklist": "تم رفض الوصول",
+    "blocked_by_country": "غير متاح في منطقتك",
+    "account_locked": "الحساب مقفل",
+    "method_not_allowed": "الطريقة غير مسموح بها",
+    "conflict": "المورد موجود بالفعل",
+    "server_error": "خطأ داخلي في الخادم",
+    "maintenance_mode": "الخدمة غير متاحة"
+  },
+
+  "plurals": {
+    "items": {
+      "zero": "لا توجد عناصر",
+      "one": "عنصر واحد",
+      "two": "عنصران",
+      "few": "{count} عناصر",
+      "many": "{count} عنصرًا",
+      "other": "{count} عنصر"
+    },
+    "results": {
+      "zero": "لا توجد نتائج",
+      "one": "نتيجة واحدة",
+      "two": "نتيجتان",
+      "few": "{count} نتائج",
+      "many": "{count} نتيجة",
+      "other": "{count} نتيجة"
+    },
+    "users": {
+      "zero": "لا يوجد مستخدمون",
+      "one": "مستخدم واحد",
+      "two": "مستخدمان",
+      "few": "{count} مستخدمين",
+      "many": "{count} مستخدمًا",
+      "other": "{count} مستخدم"
+    },
+    "days": {
+      "zero": "صفر أيام",
+      "one": "يوم واحد",
+      "two": "يومان",
+      "few": "{count} أيام",
+      "many": "{count} يومًا",
+      "other": "{count} يوم"
+    },
+    "hours": {
+      "zero": "صفر ساعات",
+      "one": "ساعة واحدة",
+      "two": "ساعتان",
+      "few": "{count} ساعات",
+      "many": "{count} ساعة",
+      "other": "{count} ساعة"
+    },
+    "minutes": {
+      "zero": "صفر دقائق",
+      "one": "دقيقة واحدة",
+      "two": "دقيقتان",
+      "few": "{count} دقائق",
+      "many": "{count} دقيقة",
+      "other": "{count} دقيقة"
+    }
+  },
+
+  "notifications": {
+    "title": "الإشعارات",
+    "mark_all_read": "وضع علامة مقروء على الكل",
+    "clear_all": "مسح الكل",
+    "ssl_expiring": "شهادة SSL ستنتهي خلال {count} يومًا",
+    "ssl_renewal_failed": "فشل تجديد شهادة SSL",
+    "backup_completed": "اكتملت عملية النسخ الاحتياطي",
+    "backup_failed": "فشلت عملية النسخ الاحتياطي",
+    "update_available": "يتوفر تحديث",
+    "disk_space_low": "مساحة القرص منخفضة",
+    "task_failed": "فشلت المهمة",
+    "task_triggered": "تم تشغيل المهمة يدويًا",
+    "ssl_renewed": "تم تجديد شهادة SSL",
+    "blocklist_updated": "تم تحديث قائمة الحظر: {name} ({count} قاعدة)",
+    "blocklist_update_failed": "فشل تحديث قائمة الحظر: {name}",
+    "geoip_updated": "تم تحديث قواعد بيانات GeoIP",
+    "geoip_update_failed": "فشل تحديث GeoIP",
+    "ip_blocked": "تم حظر عنوان IP: {ip} ({reason})",
+    "ip_allowlisted": "تمت إضافة عنوان IP إلى القائمة المسموح بها: {cidr}",
+    "country_blocked": "تم حظر طلب حسب الدولة: {ip} ({country})",
+    "preferences": {
+      "webui": "واجهة الويب",
+      "email": "البريد الإلكتروني",
+      "security_cannot_disable": "الأمان (لا يمكن تعطيله)",
+      "server": "الخادم",
+      "backup": "النسخ الاحتياطي",
+      "scheduler": "المجدول",
+      "other_admins": "المسؤولون الآخرون"
+    }
+  },
+
+  "email": {
+    "subjects": {
+      "security_alert": "تنبيه أمني - {app_name}",
+      "backup_completed": "اكتمل النسخ الاحتياطي - {app_name}",
+      "backup_failed": "فشل النسخ الاحتياطي - {app_name}",
+      "ssl_expiring": "شهادة SSL ستنتهي قريبًا - {app_name}",
+      "ssl_renewed": "تم تجديد شهادة SSL - {app_name}",
+      "ssl_renewal_failed": "فشل تجديد SSL - {app_name}",
+      "task_failed": "فشلت مهمة مجدولة - {app_name}",
+      "test_email": "بريد إلكتروني تجريبي - {app_name}"
+    },
+    "body": {
+      "security_alert_heading": "تنبيه أمني",
+      "recommended_actions": "الإجراءات الموصى بها",
+      "contact_information": "معلومات الاتصال",
+      "from": "من: {app_name} ({fqdn})"
+    }
+  },
+
+  "swagger": {
+    "title": "وثائق واجهة برمجة التطبيقات - {app_name}",
+    "description": "مستعرض تفاعلي لواجهة REST",
+    "try_it_out": "جرّب الآن",
+    "authorize": "تفويض",
+    "no_description": "لا يوجد وصف متاح",
+    "request_body": "نص الطلب",
+    "responses": "الاستجابات",
+    "parameters": "المعطيات",
+    "example_value": "قيمة مثال",
+    "model": "النموذج",
+    "headers": "الترويسات",
+    "media_type": "نوع الوسائط",
+    "endpoint_descriptions": {
+      "health_check": "التحقق من حالة الخادم",
+      "get_version": "الحصول على معلومات الإصدار",
+      "get_config": "الحصول على الإعدادات الحالية",
+      "update_config": "تحديث الإعدادات",
+      "list_items": "سرد العناصر",
+      "get_item": "الحصول على عنصر بواسطة المعرف",
+      "create_item": "إنشاء عنصر جديد",
+      "update_item": "تحديث عنصر موجود",
+      "delete_item": "حذف عنصر"
+    },
+    "parameter_descriptions": {
+      "id": "المعرف الفريد للمورد",
+      "page": "رقم الصفحة للتقسيم",
+      "per_page": "عدد العناصر لكل صفحة",
+      "sort": "حقل الفرز",
+      "order": "اتجاه الفرز (تصاعدي/تنازلي)",
+      "search": "مصطلح البحث",
+      "filter": "تعبير التصفية"
+    },
+    "error_descriptions": {
+      "400": "طلب غير صالح - تعذر معالجة الطلب",
+      "401": "غير مصرح - المصادقة مطلوبة",
+      "403": "ممنوع - صلاحيات غير كافية",
+      "404": "غير موجود - المورد غير موجود",
+      "409": "تعارض - المورد موجود بالفعل",
+      "429": "طلبات كثيرة جدًا - تم تجاوز حد المعدل",
+      "500": "خطأ في الخادم - خطأ داخلي"
+    }
+  },
+
+  "graphql": {
+    "title": "مستعرض GraphQL - {app_name}",
+    "description": "مستعرض GraphQL التفاعلي",
+    "query": "استعلام",
+    "mutation": "طفرة",
+    "subscription": "اشتراك",
+    "variables": "المتغيرات",
+    "docs": "الوثائق",
+    "schema": "المخطط",
+    "type_descriptions": {
+      "query": "الاستعلامات المتاحة لجلب البيانات",
+      "mutation": "الطفرات المتاحة لتعديل البيانات",
+      "subscription": "الاشتراكات للبيانات الفورية"
+    }
+  },
+
+  "users": {
+    "registration": {
+      "title": "التسجيل",
+      "username": "اسم المستخدم",
+      "email": "البريد الإلكتروني",
+      "password": "كلمة المرور",
+      "confirm_password": "تأكيد كلمة المرور",
+      "register_button": "تسجيل",
+      "already_have_account": "لديك حساب بالفعل؟ تسجيل الدخول"
+    },
+    "profile": {
+      "title": "الملف الشخصي",
+      "name": "الاسم",
+      "avatar": "الصورة الرمزية",
+      "bio": "نبذة",
+      "security": "الأمان",
+      "sessions": "الجلسات",
+      "login_history": "سجل تسجيل الدخول",
+      "api_usage": "استخدام واجهة برمجة التطبيقات"
+    },
+    "tokens": {
+      "title": "رموز واجهة برمجة التطبيقات",
+      "create_new": "إنشاء رمز جديد",
+      "name": "الاسم",
+      "scopes": "الصلاحيات",
+      "scope_read": "قراءة",
+      "scope_write": "كتابة",
+      "expiry": "انتهاء الصلاحية",
+      "revoke": "إلغاء",
+      "last_used": "آخر استخدام: منذ {duration}"
+    },
+    "moderation": {
+      "title": "إدارة المستخدمين",
+      "delete_user": "حذف المستخدم",
+      "impersonate": "انتحال الهوية",
+      "disable_user": "تعطيل المستخدم",
+      "enable_user": "تفعيل المستخدم",
+      "revoke_sessions": "إلغاء الجلسات",
+      "profile_tab": "الملف الشخصي",
+      "security_tab": "الأمان",
+      "activity_tab": "النشاط",
+      "actions_tab": "الإجراءات"
+    },
+    "roles": {
+      "title": "إدارة الأدوار",
+      "public": "عام",
+      "private": "خاص",
+      "disabled": "معطّل"
+    }
+  },
+
+  "cli": {
+    "description": "{project_name} {project_version} - {project_description}",
+    "usage": "الاستخدام:",
+    "information": "معلومات:",
+    "shell_integration": "تكامل الصدفة:",
+    "server_configuration": "إعدادات الخادم:",
+    "service_management": "إدارة الخدمة:",
+    "show_help": "عرض المساعدة",
+    "show_version": "عرض الإصدار",
+    "show_status": "عرض حالة الخادم وسلامته",
+    "print_completions": "طباعة إكمالات الصدفة",
+    "print_init": "طباعة أمر تهيئة الصدفة",
+    "app_mode": "وضع التطبيق",
+    "config_dir": "مجلد الإعدادات",
+    "data_dir": "مجلد البيانات",
+    "run_help": "شغّل '{project_name} <command> --help' للحصول على مساعدة مفصلة لأي أمر.",
+    "running_pid": "{project_name} قيد التشغيل (PID {pid})",
+    "daemon_started": "تم بدء الخدمة الخلفية بمعرف العملية {pid}",
+    "already_running": "قيد التشغيل بالفعل (pid {pid})",
+    "running_in_mode": "قيد التشغيل في الوضع: {app_mode}",
+    "listening_on": "يستمع على {proto}://{fqdn}:{port}",
+    "server_started_on": "تم بدء تشغيل الخادم في {startup_datetime}",
+    "server_started_ok": "تم بدء تشغيل الخادم بنجاح",
+    "received_signal": "تم استلام الإشارة {signal}، جارٍ بدء إيقاف التشغيل الآمن...",
+    "received_sigusr1": "تم استلام SIGUSR1، جارٍ إعادة فتح السجلات...",
+    "received_sigusr2": "تم استلام SIGUSR2، جارٍ إخراج الحالة...",
+    "graceful_shutdown": "اكتمل إيقاف التشغيل الآمن",
+    "shutdown_error": "فشل إيقاف خادم HTTP: {error}",
+    "windows_daemon_warning": "تحذير: --daemon غير مدعوم على Windows",
+    "windows_service_hint": "استخدم --service --install && --service start لخدمة Windows",
+    "error_create_dir": "فشل إنشاء المجلد {path}: {error}",
+    "error_not_writable": "المجلد {path} غير قابل للكتابة: {error}",
+    "error_reserved_path": "'{path}' مسار محجوز",
+    "error_route_conflict": "'{path}' يتعارض مع مسار موجود: {route}",
+    "error_corrupt_pid": "ملف PID تالف",
+    "error_unsupported_shell": "صدفة غير مدعومة: {shell}",
+    "requires_privileges": "{action} يتطلب صلاحيات مرتفعة.",
+    "escalate_prompt": "رفع الصلاحيات؟ [Y/n]: ",
+    "running_in_mode_label": "الوضع"
+  },
+
+  "version": {
+    "name_version": "{project_name} {project_version}",
+    "built": "تاريخ البناء: {build_date}",
+    "go": "Go: {go_version}",
+    "os_arch": "نظام التشغيل/المعمارية: {goos}/{goarch}"
+  },
+
+  "confirm": {
+    "delete_title": "تأكيد الحذف",
+    "delete_message": "هل أنت متأكد أنك تريد حذف هذا العنصر؟",
+    "action_irreversible": "لا يمكن التراجع عن هذا الإجراء."
+  },
+
+  "form": {
+    "required_field": "(مطلوب)",
+    "optional_field": "(اختياري)",
+    "hint_email": "لن نشارك بريدك الإلكتروني أبدًا.",
+    "errors_count": "يحتوي النموذج على {count} أخطاء"
+  },
+
+  "a11y": {
+    "skip_to_content": "الانتقال إلى المحتوى الرئيسي",
+    "skip_to_navigation": "الانتقال إلى التنقل",
+    "loading": "جارٍ التحميل...",
+    "item_saved": "تم حفظ العنصر بنجاح",
+    "search_results": "تم العثور على {count} نتيجة بحث"
+  }
+}

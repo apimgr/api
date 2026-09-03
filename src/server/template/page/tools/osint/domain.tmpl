@@ -1,0 +1,47 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2 tool-note">
+      <a href="/">Home</a> / <a href="/osint">OSINT Tools</a> / WHOIS Lookup
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">WHOIS Lookup</h1>
+        <button class="btn btn-icon" data-favorite="osint-domain" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Look up the registrar, creation/expiry dates, and nameservers for a domain.
+      </p>
+
+      <form id="domain-form" class="tool-form" data-template="/api/v1/osint/domain/{domain}">
+        <div class="form-group">
+          <label class="form-label">Domain</label>
+          <input type="text" name="domain" class="form-input" required placeholder="example.com">
+        </div>
+
+        <button type="submit" class="btn btn-primary">Investigate</button>
+      </form>
+
+      <div id="domain-form-result" class="tool-result" hidden></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">GET Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl {{.BaseURL}}/api/v1/osint/domain/example.com</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -1,0 +1,46 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">❓ Help</h1>
+    <p class="hero-subtitle">Getting started with {{.SiteTitle}}</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">Getting Started</div>
+      <div class="card-body">
+        <p>
+          Use the navigation above to browse tool categories, or call the
+          REST API directly under <code>/api/v1</code>. Full API
+          documentation is available at <a href="/api">/api</a>.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Rate Limits</div>
+      <div class="card-body">
+        <p>
+          Read requests are limited to
+          <strong>{{.RateLimitRequests}}</strong> requests per
+          <strong>{{.RateLimitWindow}}</strong> second window per client.
+          Exceeding this limit returns an HTTP 429 response.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Need More Help?</div>
+      <div class="card-body">
+        <p>
+          See the <a href="/server/contact">Contact</a> page to reach the
+          team, or the <a href="/api">API documentation</a> for endpoint
+          details.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

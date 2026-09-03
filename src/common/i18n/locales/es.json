@@ -1,0 +1,532 @@
+{
+  "meta": {
+    "language": "es",
+    "name": "Spanish",
+    "native_name": "Español",
+    "direction": "ltr",
+    "version": "1.0.0"
+  },
+
+  "common": {
+    "select_language": "Seleccionar idioma",
+    "save": "Guardar",
+    "save_all": "Guardar todo",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "update": "Actualizar",
+    "close": "Cerrar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "submit": "Enviar",
+    "confirm": "Confirmar",
+    "search": "Buscar",
+    "search_placeholder": "Buscar...",
+    "filter": "Filtrar",
+    "refresh": "Actualizar",
+    "download": "Descargar",
+    "upload": "Subir",
+    "copy": "Copiar",
+    "copy_to_clipboard": "Copiar al portapapeles",
+    "copied": "Copiado",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "warning": "Advertencia",
+    "info": "Información",
+    "yes": "Sí",
+    "no": "No",
+    "on": "Activado",
+    "off": "Desactivado",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "required": "Obligatorio",
+    "optional": "Opcional",
+    "none": "Ninguno",
+    "all": "Todos",
+    "actions": "Acciones",
+    "details": "Detalles",
+    "settings": "Configuración",
+    "preferences": "Preferencias",
+    "view": "Ver",
+    "expand": "Expandir",
+    "collapse": "Contraer",
+    "show": "Mostrar",
+    "hide": "Ocultar",
+    "more": "Más",
+    "less": "Menos",
+    "done": "Listo",
+    "unsaved_changes": "Cambios sin guardar",
+    "requires_restart": "Requiere reinicio",
+    "page_x_of_y": "Página {current} de {total}",
+    "showing_x_of_y": "Mostrando {count} de {total}",
+    "last_updated": "Última actualización: {datetime}",
+    "made_with": "Hecho con",
+    "go_home": "Ir al inicio",
+    "go_back": "Volver",
+    "github": "GitHub",
+    "mit_license": "Licencia MIT"
+  },
+
+  "theme": {
+    "light": "Claro",
+    "dark": "Oscuro",
+    "auto": "Automático",
+    "toggle": "Cambiar tema"
+  },
+
+  "nav": {
+    "home": "Inicio",
+    "categories": "Categorías",
+    "about": "Acerca de",
+    "contact": "Contacto",
+    "help": "Ayuda",
+    "privacy": "Privacidad",
+    "terms": "Términos de servicio",
+    "docs": "Documentación",
+    "api_docs": "Documentación de API",
+    "status": "Estado",
+    "skip_to_content": "Saltar al contenido principal",
+    "skip_to_navigation": "Saltar a la navegación",
+    "main_navigation": "Navegación principal"
+  },
+
+  "health": {
+    "title": "Estado del sistema",
+    "all_operational": "Todos los sistemas operativos",
+    "degraded": "Degradado",
+    "unhealthy": "No saludable",
+    "healthy": "Saludable",
+    "version": "Versión",
+    "go_version": "Versión de Go",
+    "build": "Compilación",
+    "uptime": "Tiempo de actividad",
+    "mode": "Modo",
+    "status": "Estado",
+    "features": "Características",
+    "component_status": "Estado de componentes",
+    "server_statistics": "Estadísticas del servidor",
+    "total_requests": "Solicitudes totales",
+    "requests_24h": "Solicitudes (24 horas)",
+    "active_connections": "Conexiones activas",
+    "last_checked": "Última verificación:",
+    "auto_refresh": "Auto-actualización en {seconds}s",
+    "ok": "OK",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "production": "Producción",
+    "development": "Desarrollo",
+    "debug": "Depuración"
+  },
+
+  "status_values": {
+    "online": "En línea",
+    "offline": "Fuera de línea",
+    "maintenance": "Mantenimiento",
+    "starting": "Iniciando",
+    "stopping": "Deteniendo",
+    "error": "Error",
+    "good": "Bueno",
+    "warn": "Advertencia"
+  },
+
+  "contact": {
+    "title": "Contacto",
+    "name": "Nombre",
+    "email": "Correo electrónico",
+    "subject": "Asunto",
+    "message": "Mensaje",
+    "send": "Enviar mensaje",
+    "success": "Gracias por tu mensaje. Responderemos pronto."
+  },
+
+  "help": {
+    "title": "Ayuda",
+    "getting_started": "Primeros pasos",
+    "features": "Características",
+    "api_documentation": "Documentación de API",
+    "swagger_description": "Swagger UI - Explorador interactivo de API REST",
+    "graphql_description": "Explorador interactivo de GraphQL",
+    "tor_access": "Acceso Tor",
+    "onion_address": "Dirección Onion",
+    "how_to_connect": "Cómo conectarse",
+    "download_tor": "Descargar Tor Browser",
+    "open_tor": "Abra Tor Browser y espere a que se conecte",
+    "paste_onion": "Copie la dirección onion arriba y péguela en la barra de direcciones de Tor Browser",
+    "tor_privacy": "Usar Tor proporciona privacidad adicional...",
+    "i2p_access": "Acceso I2P",
+    "i2p_address": "Dirección I2P",
+    "i2p_privacy": "Usar I2P proporciona privacidad adicional a través de la red I2P...",
+    "faq": "Preguntas frecuentes",
+    "troubleshooting": "Solución de problemas"
+  },
+
+  "privacy": {
+    "title": "Política de privacidad",
+    "last_updated": "Última actualización:",
+    "summary": "Resumen",
+    "data_stored": "Sus datos se almacenan en nuestros servidores",
+    "never_sell": "Nunca vendemos sus datos",
+    "may_sell": "Sus datos pueden ser vendidos",
+    "you_control": "Usted controla sus datos",
+    "cookie_policy": "Política de cookies",
+    "essential_cookies": "Cookies esenciales",
+    "preference_cookies": "Cookies de preferencia",
+    "analytics_cookies": "Cookies de análisis",
+    "no_analytics": "No usamos seguimiento analítico en este sitio.",
+    "manage_cookies": "Gestionar preferencias de cookies",
+    "data_we_collect": "Datos que recopilamos",
+    "how_we_use": "Cómo usamos sus datos",
+    "data_security": "Seguridad de datos",
+    "data_storage": "Almacenamiento de datos y terceros",
+    "all_data_stored": "Todos sus datos se almacenan en nuestros servidores.",
+    "when_shared": "Cuándo se pueden compartir los datos",
+    "data_retention": "Retención de datos",
+    "your_rights": "Sus derechos",
+    "right_access": "Acceso",
+    "right_export": "Exportación",
+    "right_deletion": "Eliminación",
+    "right_correction": "Corrección",
+    "right_cookie_control": "Control de cookies",
+    "third_party_services": "Servicios de terceros",
+    "service": "Servicio",
+    "purpose": "Propósito",
+    "data_sent": "Datos enviados",
+    "no_third_party": "Actualmente no usamos servicios de terceros que reciban sus datos.",
+    "view_policy": "Ver política",
+    "contact_us": "Contáctenos",
+    "privacy_inquiries": "Para consultas relacionadas con la privacidad, contáctenos.",
+    "ccpa_title": "Derechos de privacidad de California (CCPA)",
+    "ccpa_do_not_sell": "No vender mi información personal",
+    "ccpa_opted_out": "Ha optado por no participar en la venta de datos.",
+    "ccpa_opt_back_in": "Optar por participar nuevamente"
+  },
+
+  "terms": {
+    "title": "Términos de servicio",
+    "acceptance": "Aceptación",
+    "account_terms": "Términos de la cuenta",
+    "acceptable_use": "Uso aceptable",
+    "content": "Contenido",
+    "termination": "Terminación",
+    "liability": "Responsabilidad",
+    "changes": "Cambios",
+    "governing_law": "Ley aplicable"
+  },
+
+  "cookie_consent": {
+    "message": "De acuerdo con la ley GDPR de la UE, se muestra este mensaje.",
+    "accept": "Acepto",
+    "decline": "Rechazar",
+    "manage_preferences": "Gestionar preferencias",
+    "blocked_content": "Contenido externo bloqueado debido a las preferencias de cookies.",
+    "essential_description": "Necesarias para el funcionamiento del sitio. No se pueden desactivar.",
+    "preference_description": "Recordar su configuración como tema (claro/oscuro), idioma y preferencias de interfaz. Desactivarlas restablecerá los valores predeterminados en cada visita.",
+    "analytics_description": "Nos ayudan a entender cómo se utiliza el sitio."
+  },
+
+  "about": {
+    "title": "Acerca de",
+    "features": "Características",
+    "version": "Versión",
+    "links": "Enlaces"
+  },
+
+  "announcements": {
+    "warning": "Advertencia",
+    "info": "Información",
+    "error": "Error",
+    "success": "Éxito",
+    "scheduled_maintenance": "Mantenimiento programado"
+  },
+
+  "pwa": {
+    "install": "Instalar aplicación",
+    "installed": "Aplicación instalada",
+    "offline_message": "No hay conexión a internet. Mostrando contenido almacenado."
+  },
+
+  "errors": {
+    "required": "Este campo es obligatorio",
+    "invalid_email": "Correo electrónico inválido",
+    "too_short": "Debe tener al menos {min} caracteres",
+    "too_long": "No puede exceder {max} caracteres",
+    "passwords_dont_match": "Las contraseñas no coinciden",
+    "invalid_format": "Formato inválido",
+    "already_exists": "Ya existe",
+    "not_found": "No encontrado",
+    "bad_request": "Formato de solicitud inválido",
+    "validation_failed": "La validación falló: {details}",
+    "rate_limited": "Demasiadas solicitudes, inténtalo más tarde",
+    "forbidden": "Permiso denegado",
+    "blocked_by_blocklist": "Acceso denegado",
+    "blocked_by_country": "Acceso no disponible en su región",
+    "account_locked": "Cuenta bloqueada",
+    "method_not_allowed": "Método no permitido",
+    "conflict": "El recurso ya existe",
+    "server_error": "Error interno del servidor",
+    "maintenance_mode": "Servicio no disponible"
+  },
+
+  "plurals": {
+    "items": {
+      "zero": "Sin elementos",
+      "one": "{count} elemento",
+      "other": "{count} elementos"
+    },
+    "results": {
+      "zero": "Sin resultados",
+      "one": "{count} resultado",
+      "other": "{count} resultados"
+    },
+    "users": {
+      "zero": "Sin usuarios",
+      "one": "{count} usuario",
+      "other": "{count} usuarios"
+    },
+    "days": {
+      "one": "{count} día",
+      "other": "{count} días"
+    },
+    "hours": {
+      "one": "{count} hora",
+      "other": "{count} horas"
+    },
+    "minutes": {
+      "one": "{count} minuto",
+      "other": "{count} minutos"
+    }
+  },
+
+  "notifications": {
+    "title": "Notificaciones",
+    "mark_all_read": "Marcar todo como leído",
+    "clear_all": "Limpiar todo",
+    "ssl_expiring": "El certificado SSL expira en {count} días",
+    "ssl_renewal_failed": "Error al renovar el certificado SSL",
+    "backup_completed": "Respaldo completado",
+    "backup_failed": "Respaldo fallido",
+    "update_available": "Actualización disponible",
+    "disk_space_low": "Espacio en disco bajo",
+    "task_failed": "Tarea fallida",
+    "task_triggered": "Tarea ejecutada manualmente",
+    "ssl_renewed": "Certificado SSL renovado",
+    "blocklist_updated": "Lista de bloqueo actualizada: {name} ({count} reglas)",
+    "blocklist_update_failed": "Error al actualizar lista de bloqueo: {name}",
+    "geoip_updated": "Bases de datos GeoIP actualizadas",
+    "geoip_update_failed": "Error al actualizar GeoIP",
+    "ip_blocked": "IP bloqueada: {ip} ({reason})",
+    "ip_allowlisted": "IP agregada a lista de permitidos: {cidr}",
+    "country_blocked": "Solicitud bloqueada por país: {ip} ({country})",
+    "preferences": {
+      "webui": "WebUI",
+      "email": "Correo electrónico",
+      "security_cannot_disable": "Seguridad (no se puede desactivar)",
+      "server": "Servidor",
+      "backup": "Respaldo",
+      "scheduler": "Programador",
+      "other_admins": "Otros administradores"
+    }
+  },
+
+  "email": {
+    "subjects": {
+      "security_alert": "Alerta de seguridad - {app_name}",
+      "backup_completed": "Respaldo completado - {app_name}",
+      "backup_failed": "Respaldo fallido - {app_name}",
+      "ssl_expiring": "Certificado SSL por expirar - {app_name}",
+      "ssl_renewed": "Certificado SSL renovado - {app_name}",
+      "ssl_renewal_failed": "Error al renovar SSL - {app_name}",
+      "task_failed": "Tarea programada fallida - {app_name}",
+      "test_email": "Correo de prueba - {app_name}"
+    },
+    "body": {
+      "security_alert_heading": "ALERTA DE SEGURIDAD",
+      "recommended_actions": "ACCIONES RECOMENDADAS",
+      "contact_information": "INFORMACIÓN DE CONTACTO",
+      "from": "De: {app_name} ({fqdn})"
+    }
+  },
+
+  "swagger": {
+    "title": "Documentación de API - {app_name}",
+    "description": "Explorador interactivo de API REST",
+    "try_it_out": "Probar",
+    "authorize": "Autorizar",
+    "no_description": "Sin descripción disponible",
+    "request_body": "Cuerpo de la solicitud",
+    "responses": "Respuestas",
+    "parameters": "Parámetros",
+    "example_value": "Valor de ejemplo",
+    "model": "Modelo",
+    "headers": "Encabezados",
+    "media_type": "Tipo de medio",
+    "endpoint_descriptions": {
+      "health_check": "Verificar el estado del servidor",
+      "get_version": "Obtener información de la versión",
+      "get_config": "Obtener configuración actual",
+      "update_config": "Actualizar configuración",
+      "list_items": "Listar elementos",
+      "get_item": "Obtener elemento por ID",
+      "create_item": "Crear nuevo elemento",
+      "update_item": "Actualizar elemento existente",
+      "delete_item": "Eliminar elemento"
+    },
+    "parameter_descriptions": {
+      "id": "Identificador único del recurso",
+      "page": "Número de página para paginación",
+      "per_page": "Elementos por página",
+      "sort": "Campo de ordenamiento",
+      "order": "Dirección de ordenamiento (asc/desc)",
+      "search": "Término de búsqueda",
+      "filter": "Expresión de filtro"
+    },
+    "error_descriptions": {
+      "400": "Solicitud incorrecta - La solicitud no se pudo procesar",
+      "401": "No autorizado - Se requiere autenticación",
+      "403": "Prohibido - Permisos insuficientes",
+      "404": "No encontrado - El recurso no existe",
+      "409": "Conflicto - El recurso ya existe",
+      "429": "Demasiadas solicitudes - Límite de velocidad excedido",
+      "500": "Error del servidor - Error interno"
+    }
+  },
+
+  "graphql": {
+    "title": "Explorador GraphQL - {app_name}",
+    "description": "Explorador interactivo de GraphQL",
+    "query": "Consulta",
+    "mutation": "Mutación",
+    "subscription": "Suscripción",
+    "variables": "Variables",
+    "docs": "Documentación",
+    "schema": "Esquema",
+    "type_descriptions": {
+      "query": "Consultas disponibles para obtener datos",
+      "mutation": "Mutaciones disponibles para modificar datos",
+      "subscription": "Suscripciones para datos en tiempo real"
+    }
+  },
+
+  "users": {
+    "registration": {
+      "title": "Registrarse",
+      "username": "Nombre de usuario",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "confirm_password": "Confirmar contraseña",
+      "register_button": "Registrarse",
+      "already_have_account": "¿Ya tiene una cuenta? Inicie sesión"
+    },
+    "profile": {
+      "title": "Perfil",
+      "name": "Nombre",
+      "avatar": "Avatar",
+      "bio": "Biografía",
+      "security": "Seguridad",
+      "sessions": "Sesiones",
+      "login_history": "Historial de inicio de sesión",
+      "api_usage": "Uso de API"
+    },
+    "tokens": {
+      "title": "Tokens de API",
+      "create_new": "Crear nuevo token",
+      "name": "Nombre",
+      "scopes": "Alcances",
+      "scope_read": "Lectura",
+      "scope_write": "Escritura",
+      "expiry": "Expiración",
+      "revoke": "Revocar",
+      "last_used": "Última vez: hace {duration}"
+    },
+    "moderation": {
+      "title": "Moderación de usuarios",
+      "delete_user": "Eliminar usuario",
+      "impersonate": "Suplantar",
+      "disable_user": "Deshabilitar usuario",
+      "enable_user": "Habilitar usuario",
+      "revoke_sessions": "Revocar sesiones",
+      "profile_tab": "Perfil",
+      "security_tab": "Seguridad",
+      "activity_tab": "Actividad",
+      "actions_tab": "Acciones"
+    },
+    "roles": {
+      "title": "Gestión de roles",
+      "public": "Público",
+      "private": "Privado",
+      "disabled": "Deshabilitado"
+    }
+  },
+
+  "cli": {
+    "description": "{project_name} {project_version} - {project_description}",
+    "usage": "Uso:",
+    "information": "Información:",
+    "shell_integration": "Integración de shell:",
+    "server_configuration": "Configuración del servidor:",
+    "service_management": "Gestión del servicio:",
+    "show_help": "Mostrar ayuda",
+    "show_version": "Mostrar versión",
+    "show_status": "Mostrar estado y salud del servidor",
+    "print_completions": "Imprimir completaciones de shell",
+    "print_init": "Imprimir comando de inicialización de shell",
+    "app_mode": "Modo de aplicación",
+    "config_dir": "Directorio de configuración",
+    "data_dir": "Directorio de datos",
+    "run_help": "Ejecute '{project_name} <command> --help' para ayuda detallada sobre cualquier comando.",
+    "running_pid": "{project_name} está en ejecución (PID {pid})",
+    "daemon_started": "Demonio iniciado con PID {pid}",
+    "already_running": "Ya en ejecución (pid {pid})",
+    "running_in_mode": "Ejecutando en modo: {app_mode}",
+    "listening_on": "Escuchando en {proto}://{fqdn}:{port}",
+    "server_started_on": "Servidor iniciado en {startup_datetime}",
+    "server_started_ok": "Servidor iniciado exitosamente",
+    "received_signal": "Recibida señal {signal}, iniciando apagado graceful...",
+    "received_sigusr1": "Recibida SIGUSR1, reabriendo registros...",
+    "received_sigusr2": "Recibida SIGUSR2, volcando estado...",
+    "graceful_shutdown": "Apagado graceful completado",
+    "shutdown_error": "Error de apagado del servidor HTTP: {error}",
+    "windows_daemon_warning": "Advertencia: --daemon no es compatible en Windows",
+    "windows_service_hint": "Use --service --install && --service start para Servicio de Windows",
+    "error_create_dir": "Error al crear directorio {path}: {error}",
+    "error_not_writable": "El directorio {path} no es escribible: {error}",
+    "error_reserved_path": "'{path}' es una ruta reservada",
+    "error_route_conflict": "'{path}' entra en conflicto con la ruta existente: {route}",
+    "error_corrupt_pid": "Archivo PID corrupto",
+    "error_unsupported_shell": "Shell no soportado: {shell}",
+    "requires_privileges": "{action} requiere privilegios elevados.",
+    "escalate_prompt": "¿Escalar? [S/n]: ",
+    "running_in_mode_label": "Modo"
+  },
+
+  "version": {
+    "name_version": "{project_name} {project_version}",
+    "built": "Compilado: {build_date}",
+    "go": "Go: {go_version}",
+    "os_arch": "SO/Arq: {goos}/{goarch}"
+  },
+
+  "confirm": {
+    "delete_title": "Confirmar eliminación",
+    "delete_message": "¿Está seguro de que desea eliminar este elemento?",
+    "action_irreversible": "Esta acción no se puede deshacer."
+  },
+
+  "form": {
+    "required_field": "(obligatorio)",
+    "optional_field": "(opcional)",
+    "hint_email": "Nunca compartiremos su correo electrónico.",
+    "errors_count": "El formulario tiene {count} errores"
+  },
+
+  "a11y": {
+    "skip_to_content": "Saltar al contenido principal",
+    "skip_to_navigation": "Saltar a la navegación",
+    "loading": "Cargando...",
+    "item_saved": "Elemento guardado exitosamente",
+    "search_results": "{count} resultados de búsqueda encontrados"
+  }
+}

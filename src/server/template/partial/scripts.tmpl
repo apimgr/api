@@ -1,0 +1,7 @@
+{{define "scripts"}}
+<script src="{{asset "/static/js/app.js"}}"></script>
+{{/* Instant theme preview only - the toggle is a real form submit and works
+     without this file (AI.md PART 16 "Theme Toggle"). */}}
+<script src="{{asset "/static/js/theme.js"}}"></script>
+{{block "page-scripts" .}}{{end}}
+{{end}}

@@ -1,0 +1,35 @@
+{{/* layouts/public.tmpl - Public layout per PART 17 */}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.LangDir}}" class="{{.ThemeClass}}">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  {{/* Skip links per PART 30: the first focusable elements on every page,
+       off-screen until focused. Pure anchors - no JavaScript involved. */}}
+  <a href="#main-content" class="skip-link">{{t .Lang "a11y.skip_to_content"}}</a>
+  <a href="#navigation" class="skip-link">{{t .Lang "a11y.skip_to_navigation"}}</a>
+
+  {{/* The nav partial renders inside the header's single row (PART 16
+       "Header Layout"), so it is not templated separately here. */}}
+  {{template "header" .}}
+
+  {{/* main is the skip-link target, so it takes tabindex="-1" to be
+       programmatically focusable without entering the tab order. */}}
+  <main id="main-content" role="main" tabindex="-1">
+    {{template "content" .}}
+  </main>
+
+  {{template "footer" .}}
+
+  {{/* Live regions per PART 30. Rendered server-side and left empty so any
+       enhancement can announce into an element that already exists in the
+       accessibility tree; a region injected at announce time is frequently
+       missed by screen readers. Polite for status, assertive for errors.
+       Neither is required for any core feature to work. */}}
+  <div id="a11y-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="a11y-alert" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+  {{template "scripts" .}}
+</body>
+</html>

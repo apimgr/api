@@ -1,0 +1,48 @@
+{{define "content"}}
+{{$tool := .}}
+{{with $tool}}
+<section>
+  <div class="container container-sm">
+    <nav class="mb-2 tool-note">
+      <a href="/">Home</a> / <a href="/generate">Generators</a> / SQL Schema
+    </nav>
+
+    <div class="tool-card">
+      <div class="tool-header">
+        <h1 class="tool-title">SQL Schema</h1>
+        <button class="btn btn-icon" data-favorite="generate-sql" title="Add to favorites">⭐</button>
+      </div>
+
+      <p class="tool-description">
+        Generate a CREATE TABLE statement from a table name and column
+        definitions.
+      </p>
+
+      <form id="sql-form" class="tool-form" data-body-endpoint="/api/v1/generate/sql">
+        <div class="form-group">
+          <label class="form-label">Request Body (JSON)</label>
+          <textarea name="body" class="form-input" rows="10" required placeholder='{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true},{"name":"email","type":"string","unique":true}]}'></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Generate</button>
+      </form>
+
+      <div id="sql-form-result" class="tool-result" hidden></div>
+
+      <div class="mt-3">
+        <h3>API Endpoint</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">POST Request</span>
+            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+          </div>
+          <div class="code-content">
+            <pre>curl -X POST {{.BaseURL}}/api/v1/generate/sql -d '{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true}]}'</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -1,0 +1,32 @@
+{{define "nav"}}
+{{/* Rendered inside the single header row (PART 16 "Header Layout"), so this
+     partial emits no wrapper row of its own. The checkbox, links, hamburger,
+     panel and overlay stay siblings because the CSS-only menu depends on the
+     :checked ~ sibling combinator. */}}
+{{/* The toggle checkbox drives the CSS-only mobile menu. It must NOT be
+     hidden or display:none - either removes it from the tab order and
+     makes the menu keyboard-unreachable. .sr-only clips it out of view
+     instead, and CSS draws the focus ring on the label it controls. */}}
+<input type="checkbox" id="nav-toggle" class="nav-checkbox sr-only" aria-label="{{t .Lang "nav.main_navigation"}}">
+
+{{/* id="navigation" is the skip-link target; role/aria-label per PART 30
+     landmarks so the two nav landmarks on the page are distinguishable. */}}
+<nav class="nav-links" id="navigation" role="navigation" aria-label="{{t .Lang "nav.main_navigation"}}">
+  <a href="/">{{t .Lang "nav.home"}}</a>
+  <a href="/categories">{{t .Lang "nav.categories"}}</a>
+  <a href="/api">{{t .Lang "nav.api_docs"}}</a>
+  <a href="/about">{{t .Lang "nav.about"}}</a>
+</nav>
+
+<label for="nav-toggle" class="nav-toggle"><span aria-hidden="true">☰</span></label>
+
+<div class="nav-panel">
+  <label for="nav-toggle" class="nav-close"><span aria-hidden="true">✕</span></label>
+  <a href="/">{{t .Lang "nav.home"}}</a>
+  <a href="/categories">{{t .Lang "nav.categories"}}</a>
+  <a href="/api">{{t .Lang "nav.api_docs"}}</a>
+  <a href="/about">{{t .Lang "nav.about"}}</a>
+</div>
+
+<label for="nav-toggle" class="nav-overlay" aria-hidden="true"></label>
+{{end}}

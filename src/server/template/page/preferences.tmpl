@@ -1,0 +1,58 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">⚙️ Preferences</h1>
+    <p class="hero-subtitle">Theme and language are stored in your browser only — no account, no server-side record.</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">Appearance &amp; Language</div>
+      <div class="card-body">
+        <form action="/server/preferences" method="POST" class="form">
+          {{csrfField .CSRFToken}}
+          <div class="form-group">
+            <label for="pref-theme">Theme</label>
+            <select id="pref-theme" name="theme" class="form-control">
+              <option value="dark"{{if eq .Theme "dark"}} selected{{end}}>Dark</option>
+              <option value="light"{{if eq .Theme "light"}} selected{{end}}>Light</option>
+              <option value="auto"{{if eq .Theme "auto"}} selected{{end}}>Auto (match system)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="pref-lang">Language</label>
+            <select id="pref-lang" name="lang" class="form-control">
+              {{range .Languages}}
+              <option value="{{.Code}}"{{if eq $.Lang .Code}} selected{{end}}>{{.NativeName}} ({{.Name}})</option>
+              {{end}}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Save preferences</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Move these settings to another device</div>
+      <div class="card-body">
+        <p>Open this link in another browser, or type the short code into the field below on that device.</p>
+        <dl>
+          <dt>Link</dt>
+          <dd><code class="break-all">{{.PrefExportURL}}</code></dd>
+          <dt>Short code</dt>
+          <dd><code class="break-all">{{.PrefExportCode}}</code></dd>
+        </dl>
+        <form action="/server/preferences/import" method="GET" class="form">
+          <div class="form-group">
+            <label for="pref-code">Paste a link or short code</label>
+            <input id="pref-code" name="code" type="text" class="form-control" autocomplete="off" required>
+          </div>
+          <button type="submit" class="btn btn-secondary">Import preferences</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

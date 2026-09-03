@@ -1,0 +1,177 @@
+/* Light Theme - Clean light color scheme */
+/* Applied when scheme: default is active */
+
+:root {
+  /* Light theme color palette */
+  --light-bg: #ffffff;
+  --light-bg-alt: #f5f5f5;
+  --light-bg-elevated: #e0e0e0;
+  --light-text: #1a1a1a;
+  --light-text-muted: #666666;
+  --light-accent-blue: #0066cc;
+  --light-accent-green: #008000;
+  --light-accent-orange: #ff8c00;
+  --light-accent-red: #cc0000;
+  --light-accent-purple: #6600cc;
+  --light-accent-teal: #008080;
+}
+
+/* Apply light theme customization */
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: var(--light-bg);
+  --md-default-fg-color: var(--light-text);
+  --md-default-fg-color--light: var(--light-text-muted);
+  --md-default-fg-color--lighter: var(--light-bg-elevated);
+  --md-default-fg-color--lightest: var(--light-bg-alt);
+
+  --md-primary-fg-color: var(--light-accent-purple);
+  --md-primary-fg-color--light: var(--light-accent-blue);
+  --md-primary-fg-color--dark: var(--light-accent-purple);
+  --md-primary-bg-color: var(--light-bg);
+  --md-primary-bg-color--light: var(--light-bg-alt);
+
+  --md-accent-fg-color: var(--light-accent-blue);
+  --md-accent-fg-color--transparent: rgba(0, 102, 204, 0.1);
+  --md-accent-bg-color: var(--light-accent-blue);
+
+  --md-code-fg-color: var(--light-text);
+  --md-code-bg-color: var(--light-bg-alt);
+
+  --md-code-hl-color: rgba(255, 140, 0, 0.2);
+  --md-code-hl-number-color: var(--light-accent-purple);
+  --md-code-hl-special-color: var(--light-accent-red);
+  --md-code-hl-function-color: var(--light-accent-green);
+  --md-code-hl-constant-color: var(--light-accent-purple);
+  --md-code-hl-keyword-color: var(--light-accent-red);
+  --md-code-hl-string-color: var(--light-accent-teal);
+  --md-code-hl-name-color: var(--light-text);
+  --md-code-hl-operator-color: var(--light-accent-red);
+  --md-code-hl-punctuation-color: var(--light-text);
+  --md-code-hl-comment-color: var(--light-text-muted);
+  --md-code-hl-generic-color: var(--light-text);
+  --md-code-hl-variable-color: var(--light-text);
+
+  --md-typeset-color: var(--light-text);
+  --md-typeset-a-color: var(--light-accent-blue);
+
+  --md-typeset-kbd-color: var(--light-bg);
+  --md-typeset-kbd-accent-color: var(--light-bg-alt);
+  --md-typeset-kbd-border-color: var(--light-text-muted);
+
+  --md-typeset-mark-color: rgba(255, 235, 59, 0.5);
+
+  --md-typeset-table-color: var(--light-bg-elevated);
+
+  --md-admonition-fg-color: var(--light-text);
+  --md-admonition-bg-color: var(--light-bg);
+
+  --md-footer-bg-color: var(--light-text);
+  --md-footer-bg-color--dark: var(--light-text);
+}
+
+/* Navigation and sidebar */
+[data-md-color-scheme="default"] .md-nav__link {
+  color: var(--light-text);
+}
+
+[data-md-color-scheme="default"] .md-nav__link:hover {
+  color: var(--light-accent-blue);
+}
+
+[data-md-color-scheme="default"] .md-nav__link--active {
+  color: var(--light-accent-purple);
+}
+
+/* Search */
+[data-md-color-scheme="default"] .md-search__input {
+  background-color: var(--light-bg-alt);
+  color: var(--light-text);
+}
+
+[data-md-color-scheme="default"] .md-search__input::placeholder {
+  color: var(--light-text-muted);
+}
+
+/* Tables */
+[data-md-color-scheme="default"] .md-typeset table:not([class]) th {
+  background-color: var(--light-bg-alt);
+  color: var(--light-accent-purple);
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) tr:hover {
+  background-color: rgba(224, 224, 224, 0.5);
+}
+
+/* Code blocks */
+[data-md-color-scheme="default"] .highlight {
+  background-color: var(--light-bg-alt);
+}
+
+[data-md-color-scheme="default"] code {
+  background-color: var(--light-bg-alt);
+  color: var(--light-text);
+}
+
+/* Admonitions */
+[data-md-color-scheme="default"] .md-typeset .admonition,
+[data-md-color-scheme="default"] .md-typeset details {
+  border-color: var(--light-accent-purple);
+  background-color: var(--light-bg);
+}
+
+[data-md-color-scheme="default"] .md-typeset .admonition-title,
+[data-md-color-scheme="default"] .md-typeset summary {
+  background-color: rgba(102, 0, 204, 0.1);
+}
+
+/* Note admonition */
+[data-md-color-scheme="default"] .md-typeset .admonition.note,
+[data-md-color-scheme="default"] .md-typeset details.note {
+  border-color: var(--light-accent-blue);
+}
+
+[data-md-color-scheme="default"] .md-typeset .note > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .note > summary {
+  background-color: rgba(0, 102, 204, 0.1);
+}
+
+/* Warning admonition */
+[data-md-color-scheme="default"] .md-typeset .admonition.warning,
+[data-md-color-scheme="default"] .md-typeset details.warning {
+  border-color: var(--light-accent-orange);
+}
+
+[data-md-color-scheme="default"] .md-typeset .warning > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .warning > summary {
+  background-color: rgba(255, 140, 0, 0.1);
+}
+
+/* Danger/Error admonition */
+[data-md-color-scheme="default"] .md-typeset .admonition.danger,
+[data-md-color-scheme="default"] .md-typeset .admonition.error,
+[data-md-color-scheme="default"] .md-typeset details.danger,
+[data-md-color-scheme="default"] .md-typeset details.error {
+  border-color: var(--light-accent-red);
+}
+
+[data-md-color-scheme="default"] .md-typeset .danger > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .error > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .danger > summary,
+[data-md-color-scheme="default"] .md-typeset .error > summary {
+  background-color: rgba(204, 0, 0, 0.1);
+}
+
+/* Tip/Success admonition */
+[data-md-color-scheme="default"] .md-typeset .admonition.tip,
+[data-md-color-scheme="default"] .md-typeset .admonition.success,
+[data-md-color-scheme="default"] .md-typeset details.tip,
+[data-md-color-scheme="default"] .md-typeset details.success {
+  border-color: var(--light-accent-green);
+}
+
+[data-md-color-scheme="default"] .md-typeset .tip > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .success > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .tip > summary,
+[data-md-color-scheme="default"] .md-typeset .success > summary {
+  background-color: rgba(0, 128, 0, 0.1);
+}

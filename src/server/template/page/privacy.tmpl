@@ -1,0 +1,56 @@
+{{define "content"}}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">🔒 Privacy Policy</h1>
+    <p class="hero-subtitle">Last updated {{.UpdatedAt}}</p>
+  </div>
+</section>
+
+<section>
+  <div class="container container-sm">
+    <div class="card">
+      <div class="card-header">What We Collect</div>
+      <div class="card-body">
+        <p>
+          {{.SiteTitle}} processes the data you submit to its tools (text,
+          crypto, datetime, and network utilities) only to compute and
+          return a response. Submitted content is not stored beyond the
+          lifetime of the request.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Logs</div>
+      <div class="card-body">
+        <p>
+          Standard operational logs (timestamp, route, response code, and
+          source IP for rate limiting and abuse prevention) may be retained
+          for a limited period. Logs are never sold or shared with third
+          parties.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Cookies</div>
+      <div class="card-body">
+        <p>
+          No tracking or advertising cookies are used. A single preference
+          cookie (theme) may be stored locally in your browser.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Third Parties</div>
+      <div class="card-body">
+        <p>
+          No submitted data is shared with third-party services. This
+          deployment does not use analytics or advertising trackers.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

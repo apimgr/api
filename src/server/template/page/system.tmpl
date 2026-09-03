@@ -1,0 +1,31 @@
+{{define "content"}}
+<section>
+  <div class="container">
+    <h1>Health & System</h1>
+    <p class="lead">Server health checks, system information, version details, and service status monitoring.</p>
+    
+    <div class="tool-grid">
+      <a href="/api/v1/system/info" class="tool-card-link">
+        <div class="tool-card">
+          <h3>System Info</h3>
+          <p>Get server system information</p>
+        </div>
+      </a>
+      
+      <a href="/healthz" class="tool-card-link">
+        <div class="tool-card">
+          <h3>Health Check</h3>
+          <p>Check service health status</p>
+        </div>
+      </a>
+      
+      <a href="/version" class="tool-card-link">
+        <div class="tool-card">
+          <h3>Version Info</h3>
+          <p>Get version and build information</p>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+{{end}}
