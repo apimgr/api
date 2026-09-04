@@ -972,3 +972,155 @@ satisfied; they were removed rather than carried forward:
   must not be inferred. User decision: leave unset for now; `site.txt` is
   not created and any `{official_site}` reference stays unresolved until
   the user provides the real value.
+
+### Wave-5 results
+
+#### Scheduler (PART 18) — 2026-09-03
+
+- The earlier PART 18 entry in this file was stale. Verified against the
+  current code: all 11 required tasks are registered in
+  `src/scheduler/tasks.go` `RegisterDefaultTasks()` with the spec's
+  schedules and skippability (`ssl_renewal`, `geoip_update`,
+  `blocklist_update`, `cve_update`, `update_check`, `token_cleanup`,
+  `log_rotation`, `backup_daily`, `backup_hourly`, `healthcheck_self`,
+  `tor_health`), and failure notification with PART 17 suppression is
+  already wired through `Scheduler.notifyFailure`. The suppression itself
+  is enforced inside `src/email`'s Notifier (`suppressSchedulerError` on
+  the dedicated events, `consumeSuppression` in `NotifySchedulerError`),
+  so the scheduler correctly sends the dedicated event and then always
+  calls `NotifySchedulerError`. No change was needed there — do not
+  "fix" that fall-through in a future pass.
+- Fixed: the scheduler package no longer runs raw SQL against
+  `database.GetServerDB()`, so every scheduler query is now counted by the
+  PART 20 DB metrics. New instrumented helpers were added to the database
+  package and the four call sites switched to them.
+- Open: `i2p_health` (PART 18 task table, "only when I2P opt-in enabled")
+  is intentionally not registered — the project has no I2P provider
+  subsystem, and `src/server/handler/health.go` reports the eepsite
+  permanently disabled with provider "none". Register it when an I2P
+  manager exists; registering it now would fabricate a capability.
+
+#### Email & Notifications (PART 17) — 2026-09-03
+
+- The earlier PART 17 entry in this file was stale. Verified against the
+  current code: all 7 SMTP auto-detection tiers exist
+  (`src/email/email.go` `detectionHosts`, ports 25/465/587 via EHLO),
+  `src/server/template/email/` ships all 10 default templates plus
+  `embed.go`, the `{variable}` engine and 10 global variables are in
+  `src/email/template.go`, per-event toggles are in `notify.go` /
+  `fromconfig.go`, execution-scoped suppression
+  (`backup_failed`/`ssl_renewal_failed` → `scheduler_error`) is enforced
+  in the Notifier, all 7 `SMTP_*` env overrides are applied by
+  `config.applySMTPEnvOverrides`, default sender falls back to the app
+  title and `no-reply@{fqdn}`, and template validation (blocking errors,
+  "Did you mean {x}?", >78-char subject warning) is in
+  `ValidateTemplate`. Dispatch is wired at every call site: scheduler
+  failures, `backup.Manager` complete/failed (with `suppressFailure` so a
+  scheduler-driven backup does not double-send), `ssl/acme.go`
+  expiring/renewed/renewal-failed, and update available/installed.
+- Fixed: the only genuine gap — the `api email test [recipient]` command
+  from PART 17 "Email Template Configuration" did not exist. Added
+  `src/emailcmd.go` (`handleEmailCommand`), dispatched from `src/main.go`
+  after the other one-shot commands, and `email.Notifier.SendTest` in
+  `src/email/notify.go`, which now renders the `test` template with
+  `SampleVars` sample data, prefixes the subject with `[TEST]` and
+  returns the delivered recipients/subject so the command can print them
+  and write an `email.test_sent` audit entry. Recipient resolution is
+  argument → `notifications.email.reply_to` → `contact.admin.email`. It
+  errors (exit 69) instead of queueing when SMTP is unavailable.
+- Open: PART 17's optional template *editor* surface (syntax
+  highlighting, variable sidebar, live preview, Send Test dialog) has no
+  web UI — no admin web UI exists in this project, so template edits stay
+  file-based in `{config_dir}/template/email/`. Revisit only if IDEA.md
+  ever adds an operator UI.
+
+#### PART 21 — Backup & Restore (2026-09-03)
+
+- Verified against current code, most listed gaps were already closed:
+  `src/backup/manifest.go` writes `manifest.json` with every PART 21
+  field, `names.go` implements all four filename patterns plus
+  `IsEncryptedName`, `verify.go` runs all 7 post-creation checks,
+  `retention.go` implements the yearly > monthly > weekly > daily tiers,
+  the `max_total_size` cap and the falsey values
+  (`0/false/no/none/disable/disabled/off`), `manager.go` caches the
+  backup dir at construction and never re-resolves it, checks free disk
+  space before a scheduled backup (`backup.skipped_disk_full`), enforces
+  `server.compliance.enabled` via `ErrEncryptionRequired`, encrypts with
+  AES-256-GCM + Argon2id streaming so no plaintext archive touches disk,
+  and emits all 8 audit events.
+- Fixed: restore had no authorization at all. Added
+  `src/backup/authorize.go` — `Caller`, `AuthorizeRestore` implementing
+  PART 21's four-row matrix (first-run allowed, root allowed with
+  confirmation, service user requires `server.token` compared in constant
+  time over SHA-256, random user denied), `RequiresPassword`, and the
+  exported `ErrRestoreDenied` / `ErrRestoreNotConfirmed` /
+  `ErrOperatorTokenUnset` / `ErrRestorePasswordRequired` errors.
+  `Manager.Restore` now takes a `Caller`, authorizes before touching the
+  archive, refuses an encrypted archive with no password, and records the
+  resolved actor in the `backup.restored` audit event.
+- Fixed: `--maintenance backup|restore` were JSON stubs that wrote a
+  hand-rolled `{version,created_at,config,data_dir}` file. Replaced with
+  `src/maintenance_backup.go`, which drives `backup.Manager` exactly like
+  the scheduler does (same manifest, checksum, verification, retention
+  sweep and audit events), prompts for the backup password with no echo
+  (`term.ReadPassword`) instead of accepting a flag, prompts for the
+  operator token when not root, requires a `[y/N]` confirmation, and
+  detects the first-run/empty-database condition before `database.Init`
+  creates `server.db`.
+- Removed: dead `CleanupOldBackups(dir, keepCount)` in
+  `src/backup/backup.go` and its three tests — flat keep-last-N over a
+  `backup-*.tar.gz` glob the app never produces, unreferenced outside its
+  own tests, and in direct conflict with the spec'd tiered retention.
+- Added `src/backup/authorize_test.go` covering all four matrix rows,
+  the empty/unset-token cases and the encrypted-without-password refusal.
+- Open: PART 21's WebUI password dialog and the API's
+  400 `VALIDATION_FAILED` response have no call site — no backup/restore
+  HTTP handler exists under `src/server`. `backup.ErrRestorePasswordRequired`
+  and `AuthorizeRestore` are exported so a future handler maps straight
+  onto them.
+- Verified in `casjaysdev/go:latest`: `gofmt -l src/` clean, `go vet`
+  clean, `go build ./...` clean, `go test ./src/backup/...` ok (5.5s).
+
+#### Privilege escalation & service account (PART 23, 24) — 2026-09-03
+
+- The earlier PART 23/24 entry was partly stale. Already present and
+  spec-conformant before this pass: escalation detection/ordering per OS
+  (`src/sysservice/escalate*.go`), `api` user/group creation with
+  nologin shell and `api service account` Gecos, UID==GID matching,
+  safe-range selection (Linux/BSD 899→200, macOS 399→200) with reserved
+  IDs skipped, and the hardened systemd unit — which does NOT hardcode
+  `User=root`/`Group=root`.
+- Added `src/sysservice/privdrop_unix.go`: `ServiceAccountIDs()` (passwd
+  lookup, rejects a non-numeric or mismatched uid/gid) and
+  `DropPrivileges()` (`Setgroups`→`Setgid`→`Setuid`, refuses a target of
+  uid/gid ≤ 0, then `verifyPrivilegeDrop()` asserts both real and
+  effective ids match the target).
+- Added `src/sysservice/privdrop_windows.go`: no POSIX ids and no drop —
+  Windows services run under the `NT SERVICE\api` virtual account.
+- Added `src/sysservice/rootsetup.go`: `RuntimeDirs()`,
+  `PrepareRuntimeDirs()`, `RootSetup()` (home dir first, then account,
+  then the runtime tree; returns the drop target, 0 meaning no drop) and
+  `ClaimRuntimeDirs()`/`chownTree()` (recursive ownership handoff, run
+  separately because `config.Load()` writes the first-run `server.yml`
+  as root between the two steps).
+- Reordered `src/main.go` startup: early-exit commands → `RootSetup()` →
+  `config.Load()` + flag overrides → `appmode.Initialize` → `daemonize()`
+  → `net.Listen` for the HTTP/HTTPS ports (so ports below 1024 are bound
+  while still root) → `ClaimRuntimeDirs()` → `DropPrivileges()` →
+  database/logger/geoip/SMTP/PID file → `srv.Serve(ln)` /
+  `httpsSrv.ServeTLS(ln, "", "")`.
+- Added `src/sysservice/privdrop_test.go` and `rootsetup_test.go`
+  covering the unprivileged no-op path, the privileged-target refusal,
+  drop verification, absent/present service-account lookup, runtime-dir
+  coverage and recursive/missing-tree chown.
+- Open: `DetectEscalationMethod`/`CanEscalate`/`Escalate` still have no
+  call site in the startup path — they are reachable only from the
+  service commands and tests, so a non-root start that needs a
+  privileged port fails to bind rather than offering to escalate.
+- Open: real `useradd`/`groupadd`/`dscl`/`pw` execution and an actual
+  root→`api` drop cannot be exercised in this sandbox; only the logic,
+  platform branching and id-selection are covered by tests.
+- Verified in `casjaysdev/go:latest`: `gofmt -l src/` clean,
+  `go build ./src/...` clean, `go vet ./src/sysservice/...` clean,
+  `go test ./src/sysservice/...` ok (0.398s),
+  `GOOS=windows go build ./src` clean.
