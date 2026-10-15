@@ -88,9 +88,8 @@ mechanical have already been applied in-tree and are not listed here.
   folded into a new "Administration" section in `docs/cli.md`. Removed all
   other `docs/*.md` references to a web admin panel/UI (`index.md`,
   `api.md`, `configuration.md`, `installation.md`, `development.md`).
-- `docs/configuration.md` now documents `API_BACKUP_PASSWORD` (real,
-  `src/scheduler/tasks.go`). `SMTP_*` env vars are explicitly documented as
-  NOT implemented (see gap below) rather than fabricated.
+- `docs/configuration.md` documents `API_BACKUP_PASSWORD` and the configured
+  `SMTP_*` environment overrides.
 
 ## SMTP env var / config wiring gap (code, not docs) — resolved 2026-08-30
 
@@ -111,28 +110,17 @@ mechanical have already been applied in-tree and are not listed here.
   other packages can send mail without importing the composition root.
   Email is fully disabled (not queued/retried) when no working SMTP
   server is found, per "No SMTP = No emails."
-- Scope note: `email.AutoDetectSMTP()` only probes priorities 1-2 of
-  AI.md's 7-tier host table (`127.0.0.1`, `172.17.0.1` Docker bridge) —
-  see the new gap logged immediately below for priorities 3-7.
+- Follow-up completed: SMTP auto-detection now probes all seven host
+  priorities, with platform-aware gateway detection and FQDN/global IPv4
+  candidates. The former priorities 3-7 backlog below was stale.
 - Verified `go build ./... && go vet ./...` clean, and
   `go test ./config/... ./email/... -cover` (86.3%/83.3%) plus the full
   `go test ./... -cover` suite (all packages pass, no regressions) in
   `casjaysdev/go:latest`.
 
-## `AutoDetectSMTP` priorities 3-7 not implemented (spec gap, 2026-08-30)
+## SMTP auto-detection priorities 3-7 — resolved
 
-- AI.md PART 17's SMTP auto-detection table has 7 priority tiers;
-  `email.AutoDetectSMTP()` (see resolved SMTP wiring item above) only
-  implements tiers 1-2 (`127.0.0.1`, `172.17.0.1`). Tiers 3-7 —
-  `{gateway_ip}` (default gateway), `{fqdn}` (from `GetFQDN`),
-  `{global_ipv4}`, `mail.{fqdn}`, `smtp.{fqdn}` — are not probed.
-  Deliberately deferred: no gateway-IP, FQDN, or global-IPv4 detection
-  helper exists anywhere in this codebase yet (grepped `src/` before
-  scoping this), and building that detection infrastructure from
-  scratch is materially larger than "wire the existing SMTP client into
-  config." Needs its own implementation pass once FQDN/gateway/public-IP
-  detection helpers exist (PART 8's `{fqdn}` resolution chain is the
-  natural place to add them).
+`src/email/email.go` now builds the complete ordered candidate list, and `src/email/gateway.go` detects the Linux default gateway. Detection skips unavailable candidates and de-duplicates hosts. The earlier backlog claiming only priorities 1-2 existed was stale.
 
 ## Low test coverage (below the 60% gate) — resolved 2026-08-06
 
@@ -219,21 +207,15 @@ mechanical have already been applied in-tree and are not listed here.
   only a comment; `go build ./... && go vet ./... && go test ./... -cover`
   clean in `casjaysdev/go:latest`.
 
-## Email template translation pipeline not implemented (spec gap, 2026-08-29)
+## Email template translation pipeline incomplete (spec gap, 2026-08-29)
 
-- AI.md was updated to clarify (PART 30 cross-ref, email template section):
-  the plain-substitution email template engine cannot call functions, so
-  `{{t "key"}}`/`{{tf "key" ...}}` do NOT work in `.tmpl`-free email bodies —
-  every translated string must be resolved server-side via
-  `i18n.Translate`/`i18n.TranslateFormat` BEFORE rendering, then passed in as
-  an already-translated plain `{variable}`. This is moot for right now:
-  `src/email/email.go` has no template loader/renderer at all (no
-  `src/server/template/email/` directory, no `{config_dir}/template/email/`
-  override support, no i18n package under `src/common/i18n`), and per the
-  existing SMTP wiring-gap item above, the whole email feature is
-  unimplemented and unwired into config/startup. Needs a design/build pass
-  (email templates + i18n package) before this translation rule is
-  actionable; tracked here so it isn't lost.
+- SMTP configuration, notification delivery, embedded templates, custom
+  template overrides, and plain `{variable}` substitution are implemented.
+  The remaining gap is localization: the email renderer does not resolve
+  translated strings through `i18n.Translate`/`i18n.TranslateFormat` before
+  substitution as required by AI.md PART 30. Keep the current templates
+  accurate in English; implement translated template values when the email
+  locale policy and supported languages are wired into notification delivery.
 
 ## CLI self-update temp path not yet implemented (spec gap, 2026-08-29)
 
@@ -1124,3 +1106,20 @@ satisfied; they were removed rather than carried forward:
   `go build ./src/...` clean, `go vet ./src/sysservice/...` clean,
   `go test ./src/sysservice/...` ok (0.398s),
   `GOOS=windows go build ./src` clean.
+
+## Audit follow-up (2026-10-10)
+
+- Fixed IPv6 bind formatting in `src/main.go`: configured addresses now use
+  `net.JoinHostPort`, which brackets IPv6 literals correctly for both HTTP
+  and HTTPS listeners.
+- Fixed container startup prerequisites in `docker/Dockerfile` and
+  `docker/Dockerfile.dev`: Alpine's `shadow` package supplies the
+  `groupadd`/`useradd` commands required by the binary's documented
+  root-startup account creation flow.
+- Tightened restore authorization in `src/maintenance_backup.go`: a
+  non-elevated caller must match the configured service account UID before
+  the operator-token flow is offered; arbitrary local users are denied as
+  required by AI.md PART 5 and PART 21.
+- Primary-agent verification is still required for API project tests, vet,
+  staticcheck, multi-platform builds, and production/development Docker
+  startup after these changes.
