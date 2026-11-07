@@ -419,9 +419,24 @@ func (m *Manager) Cleanup() (RetentionResult, error) {
 	return result, nil
 }
 
-// Restore verifies an archive against every PART 21 restore check and then
+// Restore authorizes the caller against PART 21's restore authorization
+// matrix, verifies the archive against every PART 21 restore check, and then
 // unpacks it. A version mismatch warns rather than blocking.
-func (m *Manager) Restore(path, password string) error {
+func (m *Manager) Restore(caller Caller, path, password string) error {
+	actor, err := AuthorizeRestore(caller)
+	if err != nil {
+		m.emit(EventFailed, map[string]interface{}{
+			"filename":  filepath.Base(path),
+			"operation": "restore",
+			"error":     err.Error(),
+		})
+		return err
+	}
+
+	if RequiresPassword(path) && password == "" {
+		return ErrRestorePasswordRequired
+	}
+
 	manifest, err := Verify(path, password)
 	if err != nil {
 		details := map[string]interface{}{
@@ -452,6 +467,7 @@ func (m *Manager) Restore(path, password string) error {
 	m.emit(EventRestored, map[string]interface{}{
 		"filename":    filepath.Base(path),
 		"app_version": manifest.AppVersion,
+		"actor":       actor,
 	})
 	return nil
 }

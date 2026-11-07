@@ -55,6 +55,7 @@ RUN apk add --no-cache \
     curl \
     bash \
     tini \
+    shadow \
     tor
 
 # NO USER directive and no user/group creation - the container starts as root

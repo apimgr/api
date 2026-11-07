@@ -92,18 +92,13 @@ func (s *Scheduler) notifyUpdateAvailable(currentVersion, newVersion, branch str
 	setLastNotifiedVersion(newVersion)
 }
 
-// lastNotifiedVersion reads the most recently announced update version.
+// lastNotifiedVersion reads the most recently announced update version. A
+// read failure is treated as "never announced" so a transient database error
+// can only ever cause a duplicate notification, never a missed one.
 func lastNotifiedVersion() string {
-	db := database.GetServerDB()
-	if db == nil {
-		return ""
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var value string
-	if err := db.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, lastNotifiedKey).Scan(&value); err != nil {
+	value, err := database.GetConfigValue(context.Background(), lastNotifiedKey)
+	if err != nil {
+		log.Printf("Scheduler: Failed to read last notified update version: %v", err)
 		return ""
 	}
 	return value
@@ -111,18 +106,7 @@ func lastNotifiedVersion() string {
 
 // setLastNotifiedVersion records the announced update version.
 func setLastNotifiedVersion(version string) {
-	db := database.GetServerDB()
-	if db == nil {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if _, err := db.ExecContext(ctx, `
-		INSERT INTO config (key, value, type, updated_at) VALUES (?, ?, 'string', strftime('%s', 'now'))
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-		lastNotifiedKey, version); err != nil {
+	if err := database.SetConfigValue(context.Background(), lastNotifiedKey, version); err != nil {
 		log.Printf("Scheduler: Failed to record last notified update version: %v", err)
 	}
 }

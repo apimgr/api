@@ -1,8 +1,6 @@
 package scheduler
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"sort"
 	"time"
@@ -139,50 +137,25 @@ func (s *Scheduler) TaskHistory(id string, limit int) ([]HistoryEntry, error) {
 		limit = 50
 	}
 
-	db := database.GetServerDB()
-	if db == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	rows, err := db.QueryContext(ctx, `
-		SELECT id, task_id, started_at, completed_at, status, error, duration_ms
-		FROM scheduler_history
-		WHERE task_id = ?
-		ORDER BY started_at DESC
-		LIMIT ?`, id, limit)
+	// The query itself lives in the database package so it passes through
+	// that package's instrumented helpers and is counted by the PART 20 DB
+	// metrics; the scheduler never opens a raw handle of its own.
+	rows, err := database.SchedulerHistory(id, limit)
 	if err != nil {
-		return nil, fmt.Errorf("query scheduler history: %w", err)
-	}
-	defer rows.Close()
-
-	entries := make([]HistoryEntry, 0, limit)
-	for rows.Next() {
-		var (
-			entry       HistoryEntry
-			completedAt sql.NullTime
-			runError    sql.NullString
-			durationMS  sql.NullInt64
-		)
-		if err := rows.Scan(&entry.ID, &entry.TaskID, &entry.StartedAt, &completedAt, &entry.Status, &runError, &durationMS); err != nil {
-			return nil, fmt.Errorf("scan scheduler history: %w", err)
-		}
-		if completedAt.Valid {
-			entry.CompletedAt = completedAt.Time
-		}
-		if runError.Valid {
-			entry.Error = runError.String
-		}
-		if durationMS.Valid {
-			entry.DurationMS = durationMS.Int64
-		}
-		entries = append(entries, entry)
+		return nil, err
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate scheduler history: %w", err)
+	entries := make([]HistoryEntry, 0, len(rows))
+	for _, row := range rows {
+		entries = append(entries, HistoryEntry{
+			ID:          row.ID,
+			TaskID:      row.TaskID,
+			StartedAt:   row.StartedAt,
+			CompletedAt: row.CompletedAt,
+			Status:      row.Status,
+			Error:       row.Error,
+			DurationMS:  row.DurationMS,
+		})
 	}
 
 	return entries, nil

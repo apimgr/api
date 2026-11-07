@@ -216,6 +216,25 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Handle the positional `email test` command (AI.md PART 17). It loads
+	// config and opens the database itself because it needs the SMTP settings
+	// and writes an audit entry, so it runs before the server bring-up below.
+	if args := flag.Args(); len(args) > 0 && strings.ToLower(args[0]) == "email" {
+		handleEmailCommand(args[1:], binaryName)
+		os.Exit(0)
+	}
+
+	// Root setup (AI.md PART 8 startup sequence, PART 23 system user):
+	// while still elevated, create the dedicated service account with its
+	// home directory and every runtime directory. Ownership is transferred
+	// and privileges are dropped further down, once the first-run config
+	// has been written and the listeners are bound.
+	serviceUID, serviceGID, err := sysservice.RootSetup()
+	if err != nil {
+		log.Printf("Failed to prepare the service account and runtime directories: %v", err)
+		os.Exit(exOSErr)
+	}
+
 	// Load configuration first so the database driver/URL/token it
 	// specifies (server.cache.* sibling, server.database.*) are known
 	// before opening the database connection.
@@ -223,6 +242,81 @@ func main() {
 	if err != nil {
 		log.Printf("Failed to load configuration: %v", err)
 		os.Exit(exConfig)
+	}
+
+	// Override config with CLI flags (flags have highest priority)
+	if resolvedAddress != "" {
+		cfg.Server.Address = resolvedAddress
+	}
+	if resolvedPort != "" {
+		cfg.Server.Port = resolvedPort
+	}
+	if *baseURL != "" {
+		cfg.Server.BaseURL = *baseURL
+	}
+
+	// Determine whether --debug was explicitly passed (as opposed to
+	// defaulting to false), so it can win over DEBUG env / debug mode
+	// per the priority order in mode.Initialize.
+	debugFlagSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "debug" {
+			debugFlagSet = true
+		}
+	})
+
+	// Set application mode + debug flag (CLI > env > debug mode's default > default)
+	if err := appmode.Initialize(*mode, *debug, debugFlagSet); err != nil {
+		log.Printf("Invalid --mode value: %v", err)
+		os.Exit(exUsage)
+	}
+	cfg.Server.Mode = appmode.GetCurrentMode().String()
+
+	// Daemonize (detach from terminal) before writing the PID file, so the
+	// PID file reflects the actual detached process, not the parent. Per
+	// AI.md PART 8, --daemon is a manual-start-only concern: --service
+	// start decides for itself via shouldDaemonize/detectServiceManager.
+	if *daemon {
+		if err := daemonize(); err != nil {
+			log.Printf("Failed to daemonize: %v", err)
+			os.Exit(exOSErr)
+		}
+	}
+
+	// Bind the listening sockets while still elevated, so privileged ports
+	// (<1024) can be claimed, then drop to the dedicated service account.
+	// Binding has to happen after daemonize(), which re-execs the process
+	// and would otherwise lose the sockets.
+	httpPort, httpsPort := resolvePorts(cfg)
+	var httpLn, httpsLn net.Listener
+	if httpPort != "" {
+		httpLn, err = net.Listen("tcp", net.JoinHostPort(cfg.Server.Address, httpPort))
+		if err != nil {
+			log.Printf("Failed to bind %s:%s: %v", cfg.Server.Address, httpPort, err)
+			os.Exit(exUnavailable)
+		}
+	}
+	if httpsPort != "" {
+		httpsLn, err = net.Listen("tcp", net.JoinHostPort(cfg.Server.Address, httpsPort))
+		if err != nil {
+			log.Printf("Failed to bind %s:%s: %v", cfg.Server.Address, httpsPort, err)
+			os.Exit(exUnavailable)
+		}
+	}
+
+	// Everything that needed root is done: hand the runtime directories
+	// (including the config file just written on first run) to the service
+	// account and permanently drop privileges. A failed drop is fatal - the
+	// process must never keep serving as root (AI.md PART 23/24).
+	if serviceUID > 0 {
+		if err := sysservice.ClaimRuntimeDirs(serviceUID, serviceGID); err != nil {
+			log.Printf("Failed to transfer runtime directories to the %s account: %v", sysservice.ServiceUserName, err)
+			os.Exit(exOSErr)
+		}
+		if err := sysservice.DropPrivileges(serviceUID, serviceGID); err != nil {
+			log.Printf("Failed to drop privileges: %v", err)
+			os.Exit(exOSErr)
+		}
 	}
 
 	// Initialize database
@@ -280,45 +374,6 @@ func main() {
 	// startup; never blocks startup either way.
 	initSMTP(cfg)
 
-	// Override config with CLI flags (flags have highest priority)
-	if resolvedAddress != "" {
-		cfg.Server.Address = resolvedAddress
-	}
-	if resolvedPort != "" {
-		cfg.Server.Port = resolvedPort
-	}
-	if *baseURL != "" {
-		cfg.Server.BaseURL = *baseURL
-	}
-
-	// Determine whether --debug was explicitly passed (as opposed to
-	// defaulting to false), so it can win over DEBUG env / debug mode
-	// per the priority order in mode.Initialize.
-	debugFlagSet := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "debug" {
-			debugFlagSet = true
-		}
-	})
-
-	// Set application mode + debug flag (CLI > env > debug mode's default > default)
-	if err := appmode.Initialize(*mode, *debug, debugFlagSet); err != nil {
-		log.Printf("Invalid --mode value: %v", err)
-		os.Exit(exUsage)
-	}
-	cfg.Server.Mode = appmode.GetCurrentMode().String()
-
-	// Daemonize (detach from terminal) before writing the PID file, so the
-	// PID file reflects the actual detached process, not the parent. Per
-	// AI.md PART 8, --daemon is a manual-start-only concern: --service
-	// start decides for itself via shouldDaemonize/detectServiceManager.
-	if *daemon {
-		if err := daemonize(); err != nil {
-			log.Printf("Failed to daemonize: %v", err)
-			os.Exit(exOSErr)
-		}
-	}
-
 	// Write PID file (skipped entirely in containers per PART 8 - the
 	// container runtime supervises the process and PIDs are namespace-local)
 	pidPath := resolvedPIDFile
@@ -370,8 +425,9 @@ func main() {
 	// port of 443 is HTTPS-only, ssl.enabled forces HTTPS on any other
 	// single port, and "port1,port2" runs HTTP on the first and HTTPS on
 	// the second. DNS-01 multi-provider support is a separate, deferred
-	// item (see TODO.AI.md).
-	httpPort, httpsPort := resolvePorts(cfg)
+	// item (see TODO.AI.md). The listeners themselves were already bound
+	// above, while the process still had the privileges to claim a port
+	// below 1024.
 	var httpsSrv *http.Server
 	if httpsPort != "" {
 		sslCertPath := cfg.Server.SSL.CertPath
@@ -458,15 +514,15 @@ func main() {
 	// Start server(s) in goroutine(s)
 	go func() {
 		printStartup(cfg, binaryName)
-		if srv != nil {
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if srv != nil && httpLn != nil {
+			if err := srv.Serve(httpLn); err != nil && err != http.ErrServerClosed {
 				errChan <- err
 			}
 		}
 	}()
-	if httpsSrv != nil {
+	if httpsSrv != nil && httpsLn != nil {
 		go func() {
-			if err := httpsSrv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			if err := httpsSrv.ServeTLS(httpsLn, "", ""); err != nil && err != http.ErrServerClosed {
 				errChan <- err
 			}
 		}()
@@ -731,6 +787,9 @@ Update Commands:
   --update branch beta           Switch to beta channel
   --update branch daily          Switch to daily channel
 
+Email Commands:
+  email test [recipient]         Send a test email (requires working SMTP)
+
 Tor Commands:
   --tor status                   Show Tor hidden service status
   --tor validate                 Validate Tor configuration
@@ -955,16 +1014,12 @@ func printServiceHelp(binaryName string) {
 func handleMaintenanceCommand(cmd string, optionalArg string, args []string, binaryName string) {
 	switch strings.ToLower(cmd) {
 	case "backup":
-		backupPath := optionalArg
-		if backupPath == "" {
-			backupPath = filepath.Join(paths.DataDir(), "backup", fmt.Sprintf("backup-%s.json", time.Now().Format("20060102-150405")))
-		}
-		handleBackup(backupPath, binaryName)
+		handleBackup(optionalArg, binaryName)
 
 	case "restore":
 		if optionalArg == "" {
 			cprintln("❌ Restore requires a backup file path")
-			cprintf("   Usage: %s --maintenance restore /path/to/backup.json\n", binaryName)
+			cprintf("   Usage: %s --maintenance restore /path/to/api_backup_YYYY-MM-DD.tar.gz[.enc]\n", binaryName)
 			os.Exit(1)
 		}
 		handleRestore(optionalArg, binaryName)
@@ -1404,87 +1459,4 @@ func handleModeChange(newMode string, binaryName string) {
 
 	cprintf("✅ Mode will be set to: %s\n", parsed.String())
 	cprintln("   Mode change requires server restart to take effect")
-}
-
-// Backup handling
-func handleBackup(backupPath string, binaryName string) {
-	cprintf("📦 Creating backup to: %s\n", backupPath)
-
-	// Create backup directory
-	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
-		cprintf("❌ Failed to create backup directory: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Collect files to backup
-	backupData := map[string]interface{}{
-		"version":    Version,
-		"created_at": time.Now().Format(time.RFC3339),
-		"config":     nil,
-		"data_dir":   paths.DataDir(),
-	}
-
-	// Read current config
-	if cfg, err := config.Load(); err == nil {
-		backupData["config"] = cfg
-	}
-
-	// Write backup file
-	data, err := json.MarshalIndent(backupData, "", "  ")
-	if err != nil {
-		cprintf("❌ Failed to create backup data: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		cprintf("❌ Failed to write backup file: %v\n", err)
-		os.Exit(1)
-	}
-
-	cprintln("✅ Backup created successfully")
-	cprintf("   Config: %s\n", config.GetConfigPath())
-	cprintf("   Data: %s\n", paths.DataDir())
-}
-
-// Restore handling
-func handleRestore(restorePath string, binaryName string) {
-	cprintf("📥 Restoring from: %s\n", restorePath)
-
-	// Read backup file
-	data, err := os.ReadFile(restorePath)
-	if err != nil {
-		cprintf("❌ Failed to read backup file: %v\n", err)
-		os.Exit(1)
-	}
-
-	var backupData map[string]interface{}
-	if err := json.Unmarshal(data, &backupData); err != nil {
-		cprintf("❌ Invalid backup file format: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Validate backup
-	if _, ok := backupData["version"]; !ok {
-		cprintln("❌ Invalid backup file: missing version")
-		os.Exit(1)
-	}
-
-	cprintf("   Backup version: %v\n", backupData["version"])
-	cprintf("   Created: %v\n", backupData["created_at"])
-
-	// Restore config if present
-	if cfgData, ok := backupData["config"]; ok && cfgData != nil {
-		cfgBytes, _ := json.Marshal(cfgData)
-		var cfg config.Config
-		if err := json.Unmarshal(cfgBytes, &cfg); err == nil {
-			if err := config.Save(&cfg); err != nil {
-				cprintf("⚠️ Failed to restore config: %v\n", err)
-			} else {
-				cprintln("✅ Configuration restored")
-			}
-		}
-	}
-
-	cprintln("✅ Restore completed")
-	cprintln("   Restart the service to apply changes")
 }

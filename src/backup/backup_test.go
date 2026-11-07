@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,51 +142,4 @@ func TestGetHostname(t *testing.T) {
 		want = "unknown"
 	}
 	assert.Equal(t, want, getHostname())
-}
-
-// CleanupOldBackups must keep only the newest keepCount backups and remove
-// the rest.
-func TestCleanupOldBackups(t *testing.T) {
-	tmp := t.TempDir()
-
-	names := []string{"backup-1.tar.gz", "backup-2.tar.gz", "backup-3.tar.gz", "backup-4.tar.gz"}
-	base := time.Now().Add(-1 * time.Hour)
-	for i, name := range names {
-		p := filepath.Join(tmp, name)
-		require.NoError(t, os.WriteFile(p, []byte("x"), 0644))
-		// Space out modification times so ordering is deterministic:
-		// backup-1 is oldest, backup-4 is newest.
-		modTime := base.Add(time.Duration(i) * time.Minute)
-		require.NoError(t, os.Chtimes(p, modTime, modTime))
-	}
-
-	require.NoError(t, CleanupOldBackups(tmp, 2))
-
-	remaining, err := filepath.Glob(filepath.Join(tmp, "backup-*.tar.gz"))
-	require.NoError(t, err)
-	assert.Len(t, remaining, 2)
-	assert.ElementsMatch(t, []string{
-		filepath.Join(tmp, "backup-3.tar.gz"),
-		filepath.Join(tmp, "backup-4.tar.gz"),
-	}, remaining)
-}
-
-// CleanupOldBackups must be a no-op when there are fewer backups than
-// keepCount.
-func TestCleanupOldBackupsNoopWhenUnderLimit(t *testing.T) {
-	tmp := t.TempDir()
-	p := filepath.Join(tmp, "backup-only.tar.gz")
-	require.NoError(t, os.WriteFile(p, []byte("x"), 0644))
-
-	require.NoError(t, CleanupOldBackups(tmp, 5))
-
-	remaining, err := filepath.Glob(filepath.Join(tmp, "backup-*.tar.gz"))
-	require.NoError(t, err)
-	assert.Len(t, remaining, 1)
-}
-
-// CleanupOldBackups on a directory with no matching files must not error.
-func TestCleanupOldBackupsEmptyDir(t *testing.T) {
-	tmp := t.TempDir()
-	assert.NoError(t, CleanupOldBackups(tmp, 3))
 }

@@ -391,35 +391,53 @@ func (n *Notifier) NotifyUpdateInstalled(to []string, previousVersion, newVersio
 	}, to)
 }
 
-// SendTestEmail sends the test template to "to", subject prefixed
-// "[TEST]" per AI.md PART 17 "Send Test Email". Unlike the Notify*
-// methods it always attempts to send (bypassing event toggles, since it
-// is an explicit manual operator action) but still requires SMTP to be
-// enabled, returning an error rather than silently no-op'ing so
-// "{project_name} email test" can report failure to the caller.
-func (n *Notifier) SendTestEmail(to []string) error {
+// TestResult reports what a manual test email actually delivered, so
+// "{project_name} email test" can print the recipients and subject line it
+// used and record both in the audit log (AI.md PART 17 "Send Test Email").
+type TestResult struct {
+	Recipients []string
+	Subject    string
+}
+
+// SendTest sends the test template to "to" with sample data, subject prefixed
+// "[TEST]" per AI.md PART 17 "Send Test Email". Unlike the Notify* methods it
+// always attempts to send (bypassing event toggles, since it is an explicit
+// manual operator action) but still requires SMTP to be enabled, returning an
+// error rather than silently no-op'ing so the caller can report the failure.
+func (n *Notifier) SendTest(to []string) (TestResult, error) {
 	if n == nil {
-		return fmt.Errorf("email is not enabled")
+		return TestResult{}, fmt.Errorf("email is not enabled")
 	}
 	n.mu.Lock()
 	client := n.client
 	configDir := n.configDir
-	vars := n.vars.toMap()
+	vars := SampleVars("test", n.vars)
 	if len(to) == 0 {
 		to = append([]string(nil), n.recipients...)
 	}
 	n.mu.Unlock()
 
 	if client == nil || !client.config.Enabled {
-		return fmt.Errorf("email is not enabled")
+		return TestResult{}, fmt.Errorf("email is not enabled")
 	}
 	if len(to) == 0 {
-		return fmt.Errorf("no recipient for test email")
+		return TestResult{}, fmt.Errorf("no recipient for test email")
 	}
 	tmpl, err := LoadTemplate("test", configDir)
 	if err != nil {
-		return fmt.Errorf("load template %q: %w", "test", err)
+		return TestResult{}, fmt.Errorf("load template %q: %w", "test", err)
 	}
 	subject, body := RenderTemplate(tmpl, vars)
-	return client.Send(Message{To: to, Subject: "[TEST] " + subject, Body: body})
+	subject = "[TEST] " + subject
+	if err := client.Send(Message{To: to, Subject: subject, Body: body}); err != nil {
+		return TestResult{}, err
+	}
+	return TestResult{Recipients: to, Subject: subject}, nil
+}
+
+// SendTestEmail is the error-only form of SendTest, for callers that do not
+// need the delivered recipients or subject back.
+func (n *Notifier) SendTestEmail(to []string) error {
+	_, err := n.SendTest(to)
+	return err
 }

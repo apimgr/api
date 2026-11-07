@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -496,23 +495,11 @@ func (s *Scheduler) audit(taskID, taskTitle, status string, started, completed, 
 		s.opts.Audit(event, details)
 	}
 
-	encoded, err := json.Marshal(details)
-	if err != nil {
-		log.Printf("Scheduler: Failed to encode audit details for task '%s': %v", taskID, err)
-		return
-	}
-
-	db := database.GetServerDB()
-	if db == nil {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if _, err := db.ExecContext(ctx,
-		`INSERT INTO audit_log (timestamp, event, actor, details) VALUES (?, ?, ?, ?)`,
-		completed.UTC(), event, "scheduler", string(encoded)); err != nil {
+	// The insert lives in the database package so it passes through that
+	// package's instrumented helpers and is counted by the PART 20 DB
+	// metrics; the scheduler never opens a raw handle of its own. The
+	// scheduler has no client IP, so the actor address is empty.
+	if err := database.WriteAuditEvent(context.Background(), event, "scheduler", "", details); err != nil {
 		log.Printf("Scheduler: Failed to write audit entry for task '%s': %v", taskID, err)
 	}
 }

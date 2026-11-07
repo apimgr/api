@@ -365,15 +365,12 @@ func logRotationTask() error {
 
 // healthCheckTask performs self health check
 func healthCheckTask() error {
-	// Check database connectivity
-	db := database.GetServerDB()
-	if db != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		if err := db.PingContext(ctx); err != nil {
-			log.Printf("Scheduler: Health check - database error: %v", err)
-			// Don't fail the task, just log
-		}
+	// Check database connectivity. A failure is logged but never fails the
+	// task: healthcheck_self reports health, it does not enforce it.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := database.PingServerDB(ctx); err != nil {
+		log.Printf("Scheduler: Health check - database error: %v", err)
 	}
 
 	// Check disk space

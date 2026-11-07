@@ -160,7 +160,7 @@ func TestManagerRestoreVerifiesFirst(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, os.Remove(filepath.Join(source, "server.yml")))
-	require.NoError(t, manager.Restore(path, ""))
+	require.NoError(t, manager.Restore(Caller{FirstRun: true}, path, ""))
 
 	assert.FileExists(t, filepath.Join(source, "server.yml"))
 	assert.True(t, recorder.has(EventRestored))
@@ -178,7 +178,7 @@ func TestManagerRestoreRejectsCorruptedArchive(t *testing.T) {
 	data[len(data)/2] ^= 0xFF
 	require.NoError(t, os.WriteFile(path, data, 0600))
 
-	err = manager.Restore(path, "")
+	err = manager.Restore(Caller{FirstRun: true}, path, "")
 	require.Error(t, err)
 	assert.True(t, recorder.has(EventVerificationFailed))
 }

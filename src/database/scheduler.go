@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 )
@@ -124,6 +125,82 @@ func RecordSchedulerRun(taskID string, startedAt, completedAt time.Time, status 
 	`, taskID, startedAt, completedAt, status, errText, durationMS); err != nil {
 		log.Printf("Database: failed to record scheduler history for '%s': %v", taskID, err)
 	}
+}
+
+// SchedulerHistoryEntry is one persisted execution of a scheduled task,
+// backing the `scheduler history <id>` CLI command in AI.md PART 18.
+type SchedulerHistoryEntry struct {
+	ID          int64
+	TaskID      string
+	StartedAt   time.Time
+	CompletedAt time.Time
+	Status      string
+	Error       string
+	DurationMS  int64
+}
+
+// SchedulerHistory returns the most recent executions of one task, newest
+// first, capped at limit rows. A non-positive limit defaults to 50.
+func SchedulerHistory(taskID string, limit int) ([]SchedulerHistoryEntry, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	db := GetServerDB()
+	if db == nil {
+		return nil, fmt.Errorf("scheduler history: database not initialized")
+	}
+
+	const historyQuery = `
+		SELECT id, task_id, started_at, completed_at, status, error, duration_ms
+		FROM scheduler_history
+		WHERE task_id = ?
+		ORDER BY started_at DESC
+		LIMIT ?
+	`
+
+	// The deadline has to outlive the rows iteration below, so cancel is
+	// deferred to function scope rather than released after the call.
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutComplexSelect)
+	defer cancel()
+
+	rows, err := queryContext(ctx, db, historyQuery, taskID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query scheduler history: %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]SchedulerHistoryEntry, 0, limit)
+	for rows.Next() {
+		var (
+			entry       SchedulerHistoryEntry
+			completedAt sql.NullTime
+			runError    sql.NullString
+			durationMS  sql.NullInt64
+		)
+		if err := rows.Scan(&entry.ID, &entry.TaskID, &entry.StartedAt, &completedAt,
+			&entry.Status, &runError, &durationMS); err != nil {
+			recordQueryError(historyQuery, err)
+			return nil, fmt.Errorf("scan scheduler history: %w", err)
+		}
+		if completedAt.Valid {
+			entry.CompletedAt = completedAt.Time
+		}
+		if runError.Valid {
+			entry.Error = runError.String
+		}
+		if durationMS.Valid {
+			entry.DurationMS = durationMS.Int64
+		}
+		entries = append(entries, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		recordQueryError(historyQuery, err)
+		return nil, fmt.Errorf("iterate scheduler history: %w", err)
+	}
+
+	return entries, nil
 }
 
 // DueSchedulerTasks returns persisted tasks whose next_run is on or before
