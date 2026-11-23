@@ -17,7 +17,7 @@
         Compute Flesch Reading Ease, Flesch-Kincaid Grade, and Gunning Fog scores for text.
       </p>
 
-      <form id="readability-form" class="tool-form" data-body-endpoint="/api/v1/language/readability">
+      <form id="readability-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/language/readability">
         <div class="form-group">
           <label class="form-label">Text</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="Paste or type text here."></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/language/readability -d 'Some text to analyze for readability.'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/language/readability -d 'Some text to analyze for readability.'</pre>
           </div>
         </div>
       </div>

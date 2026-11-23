@@ -18,7 +18,7 @@
         definitions.
       </p>
 
-      <form id="sql-form" class="tool-form" data-body-endpoint="/api/v1/generate/sql">
+      <form id="sql-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/generate/sql">
         <div class="form-group">
           <label class="form-label">Request Body (JSON)</label>
           <textarea name="body" class="form-input" rows="10" required placeholder='{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true},{"name":"email","type":"string","unique":true}]}'></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/generate/sql -d '{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true}]}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/generate/sql -d '{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true}]}'</pre>
           </div>
         </div>
       </div>

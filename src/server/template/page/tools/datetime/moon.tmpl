@@ -18,7 +18,7 @@
         date (defaults to today).
       </p>
 
-      <form id="moon-form" class="tool-form" data-template="/api/v1/datetime/moon/{date}">
+      <form id="moon-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/moon/{date}">
         <div class="form-group">
           <label class="form-label">Date</label>
           <input type="date" name="date" class="form-input" value="2024-06-21">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/moon/2024-06-21</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/moon/2024-06-21</pre>
           </div>
         </div>
       </div>

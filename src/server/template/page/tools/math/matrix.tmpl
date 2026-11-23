@@ -19,7 +19,7 @@
         <code>a</code>, and (for add/multiply) <code>b</code>.
       </p>
 
-      <form id="matrix-form" class="tool-form" data-body-endpoint="/api/v1/math/matrix">
+      <form id="matrix-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/math/matrix">
         <div class="form-group">
           <label class="form-label">Request Body (JSON)</label>
           <textarea name="body" class="form-input" rows="8" required placeholder='{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}'>{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}</textarea>
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/math/matrix -d '{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/math/matrix -d '{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}'</pre>
           </div>
         </div>
       </div>

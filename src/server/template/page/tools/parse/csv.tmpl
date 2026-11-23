@@ -17,7 +17,7 @@
         Parse a CSV document (first row treated as headers) into structured rows.
       </p>
 
-      <form id="csv-form" class="tool-form" data-body-endpoint="/api/v1/parse/csv">
+      <form id="csv-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/csv">
         <div class="form-group">
           <label class="form-label">CSV Document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="name,age&#10;Alice,30&#10;Bob,25"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/csv -d $'name,age\nAlice,30'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/csv -d $'name,age\nAlice,30'</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Decode text encoded with base64, base32, hex, URL, or HTML encoding.
       </p>
 
-      <form id="decode-form" class="tool-form" data-template="/api/v1/text/decode/{encoding}/{input}">
+      <form id="decode-form" class="tool-form" data-template="{{.APIBasePath}}/text/decode/{encoding}/{input}">
         <div class="form-group">
           <label class="form-label">Encoding</label>
           <select name="encoding" class="form-input">
@@ -47,7 +47,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/text/decode/base64/SGVsbG8gV29ybGQ=</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/text/decode/base64/SGVsbG8gV29ybGQ=</pre>
           </div>
         </div>
       </div>

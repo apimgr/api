@@ -18,7 +18,7 @@
         following the referral to the domain's authoritative registry).
       </p>
 
-      <form id="whois-form" class="tool-form" data-endpoint="/api/v1/network/whois" method="get" action="/api/v1/network/whois">
+      <form id="whois-form" class="tool-form" data-endpoint="{{.APIBasePath}}/network/whois" method="get" action="{{.APIBasePath}}/network/whois">
         <div class="form-group">
           <label class="form-label">Domain</label>
           <input type="text" name="domain" class="form-input" required placeholder="example.com">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/network/whois?domain=example.com"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/network/whois?domain=example.com"</pre>
           </div>
         </div>
       </div>

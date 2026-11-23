@@ -18,7 +18,7 @@
         mod-97 checksum.
       </p>
 
-      <form id="validate-iban-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/iban">
+      <form id="validate-iban-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/iban">
         <div class="form-group">
           <label class="form-label">Validate IBAN</label>
           <input type="text" name="iban" class="form-input" required placeholder="GB29NWBK60161331926819">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/iban?iban=GB29NWBK60161331926819"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/iban?iban=GB29NWBK60161331926819"</pre>
           </div>
         </div>
       </div>

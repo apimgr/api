@@ -17,7 +17,7 @@
         Look up word synonyms and antonyms using the free, keyless Datamuse API.
       </p>
 
-      <form id="thesaurus-form" class="tool-form" data-query-post-endpoint="/api/v1/language/thesaurus">
+      <form id="thesaurus-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/language/thesaurus">
         <div class="form-group">
           <label class="form-label">Word</label>
           <input type="text" name="word" class="form-input" required placeholder="happy">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/language/thesaurus?word=happy"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/language/thesaurus?word=happy"</pre>
           </div>
         </div>
       </div>

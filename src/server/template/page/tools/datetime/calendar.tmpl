@@ -17,7 +17,7 @@
         Generate a week-grid calendar (Sunday start) for any year and month.
       </p>
 
-      <form id="calendar-form" class="tool-form" data-template="/api/v1/datetime/calendar/{year}/{month}">
+      <form id="calendar-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/calendar/{year}/{month}">
         <div class="form-group">
           <label class="form-label">Year</label>
           <input type="number" name="year" class="form-input" required value="2024">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/calendar/2024/1</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/calendar/2024/1</pre>
           </div>
         </div>
       </div>

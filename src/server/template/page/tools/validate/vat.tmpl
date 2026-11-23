@@ -18,7 +18,7 @@
         (2-letter country prefix plus that country's fixed-length body).
       </p>
 
-      <form id="validate-vat-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/vat">
+      <form id="validate-vat-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/vat">
         <div class="form-group">
           <label class="form-label">Validate VAT Number</label>
           <input type="text" name="vat" class="form-input" required placeholder="GB123456789">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/vat?vat=GB123456789"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/vat?vat=GB123456789"</pre>
           </div>
         </div>
       </div>

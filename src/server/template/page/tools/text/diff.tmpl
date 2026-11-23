@@ -17,7 +17,7 @@
         Compare two blocks of text and see a unified line diff between them.
       </p>
 
-      <form id="diff-form" class="tool-form" data-body-endpoint="/api/v1/text/diff">
+      <form id="diff-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/text/diff">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"text1":"line one\nline two","text2":"line one\nline three"}'></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/text/diff -d '{"text1":"a","text2":"b"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/text/diff -d '{"text1":"a","text2":"b"}'</pre>
           </div>
         </div>
       </div>

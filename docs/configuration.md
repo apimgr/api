@@ -1,329 +1,66 @@
 # Configuration
 
-The API server can be configured via configuration file, environment variables, or command-line flags.
-
-## Configuration Priority
-
-Settings are applied in this order (highest priority first):
-
-1. **Command-line flags** - `--port 8080`
-2. **Environment variables** - `API_PORT=8080`
-3. **Configuration file** - `server.yml`
-4. **Default values** - Built-in defaults
-
-## Configuration File
-
-### Location
-
-Default configuration file locations:
-
-| Context | Path |
-|---------|------|
-| **Root user** | `/etc/apimgr/api/server.yml` |
-| **Regular user** | `~/.config/apimgr/api/server.yml` |
-| **Custom** | Specified with `--config` flag |
-
-### Example Configuration
-
-Create `server.yml`:
-
-```yaml
-server:
-  # Listen address (0.0.0.0 for all interfaces)
-  address: "0.0.0.0"
-
-  # Port number
-  port: "64580"
-
-  # Fully qualified domain name
-  fqdn: "api.example.com"
-
-  # Application mode: production or development
-  mode: production
-
-  # Branding
-  branding:
-    title: "API Toolkit"
-    tagline: "Universal API Services"
-
-  # SSL/TLS configuration
-  ssl:
-    enabled: false
-    cert_path: ""
-    letsencrypt:
-      enabled: false
-      email: "ssl@example.com"
-      challenge: "http-01" # http-01, tls-alpn-01, or dns-01
-
-  # Database configuration
-  database:
-    driver: "sqlite" # sqlite, postgres, mysql
-
-  # Rate limiting
-  rate_limit:
-    enabled: true
-    requests: 100 # requests per window
-    window: 60 # window in seconds
-
-  # Logging
-  logs:
-    level: "info" # debug, info, warn, error
-    access:
-      filename: "access.log"
-      format: "combined"
-      rotate: "daily"
-      keep: "7"
-    server:
-      filename: "server.log"
-      format: "json"
-      rotate: "daily"
-      keep: "30"
-    error:
-      filename: "error.log"
-      format: "json"
-      rotate: "daily"
-      keep: "30"
-    audit:
-      filename: "audit.log"
-      format: "json"
-      rotate: "daily"
-      keep: "90"
-    security:
-      enabled: true
-      filename: "security.log"
-      format: "json"
-      rotate: "daily"
-      keep: "90"
-
-  # Scheduler
-  schedule:
-    enabled: true
-
-# Web interface configuration
-web:
-  # CORS configuration
-  cors: "*"
-
-  # UI settings
-  ui:
-    theme: "dark" # dark, light, auto
-
-  # Robots.txt
-  robots:
-    allow:
-      - "/"
-    deny:
-      - "/api/v1"
-
-  # Security settings
-  security:
-    email: "security@example.com"
-
-# API-specific settings
-api:
-  # Enable/disable service categories
-  services:
-    text:
-      enabled: true
-    crypto:
-      enabled: true
-    datetime:
-      enabled: true
-    network:
-      enabled: true
-
-  # Service limits
-  limits:
-    max_input_size: 1048576  # 1MB
-    max_batch_operations: 100
-```
-
-## Environment Variables
-
-All configuration options can be set via environment variables using the `API_` prefix:
-
-```bash
-# Server settings
-export API_PORT=8080
-export API_ADDRESS=0.0.0.0
-export API_MODE=production
-export API_FQDN=api.example.com
-
-
-# SSL settings
-export API_SSL_ENABLED=true
-export API_SSL_LETSENCRYPT_EMAIL=ssl@example.com
-
-# Database
-export API_DATABASE_DRIVER=postgres
-export API_DATABASE_HOST=localhost
-export API_DATABASE_PORT=5432
-
-# Scheduled backup encryption password (overrides
-# server.backup.encryption_password for unattended scheduled backup runs
-# only - the scheduler cannot prompt interactively the way the CLI/WebUI
-# restore flow can)
-export API_BACKUP_PASSWORD=changeme
-
-# Outbound email (server.notifications.email.*); leave SMTP_HOST unset
-# to auto-detect a local relay on startup instead
-export SMTP_HOST=127.0.0.1
-export SMTP_PORT=587
-export SMTP_USERNAME=
-export SMTP_PASSWORD=
-export SMTP_TLS=auto
-export SMTP_FROM_NAME="My App"
-export SMTP_FROM_EMAIL=no-reply@example.com
-```
-
-!!! note
-    If `SMTP_HOST`/`server.notifications.email.smtp.host` is left empty,
-    the server auto-detects a local SMTP relay on startup by probing
-    `127.0.0.1` and the Docker bridge gateway `172.17.0.1` (ports 25,
-    465, 587) and persists the first successful host/port to
-    `server.yml`. If no SMTP server is found or reachable, email
-    features are completely disabled - never queued, never retried.
-
-## Command-Line Flags
-
-Override any setting with command-line flags:
-
-```bash
-# Server configuration
-api --address 0.0.0.0 --port 8080
-
-# Application mode
-api --mode development
-
-# Custom paths
-api --config /path/to/config \
-    --data /path/to/data \
-    --log /path/to/logs
-
-# Enable debug mode
-api --debug
-```
-
-## Boolean Values
-
-Boolean settings accept multiple formats (case-insensitive):
-
-**Truthy values:**
-`1`, `yes`, `true`, `on`, `enable`, `enabled`, `y`, `t`, `yep`, `yup`, `yeah`, `aye`, `si`, `oui`
-
-**Falsy values:**
-`0`, `no`, `false`, `off`, `disable`, `disabled`, `n`, `f`, `nope`, `nah`, `nay`, `nein`, `non`
-
-## Application Modes
-
-### Production Mode
-
-Optimized for production use:
-
-- Strict security headers
-- Compressed responses
-- Minimal logging
-- No debug endpoints
-- HTTPS enforcement (if SSL enabled)
-
-```bash
-api --mode production
-```
-
-### Development Mode
-
-Enhanced debugging and development features:
-
-- Relaxed CSP headers
-- Verbose logging
-- Debug endpoints enabled (`/debug/pprof`, `/debug/vars`)
-- Hot reload support
-- Detailed error messages
-
-```bash
-api --mode development
-```
-
-## SSL/TLS Configuration
-
-### Manual Certificates
-
-```yaml
-server:
-  ssl:
-    enabled: true
-    cert_path: "/path/to/certs"
-```
-
-Place your certificates:
-- `/path/to/certs/cert.pem`
-- `/path/to/certs/key.pem`
-
-### Let's Encrypt
-
-```yaml
-server:
-  ssl:
-    enabled: true
-    letsencrypt:
-      enabled: true
-      email: "ssl@example.com"
-      challenge: "http-01"
-```
-
-Supported challenges:
-- `http-01` - HTTP challenge (port 80 required)
-- `tls-alpn-01` - TLS-ALPN challenge (port 443 required)
-- `dns-01` - DNS challenge (requires DNS provider API access)
-
-## Logging Configuration
-
-### Log Levels
-
-- `debug` - Detailed debugging information
-- `info` - General informational messages
-- `warn` - Warning messages
-- `error` - Error messages only
-
-### Log Formats
-
-- `combined` - Apache combined format (access logs)
-- `json` - Structured JSON (server/error/audit logs)
-
-### Log Rotation
-
-- `daily` - Rotate logs daily
-- `weekly` - Rotate logs weekly
-- `monthly` - Rotate logs monthly
-- `size:10M` - Rotate when file reaches 10MB
-
-## First-Run Setup
-
-There is no web-based setup wizard or admin panel. On first run, the binary
-itself:
-
-1. Generates the project secrets (`installation_secret`, `cookie_signing_key`,
-   `csrf_token_secret`, `server.security.encryption_key`)
-2. Writes a default `server.yml` with sane defaults
-3. Initializes the database (`server.db`)
-4. Sets up SSL (if configured)
-
-Run `api --maintenance setup` to (re-)run this first-run initialization from
-the CLI. See [CLI Reference](cli.md#administration) for the full
-administration surface.
-
-## Backup Configuration
-
-```bash
-# Backup current config
-api --maintenance backup /path/to/backup.json
-
-# Restore from backup
-api --maintenance restore /path/to/backup.json
-```
-
-## Next Steps
-
-- [Explore the API](api.md)
-- [Security](security.md)
-- [CLI reference](cli.md)
+The server reads `server.yml`, optional drop-in files from `yaml.d/`, and protected `secrets.yml` from its configuration directory. Defaults are built in; a fresh installation does not need a hand-written 1000-line configuration. Use the server's `--help` output for directory flags and the generated configuration for the values initialized on that host.
+
+## Sources and precedence
+
+Configuration is merged in this order: built-in defaults, `server.yml`, `yaml.d/` files in byte-wise filename order, and `secrets.yml`. Command-line flags and runtime environment overrides have higher priority. Maps merge recursively; later scalar values and lists replace earlier values. Invalid values fall back to their documented defaults with a warning rather than preventing startup. Configuration and secret files are private files; do not commit them or include their contents in logs or support messages.
+
+Use `yaml.d/` for optional area files such as networking, email, or logging when the corresponding workflow creates them. Only regular `.yml` and `.yaml` files are loaded. Secrets belong in `secrets.yml`, not in README examples or source control.
+
+## Configuration areas
+
+| YAML area | Purpose |
+|------------|---------|
+| `server.address`, `server.port`, `server.fqdn`, `server.api_version`, `server.baseurl` | Listener, public host, API version, and base URL resolution |
+| `server.mode`, `server.branding` | Runtime mode and application identity |
+| `server.database`, `server.cache` | Database and optional cache connections |
+| `server.ssl` | TLS and certificate automation |
+| `server.trusted_proxies` | Peers allowed to supply trusted reverse-proxy headers |
+| `server.rate_limit`, `server.healthz` | Request limits and health aliases |
+| `server.security`, `server.token` | Security controls and operator credential |
+| `server.logs` | Access, application, audit, and security logging |
+| `server.scheduler`, `server.backup`, `server.update` | Scheduled tasks, encrypted backups, retention, and release channel |
+| `server.notifications`, `server.contact`, `server.privacy`, `server.csrf` | Email delivery and contact/privacy protections |
+| `server.metrics`, `server.geoip`, `server.tor` | Metrics, local GeoIP data, and Tor service behavior |
+| `server.compliance`, `server.tracking` | Compliance-driven defaults and privacy choices |
+| `web.robots`, `web.security`, `web.cors`, `web.hsts`, `web.csp`, `web.headers`, `web.reports` | Public web policy, security metadata, browser headers, and reporting endpoints |
+| `web.ui` | Public interface theme and branding assets |
+| `output.color`, `output.emoji` | CLI output preferences |
+
+Configuration is validated per setting. Consult the matching sections of `AI.md` for field-specific accepted values, defaults, and interactions; this table names the complete configuration areas, not a substitute for those detailed constraints.
+
+## Secrets and credentials
+
+`server.token`, database/cache credentials, SMTP credentials, private keys, installation secrets, encryption keys, and backup passwords are sensitive. Store them in the protected config or secrets files generated for the server. Do not pass passwords on command lines. Configuration and backup passwords use Argon2id; API tokens are stored as SHA-256 hashes. The server redacts secret values from logs and operator-facing config output.
+
+Generated secrets are stored in `secrets.yml` or in the database secret store according to the key's lifecycle. Secret rotation is performed through the documented maintenance commands, not by copying secret values into ordinary configuration examples.
+
+## Environment variables
+
+The following runtime variables are read by the server:
+
+| Variable | Purpose |
+|----------|---------|
+| `NO_COLOR` | Disable ANSI color output when set to a non-empty value |
+| `TERM` | Detect terminal capabilities; `dumb` disables ANSI output |
+| `DOMAIN` | Highest-priority public hostname override |
+| `MODE` | Select `production` (default) or `development`; aliases are documented in the CLI help |
+| `DEBUG` | Enable debug behavior when set to a truthy value; `--debug` takes precedence |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | SMTP connection overrides |
+| `SMTP_FROM_NAME`, `SMTP_FROM_EMAIL`, `SMTP_TLS` | SMTP sender and TLS mode overrides |
+| `CONFIG_DIR`, `DATA_DIR`, `LOG_DIR`, `DATABASE_DIR`, `BACKUP_DIR` | Directory overrides where supported |
+| `PORT`, `LISTEN`, `APPLICATION_NAME`, `APPLICATION_TAGLINE` | First-run initialization values |
+| `DATABASE_DRIVER`, `DATABASE_URL`, `CACHE_URL` | First-run database and cache connection values |
+
+First-run-only values are written to configuration and ignored on later starts. Credential-bearing connection strings are stored in the protected secrets file. Do not use an environment variable as a substitute for rotating an already-persisted secret.
+
+## Security and public endpoints
+
+`web.security` configures the RFC 9116 `security.txt` contact channels, expiry, and disclosure policy. Security-report storage/encryption settings are under `server.security`. `web.well_known` controls optional standards endpoints; unknown well-known paths return `404`. Reverse-proxy-derived URLs and origins are trusted only when the immediate peer is allowed by `server.trusted_proxies`.
+
+See [Security](security.md) for the public reporting endpoints and [Integrations](integrations.md) for discovery settings.
+
+## Configuration management
+
+The configuration is file-based; the watcher monitors `server.yml`, `yaml.d/`, `secrets.yml`, and the configured assets directory and re-merges changes. Restart the service only when an affected feature requires it. Sensitive operations such as secret rotation and backup restoration use the CLI maintenance flow and audit logging. The CLI uses its own configuration file and options; see [CLI reference](cli.md).

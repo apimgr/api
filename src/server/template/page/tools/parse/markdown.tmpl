@@ -17,7 +17,7 @@
         Extract headings, links, and code blocks from a Markdown document.
       </p>
 
-      <form id="markdown-form" class="tool-form" data-body-endpoint="/api/v1/parse/markdown">
+      <form id="markdown-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/markdown">
         <div class="form-group">
           <label class="form-label">Markdown document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="# Title&#10;&#10;[link](https://example.com)"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/markdown -d '# Title'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/markdown -d '# Title'</pre>
           </div>
         </div>
       </div>

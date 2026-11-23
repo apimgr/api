@@ -19,7 +19,7 @@
         (including factorial) need only <strong>n</strong>.
       </p>
 
-      <form id="calculate-form" class="tool-form" data-endpoint="/api/v1/math/calculate" method="get" action="/api/v1/math/calculate">
+      <form id="calculate-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="get" action="{{.APIBasePath}}/math/calculate">
         <div class="form-group">
           <label class="form-label">Operation</label>
           <select name="operation" class="form-input">
@@ -78,7 +78,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/calculate?operation=add&a=2&b=3"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/calculate?operation=add&a=2&b=3"</pre>
           </div>
         </div>
       </div>

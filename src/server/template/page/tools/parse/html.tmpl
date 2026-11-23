@@ -17,7 +17,7 @@
         Parse an HTML document into a structural summary: title, meta tags, headings, links, images, and form count.
       </p>
 
-      <form id="html-form" class="tool-form" data-body-endpoint="/api/v1/parse/html">
+      <form id="html-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/html">
         <div class="form-group">
           <label class="form-label">HTML document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="&lt;html&gt;&lt;head&gt;&lt;title&gt;Example&lt;/title&gt;&lt;/head&gt;&lt;body&gt;&lt;/body&gt;&lt;/html&gt;"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/html -d '&lt;html&gt;&lt;title&gt;Example&lt;/title&gt;&lt;/html&gt;'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/html -d '&lt;html&gt;&lt;title&gt;Example&lt;/title&gt;&lt;/html&gt;'</pre>
           </div>
         </div>
       </div>

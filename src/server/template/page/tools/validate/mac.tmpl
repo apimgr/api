@@ -17,7 +17,7 @@
         Check whether a string is a correctly formatted MAC address.
       </p>
 
-      <form id="validate-mac-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/mac">
+      <form id="validate-mac-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/mac">
         <div class="form-group">
           <label class="form-label">Validate MAC Address</label>
           <input type="text" name="mac" class="form-input" required placeholder="00:1A:2B:3C:4D:5E">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/mac?mac=00:1A:2B:3C:4D:5E"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/mac?mac=00:1A:2B:3C:4D:5E"</pre>
           </div>
         </div>
       </div>

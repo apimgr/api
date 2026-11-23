@@ -18,7 +18,7 @@
         fragment components.
       </p>
 
-      <form id="url-form" class="tool-form" data-endpoint="/api/v1/network/url" method="get" action="/api/v1/network/url">
+      <form id="url-form" class="tool-form" data-endpoint="{{.APIBasePath}}/network/url" method="get" action="{{.APIBasePath}}/network/url">
         <div class="form-group">
           <label class="form-label">URL</label>
           <input type="text" name="url" class="form-input" required placeholder="https://user@example.com:8443/path?a=1#frag">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/network/url?url=https%3A%2F%2Fexample.com%2Fpath"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/network/url?url=https%3A%2F%2Fexample.com%2Fpath"</pre>
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@
         the given resolution.
       </p>
 
-      <form id="h3-form" class="tool-form" data-endpoint="/api/v1/geo/h3" method="get" action="/api/v1/geo/h3">
+      <form id="h3-form" class="tool-form" data-endpoint="{{.APIBasePath}}/geo/h3" method="get" action="{{.APIBasePath}}/geo/h3">
         <div class="form-group">
           <label class="form-label">Latitude</label>
           <input type="text" name="lat" class="form-input" required value="40.7128">
@@ -47,7 +47,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/geo/h3?lat=40.7128&lon=-74.0060&resolution=9"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/geo/h3?lat=40.7128&lon=-74.0060&resolution=9"</pre>
           </div>
         </div>
       </div>

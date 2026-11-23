@@ -17,7 +17,7 @@
         Convert a color between hex, RGB, and HSL representations.
       </p>
 
-      <form id="color-form" class="tool-form" data-endpoint="/api/v1/convert/color" method="get" action="/api/v1/convert/color">
+      <form id="color-form" class="tool-form" data-endpoint="{{.APIBasePath}}/convert/color" method="get" action="{{.APIBasePath}}/convert/color">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="text" name="value" class="form-input" required placeholder="#ff0000">
@@ -54,7 +54,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/convert/color?value=%23ff0000&from=hex&to=rgb"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/convert/color?value=%23ff0000&from=hex&to=rgb"</pre>
           </div>
         </div>
       </div>

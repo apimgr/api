@@ -17,7 +17,7 @@
         Check whether a string is a correctly formatted phone number.
       </p>
 
-      <form id="validate-phone-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/phone">
+      <form id="validate-phone-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/phone">
         <div class="form-group">
           <label class="form-label">Validate Phone Number</label>
           <input type="text" name="phone" class="form-input" required placeholder="+14155552671">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/phone?phone=+14155552671"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/phone?phone=+14155552671"</pre>
           </div>
         </div>
       </div>

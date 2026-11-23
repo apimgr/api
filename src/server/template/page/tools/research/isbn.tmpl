@@ -17,7 +17,7 @@
         Look up book metadata by ISBN using the free, keyless Open Library Books API.
       </p>
 
-      <form id="isbn-form" class="tool-form" data-query-post-endpoint="/api/v1/research/isbn">
+      <form id="isbn-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/research/isbn">
         <div class="form-group">
           <label class="form-label">ISBN</label>
           <input type="text" name="isbn" class="form-input" required placeholder="978-3-16-148410-0">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/research/isbn?isbn=978-3-16-148410-0"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/research/isbn?isbn=978-3-16-148410-0"</pre>
           </div>
         </div>
       </div>

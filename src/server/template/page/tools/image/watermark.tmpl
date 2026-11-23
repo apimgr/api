@@ -17,7 +17,7 @@
         Upload an image and tile a text watermark across it.
       </p>
 
-      <form id="watermark-form" class="tool-form" method="post" action="/api/v1/image/watermark" enctype="multipart/form-data">
+      <form id="watermark-form" class="tool-form" method="post" action="{{.APIBasePath}}/image/watermark" enctype="multipart/form-data">
         {{csrfField .CSRFToken}}
         <div class="form-group">
           <label class="form-label" for="watermark-image">Image File</label>
@@ -54,7 +54,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/image/watermark?text=SAMPLE&amp;opacity=0.35" --data-binary @image.png -o watermarked.png</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/image/watermark?text=SAMPLE&amp;opacity=0.35" --data-binary @image.png -o watermarked.png</pre>
           </div>
         </div>
       </div>

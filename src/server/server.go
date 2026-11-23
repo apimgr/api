@@ -50,6 +50,7 @@ func New(cfg *config.Config) *http.Server {
 	}
 
 	r := chi.NewRouter()
+	apiRoutes := make([]swagger.Route, 0)
 
 	// Core middleware
 	r.Use(serverTimingMiddleware(cfg))
@@ -108,7 +109,7 @@ func New(cfg *config.Config) *http.Server {
 
 	// Per-tool detail pages (see TODO.AI.md for remaining sub-tool wiring)
 	for _, tp := range toolPages() {
-		r.Get("/"+tp.category+"/"+tp.tool, toolPageHandler(cfg, tp.category, tp.tool, tp.title, tp.description, tp.reason))
+		r.Get("/"+tp.category+"/"+tp.tool, toolPageHandler(cfg, tp.category, tp.tool, tp.title, tp.description))
 	}
 
 	r.Get("/api", apiDocsHandler(cfg))
@@ -117,14 +118,14 @@ func New(cfg *config.Config) *http.Server {
 	// The old root paths (/openapi, /openapi.json, /openapi.yaml, /swagger,
 	// /graphql) are no longer served — do not implement redirects from
 	// them. The unversioned /api/swagger and /api/graphql aliases mount
-	// the SAME handler as their /api/v1/server/* counterparts (no
+	// the SAME handler as their versioned /api/{api_version}/server/* counterparts (no
 	// redirect), per PART 14's "Unversioned API aliases" rules.
 	r.Get("/server/docs/swagger", swaggerUIHandler(cfg))
 	r.Get("/server/docs/graphql", graphqlUIHandler(cfg))
-	r.Get("/api/swagger", apiSwaggerSpecHandler(cfg))
+	r.Get("/api/swagger", apiSwaggerSpecHandler(cfg, &apiRoutes))
 	r.Post("/api/graphql", graphql.HandleQuery)
-	r.Get("/api/v1/server/swagger", apiSwaggerSpecHandler(cfg))
-	r.Post("/api/v1/server/graphql", graphql.HandleQuery)
+	r.Get(APIBasePath(cfg)+"/server/swagger", apiSwaggerSpecHandler(cfg, &apiRoutes))
+	r.Post(APIBasePath(cfg)+"/server/graphql", graphql.HandleQuery)
 
 	// Standard pages (/server/*)
 	r.Get("/server/about", aboutPageHandler(cfg))
@@ -139,10 +140,10 @@ func New(cfg *config.Config) *http.Server {
 	r.Post("/server/preferences", preferencesSaveHandler)
 	r.Get("/server/preferences/export", preferencesExportPageHandler(cfg))
 	r.Get("/server/preferences/import", preferencesImportHandler)
-	r.Get("/api/v1/server/preferences", apiPreferencesHandler)
-	r.Post("/api/v1/server/preferences", apiPreferencesSaveHandler)
-	r.Get("/api/v1/server/preferences/export", apiPreferencesExportHandler)
-	r.Get("/api/v1/server/preferences/import", preferencesImportHandler)
+	r.Get(APIBasePath(cfg)+"/server/preferences", apiPreferencesHandler)
+	r.Post(APIBasePath(cfg)+"/server/preferences", apiPreferencesSaveHandler)
+	r.Get(APIBasePath(cfg)+"/server/preferences/export", apiPreferencesExportHandler)
+	r.Get(APIBasePath(cfg)+"/server/preferences/import", preferencesImportHandler)
 
 	// Health check (PART 13: frontend route, optional root alias, API
 	// route, and unversioned machine-friendly alias — all mount the same
@@ -151,7 +152,7 @@ func New(cfg *config.Config) *http.Server {
 	if cfg.Server.Healthz.Root.Enabled {
 		r.Get("/healthz", handler.ServerHealthz(cfg, true))
 	}
-	r.Get("/api/v1/server/healthz", handler.ServerHealthz(cfg, false))
+	r.Get(APIBasePath(cfg)+"/server/healthz", handler.ServerHealthz(cfg, false))
 	r.Get("/api/healthz", handler.ServerHealthz(cfg, false))
 
 	// Metrics endpoints (PART 20 — INTERNAL only). Paths are fixed, not
@@ -190,8 +191,8 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/sw.js", serviceWorkerHandler())
 	r.Get("/offline.html", offlinePageHandler())
 
-	// API v1 routes
-	r.Route("/api/v1", func(r chi.Router) {
+	// Versioned API routes
+	r.Route(APIBasePath(cfg), func(r chi.Router) {
 		// Version
 		r.Get("/version", handler.HandleVersion)
 
@@ -388,7 +389,6 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/ssl", apiNetworkSSLHandler)
 			r.Get("/url", apiNetworkURLHandler)
 			r.Get("/whois", apiNetworkWhoisHandler)
-			r.Get("/traceroute", apiNetworkTracerouteHandler)
 		})
 
 		// Docker utilities
@@ -417,10 +417,8 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/astronomy/{location}", apiWeatherAstronomyHandler)
 			r.Get("/historical/{location}", apiWeatherHistoricalHandler)
 			r.Get("/hourly/{location}", apiWeatherHourlyHandler)
-			r.Get("/maps/{location}", apiWeatherMapsHandler)
 			r.Get("/marine/{location}", apiWeatherMarineHandler)
 			r.Get("/pollen/{location}", apiWeatherPollenHandler)
-			r.Get("/radar/{location}", apiWeatherRadarHandler)
 			r.Get("/uv/{location}", apiWeatherUVHandler)
 		})
 
@@ -518,7 +516,6 @@ func New(cfg *config.Config) *http.Server {
 
 		// Language Tools
 		r.Route("/language", func(r chi.Router) {
-			r.Post("/detect", apiLanguageDetectHandler)
 			r.Get("/phonetic", apiLanguagePhoneticHandler)
 			r.Post("/word-count", apiLanguageWordCountHandler)
 			r.Post("/keywords", apiLanguageKeywordsHandler)
@@ -527,9 +524,6 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/sentiment", apiLanguageSentimentHandler)
 			r.Post("/dictionary", apiLanguageDictionaryHandler)
 			r.Post("/thesaurus", apiLanguageThesaurusHandler)
-			r.Post("/spell-check", apiLanguageSpellCheckHandler)
-			r.Post("/grammar", apiLanguageGrammarHandler)
-			r.Post("/translate", apiLanguageTranslateHandler)
 		})
 
 		// Testing Tools
@@ -547,10 +541,6 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/status-codes/{code}", apiTestStatusCodesHandler)
 			r.Get("/response-generator", apiTestResponseGeneratorHandler)
 			r.Post("/webhook", apiTestWebhookHandler)
-			r.Get("/load-test", apiTestLoadTestHandler)
-			r.Post("/load-test", apiTestLoadTestHandler)
-			r.Get("/mock-server", apiTestMockServerHandler)
-			r.Post("/mock-server", apiTestMockServerHandler)
 		})
 
 		// OSINT Tools
@@ -561,29 +551,14 @@ func New(cfg *config.Config) *http.Server {
 			r.Get("/cert/{domain}", apiOsintCertHandler)
 			r.Get("/subdomain/{domain}", apiOsintSubdomainHandler)
 			r.Get("/tech-stack", apiOsintTechStackHandler)
-			r.Get("/breach/{email}", apiOsintBreachHandler)
-			r.Get("/company/{name}", apiOsintCompanyHandler)
-			r.Get("/metadata/{target}", apiOsintMetadataHandler)
-			r.Get("/phone/{number}", apiOsintPhoneHandler)
-			r.Get("/social/{username}", apiOsintSocialHandler)
-			r.Get("/username/{username}", apiOsintUsernameHandler)
 		})
 
 		// Research Tools
 		r.Route("/research", func(r chi.Router) {
 			r.Post("/citation", apiResearchCitationHandler)
 			r.Get("/doi/*", apiResearchDOIHandler)
-			r.Post("/extract", apiResearchExtractHandler)
 			r.Post("/arxiv", apiResearchArxivHandler)
-			r.Post("/bibtex", apiResearchBibtexHandler)
-			r.Post("/footnotes", apiResearchFootnotesHandler)
 			r.Post("/isbn", apiResearchIsbnHandler)
-			r.Post("/metadata", apiResearchMetadataHandler)
-			r.Post("/outline", apiResearchOutlineHandler)
-			r.Post("/pdf-extract", apiResearchPdfExtractHandler)
-			r.Post("/readability", apiResearchReadabilityHandler)
-			r.Post("/scraper", apiResearchScraperHandler)
-			r.Post("/summarize", apiResearchSummarizeHandler)
 		})
 
 		// Fun & Content
@@ -647,6 +622,14 @@ func New(cfg *config.Config) *http.Server {
 	// Give every parameterised route a parameterless variant so a plain HTML
 	// form can drive the same handler with zero JavaScript.
 	registerFormFallbacks(r)
+	if err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if strings.HasPrefix(route, "/api/") {
+			apiRoutes = append(apiRoutes, swagger.Route{Method: method, Path: route})
+		}
+		return nil
+	}); err != nil {
+		panic(fmt.Sprintf("Failed to enumerate API routes: %v", err))
+	}
 
 	return &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Address, cfg.Server.Port),
@@ -659,35 +642,35 @@ func New(cfg *config.Config) *http.Server {
 
 // Template data
 type PageData struct {
-	SiteTitle          string
-	SiteDescription    string
-	SiteIcon           string
-	BaseURL            string
-	Theme              string
-	ThemeClass         string
-	Lang               string
-	LangDir            string
-	Languages          []i18n.LanguageInfo
-	PrefExportURL      string
-	PrefExportCode     string
-	Layout             string
-	ActivePage         string
-	PageTitle          string
-	PageDescription    string
-	NotSupportedReason string
-	Tagline            string
-	Version            string
-	CommitID           string
-	BuildDate          string
-	Mode               string
-	SecurityEmail      string
-	UpdatedAt          string
-	RateLimitRequests  int
-	RateLimitWindow    int
-	Categories         []CategoryInfo
-	TorEnabled         bool
-	TorRunning         bool
-	OnionAddress       string
+	SiteTitle         string
+	SiteDescription   string
+	SiteIcon          string
+	BaseURL           string
+	APIBasePath       string
+	Theme             string
+	ThemeClass        string
+	Lang              string
+	LangDir           string
+	Languages         []i18n.LanguageInfo
+	PrefExportURL     string
+	PrefExportCode    string
+	Layout            string
+	ActivePage        string
+	PageTitle         string
+	PageDescription   string
+	Tagline           string
+	Version           string
+	CommitID          string
+	BuildDate         string
+	Mode              string
+	SecurityEmail     string
+	UpdatedAt         string
+	RateLimitRequests int
+	RateLimitWindow   int
+	Categories        []CategoryInfo
+	TorEnabled        bool
+	TorRunning        bool
+	OnionAddress      string
 	// I2P fields mirror the Tor trio for the footer's second overlay row
 	// (PART 16 fixed row order: Tor -> I2P -> page links). No eepsite
 	// subsystem is wired yet, so they stay false/empty and the guarded row
@@ -737,6 +720,7 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		SiteDescription: cfg.Server.Branding.Description,
 		SiteIcon:        "🛠️",
 		BaseURL:         baseURL,
+		APIBasePath:     APIBasePath(cfg),
 		Theme:           string(theme),
 		ThemeClass:      ThemeClass(theme),
 		Lang:            lang,
@@ -760,6 +744,15 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		data.OnionAddress = m.OnionAddress()
 	}
 	return data
+}
+
+// APIBasePath returns the configured REST API prefix, defaulting to v1.
+func APIBasePath(cfg *config.Config) string {
+	version := "v1"
+	if cfg != nil && strings.TrimSpace(cfg.Server.APIVersion) != "" {
+		version = strings.Trim(strings.TrimSpace(cfg.Server.APIVersion), "/")
+	}
+	return "/api/" + version
 }
 
 // footerBuildDate renders the compiled-in build timestamp in the footer
@@ -839,18 +832,10 @@ func initTemplates() error {
 		pageTemplates[page] = tmpl
 	}
 
-	// Per-tool detail pages nested under template/page/tools/{category}/{tool}.tmpl,
-	// registered under composite keys like "crypto/hash". Entries with a
-	// non-empty reason (the 28 permanent API gaps) instead share
-	// template/page/tools/unsupported.tmpl — see the loop below.
+	// Per-tool detail pages are nested under template/page/tools/{category}/{tool}.tmpl.
 	for _, tp := range toolPages() {
 		key := tp.category + "/" + tp.tool
 		contentTemplate := fmt.Sprintf("template/page/tools/%s.tmpl", key)
-		if tp.reason != "" {
-			// Permanent API gap (PART 16 route mirroring): reuse the one
-			// shared "not supported" template instead of a per-tool file.
-			contentTemplate = "template/page/tools/unsupported.tmpl"
-		}
 		tmpl, err := template.New(key).Funcs(templateFuncs()).ParseFS(templatesFS,
 			"template/layout/public.tmpl",
 			"template/partial/*.tmpl",
@@ -872,24 +857,9 @@ type toolPage struct {
 	tool        string
 	title       string
 	description string
-	// reason is set only for the 28 permanent API gaps (PART 16 route-
-	// mirroring: every wired API route, including a 501 NOT_SUPPORTED one,
-	// gets a matching frontend page). When non-empty, initTemplates()
-	// renders this entry from the shared template/page/tools/unsupported.tmpl
-	// instead of a per-tool template, and the handler surfaces reason as
-	// PageData.NotSupportedReason instead of a working form.
-	reason string
 }
 
-// toolPages lists the per-tool detail pages that currently have templates on
-// disk under template/page/tools/{category}/{tool}.tmpl (PART 16 frontend
-// route mirrors API route rule). This includes the 28 permanent API gaps
-// (entries with a non-empty reason), which render the shared
-// template/page/tools/unsupported.tmpl instead of a working form so their
-// wired-but-501 API route still has a matching frontend page. Most of the
-// remaining ~240 sub-tool pages linked from the 21 category pages have
-// neither a template nor a route yet — see TODO.AI.md for the remaining
-// wiring work.
+// toolPages lists the implemented tool pages and their category routes.
 func toolPages() []toolPage {
 	return []toolPage{
 		{category: "crypto", tool: "hash", title: "Hash Generator", description: "Generate cryptographic hashes using various algorithms (MD5, SHA-1, SHA-256, SHA-512, BLAKE3)"},
@@ -1107,48 +1077,15 @@ func toolPages() []toolPage {
 		{category: "generate", tool: "ssh-key", title: "SSH Key", description: "Generate SSH key pairs"},
 		{category: "generate", tool: "identicon", title: "Identicon", description: "Generate identicons from hashes"},
 		{category: "generate", tool: "placeholder", title: "Placeholder Image", description: "Generate placeholder images"},
-
-		// The 28 permanent API gaps (see TODO.AI.md "Known permanent API
-		// gaps"): each has a real, wired /api/{version}/... route that
-		// honestly returns 501 NOT_SUPPORTED rather than inventing
-		// behavior IDEA.md's declared scope/non-goals/trust-boundary
-		// excludes. PART 16 requires a matching frontend route for every
-		// wired API route, so each gets a page here too — rendered via
-		// the shared unsupported.tmpl rather than a working form.
-		{category: "language", tool: "detect", title: "Language Detection", description: "Detect the language of a piece of text", reason: "Language auto-detection is a declared non-goal in IDEA.md; only language code/name lookup is supported."},
-		{category: "language", tool: "translate", title: "Translate", description: "Translate text between languages", reason: "Machine translation is a declared non-goal in IDEA.md and commercial translation APIs are outside the declared free/keyless trust boundary."},
-		{category: "language", tool: "grammar", title: "Grammar Check", description: "Check text for grammar issues", reason: "Grammar checking is not named in IDEA.md's declared Language scope of code/name lookup and listing."},
-		{category: "language", tool: "spell-check", title: "Spell Check", description: "Check text for spelling issues", reason: "Spell checking is not named in IDEA.md's declared Language scope of code/name lookup and listing."},
-		{category: "research", tool: "extract", title: "Citation Extraction", description: "Extract citations from unstructured text", reason: "Citation extraction from free-form text is unimplemented; IDEA.md's Research scope covers citation formatting, bibliography generation, DOI validation, and the arXiv/ISBN lookups only."},
-		{category: "research", tool: "bibtex", title: "BibTeX Export", description: "Export a citation as BibTeX", reason: "BibTeX export is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
-		{category: "research", tool: "footnotes", title: "Footnote Formatter", description: "Format footnotes for a document", reason: "Footnote formatting is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
-		{category: "research", tool: "metadata", title: "Page Metadata Extraction", description: "Extract metadata from a web page", reason: "Web page metadata extraction is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
-		{category: "research", tool: "outline", title: "Document Outline", description: "Generate a document outline", reason: "Document outlining is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
-		{category: "research", tool: "pdf-extract", title: "PDF Text Extraction", description: "Extract text from a PDF", reason: "PDF text extraction needs a new third-party dependency to parse untrusted binaries; outside IDEA.md's declared scope."},
-		{category: "research", tool: "readability", title: "Readability Score", description: "Score the readability of a page or text", reason: "Readability scoring of remote pages is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
-		{category: "research", tool: "scraper", title: "Web Scraper", description: "Scrape content from a web page", reason: "Web scraping is not named in IDEA.md's declared Research scope of citation formatting/bibliography/DOI/arXiv/ISBN."},
-		{category: "research", tool: "summarize", title: "Text Summarizer", description: "Summarize a piece of text", reason: "A genuine summarizer needs an external/keyed NLP or LLM service, excluded by IDEA.md's free/keyless integration policy."},
-		{category: "osint", tool: "breach", title: "Breach Check", description: "Check whether an email or username appears in a known breach", reason: "Breach-database checking requires a commercial keyed third-party API, outside IDEA.md's declared free/keyless OSINT trust boundary."},
-		{category: "osint", tool: "company", title: "Company Lookup", description: "Look up company registration details", reason: "Company lookup requires a commercial keyed third-party API, outside IDEA.md's declared free/keyless OSINT trust boundary."},
-		{category: "osint", tool: "metadata", title: "File Metadata Extraction", description: "Extract metadata from an uploaded file", reason: "Generic file-metadata extraction duplicates the existing image/metadata tool and is outside OSINT's declared 4-mechanism scope of IP geolocation/WHOIS/DNS/TLS certificate."},
-		{category: "osint", tool: "phone", title: "Phone Intelligence", description: "Look up carrier and risk details for a phone number", reason: "Phone-number intelligence requires a commercial keyed API; validate/phone already covers format validation within IDEA.md's declared scope."},
-		{category: "osint", tool: "social", title: "Social Profile Discovery", description: "Discover social media profiles for a name or handle", reason: "Cross-platform profile discovery would require probing dozens of third-party platforms, outside IDEA.md's declared free/keyless OSINT trust boundary."},
-		{category: "osint", tool: "username", title: "Username Search", description: "Search for a username across platforms", reason: "Cross-platform username discovery would require probing dozens of third-party platforms, outside IDEA.md's declared free/keyless OSINT trust boundary."},
-		{category: "testing", tool: "load-test", title: "Load Test", description: "Run a load test against a target URL", reason: "Load testing would require firing outbound HTTP traffic at a caller-supplied target, outside IDEA.md's declared outbound-call boundary."},
-		{category: "testing", tool: "mock-server", title: "Mock Server", description: "Spin up a temporary mock HTTP server", reason: "A mock server needs either a second runtime-managed listening socket (forbidden by the no-runtime-port-change config rule) or persisting caller-defined rules (forbidden by IDEA.md's no-persistent-storage non-goal)."},
-		{category: "weather", tool: "maps", title: "Weather Map Tiles", description: "Get weather map tile imagery for a region", reason: "Keyless weather tile imagery has no free provider within IDEA.md's declared outbound-call boundary; a real implementation needs a keyed provider."},
-		{category: "weather", tool: "radar", title: "Radar Imagery", description: "Get radar imagery for a location", reason: "Keyless radar imagery has no free provider within IDEA.md's declared outbound-call boundary; a real implementation needs a keyed provider."},
-		{category: "network", tool: "traceroute", title: "Traceroute", description: "Trace the network path to a host", reason: "A real traceroute needs TTL-limited probes and a raw ICMP socket (CAP_NET_RAW or root), which this unprivileged self-contained binary cannot assume it has."},
 	}
 }
 
 // toolPageHandler renders a per-tool detail page under a category
-func toolPageHandler(cfg *config.Config, category, tool, title, description, reason string) http.HandlerFunc {
+func toolPageHandler(cfg *config.Config, category, tool, title, description string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, category)
 		data.PageTitle = title
 		data.PageDescription = description
-		data.NotSupportedReason = reason
 		renderPage(w, category+"/"+tool, data)
 	}
 }
@@ -1206,7 +1143,7 @@ func categoryPageHandler(cfg *config.Config, category, title, description string
 
 // allCategories lists the 21 tool categories shown on the /categories index page
 func allCategories() []CategoryInfo {
-	return []CategoryInfo{
+	categories := []CategoryInfo{
 		{Path: "/text", Icon: "📝", Name: "Text Utilities", Description: "UUID generation, hashing, encoding, and text manipulation", Count: 89},
 		{Path: "/crypto", Icon: "🔐", Name: "Cryptography", Description: "Password hashing, TOTP generation, and secure passwords", Count: 147},
 		{Path: "/datetime", Icon: "🕐", Name: "Date & Time", Description: "Timestamp conversion, timezone handling, and date calculations", Count: 67},
@@ -1229,6 +1166,14 @@ func allCategories() []CategoryInfo {
 		{Path: "/validate", Icon: "✅", Name: "Validators", Description: "Validating emails, phones, URLs, credit cards, and more", Count: 68},
 		{Path: "/weather", Icon: "⛅", Name: "Weather", Description: "Current weather, forecasts, and air quality data", Count: 27},
 	}
+	counts := make(map[string]int, len(categories))
+	for _, page := range toolPages() {
+		counts[page.category]++
+	}
+	for i := range categories {
+		categories[i].Count = counts[strings.TrimPrefix(categories[i].Path, "/")]
+	}
+	return categories
 }
 
 func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
@@ -1312,11 +1257,18 @@ func swaggerUIHandler(cfg *config.Config) http.HandlerFunc {
 }
 
 // apiSwaggerSpecHandler serves the OpenAPI JSON spec. Mounted at both
-// /api/swagger (unversioned alias) and /api/v1/server/swagger (versioned
+// /api/swagger (unversioned alias) and /api/{api_version}/server/swagger (versioned
 // canonical) — same handler, no redirect, per PART 14. JSON only, no YAML.
-func apiSwaggerSpecHandler(cfg *config.Config) http.HandlerFunc {
+func apiSwaggerSpecHandler(cfg *config.Config, routes *[]swagger.Route) http.HandlerFunc {
 	baseURL := getBaseURL(cfg)
-	return swagger.ServeSpec(Version, baseURL)
+	apiVersion := strings.TrimPrefix(APIBasePath(cfg), "/api/")
+	return func(w http.ResponseWriter, r *http.Request) {
+		var registered []swagger.Route
+		if routes != nil {
+			registered = *routes
+		}
+		swagger.ServeSpecWithRoutes(Version, baseURL, apiVersion, registered).ServeHTTP(w, r)
+	}
 }
 
 // getBaseURL returns the base URL for the server
@@ -1371,7 +1323,7 @@ func mountMetrics(r chi.Router, cfg *config.Config) {
 		r.Get(prefix+"/loki", lokiHandler)
 	}
 	mount("/server/metrics")
-	mount("/api/v1/server/metrics")
+	mount(APIBasePath(cfg) + "/server/metrics")
 	mount("/api/metrics")
 	if mc.Root.Enabled {
 		mount("/metrics")

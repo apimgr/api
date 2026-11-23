@@ -18,7 +18,7 @@
         HTTP request to a site — no third-party service is contacted.
       </p>
 
-      <form id="tech-stack-form" class="tool-form" data-endpoint="/api/v1/osint/tech-stack" method="get" action="/api/v1/osint/tech-stack">
+      <form id="tech-stack-form" class="tool-form" data-endpoint="{{.APIBasePath}}/osint/tech-stack" method="get" action="{{.APIBasePath}}/osint/tech-stack">
         <div class="form-group">
           <label class="form-label">URL</label>
           <input type="text" name="url" class="form-input" required placeholder="https://example.com">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/osint/tech-stack?url=https://example.com"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/osint/tech-stack?url=https://example.com"</pre>
           </div>
         </div>
       </div>

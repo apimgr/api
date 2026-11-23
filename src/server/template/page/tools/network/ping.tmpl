@@ -19,7 +19,7 @@
         root/CAP_NET_RAW).
       </p>
 
-      <form id="ping-form" class="tool-form" data-endpoint="/api/v1/network/ping" method="get" action="/api/v1/network/ping">
+      <form id="ping-form" class="tool-form" data-endpoint="{{.APIBasePath}}/network/ping" method="get" action="{{.APIBasePath}}/network/ping">
         <div class="form-group">
           <label class="form-label">Host</label>
           <input type="text" name="host" class="form-input" required placeholder="example.com">
@@ -43,7 +43,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/network/ping?host=example.com&count=4"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/network/ping?host=example.com&count=4"</pre>
           </div>
         </div>
       </div>

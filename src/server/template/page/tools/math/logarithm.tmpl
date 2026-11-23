@@ -17,7 +17,7 @@
         Calculate the natural, base-10, or base-2 logarithm of a number.
       </p>
 
-      <form id="logarithm-form" class="tool-form" data-endpoint="/api/v1/math/calculate" method="get" action="/api/v1/math/calculate">
+      <form id="logarithm-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="get" action="{{.APIBasePath}}/math/calculate">
         <div class="form-group">
           <label class="form-label">Operation</label>
           <select name="operation" class="form-input">
@@ -45,7 +45,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/calculate?operation=log10&n=100"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/calculate?operation=log10&n=100"</pre>
           </div>
         </div>
       </div>

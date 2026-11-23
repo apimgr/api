@@ -15,7 +15,7 @@
         Describe an HTTP request and get back a minimal Postman Collection v2.1 JSON
         document containing that request.
       </p>
-      <form id="postman-form" class="tool-form" data-body-endpoint="/api/v1/test/postman">
+      <form id="postman-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/test/postman">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"method":"GET","url":"https://example.com/api","headers":{"Accept":"application/json"}}'></textarea>
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/test/postman -d '{"method":"GET","url":"https://example.com/api"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/test/postman -d '{"method":"GET","url":"https://example.com/api"}'</pre>
           </div>
         </div>
       </div>

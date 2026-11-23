@@ -17,7 +17,7 @@
         Generate a deterministic identicon image from a seed value's SHA-256 hash.
       </p>
 
-      <form id="identicon-form" class="tool-form" data-image-template="/api/v1/generate/identicon">
+      <form id="identicon-form" class="tool-form" data-image-template="{{.APIBasePath}}/generate/identicon">
         <div class="form-group">
           <label class="form-label">Seed</label>
           <input type="text" name="seed" class="form-input" required placeholder="user@example.com">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/identicon?seed=user@example.com&size=256" -o identicon.png</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/identicon?seed=user@example.com&size=256" -o identicon.png</pre>
           </div>
         </div>
       </div>

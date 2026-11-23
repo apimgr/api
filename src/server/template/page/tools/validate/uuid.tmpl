@@ -17,7 +17,7 @@
         Check whether a string is a correctly formatted UUID.
       </p>
 
-      <form id="validate-uuid-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/uuid">
+      <form id="validate-uuid-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/uuid">
         <div class="form-group">
           <label class="form-label">Validate UUID</label>
           <input type="text" name="uuid" class="form-input" required placeholder="550e8400-e29b-41d4-a716-446655440000">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/uuid?uuid=550e8400-e29b-41d4-a716-446655440000"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/uuid?uuid=550e8400-e29b-41d4-a716-446655440000"</pre>
           </div>
         </div>
       </div>

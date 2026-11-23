@@ -18,7 +18,7 @@
         same passphrase that was used to encrypt it.
       </p>
 
-      <form id="decrypt-form" class="tool-form" data-body-endpoint="/api/v1/crypto/decrypt">
+      <form id="decrypt-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/crypto/decrypt">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="4" required placeholder='{"ciphertext":"...","key":"correct horse battery staple"}'></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/crypto/decrypt -d '{"ciphertext":"...","key":"correct horse battery staple"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/crypto/decrypt -d '{"ciphertext":"...","key":"correct horse battery staple"}'</pre>
           </div>
         </div>
       </div>

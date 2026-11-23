@@ -18,7 +18,7 @@
         collection (no image generation).
       </p>
 
-      <form id="meme-form" class="tool-form" data-template="/api/v1/fun/meme">
+      <form id="meme-form" class="tool-form" data-template="{{.APIBasePath}}/fun/meme">
         <button type="submit" class="btn btn-primary">Give Me One</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/meme</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/meme</pre>
           </div>
         </div>
       </div>

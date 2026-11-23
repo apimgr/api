@@ -22,7 +22,7 @@
         empty list, not an error.
       </p>
 
-      <form id="alerts-form" class="tool-form" data-template="/api/v1/weather/alerts/{location}">
+      <form id="alerts-form" class="tool-form" data-template="{{.APIBasePath}}/weather/alerts/{location}">
         <div class="form-group">
           <label class="form-label">Location</label>
           <input type="text" name="location" class="form-input" required placeholder="London, 90210, or 51.5,-0.1">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/weather/alerts/London</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/weather/alerts/London</pre>
           </div>
         </div>
       </div>

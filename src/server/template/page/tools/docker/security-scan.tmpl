@@ -18,7 +18,7 @@
         security anti-patterns.
       </p>
 
-      <form id="security-scan-form" class="tool-form" data-body-endpoint="/api/v1/docker/security-scan">
+      <form id="security-scan-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/security-scan">
         <div class="form-group">
           <label class="form-label">Dockerfile or docker-compose.yml content</label>
           <textarea name="body" class="form-input" rows="10" required placeholder="FROM ubuntu:latest&#10;USER root&#10;RUN curl http://example.com/install.sh | sh"></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/docker/security-scan -d 'FROM ubuntu:latest
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/security-scan -d 'FROM ubuntu:latest
 USER root'</pre>
           </div>
         </div>

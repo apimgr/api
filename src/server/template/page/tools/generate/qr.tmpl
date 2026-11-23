@@ -18,7 +18,7 @@
         from a network name and password.
       </p>
 
-      <form id="qr-form" class="tool-form" data-image-template="/api/v1/generate/qr">
+      <form id="qr-form" class="tool-form" data-image-template="{{.APIBasePath}}/generate/qr">
         <div class="form-group">
           <label class="form-label">Data</label>
           <input type="text" name="data" class="form-input" placeholder="https://example.com">
@@ -77,7 +77,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/qr?data=https://example.com" -o qr.png</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/qr?data=https://example.com" -o qr.png</pre>
           </div>
         </div>
         <div class="code-block mt-2">
@@ -86,7 +86,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/qr?ssid=MyNetwork&password=hunter2&security=WPA" -o wifi-qr.png</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/qr?ssid=MyNetwork&password=hunter2&security=WPA" -o wifi-qr.png</pre>
           </div>
         </div>
       </div>

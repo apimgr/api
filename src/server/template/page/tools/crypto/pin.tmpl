@@ -18,7 +18,7 @@
         secure random source.
       </p>
 
-      <form id="pin-form" class="tool-form" data-template="/api/v1/crypto/pin/{length}.txt">
+      <form id="pin-form" class="tool-form" data-template="{{.APIBasePath}}/crypto/pin/{length}.txt">
         <div class="form-group">
           <label class="form-label">Length</label>
           <input type="number" name="length" class="form-input" value="6" min="1" max="20">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/crypto/pin/6</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/crypto/pin/6</pre>
           </div>
         </div>
       </div>

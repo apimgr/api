@@ -17,7 +17,7 @@
         Count words, characters, lines, and sentences in text.
       </p>
 
-      <form id="word-count-form" class="tool-form" data-body-endpoint="/api/v1/language/word-count">
+      <form id="word-count-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/language/word-count">
         <div class="form-group">
           <label class="form-label">Text</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="Paste or type text here."></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/language/word-count -d 'Some text to count.'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/language/word-count -d 'Some text to count.'</pre>
           </div>
         </div>
       </div>

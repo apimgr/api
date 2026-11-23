@@ -95,12 +95,13 @@ func Execute(argv []string, build BuildInfo) int {
 		}
 	}
 
-	client := api.NewWithOptions(
+	client := api.NewWithAPIVersion(
 		server,
 		token,
 		parseDurationOr(cfg.Server.Timeout, api.DefaultTimeout),
 		cfg.Server.Retry,
 		parseDurationOr(cfg.Server.RetryDelay, api.DefaultRetryDelay),
+		cfg.Server.APIVersion,
 	)
 	client.Debug = flags.Debug || cfg.Debug
 

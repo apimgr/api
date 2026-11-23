@@ -70,6 +70,20 @@ func TestGetSuccess(t *testing.T) {
 	assert.Equal(t, "application/json", gotAccept)
 }
 
+func TestConfiguredAPIVersion(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := NewWithAPIVersion(srv.URL, "", DefaultTimeout, 1, 0, "v2")
+	_, err := c.Get("/api/v1/text/uuid", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "/api/v2/text/uuid", gotPath)
+}
+
 // TestGetNoToken verifies no Authorization header is sent when the
 // client has no token, matching the CLI's "open API, tokens only for
 // ownership" model from PART 32.

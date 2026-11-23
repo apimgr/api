@@ -19,7 +19,7 @@
         reference-time layout string.
       </p>
 
-      <form id="format-form" class="tool-form" data-template="/api/v1/datetime/format/{timestamp}/{format}">
+      <form id="format-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/format/{timestamp}/{format}">
         <div class="form-group">
           <label class="form-label">Unix timestamp</label>
           <input type="number" name="timestamp" class="form-input" required value="1700000000">
@@ -52,7 +52,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/format/1700000000/iso8601</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/format/1700000000/iso8601</pre>
           </div>
         </div>
       </div>

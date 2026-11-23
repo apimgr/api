@@ -18,7 +18,7 @@
         collection.
       </p>
 
-      <form id="insult-form" class="tool-form" data-template="/api/v1/fun/insult">
+      <form id="insult-form" class="tool-form" data-template="{{.APIBasePath}}/fun/insult">
         <button type="submit" class="btn btn-primary">Insult Me</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/insult</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/insult</pre>
           </div>
         </div>
       </div>

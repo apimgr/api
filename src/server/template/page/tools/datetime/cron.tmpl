@@ -19,7 +19,7 @@
         the next 5 scheduled run times.
       </p>
 
-      <form id="cron-form" class="tool-form" data-endpoint="/api/v1/datetime/cron" method="get" action="/api/v1/datetime/cron">
+      <form id="cron-form" class="tool-form" data-endpoint="{{.APIBasePath}}/datetime/cron" method="get" action="{{.APIBasePath}}/datetime/cron">
         <div class="form-group">
           <label class="form-label">Cron expression</label>
           <input type="text" name="expression" class="form-input" required placeholder="*/15 9-17 * * 1-5" value="*/15 9-17 * * 1-5">
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -G "{{.BaseURL}}/api/v1/datetime/cron" --data-urlencode "expression=*/15 9-17 * * 1-5"</pre>
+            <pre>curl -G "{{.BaseURL}}{{.APIBasePath}}/datetime/cron" --data-urlencode "expression=*/15 9-17 * * 1-5"</pre>
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@
         test suites and fixtures.
       </p>
 
-      <form id="fake-data-form" class="tool-form" data-endpoint="/api/v1/test/fake-data" method="get" action="/api/v1/test/fake-data">
+      <form id="fake-data-form" class="tool-form" data-endpoint="{{.APIBasePath}}/test/fake-data" method="get" action="{{.APIBasePath}}/test/fake-data">
         <div class="form-group">
           <label class="form-label">Type</label>
           <select name="type" class="form-input">
@@ -46,7 +46,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/test/fake-data?type=user&prefix=test"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/test/fake-data?type=user&prefix=test"</pre>
           </div>
         </div>
       </div>

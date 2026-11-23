@@ -17,7 +17,7 @@
         Score text as positive, negative, or neutral using a lexicon-based heuristic.
       </p>
 
-      <form id="sentiment-form" class="tool-form" data-body-endpoint="/api/v1/language/sentiment">
+      <form id="sentiment-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/language/sentiment">
         <div class="form-group">
           <label class="form-label">Text</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="Paste or type text here."></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/language/sentiment -d 'Some text to analyze for sentiment.'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/language/sentiment -d 'Some text to analyze for sentiment.'</pre>
           </div>
         </div>
       </div>

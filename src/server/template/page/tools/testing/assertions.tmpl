@@ -18,7 +18,7 @@
         pass/fail result with a diagnostic message.
       </p>
 
-      <form id="assertions-form" class="tool-form" data-body-endpoint="/api/v1/test/assert">
+      <form id="assertions-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/test/assert">
         <div class="form-group">
           <label class="form-label">Assertion (JSON)</label>
           <textarea name="body" class="form-input" rows="4" required placeholder='{"op":"equal","expected":"foo","actual":"foo"}'></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/test/assert -d '{"op":"equal","expected":"foo","actual":"foo"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/test/assert -d '{"op":"equal","expected":"foo","actual":"foo"}'</pre>
           </div>
         </div>
       </div>

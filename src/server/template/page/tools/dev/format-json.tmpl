@@ -17,7 +17,7 @@
         Pretty-print and re-indent a raw JSON document.
       </p>
 
-      <form id="format-json-form" class="tool-form" data-body-endpoint="/api/v1/dev/format/json">
+      <form id="format-json-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/format/json">
         <div class="form-group">
           <label class="form-label">Raw JSON</label>
           <textarea name="body" class="form-input" rows="8" required placeholder='{"key":"value"}'></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/dev/format/json -d '{"key":"value"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/dev/format/json -d '{"key":"value"}'</pre>
           </div>
         </div>
       </div>

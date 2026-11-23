@@ -17,7 +17,7 @@
         Generate the first N numbers of the Fibonacci sequence.
       </p>
 
-      <form id="fibonacci-form" class="tool-form" data-endpoint="/api/v1/math/fibonacci" method="get" action="/api/v1/math/fibonacci">
+      <form id="fibonacci-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/fibonacci" method="get" action="{{.APIBasePath}}/math/fibonacci">
         <div class="form-group">
           <label class="form-label">Count</label>
           <input type="number" name="count" class="form-input" step="1" min="0" required value="10">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/fibonacci?count=10"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/fibonacci?count=10"</pre>
           </div>
         </div>
       </div>

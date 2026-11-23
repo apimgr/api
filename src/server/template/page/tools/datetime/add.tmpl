@@ -17,7 +17,7 @@
         Add a duration (e.g. 1h30m, 24h, 7d) to a Unix timestamp.
       </p>
 
-      <form id="add-form" class="tool-form" data-template="/api/v1/datetime/add/{timestamp}/{duration}">
+      <form id="add-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/add/{timestamp}/{duration}">
         <div class="form-group">
           <label class="form-label">Unix timestamp</label>
           <input type="number" name="timestamp" class="form-input" required placeholder="1700000000">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/add/1700000000/24h</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/add/1700000000/24h</pre>
           </div>
         </div>
       </div>

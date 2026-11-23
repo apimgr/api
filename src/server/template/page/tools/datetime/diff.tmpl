@@ -17,7 +17,7 @@
         Compute the difference between two Unix timestamps.
       </p>
 
-      <form id="diff-form" class="tool-form" data-template="/api/v1/datetime/diff/{timestamp1}/{timestamp2}">
+      <form id="diff-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/diff/{timestamp1}/{timestamp2}">
         <div class="form-group">
           <label class="form-label">First timestamp</label>
           <input type="number" name="timestamp1" class="form-input" required placeholder="1700000000">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/diff/1700000000/1700086400</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/diff/1700000000/1700086400</pre>
           </div>
         </div>
       </div>

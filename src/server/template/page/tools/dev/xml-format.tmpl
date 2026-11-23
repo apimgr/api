@@ -17,7 +17,7 @@
         Format/minify XML.
       </p>
 
-      <form id="xml-format-form" class="tool-form" data-body-endpoint="/api/v1/dev/format/xml">
+      <form id="xml-format-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/format/xml">
         <div class="form-group">
           <label class="form-label">Raw XML</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="&lt;root&gt;&lt;item&gt;value&lt;/item&gt;&lt;/root&gt;"></textarea>
@@ -43,7 +43,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/dev/format/xml -d '&lt;root&gt;&lt;item&gt;value&lt;/item&gt;&lt;/root&gt;'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/dev/format/xml -d '&lt;root&gt;&lt;item&gt;value&lt;/item&gt;&lt;/root&gt;'</pre>
           </div>
         </div>
       </div>

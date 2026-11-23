@@ -17,7 +17,7 @@
         Generate API documentation from the live OpenAPI spec, as Markdown or JSON.
       </p>
 
-      <form id="api-docs-form" class="tool-form" data-template="/api/v1/generate/api-docs?format={format}&version={version}">
+      <form id="api-docs-form" class="tool-form" data-template="{{.APIBasePath}}/generate/api-docs?format={format}&version={version}">
         <div class="form-group">
           <label class="form-label">Format</label>
           <select name="format" class="form-input">
@@ -44,7 +44,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/api-docs?format=markdown&version=v1"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/api-docs?format=markdown&version=v1"</pre>
           </div>
         </div>
       </div>

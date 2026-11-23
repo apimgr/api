@@ -18,7 +18,7 @@
         public key, or decrypt a PGP message with a private key.
       </p>
 
-      <form id="pgp-form" class="tool-form" data-body-endpoint="/api/v1/crypto/pgp">
+      <form id="pgp-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/crypto/pgp">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"mode":"generate","name":"Jane Doe","email":"jane@example.com"}'></textarea>
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/crypto/pgp -d '{"mode":"generate","name":"Jane Doe","email":"jane@example.com"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/crypto/pgp -d '{"mode":"generate","name":"Jane Doe","email":"jane@example.com"}'</pre>
           </div>
         </div>
       </div>

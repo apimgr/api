@@ -17,7 +17,7 @@
         Generate a time-based one-time password (TOTP) secret, provisioning URI, and current code.
       </p>
 
-      <form id="totp-form" class="tool-form" data-template="/api/v1/crypto/totp/generate?issuer={issuer}&account={account}">
+      <form id="totp-form" class="tool-form" data-template="{{.APIBasePath}}/crypto/totp/generate?issuer={issuer}&account={account}">
         <div class="form-group">
           <label class="form-label">Issuer</label>
           <input type="text" name="issuer" class="form-input" placeholder="CasTools">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/crypto/totp/generate?issuer=CasTools&account=user@example.com</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/crypto/totp/generate?issuer=CasTools&account=user@example.com</pre>
           </div>
         </div>
       </div>

@@ -36,8 +36,8 @@ The included Compose configuration publishes the web interface on `http://172.17
 
 - [Repository](https://github.com/apimgr/api)
 - [Issue tracker](https://github.com/apimgr/api/issues)
-- [Interactive OpenAPI UI](/server/docs/swagger)
-- [Interactive GraphQL UI](/server/docs/graphql)
+- OpenAPI UI on a running instance: `/server/docs/swagger`
+- GraphQL UI on a running instance: `/server/docs/graphql`
 
 ## License
 

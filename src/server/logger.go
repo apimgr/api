@@ -51,10 +51,9 @@ var sensitiveQueryParams = map[string]bool{
 // successful (2xx) response, per the Health-Check Log Suppression rules -
 // mirrors the health-check routes actually registered in server.go
 var healthCheckPaths = map[string]bool{
-	"/healthz":               true,
-	"/server/healthz":        true,
-	"/api/healthz":           true,
-	"/api/v1/server/healthz": true,
+	"/healthz":        true,
+	"/server/healthz": true,
+	"/api/healthz":    true,
 }
 
 // redactQuery drops the value of any sensitive query parameter (matched
@@ -87,7 +86,11 @@ func redactQuery(rawQuery string) string {
 // isHealthCheckPath reports whether path is a health-check endpoint
 // eligible for access-log suppression on a successful response
 func isHealthCheckPath(path string) bool {
-	return healthCheckPaths[path]
+	return isHealthCheckPathForBase(path, APIBasePath(config.Get()))
+}
+
+func isHealthCheckPathForBase(path, apiBase string) bool {
+	return healthCheckPaths[path] || path == apiBase+"/server/healthz"
 }
 
 // NewLogger creates a new logger instance

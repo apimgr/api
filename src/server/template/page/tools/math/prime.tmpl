@@ -17,7 +17,7 @@
         Check whether a number is prime.
       </p>
 
-      <form id="prime-form" class="tool-form" data-template="/api/v1/math/prime/{n}">
+      <form id="prime-form" class="tool-form" data-template="{{.APIBasePath}}/math/prime/{n}">
         <div class="form-group">
           <label class="form-label">n</label>
           <input type="number" name="n" class="form-input" step="1" required value="17">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/math/prime/17</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/math/prime/17</pre>
           </div>
         </div>
       </div>

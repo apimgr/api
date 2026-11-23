@@ -17,7 +17,7 @@
         Check whether a domain name is correctly formatted.
       </p>
 
-      <form id="validate-domain-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/domain">
+      <form id="validate-domain-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/domain">
         <div class="form-group">
           <label class="form-label">Validate Domain</label>
           <input type="text" name="domain" class="form-input" required placeholder="example.com">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/domain?domain=example.com"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/domain?domain=example.com"</pre>
           </div>
         </div>
       </div>

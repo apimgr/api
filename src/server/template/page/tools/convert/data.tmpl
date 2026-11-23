@@ -18,7 +18,7 @@
         gigabytes, and terabytes (decimal, 1000-based units).
       </p>
 
-      <form id="data-form" class="tool-form" data-template="/api/v1/convert/data/{value}/{from}/{to}">
+      <form id="data-form" class="tool-form" data-template="{{.APIBasePath}}/convert/data/{value}/{from}/{to}">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="number" name="value" class="form-input" step="any" required value="1">
@@ -59,7 +59,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/convert/data/1024/b/kb</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/data/1024/b/kb</pre>
           </div>
         </div>
       </div>

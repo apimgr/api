@@ -17,7 +17,7 @@
         Upload an image and apply a grayscale, sepia, invert, blur, brighten, or darken filter.
       </p>
 
-      <form id="filter-form" class="tool-form" method="post" action="/api/v1/image/filter" enctype="multipart/form-data">
+      <form id="filter-form" class="tool-form" method="post" action="{{.APIBasePath}}/image/filter" enctype="multipart/form-data">
         {{csrfField .CSRFToken}}
         <div class="form-group">
           <label class="form-label" for="filter-image">Image File</label>
@@ -61,7 +61,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/image/filter?name=grayscale&amp;amount=0.3&amp;format=png" --data-binary @image.png -o filtered.png</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/image/filter?name=grayscale&amp;amount=0.3&amp;format=png" --data-binary @image.png -o filtered.png</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Parse a TOML document into a nested key/value structure.
       </p>
 
-      <form id="toml-form" class="tool-form" data-body-endpoint="/api/v1/parse/toml">
+      <form id="toml-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/toml">
         <div class="form-group">
           <label class="form-label">TOML document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="[table]&#10;key = &quot;value&quot;"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/toml -d '[table]
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/toml -d '[table]
 key = "value"'</pre>
           </div>
         </div>

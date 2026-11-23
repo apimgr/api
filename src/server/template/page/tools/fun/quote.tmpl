@@ -17,7 +17,7 @@
         Get an inspirational quote from the built-in curated collection.
       </p>
 
-      <form id="quote-form" class="tool-form" data-template="/api/v1/fun/quote">
+      <form id="quote-form" class="tool-form" data-template="{{.APIBasePath}}/fun/quote">
         <button type="submit" class="btn btn-primary">Tell Me One</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/quote</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/quote</pre>
           </div>
         </div>
       </div>

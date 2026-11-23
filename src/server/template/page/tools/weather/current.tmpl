@@ -18,7 +18,7 @@
         code, or coordinates.
       </p>
 
-      <form id="current-form" class="tool-form" data-template="/api/v1/weather/current/{location}">
+      <form id="current-form" class="tool-form" data-template="{{.APIBasePath}}/weather/current/{location}">
         <div class="form-group">
           <label class="form-label">Location</label>
           <input type="text" name="location" class="form-input" required placeholder="London, 90210, or 51.5,-0.1">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/weather/current/London</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/weather/current/London</pre>
           </div>
         </div>
       </div>

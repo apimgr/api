@@ -18,7 +18,7 @@
         remote address, and body.
       </p>
 
-      <form id="echo-form" class="tool-form" data-template="/api/v1/dev/echo">
+      <form id="echo-form" class="tool-form" data-template="{{.APIBasePath}}/dev/echo">
         <button type="submit" class="btn btn-primary">Echo</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/dev/echo</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/dev/echo</pre>
           </div>
         </div>
       </div>

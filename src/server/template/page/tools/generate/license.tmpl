@@ -17,7 +17,7 @@
         Generate canonical license text, optionally substituting your name and year.
       </p>
 
-      <form id="license-form" class="tool-form" data-template="/api/v1/generate/license?type={type}&author={author}&year={year}">
+      <form id="license-form" class="tool-form" data-template="{{.APIBasePath}}/generate/license?type={type}&author={author}&year={year}">
         <div class="form-group">
           <label class="form-label">License Type</label>
           <select name="type" class="form-input">
@@ -52,7 +52,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/license?type=mit&author=Jane+Doe&year=2026"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/license?type=mit&author=Jane+Doe&year=2026"</pre>
           </div>
         </div>
       </div>

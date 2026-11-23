@@ -17,7 +17,7 @@
         Upload an image and inspect its dimensions, format, and byte size.
       </p>
 
-      <form id="metadata-form" class="tool-form" method="post" action="/api/v1/image/metadata" enctype="multipart/form-data">
+      <form id="metadata-form" class="tool-form" method="post" action="{{.APIBasePath}}/image/metadata" enctype="multipart/form-data">
         {{csrfField .CSRFToken}}
         <div class="form-group">
           <label class="form-label" for="metadata-image">Image File</label>
@@ -35,7 +35,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/image/metadata" --data-binary @image.png</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/image/metadata" --data-binary @image.png</pre>
           </div>
         </div>
       </div>

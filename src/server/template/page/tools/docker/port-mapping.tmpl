@@ -18,7 +18,7 @@
         string, or parse an existing mapping back into its parts.
       </p>
 
-      <form id="port-mapping-form" class="tool-form" data-endpoint="/api/v1/docker/port-mapping" method="get" action="/api/v1/docker/port-mapping">
+      <form id="port-mapping-form" class="tool-form" data-endpoint="{{.APIBasePath}}/docker/port-mapping" method="get" action="{{.APIBasePath}}/docker/port-mapping">
         <div class="form-group">
           <label class="form-label">Action</label>
           <select name="action" class="form-input">
@@ -60,7 +60,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/docker/port-mapping?action=format&host=8080&container=80&protocol=tcp"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/docker/port-mapping?action=format&host=8080&container=80&protocol=tcp"</pre>
           </div>
         </div>
       </div>

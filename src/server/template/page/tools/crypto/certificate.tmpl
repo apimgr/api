@@ -18,7 +18,7 @@
         or parse an existing PEM certificate's subject, issuer, and validity.
       </p>
 
-      <form id="certificate-form" class="tool-form" data-body-endpoint="/api/v1/crypto/certificate">
+      <form id="certificate-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/crypto/certificate">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"mode":"generate","common_name":"example.com","valid_days":365}'></textarea>
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/crypto/certificate -d '{"mode":"generate","common_name":"example.com","valid_days":365}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/crypto/certificate -d '{"mode":"generate","common_name":"example.com","valid_days":365}'</pre>
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@
         This is a read-only decoder — the signature is shown but never verified.
       </p>
 
-      <form id="jwt-form" class="tool-form" data-template="/api/v1/parse/jwt/{token}">
+      <form id="jwt-form" class="tool-form" data-template="{{.APIBasePath}}/parse/jwt/{token}">
         <div class="form-group">
           <label class="form-label">JWT Token</label>
           <textarea name="token" class="form-input" rows="5" required placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/parse/jwt/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/parse/jwt/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature</pre>
           </div>
         </div>
       </div>

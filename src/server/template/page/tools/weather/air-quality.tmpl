@@ -19,7 +19,7 @@
         coordinates.
       </p>
 
-      <form id="air-quality-form" class="tool-form" data-template="/api/v1/weather/air-quality/{location}">
+      <form id="air-quality-form" class="tool-form" data-template="{{.APIBasePath}}/weather/air-quality/{location}">
         <div class="form-group">
           <label class="form-label">Location</label>
           <input type="text" name="location" class="form-input" required placeholder="London, 90210, or 51.5,-0.1">
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/weather/air-quality/London</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/weather/air-quality/London</pre>
           </div>
         </div>
       </div>

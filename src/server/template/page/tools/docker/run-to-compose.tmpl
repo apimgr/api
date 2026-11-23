@@ -18,7 +18,7 @@
         service block.
       </p>
 
-      <form id="run-to-compose-form" class="tool-form" data-body-endpoint="/api/v1/docker/run-to-compose">
+      <form id="run-to-compose-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/run-to-compose">
         <div class="form-group">
           <label class="form-label">docker run command</label>
           <textarea name="body" class="form-input" rows="6" required placeholder="docker run -d --name web -p 8080:80 -v /data:/app/data nginx:latest"></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/docker/run-to-compose -d 'docker run -d --name web -p 8080:80 nginx:latest'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/run-to-compose -d 'docker run -d --name web -p 8080:80 nginx:latest'</pre>
           </div>
         </div>
       </div>

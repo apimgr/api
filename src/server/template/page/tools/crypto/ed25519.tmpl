@@ -18,7 +18,7 @@
         verify a signature against a public key.
       </p>
 
-      <form id="ed25519-form" class="tool-form" data-body-endpoint="/api/v1/crypto/ed25519">
+      <form id="ed25519-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/crypto/ed25519">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"mode":"generate"}'></textarea>
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/crypto/ed25519 -d '{"mode":"generate"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/crypto/ed25519 -d '{"mode":"generate"}'</pre>
           </div>
         </div>
       </div>

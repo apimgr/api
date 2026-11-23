@@ -17,7 +17,7 @@
         Format SQL queries.
       </p>
 
-      <form id="sql-format-form" class="tool-form" data-body-endpoint="/api/v1/dev/format/sql">
+      <form id="sql-format-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/format/sql">
         <div class="form-group">
           <label class="form-label">Raw SQL</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="select * from users where id=1 and active=1"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/dev/format/sql -d 'select * from users where id=1 and active=1'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/dev/format/sql -d 'select * from users where id=1 and active=1'</pre>
           </div>
         </div>
       </div>

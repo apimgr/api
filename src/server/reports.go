@@ -27,7 +27,7 @@ var reportsAllowedContentTypes = map[string]bool{
 
 // reportsHandler receives browser-emitted reports (CSP violations, NEL
 // network errors, deprecation/intervention/crash reports, and the generic
-// "default" group) POSTed to /api/v1/server/reports/{name}, per AI.md
+// "default" group) POSTed to /api/{api_version}/server/reports/{name}, per AI.md
 // PART 11 "Reporting API (Modern + Legacy)": "All report endpoints share
 // the same public reports rules — same rate limits [applied globally by
 // RateLimitMiddleware's write class], same Output Sanitization Pipeline,

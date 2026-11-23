@@ -17,7 +17,7 @@
         Parse a raw JSON document and view the decoded structure.
       </p>
 
-      <form id="json-form" class="tool-form" data-body-endpoint="/api/v1/parse/json">
+      <form id="json-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/json">
         <div class="form-group">
           <label class="form-label">JSON document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder='{"key":"value"}'></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/json -d '{"key":"value"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/json -d '{"key":"value"}'</pre>
           </div>
         </div>
       </div>

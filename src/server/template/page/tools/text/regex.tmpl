@@ -18,7 +18,7 @@
         get a human-readable explanation of the pattern.
       </p>
 
-      <form id="regex-form" class="tool-form" data-body-endpoint="/api/v1/text/regex">
+      <form id="regex-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/text/regex">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"pattern":"[a-z]+","text":"Hello World","mode":"match"}'></textarea>
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/text/regex -d '{"pattern":"[a-z]+","text":"Hello World","mode":"match"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/text/regex -d '{"pattern":"[a-z]+","text":"Hello World","mode":"match"}'</pre>
           </div>
         </div>
       </div>

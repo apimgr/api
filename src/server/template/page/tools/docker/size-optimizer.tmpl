@@ -18,7 +18,7 @@
         size.
       </p>
 
-      <form id="size-optimizer-form" class="tool-form" data-body-endpoint="/api/v1/docker/size-optimizer">
+      <form id="size-optimizer-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/size-optimizer">
         <div class="form-group">
           <label class="form-label">Dockerfile content</label>
           <textarea name="body" class="form-input" rows="10" required placeholder="FROM golang:latest&#10;RUN apt-get update && apt-get install -y curl"></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/docker/size-optimizer -d 'FROM golang:latest'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/size-optimizer -d 'FROM golang:latest'</pre>
           </div>
         </div>
       </div>

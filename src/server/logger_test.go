@@ -101,9 +101,10 @@ func TestIsHealthCheckPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			assert.Equal(t, tt.want, isHealthCheckPath(tt.path))
+			assert.Equal(t, tt.want, isHealthCheckPathForBase(tt.path, "/api/v1"))
 		})
 	}
+	assert.True(t, isHealthCheckPathForBase("/api/v2/server/healthz", "/api/v2"))
 }
 
 // newTestLogger builds a Logger with every sub-logger backed by its own

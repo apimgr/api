@@ -18,7 +18,7 @@
         SHA-512, or BLAKE3.
       </p>
 
-      <form id="hash-form" class="tool-form" data-template="/api/v1/text/hash/{algorithm}/{input}.txt">
+      <form id="hash-form" class="tool-form" data-template="{{.APIBasePath}}/text/hash/{algorithm}/{input}.txt">
         <div class="form-group">
           <label class="form-label">Algorithm</label>
           <select name="algorithm" class="form-select">
@@ -48,7 +48,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/text/hash/sha256/hello</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/text/hash/sha256/hello</pre>
           </div>
         </div>
       </div>

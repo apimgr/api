@@ -18,7 +18,7 @@
         "api_response"; any other type returns a minimal tagged fixture.
       </p>
 
-      <form id="fixtures-form" class="tool-form" data-template="/api/v1/test/fixture/{type}">
+      <form id="fixtures-form" class="tool-form" data-template="{{.APIBasePath}}/test/fixture/{type}">
         <div class="form-group">
           <label class="form-label">Fixture Type</label>
           <input type="text" name="type" class="form-input" required placeholder="user" value="user">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/test/fixture/user</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/test/fixture/user</pre>
           </div>
         </div>
       </div>

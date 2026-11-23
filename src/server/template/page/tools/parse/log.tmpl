@@ -17,7 +17,7 @@
         Best-effort parse of log lines into timestamp, level, and message.
       </p>
 
-      <form id="log-form" class="tool-form" data-body-endpoint="/api/v1/parse/log">
+      <form id="log-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/log">
         <div class="form-group">
           <label class="form-label">Log lines</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="2024-01-02 15:04:05 ERROR something failed"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/log -d '2024-01-02 15:04:05 ERROR something failed'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/log -d '2024-01-02 15:04:05 ERROR something failed'</pre>
           </div>
         </div>
       </div>

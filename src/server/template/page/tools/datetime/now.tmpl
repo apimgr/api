@@ -15,7 +15,7 @@
         Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable.
       </p>
       
-      <form id="datetime-form" class="tool-form" method="get" action="/api/v1/datetime/now">
+      <form id="datetime-form" class="tool-form" method="get" action="{{.APIBasePath}}/datetime/now">
         <div class="form-group">
           <label class="form-label">Timezone (optional)</label>
           <input type="text" name="timezone" class="form-input" placeholder="America/New_York">
@@ -34,9 +34,9 @@
             <button class="btn btn-sm" data-copy>Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/now
-curl {{.BaseURL}}/api/v1/datetime/now.txt
-curl {{.BaseURL}}/api/v1/datetime/now?tz=America/New_York</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/now
+curl {{.BaseURL}}{{.APIBasePath}}/datetime/now.txt
+curl {{.BaseURL}}{{.APIBasePath}}/datetime/now?tz=America/New_York</pre>
           </div>
         </div>
       </div>

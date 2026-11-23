@@ -19,7 +19,7 @@
         macos, linux, windows, vscode, jetbrains).
       </p>
 
-      <form id="gitignore-form" class="tool-form" data-template="/api/v1/generate/gitignore?lang={lang}">
+      <form id="gitignore-form" class="tool-form" data-template="{{.APIBasePath}}/generate/gitignore?lang={lang}">
         <div class="form-group">
           <label class="form-label">Languages/Tools</label>
           <input type="text" name="lang" class="form-input" required placeholder="go,vscode,macos">
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/gitignore?lang=go,vscode,macos"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/gitignore?lang=go,vscode,macos"</pre>
           </div>
         </div>
       </div>

@@ -348,6 +348,36 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 	}
 }
 
+func TestNew_ConfiguredAPIVersionRoutesAndOpenAPI(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Server.APIVersion = "v2"
+	cfg.Server.RateLimit.Read.Requests = 10000
+	srv := newTestServer(t, cfg)
+	ts := httptest.NewServer(srv.Handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/v2/text/uuid")
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = http.Get(ts.URL + "/api/v1/text/uuid")
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	resp, err = http.Get(ts.URL + "/api/swagger")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var spec map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&spec))
+	paths, ok := spec["paths"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Contains(t, paths, "/api/v2/text/uuid")
+	assert.NotContains(t, paths, "/api/v1/text/uuid")
+}
+
 // TestNew_SecurityHeadersApplied confirms the security headers middleware
 // registered in New() actually fires on a real request through the
 // assembled router (not just in isolation).
@@ -1345,8 +1375,18 @@ func TestApiSwaggerSpecHandler_ServesJSON(t *testing.T) {
 	cfg := &config.Config{}
 	req := httptest.NewRequest(http.MethodGet, "/api/swagger", nil)
 	rec := httptest.NewRecorder()
-	apiSwaggerSpecHandler(cfg)(rec, req)
+	apiSwaggerSpecHandler(cfg, nil)(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+}
+
+func TestAllCategoriesCountsRegisteredTools(t *testing.T) {
+	counts := make(map[string]int)
+	for _, page := range toolPages() {
+		counts[page.category]++
+	}
+	for _, category := range allCategories() {
+		assert.Equal(t, counts[strings.TrimPrefix(category.Path, "/")], category.Count, category.Path)
+	}
 }

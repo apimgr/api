@@ -18,7 +18,7 @@
         Algorithm defaults to sha256 when omitted.
       </p>
 
-      <form id="hmac-form" class="tool-form" data-body-endpoint="/api/v1/crypto/hmac">
+      <form id="hmac-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/crypto/hmac">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="4" required placeholder='{"algorithm":"sha256","key":"secret","message":"Hello World"}'></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/crypto/hmac -d '{"algorithm":"sha256","key":"secret","message":"Hello World"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/crypto/hmac -d '{"algorithm":"sha256","key":"secret","message":"Hello World"}'</pre>
           </div>
         </div>
       </div>

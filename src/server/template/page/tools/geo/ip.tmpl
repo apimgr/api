@@ -18,7 +18,7 @@
         a public IP address.
       </p>
 
-      <form id="ip-form" class="tool-form" data-template="/api/v1/geo/ip/{ip}">
+      <form id="ip-form" class="tool-form" data-template="{{.APIBasePath}}/geo/ip/{ip}">
         <div class="form-group">
           <label class="form-label">IP address</label>
           <input type="text" name="ip" class="form-input" required placeholder="8.8.8.8">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/geo/ip/8.8.8.8</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/geo/ip/8.8.8.8</pre>
           </div>
         </div>
       </div>

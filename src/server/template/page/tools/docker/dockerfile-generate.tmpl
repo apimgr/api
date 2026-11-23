@@ -17,7 +17,7 @@
         Generate a Dockerfile from a structured JSON configuration.
       </p>
 
-      <form id="dockerfile-generate-form" class="tool-form" data-body-endpoint="/api/v1/docker/dockerfile-generate">
+      <form id="dockerfile-generate-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/dockerfile-generate">
         <div class="form-group">
           <label class="form-label">Configuration (JSON)</label>
           <textarea name="body" class="form-input" rows="10" required placeholder='{"base_image":"alpine:latest","work_dir":"/app","run_commands":["apk add --no-cache ca-certificates"],"expose_ports":[8080],"cmd":"/app/server"}'></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/docker/dockerfile-generate -d '{"base_image":"alpine:latest","cmd":"/app/server"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/dockerfile-generate -d '{"base_image":"alpine:latest","cmd":"/app/server"}'</pre>
           </div>
         </div>
       </div>

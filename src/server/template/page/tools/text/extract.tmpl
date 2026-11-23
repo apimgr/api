@@ -17,7 +17,7 @@
         Pull emails, URLs, IP addresses, or phone numbers out of free-form text.
       </p>
 
-      <form id="extract-form" class="tool-form" data-body-endpoint="/api/v1/text/extract">
+      <form id="extract-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/text/extract">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"text":"contact us at test@example.com or https://example.com","type":"emails"}'></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/text/extract -d '{"text":"test@example.com","type":"emails"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/text/extract -d '{"text":"test@example.com","type":"emails"}'</pre>
           </div>
         </div>
       </div>

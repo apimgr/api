@@ -17,7 +17,7 @@
         Convert a weight value between pounds, kilograms, ounces, and grams.
       </p>
 
-      <form id="weight-form" class="tool-form" data-template="/api/v1/convert/weight/{value}/{from}/{to}">
+      <form id="weight-form" class="tool-form" data-template="{{.APIBasePath}}/convert/weight/{value}/{from}/{to}">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="number" name="value" class="form-input" step="any" required value="1">
@@ -56,7 +56,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/convert/weight/1/lb/kg</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/weight/1/lb/kg</pre>
           </div>
         </div>
       </div>

@@ -1,98 +1,57 @@
 # Security
 
-This page documents the security-related behavior of the API server: rate
-limiting, the public `security.txt` endpoint, and how to report a security
-issue.
+This page describes the security model defined for the API server. For exact defaults and field-level configuration, see [Configuration](configuration.md).
 
-## Rate Limiting
+## Credentials and access
 
-Every request is rate limited per client IP using a sliding-window counter
-(`server.rate_limit` in `server.yml`). Requests are classified before the
-per-class limit is checked:
+The REST API is public where an operation is public. Bearer credentials link resources to an owner or authorize operator-only routes; they are not interchangeable. Owner and linked API tokens are stored as SHA-256 hashes. The global operator token is configured separately as `server.token`, validated against a hash, and never returned by an API. Cookies do not authenticate API requests.
 
-| Class | Matches | Default limit |
-|-------|---------|----------------|
-| `health` | health-check paths | 120 requests / 60s |
-| `read` | `GET`/`HEAD` requests | 120 requests / 60s |
-| `write` | all other methods (`POST`, `PUT`, `PATCH`, `DELETE`) | 10 requests / 60s |
-| `global` | absolute ceiling across all classes combined | 240 requests / 60s |
+MCP uses the same Bearer token validation and authorization as REST. Token management is not exposed through MCP. Public health, security overview, and documentation endpoints disclose only their documented public fields. Operator-only routes require the operator token.
 
-The `global` ceiling is checked first; if it is exceeded, the request is
-rejected regardless of which class it would otherwise fall into. Rate
-limiting can be disabled entirely with `server.rate_limit.enabled: false`.
+## Security headers and request handling
 
-Counters are stored in the configured cache backend (in-process `memory` by
-default, or a shared `valkey`/`redis` store when `server.cache` is
-configured) so limits are consistent across multiple server processes
-sharing the same cache.
+The server applies its configured Content-Security-Policy, Permissions-Policy, HSTS (when TLS is enabled), and other security headers. Reverse-proxy headers are trusted only from configured trusted peers; the original TCP peer is used for that trust decision. User-provided content is escaped or sanitized before rendering. Request paths and input values are normalized and validated before use.
 
-### Response headers
+Rate limits distinguish read, write, health, and global burst classes. Defaults and response behavior are configurable under `server.rate_limit`. Browser Reporting API endpoints accept only the documented report formats, cap request size, sanitize logged fields, and do not echo report bodies.
 
-Every rate-limited response includes:
+## Public security endpoints
 
-```
-X-RateLimit-Limit: 120
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1705315900
-```
+| Endpoint | Purpose |
+|----------|---------|
+| `/.well-known/security.txt` and `/security.txt` | RFC 9116 contact, policy, and expiry information, generated per request |
+| `/.well-known/llms.txt` and `/llms.txt` | Public machine-readable application and API discovery |
+| `/.well-known/pgp-key.asc` | Project security public key when one has been generated and publishing is enabled |
+| `/server/security` | Human-readable security overview and reporting channels |
+| `/server/security/policy` | Coordinated disclosure policy |
+| `/server/security/thanks` | Public researcher acknowledgments who opted into credit |
+| `/server/security/report/{tracking_id}` | Researcher-only status view using the emailed, rate-limited status token |
+| `/api/{api_version}/server/security` | JSON mirror of the security overview |
+| `/api/{api_version}/server/security/policy` | JSON policy content |
+| `/api/{api_version}/server/security/thanks` | JSON acknowledgment entries |
 
-When the limit is exceeded, the server returns `429 Too Many Requests` with
-a `Retry-After`-bearing response; no rate-limit detail is placed in the
-JSON body.
-
-### Fail-open behavior
-
-If the cache backend used for rate-limit counters is unreachable, the
-request is allowed through (fail open) and a warning is logged. A degraded
-cache never blocks legitimate traffic.
-
-## `security.txt`
-
-The server publishes an [RFC 9116](https://www.rfc-editor.org/rfc/rfc9116)
-compliant `security.txt` at two paths, both served by the same handler:
-
-- `/security.txt`
-- `/.well-known/security.txt`
-
-The response is plain text and currently includes:
-
-```
-Contact: mailto:security@example.com
-Expires: 2026-01-01T00:00:00Z
-Preferred-Languages: en
-```
-
-`Contact` comes from `web.security.email` in `server.yml`; `Expires` is
-generated from the configured expiry date. There is no `/server/security`
-page or `security_id`-gated report endpoint in the current server — reports
-go directly to the configured security contact address shown in
-`security.txt`, and general contact submissions go through
-[`/server/contact`](#contact-page).
-
-## Contact page
-
-`/server/contact` renders the general contact page, which surfaces the
-configured security contact email (`web.security.email`) alongside general
-contact information. It does not currently take a `security_id` query
-parameter — there is no rotating-token report flow wired into the contact
-handler.
-
-## Security headers
-
-Standard security headers (`X-Content-Type-Options`, `X-Frame-Options`,
-`Referrer-Policy`, Content-Security-Policy, etc.) are applied to every
-response. CSP behavior is stricter in `production` mode than in
-`development` mode — see [Configuration](configuration.md#application-modes)
-for the mode differences.
+Unknown entries in the `/.well-known/` namespace return `404`. Optional standards endpoints exist only when the corresponding feature is enabled. See [Integrations](integrations.md) for discovery and protocol behavior.
 
 ## Reporting a vulnerability
 
-To report a security issue, use the contact address published in
-`security.txt` (`GET /security.txt` or `GET /.well-known/security.txt`).
-Do not open a public issue for undisclosed vulnerabilities.
+The preferred repository-code reporting channel is the configured GitHub private vulnerability reporting URL. For a deployed instance, use the security-report contact link on `/server/security` or in `/.well-known/security.txt`. The `security_id` rotates every 48 hours; the current and immediately previous window remain valid so a report started near a rotation boundary can finish.
 
-## Next Steps
+The contact form enters security mode only when the supplied `security_id` is valid. Security reports use a two-step review and confirmation flow, server-side validation, rate limits, and CAPTCHA. The server stores report content encrypted at rest. It sends a PGP-encrypted maintainer notification when a project key exists; otherwise it uses an AES-encrypted attachment and warns the maintainer. The server issues a random `sec_` tracking ID. Logs contain the tracking ID and sanitized metadata, never report content or researcher contact details.
 
-- [Configuration reference](configuration.md)
-- [CLI reference](cli.md)
+When SMTP is available, researchers receive an acknowledgment containing only the tracking ID and private status URL, never report content. The status token is limited to one use per UTC day and expires 30 days after closure. The status page shows triage status, maintainer comments, and an expected disclosure date; it does not expose report content. Maintainers manage records through the CLI maintenance security commands. There is no web administration interface for reports.
+
+The built-in disclosure policy defines scope, excluded testing, coordinated disclosure, and safe harbor. An operator may replace the policy body using `web.security.policy`. Do not publish vulnerability details before coordinated disclosure.
+
+## Security report configuration
+
+`web.security.report_url` is the primary repository reporting channel. `web.security.contact` is the secondary email contact; `web.security.expires` controls the RFC 9116 expiry; `web.security.policy` customizes the disclosure policy. The local contact form appears in the published contact list only when enabled. Generated installation secrets and the AES-256-GCM encryption key are held in the protected secrets configuration and are never printed or returned by an API.
+
+## Health endpoints
+
+`/server/healthz` and `/api/{api_version}/server/healthz` return public-safe health information. `/api/healthz` is a direct alias when enabled by configuration. Health output does not reveal credentials, database structure, internal addresses, or detailed operator-only diagnostics.
+
+## Further reading
+
+- [Configuration](configuration.md)
 - [API reference](api.md)
+- [Integrations and discovery](integrations.md)
+- [CLI reference](cli.md)

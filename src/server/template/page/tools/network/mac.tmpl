@@ -17,7 +17,7 @@
         Look up the hardware vendor that owns a MAC address's OUI prefix.
       </p>
 
-      <form id="mac-form" class="tool-form" data-template="/api/v1/network/mac/{mac}">
+      <form id="mac-form" class="tool-form" data-template="{{.APIBasePath}}/network/mac/{mac}">
         <div class="form-group">
           <label class="form-label">MAC address</label>
           <input type="text" name="mac" class="form-input" required placeholder="00:1A:2B:3C:4D:5E">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/network/mac/00:1A:2B:3C:4D:5E</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/network/mac/00:1A:2B:3C:4D:5E</pre>
           </div>
         </div>
       </div>

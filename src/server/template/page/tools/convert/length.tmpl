@@ -18,7 +18,7 @@
         miles/kilometers.
       </p>
 
-      <form id="length-form" class="tool-form" data-template="/api/v1/convert/length/{value}/{from}/{to}">
+      <form id="length-form" class="tool-form" data-template="{{.APIBasePath}}/convert/length/{value}/{from}/{to}">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="number" name="value" class="form-input" step="any" required value="1">
@@ -61,7 +61,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/convert/length/1/ft/m</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/length/1/ft/m</pre>
           </div>
         </div>
       </div>

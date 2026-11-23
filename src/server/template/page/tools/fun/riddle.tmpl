@@ -18,7 +18,7 @@
         built-in curated collection.
       </p>
 
-      <form id="riddle-form" class="tool-form" data-template="/api/v1/fun/riddle">
+      <form id="riddle-form" class="tool-form" data-template="{{.APIBasePath}}/fun/riddle">
         <button type="submit" class="btn btn-primary">Give Me One</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/riddle</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/riddle</pre>
           </div>
         </div>
       </div>

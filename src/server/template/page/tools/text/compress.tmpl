@@ -18,7 +18,7 @@
         output are base64-encoded so the result is always safe to copy as text.
       </p>
 
-      <form id="compress-form" class="tool-form" data-body-endpoint="/api/v1/text/compress">
+      <form id="compress-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/text/compress">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"data":"hello world","algorithm":"gzip","mode":"compress"}'></textarea>
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/text/compress -d '{"data":"hello world","algorithm":"gzip","mode":"compress"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/text/compress -d '{"data":"hello world","algorithm":"gzip","mode":"compress"}'</pre>
           </div>
         </div>
       </div>

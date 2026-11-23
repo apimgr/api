@@ -1,9 +1,9 @@
 # MkDocs configuration for API project
 # Documentation: https://www.mkdocs.org/
 
-site_name: API Documentation
-site_description: Universal API toolkit providing utility services (text, crypto, datetime, network)
-site_author: API Manager
+site_name: API
+site_description: Self-hosted utility service with a server-rendered interface, REST API, GraphQL, and CLI client
+site_author: apimgr
 site_url: https://apimgr-api.readthedocs.io
 repo_name: apimgr/api
 repo_url: https://github.com/apimgr/api
@@ -111,6 +111,7 @@ nav:
     - Integrations: integrations.md
   - Development:
     - Contributing: development.md
+    - Translating: translating.md
 
 extra:
   social:

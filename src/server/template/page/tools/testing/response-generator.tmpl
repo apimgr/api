@@ -14,7 +14,7 @@
       <p class="tool-description">
         Generate a mock API response fixture for use in client-side testing.
       </p>
-      <form id="response-generator-form" class="tool-form" data-template="/api/v1/test/response-generator">
+      <form id="response-generator-form" class="tool-form" data-template="{{.APIBasePath}}/test/response-generator">
         <button type="submit" class="btn btn-primary">Generate</button>
       </form>
       <div id="response-generator-form-result" class="tool-result" hidden></div>
@@ -26,7 +26,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/test/response-generator</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/test/response-generator</pre>
           </div>
         </div>
       </div>

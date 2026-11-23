@@ -18,7 +18,7 @@
         string, optionally read-only.
       </p>
 
-      <form id="volume-helper-form" class="tool-form" data-endpoint="/api/v1/docker/volume-helper" method="get" action="/api/v1/docker/volume-helper">
+      <form id="volume-helper-form" class="tool-form" data-endpoint="{{.APIBasePath}}/docker/volume-helper" method="get" action="{{.APIBasePath}}/docker/volume-helper">
         <div class="form-group">
           <label class="form-label">Host Path</label>
           <input type="text" name="host" class="form-input" required value="/data/app">
@@ -49,7 +49,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/docker/volume-helper?host=/data/app&container=/app/data"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/docker/volume-helper?host=/data/app&container=/app/data"</pre>
           </div>
         </div>
       </div>

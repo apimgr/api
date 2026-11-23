@@ -17,7 +17,7 @@
         Parse a raw XML document and view the decoded structure.
       </p>
 
-      <form id="xml-form" class="tool-form" data-body-endpoint="/api/v1/parse/xml">
+      <form id="xml-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/xml">
         <div class="form-group">
           <label class="form-label">XML Document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="&lt;root&gt;&lt;item&gt;value&lt;/item&gt;&lt;/root&gt;"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/xml -d '&lt;root&gt;&lt;item&gt;value&lt;/item&gt;&lt;/root&gt;'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/xml -d '&lt;root&gt;&lt;item&gt;value&lt;/item&gt;&lt;/root&gt;'</pre>
           </div>
         </div>
       </div>

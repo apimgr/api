@@ -17,7 +17,7 @@
         Get a classic dad joke from the built-in curated collection.
       </p>
 
-      <form id="dad-joke-form" class="tool-form" data-template="/api/v1/fun/dad-joke">
+      <form id="dad-joke-form" class="tool-form" data-template="{{.APIBasePath}}/fun/dad-joke">
         <button type="submit" class="btn btn-primary">Tell Me One</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/dad-joke</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/dad-joke</pre>
           </div>
         </div>
       </div>

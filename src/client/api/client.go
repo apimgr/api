@@ -29,10 +29,11 @@ const (
 
 // Client talks to a single api server.
 type Client struct {
-	BaseURL string
-	Token   string
-	HTTP    *http.Client
-	Debug   bool
+	BaseURL    string
+	APIVersion string
+	Token      string
+	HTTP       *http.Client
+	Debug      bool
 	// Retry is the total number of attempts per request; values below 1
 	// are treated as a single attempt.
 	Retry int
@@ -49,6 +50,11 @@ func New(baseURL, token string) *Client {
 // NewWithOptions creates a client with the connection settings resolved
 // from cli.yml (server.timeout, server.retry, server.retry_delay).
 func NewWithOptions(baseURL, token string, timeout time.Duration, retry int, retryDelay time.Duration) *Client {
+	return NewWithAPIVersion(baseURL, token, timeout, retry, retryDelay, "v1")
+}
+
+// NewWithAPIVersion creates a client using the server's configured API version.
+func NewWithAPIVersion(baseURL, token string, timeout time.Duration, retry int, retryDelay time.Duration, apiVersion string) *Client {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
@@ -58,8 +64,13 @@ func NewWithOptions(baseURL, token string, timeout time.Duration, retry int, ret
 	if retryDelay < 0 {
 		retryDelay = 0
 	}
+	apiVersion = strings.Trim(strings.TrimSpace(apiVersion), "/")
+	if apiVersion == "" {
+		apiVersion = "v1"
+	}
 	return &Client{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
+		APIVersion: apiVersion,
 		Token:      token,
 		HTTP:       &http.Client{Timeout: timeout},
 		Retry:      retry,
@@ -96,6 +107,13 @@ func (c *Client) PostJSON(path string, body any) ([]byte, error) {
 func (c *Client) do(method, path string, query map[string]string, body []byte) ([]byte, error) {
 	if c.BaseURL == "" {
 		return nil, fmt.Errorf("no server configured; use --server or set server.primary in cli.yml")
+	}
+	if strings.HasPrefix(path, "/api/v1/") {
+		version := c.APIVersion
+		if version == "" {
+			version = "v1"
+		}
+		path = "/api/" + version + strings.TrimPrefix(path, "/api/v1")
 	}
 
 	u, err := url.Parse(c.BaseURL + path)

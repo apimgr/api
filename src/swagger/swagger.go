@@ -3,7 +3,14 @@ package swagger
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
+
+// Route is a method and path collected from the running server router.
+type Route struct {
+	Method string
+	Path   string
+}
 
 // Spec represents the OpenAPI specification structure
 type Spec struct {
@@ -107,6 +114,13 @@ type Components struct {
 
 // GenerateSpec creates the OpenAPI specification for the API
 func GenerateSpec(version, baseURL string) *Spec {
+	return GenerateSpecForAPIVersion(version, baseURL, "v1")
+}
+
+// GenerateSpecForAPIVersion creates an OpenAPI specification using the
+// configured API version prefix.
+func GenerateSpecForAPIVersion(version, baseURL, apiVersion string) *Spec {
+	apiBase := "/api/" + apiVersion
 	return &Spec{
 		OpenAPI: "3.0.3",
 		Info: Info{
@@ -128,7 +142,7 @@ func GenerateSpec(version, baseURL string) *Spec {
 				Description: "API Server",
 			},
 		},
-		Paths: generatePaths(),
+		Paths: generatePaths(apiBase),
 		Components: Components{
 			Schemas: generateSchemas(),
 		},
@@ -136,7 +150,7 @@ func GenerateSpec(version, baseURL string) *Spec {
 }
 
 // generatePaths creates the path definitions
-func generatePaths() map[string]PathItem {
+func generatePaths(apiBase string) map[string]PathItem {
 	paths := make(map[string]PathItem)
 
 	// Health endpoint
@@ -166,7 +180,7 @@ func generatePaths() map[string]PathItem {
 	}
 
 	// Version endpoint
-	paths["/api/v1/version"] = PathItem{
+	paths[apiBase+"/version"] = PathItem{
 		Get: &Operation{
 			Summary:     "Get version information",
 			Description: "Returns API version details",
@@ -193,24 +207,24 @@ func generatePaths() map[string]PathItem {
 	}
 
 	// Text utilities endpoints
-	addTextEndpoints(paths)
+	addTextEndpoints(paths, apiBase)
 
 	// Crypto utilities endpoints
-	addCryptoEndpoints(paths)
+	addCryptoEndpoints(paths, apiBase)
 
 	// DateTime utilities endpoints
-	addDateTimeEndpoints(paths)
+	addDateTimeEndpoints(paths, apiBase)
 
 	// Network utilities endpoints
-	addNetworkEndpoints(paths)
+	addNetworkEndpoints(paths, apiBase)
 
 	return paths
 }
 
 // addTextEndpoints adds text utility endpoints to paths
-func addTextEndpoints(paths map[string]PathItem) {
+func addTextEndpoints(paths map[string]PathItem, apiBase string) {
 	// UUID endpoints
-	paths["/api/v1/text/uuid"] = PathItem{
+	paths[apiBase+"/text/uuid"] = PathItem{
 		Get: &Operation{
 			Summary:     "Generate UUID",
 			Tags:        []string{"Text"},
@@ -222,7 +236,7 @@ func addTextEndpoints(paths map[string]PathItem) {
 	}
 
 	// Hash endpoints
-	paths["/api/v1/text/hash/{algorithm}/{input}"] = PathItem{
+	paths[apiBase+"/text/hash/{algorithm}/{input}"] = PathItem{
 		Get: &Operation{
 			Summary:     "Hash text",
 			Tags:        []string{"Text"},
@@ -238,7 +252,7 @@ func addTextEndpoints(paths map[string]PathItem) {
 	}
 
 	// Encode/Decode endpoints
-	paths["/api/v1/text/encode/{encoding}/{input}"] = PathItem{
+	paths[apiBase+"/text/encode/{encoding}/{input}"] = PathItem{
 		Get: &Operation{
 			Summary:     "Encode text",
 			Tags:        []string{"Text"},
@@ -253,7 +267,7 @@ func addTextEndpoints(paths map[string]PathItem) {
 		},
 	}
 
-	paths["/api/v1/text/decode/{encoding}/{input}"] = PathItem{
+	paths[apiBase+"/text/decode/{encoding}/{input}"] = PathItem{
 		Get: &Operation{
 			Summary:     "Decode text",
 			Tags:        []string{"Text"},
@@ -270,9 +284,9 @@ func addTextEndpoints(paths map[string]PathItem) {
 }
 
 // addCryptoEndpoints adds crypto utility endpoints to paths
-func addCryptoEndpoints(paths map[string]PathItem) {
+func addCryptoEndpoints(paths map[string]PathItem, apiBase string) {
 	// Bcrypt endpoints
-	paths["/api/v1/crypto/bcrypt/{password}"] = PathItem{
+	paths[apiBase+"/crypto/bcrypt/{password}"] = PathItem{
 		Get: &Operation{
 			Summary:     "Generate bcrypt hash",
 			Tags:        []string{"Crypto"},
@@ -283,7 +297,7 @@ func addCryptoEndpoints(paths map[string]PathItem) {
 	}
 
 	// Password generation
-	paths["/api/v1/crypto/password"] = PathItem{
+	paths[apiBase+"/crypto/password"] = PathItem{
 		Get: &Operation{
 			Summary:     "Generate secure password",
 			Tags:        []string{"Crypto"},
@@ -293,7 +307,7 @@ func addCryptoEndpoints(paths map[string]PathItem) {
 	}
 
 	// TOTP endpoints
-	paths["/api/v1/crypto/totp/secret"] = PathItem{
+	paths[apiBase+"/crypto/totp/secret"] = PathItem{
 		Get: &Operation{
 			Summary:     "Generate TOTP secret",
 			Tags:        []string{"Crypto"},
@@ -304,9 +318,9 @@ func addCryptoEndpoints(paths map[string]PathItem) {
 }
 
 // addDateTimeEndpoints adds datetime utility endpoints to paths
-func addDateTimeEndpoints(paths map[string]PathItem) {
+func addDateTimeEndpoints(paths map[string]PathItem, apiBase string) {
 	// Current time
-	paths["/api/v1/datetime/now"] = PathItem{
+	paths[apiBase+"/datetime/now"] = PathItem{
 		Get: &Operation{
 			Summary:     "Get current timestamp",
 			Tags:        []string{"DateTime"},
@@ -316,7 +330,7 @@ func addDateTimeEndpoints(paths map[string]PathItem) {
 	}
 
 	// Timestamp conversion
-	paths["/api/v1/datetime/convert/{timestamp}"] = PathItem{
+	paths[apiBase+"/datetime/convert/{timestamp}"] = PathItem{
 		Get: &Operation{
 			Summary:     "Convert timestamp",
 			Tags:        []string{"DateTime"},
@@ -327,7 +341,7 @@ func addDateTimeEndpoints(paths map[string]PathItem) {
 	}
 
 	// Timezone list
-	paths["/api/v1/datetime/timezones"] = PathItem{
+	paths[apiBase+"/datetime/timezones"] = PathItem{
 		Get: &Operation{
 			Summary:     "List all timezones",
 			Tags:        []string{"DateTime"},
@@ -338,9 +352,9 @@ func addDateTimeEndpoints(paths map[string]PathItem) {
 }
 
 // addNetworkEndpoints adds network utility endpoints to paths
-func addNetworkEndpoints(paths map[string]PathItem) {
+func addNetworkEndpoints(paths map[string]PathItem, apiBase string) {
 	// Client IP
-	paths["/api/v1/network/ip"] = PathItem{
+	paths[apiBase+"/network/ip"] = PathItem{
 		Get: &Operation{
 			Summary:     "Get client IP address",
 			Tags:        []string{"Network"},
@@ -350,7 +364,7 @@ func addNetworkEndpoints(paths map[string]PathItem) {
 	}
 
 	// Headers
-	paths["/api/v1/network/headers"] = PathItem{
+	paths[apiBase+"/network/headers"] = PathItem{
 		Get: &Operation{
 			Summary:     "Get request headers",
 			Tags:        []string{"Network"},
@@ -376,8 +390,56 @@ func generateSchemas() map[string]Schema {
 
 // ServeSpec serves the OpenAPI specification as JSON
 func ServeSpec(version, baseURL string) http.HandlerFunc {
+	return ServeSpecWithRoutes(version, baseURL, "v1", nil)
+}
+
+// ServeSpecWithRoutes serves a spec generated from the configured version and
+// the routes registered by the server.
+func ServeSpecWithRoutes(version, baseURL, apiVersion string, routes []Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		spec := GenerateSpec(version, baseURL)
+		spec := GenerateSpecForAPIVersion(version, baseURL, apiVersion)
+		for _, route := range routes {
+			if !strings.HasPrefix(route.Path, "/api/") {
+				continue
+			}
+			path := strings.ReplaceAll(route.Path, "*", "{path}")
+			item := spec.Paths[path]
+			operation := &Operation{
+				Summary:     strings.TrimSpace(strings.ReplaceAll(strings.TrimPrefix(path, "/api/"), "/", " ")),
+				OperationID: strings.ToLower(route.Method + strings.NewReplacer("/", "_", "{", "", "}", "", "-", "_").Replace(path)),
+				Tags:        []string{"API"},
+				Responses:   map[string]Response{"200": {Description: "Operation completed"}},
+			}
+			switch strings.ToUpper(route.Method) {
+			case http.MethodGet:
+				if item.Get == nil {
+					item.Get = operation
+				}
+			case http.MethodPost:
+				if item.Post == nil {
+					item.Post = operation
+				}
+			case http.MethodPut:
+				if item.Put == nil {
+					item.Put = operation
+				}
+			case http.MethodPatch:
+				if item.Patch == nil {
+					item.Patch = operation
+				}
+			case http.MethodDelete:
+				if item.Delete == nil {
+					item.Delete = operation
+				}
+			case http.MethodOptions:
+				if item.Options == nil {
+					item.Options = operation
+				}
+			default:
+				continue
+			}
+			spec.Paths[path] = item
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(spec)
 	}

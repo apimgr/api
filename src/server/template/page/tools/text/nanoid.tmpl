@@ -17,7 +17,7 @@
         Generate a compact, URL-friendly unique ID (21 characters).
       </p>
 
-      <form id="nanoid-form" class="tool-form" data-endpoint="/api/v1/text/nanoid" method="get" action="/api/v1/text/nanoid">
+      <form id="nanoid-form" class="tool-form" data-endpoint="{{.APIBasePath}}/text/nanoid" method="get" action="{{.APIBasePath}}/text/nanoid">
         <button type="submit" class="btn btn-primary">Generate</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/text/nanoid</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/text/nanoid</pre>
           </div>
         </div>
       </div>

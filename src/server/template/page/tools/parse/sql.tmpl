@@ -17,7 +17,7 @@
         Best-effort extraction of statement type, referenced tables, and columns from a single SQL statement. Not a SQL validator.
       </p>
 
-      <form id="sql-form" class="tool-form" data-body-endpoint="/api/v1/parse/sql">
+      <form id="sql-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/sql">
         <div class="form-group">
           <label class="form-label">SQL statement</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="SELECT id, name FROM users WHERE id = 1"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/sql -d 'SELECT id, name FROM users'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/sql -d 'SELECT id, name FROM users'</pre>
           </div>
         </div>
       </div>

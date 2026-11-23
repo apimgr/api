@@ -17,7 +17,7 @@
         Convert a Unix timestamp to a human-readable date/time in any timezone.
       </p>
 
-      <form id="convert-form" class="tool-form" data-template="/api/v1/datetime/convert/{timestamp}/{timezone}">
+      <form id="convert-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/convert/{timestamp}/{timezone}">
         <div class="form-group">
           <label class="form-label">Unix timestamp</label>
           <input type="number" name="timestamp" class="form-input" required placeholder="1700000000">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/convert/1700000000/UTC</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/convert/1700000000/UTC</pre>
           </div>
         </div>
       </div>

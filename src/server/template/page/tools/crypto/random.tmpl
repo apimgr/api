@@ -17,7 +17,7 @@
         Generate cryptographically secure random bytes, returned as both raw byte values and hex encoding.
       </p>
 
-      <form id="random-form" class="tool-form" data-template="/api/v1/crypto/random/bytes/{count}">
+      <form id="random-form" class="tool-form" data-template="{{.APIBasePath}}/crypto/random/bytes/{count}">
         <div class="form-group">
           <label class="form-label">Byte Count</label>
           <input type="number" name="count" class="form-input" min="1" max="1024" value="32" required>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/crypto/random/bytes/32</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/crypto/random/bytes/32</pre>
           </div>
         </div>
       </div>

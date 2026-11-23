@@ -17,7 +17,7 @@
         Convert a time value between seconds, minutes, hours, and days.
       </p>
 
-      <form id="time-form" class="tool-form" data-template="/api/v1/convert/time/{value}/{from}/{to}">
+      <form id="time-form" class="tool-form" data-template="{{.APIBasePath}}/convert/time/{value}/{from}/{to}">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="number" name="value" class="form-input" step="any" required value="1">
@@ -56,7 +56,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/convert/time/1/s/min</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/time/1/s/min</pre>
           </div>
         </div>
       </div>

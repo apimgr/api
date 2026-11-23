@@ -20,7 +20,7 @@
         fixed lossless compression instead.
       </p>
 
-      <form id="optimize-form" class="tool-form" method="post" action="/api/v1/image/optimize" enctype="multipart/form-data">
+      <form id="optimize-form" class="tool-form" method="post" action="{{.APIBasePath}}/image/optimize" enctype="multipart/form-data">
         {{csrfField .CSRFToken}}
         <div class="form-group">
           <label class="form-label" for="optimize-image">Image File</label>
@@ -52,7 +52,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/image/optimize?format=jpeg&amp;quality=75" --data-binary @image.png -o optimized.jpg</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/image/optimize?format=jpeg&amp;quality=75" --data-binary @image.png -o optimized.jpg</pre>
           </div>
         </div>
       </div>

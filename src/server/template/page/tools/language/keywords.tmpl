@@ -17,7 +17,7 @@
         Extract the most frequent non-stopword keywords from text.
       </p>
 
-      <form id="keywords-form" class="tool-form" data-body-endpoint="/api/v1/language/keywords">
+      <form id="keywords-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/language/keywords">
         <div class="form-group">
           <label class="form-label">Text</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="Paste or type text here."></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/language/keywords -d 'Some text to analyze for keywords.'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/language/keywords -d 'Some text to analyze for keywords.'</pre>
           </div>
         </div>
       </div>

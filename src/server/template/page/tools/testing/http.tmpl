@@ -18,7 +18,7 @@
         build, useful for testing client-side response handling.
       </p>
 
-      <form id="http-form" class="tool-form" data-template="/api/v1/test/http">
+      <form id="http-form" class="tool-form" data-template="{{.APIBasePath}}/test/http">
         <button type="submit" class="btn btn-primary">Run</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/test/http</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/test/http</pre>
           </div>
         </div>
       </div>

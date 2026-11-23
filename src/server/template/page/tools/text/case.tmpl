@@ -18,7 +18,7 @@
         other case styles.
       </p>
 
-      <form id="case-form" class="tool-form" data-template="/api/v1/text/case/{style}/{input}">
+      <form id="case-form" class="tool-form" data-template="{{.APIBasePath}}/text/case/{style}/{input}">
         <div class="form-group">
           <label class="form-label">Style</label>
           <select name="style" class="form-input">
@@ -50,7 +50,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/text/case/upper/Hello%20World</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/text/case/upper/Hello%20World</pre>
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@
         kilowatt-hours.
       </p>
 
-      <form id="energy-form" class="tool-form" data-template="/api/v1/convert/energy/{value}/{from}/{to}">
+      <form id="energy-form" class="tool-form" data-template="{{.APIBasePath}}/convert/energy/{value}/{from}/{to}">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="number" name="value" class="form-input" step="any" required value="1">
@@ -55,7 +55,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/convert/energy/1/j/cal</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/energy/1/j/cal</pre>
           </div>
         </div>
       </div>

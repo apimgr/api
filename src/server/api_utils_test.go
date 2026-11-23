@@ -857,8 +857,7 @@ func TestAPIDatetimeMoonHandler(t *testing.T) {
 	})
 }
 
-// apiGenerateQRHandler must always report NOT_SUPPORTED — no QR encoder
-// exists anywhere in the codebase.
+// apiGenerateQRHandler generates valid PNG images for text and Wi-Fi payloads.
 func TestAPIGenerateQRHandler(t *testing.T) {
 	t.Run("missing data and ssid", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/generate/qr", nil)
@@ -3307,9 +3306,7 @@ func TestAPIImageIdenticonHandler(t *testing.T) {
 	})
 }
 
-// apiImageQRHandler is a permanent API gap: no QR encoder exists anywhere
-// in the codebase, so it must always report the same honest 501 as
-// apiGenerateQRHandler.
+// apiImageQRHandler generates the same QR PNG format as the generator tool.
 func TestAPIImageQRHandler(t *testing.T) {
 	t.Run("missing data and ssid", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/image/qr", nil)

@@ -18,7 +18,7 @@
         networks: block.
       </p>
 
-      <form id="network-helper-form" class="tool-form" data-endpoint="/api/v1/docker/network-helper" method="get" action="/api/v1/docker/network-helper">
+      <form id="network-helper-form" class="tool-form" data-endpoint="{{.APIBasePath}}/docker/network-helper" method="get" action="{{.APIBasePath}}/docker/network-helper">
         <div class="form-group">
           <label class="form-label">Network Name</label>
           <input type="text" name="name" class="form-input" required placeholder="app-net">
@@ -58,7 +58,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/docker/network-helper?name=app-net&driver=bridge&subnet=172.20.0.0/16"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/docker/network-helper?name=app-net&driver=bridge&subnet=172.20.0.0/16"</pre>
           </div>
         </div>
       </div>

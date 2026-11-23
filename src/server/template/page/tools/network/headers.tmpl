@@ -18,7 +18,7 @@
         with this request.
       </p>
 
-      <form id="headers-form" class="tool-form" data-template="/api/v1/network/headers">
+      <form id="headers-form" class="tool-form" data-template="{{.APIBasePath}}/network/headers">
         <button type="submit" class="btn btn-primary">Inspect</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/network/headers</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/network/headers</pre>
           </div>
         </div>
       </div>

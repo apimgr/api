@@ -18,7 +18,7 @@
         step each time) number sequence.
       </p>
 
-      <form id="sequence-form" class="tool-form" data-endpoint="/api/v1/math/sequence" method="get" action="/api/v1/math/sequence">
+      <form id="sequence-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/sequence" method="get" action="{{.APIBasePath}}/math/sequence">
         <div class="form-group">
           <label class="form-label">Type</label>
           <select name="type" class="form-input" required>
@@ -55,7 +55,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/sequence?type=arithmetic&start=1&step=2&count=10"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/sequence?type=arithmetic&start=1&step=2&count=10"</pre>
           </div>
         </div>
       </div>

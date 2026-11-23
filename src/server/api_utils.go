@@ -4599,8 +4599,8 @@ func apiImageIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiImageQRHandler renders a QR code PNG for the given data, or for a
 // Wi-Fi join payload when ssid is supplied instead of data. This mirrors
-// apiGenerateQRHandler exactly; it exists only so the /api/v1/image/qr
-// path works the same as /api/v1/generate/qr.
+// apiGenerateQRHandler exactly; it exists so both image and generator
+// routes provide the same QR output.
 func apiImageQRHandler(w http.ResponseWriter, r *http.Request) {
 	handleQRRequest(w, r)
 }

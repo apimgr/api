@@ -17,7 +17,7 @@
         Find the greatest common divisor of two integers.
       </p>
 
-      <form id="gcd-form" class="tool-form" data-endpoint="/api/v1/math/calculate" method="get" action="/api/v1/math/calculate">
+      <form id="gcd-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="get" action="{{.APIBasePath}}/math/calculate">
         <input type="hidden" name="operation" value="gcd">
 
         <div class="form-group">
@@ -43,7 +43,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/calculate?operation=gcd&a=12&b=18"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/calculate?operation=gcd&a=12&b=18"</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Upload an image and crop a region out of it.
       </p>
 
-      <form id="crop-form" class="tool-form" method="post" action="/api/v1/image/crop" enctype="multipart/form-data">
+      <form id="crop-form" class="tool-form" method="post" action="{{.APIBasePath}}/image/crop" enctype="multipart/form-data">
         {{csrfField .CSRFToken}}
         <div class="form-group">
           <label class="form-label" for="crop-image">Image File</label>
@@ -64,7 +64,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/image/crop?x=0&amp;y=0&amp;width=100&amp;height=100&amp;format=png" --data-binary @image.png -o cropped.png</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/image/crop?x=0&amp;y=0&amp;width=100&amp;height=100&amp;format=png" --data-binary @image.png -o cropped.png</pre>
           </div>
         </div>
       </div>

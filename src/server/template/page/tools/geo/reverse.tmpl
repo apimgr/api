@@ -18,7 +18,7 @@
         Nominatim.
       </p>
 
-      <form id="reverse-form" class="tool-form" data-endpoint="/api/v1/geo/reverse" method="get" action="/api/v1/geo/reverse">
+      <form id="reverse-form" class="tool-form" data-endpoint="{{.APIBasePath}}/geo/reverse" method="get" action="{{.APIBasePath}}/geo/reverse">
         <div class="form-group">
           <label class="form-label">Latitude</label>
           <input type="text" name="lat" class="form-input" required value="38.8977">
@@ -42,7 +42,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/geo/reverse?lat=38.8977&lon=-77.0365"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/geo/reverse?lat=38.8977&lon=-77.0365"</pre>
           </div>
         </div>
       </div>

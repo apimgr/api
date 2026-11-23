@@ -15,7 +15,7 @@
         Describe an HTTP request and generate ready-to-run client code in curl,
         JavaScript, Python, and Go.
       </p>
-      <form id="api-client-form" class="tool-form" data-body-endpoint="/api/v1/test/api-client">
+      <form id="api-client-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/test/api-client">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"method":"GET","url":"https://example.com/api","headers":{"Accept":"application/json"},"body":""}'></textarea>
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/test/api-client -d '{"method":"GET","url":"https://example.com/api"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/test/api-client -d '{"method":"GET","url":"https://example.com/api"}'</pre>
           </div>
         </div>
       </div>

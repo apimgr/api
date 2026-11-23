@@ -20,7 +20,7 @@
         error.
       </p>
 
-      <form id="marine-form" class="tool-form" data-template="/api/v1/weather/marine/{location}">
+      <form id="marine-form" class="tool-form" data-template="{{.APIBasePath}}/weather/marine/{location}">
         <div class="form-group">
           <label class="form-label">Location</label>
           <input type="text" name="location" class="form-input" required placeholder="Miami, or 25.7,-80.1">
@@ -39,7 +39,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/weather/marine/Miami</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/weather/marine/Miami</pre>
           </div>
         </div>
       </div>

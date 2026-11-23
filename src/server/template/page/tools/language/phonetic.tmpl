@@ -17,7 +17,7 @@
         Generate the Soundex and Metaphone phonetic codes for a word.
       </p>
 
-      <form id="phonetic-form" class="tool-form" data-endpoint="/api/v1/language/phonetic" method="get" action="/api/v1/language/phonetic">
+      <form id="phonetic-form" class="tool-form" data-endpoint="{{.APIBasePath}}/language/phonetic" method="get" action="{{.APIBasePath}}/language/phonetic">
         <div class="form-group">
           <label class="form-label">Word</label>
           <input type="text" name="word" class="form-input" required value="Robert">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/language/phonetic?word=Robert"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/language/phonetic?word=Robert"</pre>
           </div>
         </div>
       </div>

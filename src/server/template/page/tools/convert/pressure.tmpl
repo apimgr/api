@@ -18,7 +18,7 @@
         atmospheres.
       </p>
 
-      <form id="pressure-form" class="tool-form" data-template="/api/v1/convert/pressure/{value}/{from}/{to}">
+      <form id="pressure-form" class="tool-form" data-template="{{.APIBasePath}}/convert/pressure/{value}/{from}/{to}">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="number" name="value" class="form-input" step="any" required value="1">
@@ -57,7 +57,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/convert/pressure/1/pa/bar</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/pressure/1/pa/bar</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Generate an avatar image from initials.
       </p>
 
-      <form id="avatar-form" class="tool-form" data-image-template="/api/v1/generate/avatar">
+      <form id="avatar-form" class="tool-form" data-image-template="{{.APIBasePath}}/generate/avatar">
         <div class="form-group">
           <label class="form-label">Initials</label>
           <input type="text" name="initials" class="form-input" required maxlength="3" placeholder="AB">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/avatar?initials=AB&size=128" -o avatar.png</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/avatar?initials=AB&size=128" -o avatar.png</pre>
           </div>
         </div>
       </div>

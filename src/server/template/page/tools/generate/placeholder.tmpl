@@ -18,7 +18,7 @@
         background color.
       </p>
 
-      <form id="placeholder-form" class="tool-form" data-image-template="/api/v1/generate/placeholder/{width}/{height}">
+      <form id="placeholder-form" class="tool-form" data-image-template="{{.APIBasePath}}/generate/placeholder/{width}/{height}">
         <div class="form-group">
           <label class="form-label">Width</label>
           <input type="number" name="width" class="form-input" required min="1" value="300">
@@ -56,7 +56,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/generate/placeholder/300/200 -o placeholder.png</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/generate/placeholder/300/200 -o placeholder.png</pre>
           </div>
         </div>
       </div>

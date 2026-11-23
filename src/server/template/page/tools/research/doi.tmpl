@@ -17,7 +17,7 @@
         Validate a DOI (Digital Object Identifier) and get its canonical https://doi.org resolver URL.
       </p>
 
-      <form id="doi-form" class="tool-form" data-template="/api/v1/research/doi/{doi}">
+      <form id="doi-form" class="tool-form" data-template="{{.APIBasePath}}/research/doi/{doi}">
         <div class="form-group">
           <label class="form-label">DOI</label>
           <input type="text" name="doi" class="form-input" required placeholder="10.1000/182">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/research/doi/10.1000/182</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/research/doi/10.1000/182</pre>
           </div>
         </div>
       </div>

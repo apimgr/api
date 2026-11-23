@@ -17,7 +17,7 @@
         Convert a human-readable date/time string to a Unix timestamp.
       </p>
 
-      <form id="unix-form" class="tool-form" data-template="/api/v1/datetime/to-unix/{datetime}">
+      <form id="unix-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/to-unix/{datetime}">
         <div class="form-group">
           <label class="form-label">Date/time</label>
           <input type="text" name="datetime" class="form-input" required placeholder="2024-01-15T10:00:00Z">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/to-unix/2024-01-15T10:00:00Z</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/to-unix/2024-01-15T10:00:00Z</pre>
           </div>
         </div>
       </div>

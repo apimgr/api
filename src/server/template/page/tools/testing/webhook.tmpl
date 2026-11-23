@@ -16,7 +16,7 @@
         response. Nothing is stored — this is a same-request echo, not a persistent
         webhook receiver.
       </p>
-      <form id="webhook-form" class="tool-form" data-body-endpoint="/api/v1/test/webhook">
+      <form id="webhook-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/test/webhook">
         <div class="form-group">
           <label class="form-label">Payload (raw body)</label>
           <textarea name="body" class="form-input" rows="6" placeholder='{"event":"example","data":{}}'></textarea>
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/test/webhook -d '{"event":"example"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/test/webhook -d '{"event":"example"}'</pre>
           </div>
         </div>
       </div>

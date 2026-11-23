@@ -17,7 +17,7 @@
         Parse a YAML document into a nested key/value structure.
       </p>
 
-      <form id="yaml-form" class="tool-form" data-body-endpoint="/api/v1/parse/yaml">
+      <form id="yaml-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/yaml">
         <div class="form-group">
           <label class="form-label">YAML document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="key: value&#10;list:&#10;  - one&#10;  - two"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/yaml -d 'key: value'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/yaml -d 'key: value'</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Estimate reading time for text at a given words-per-minute rate (default 200 wpm).
       </p>
 
-      <form id="reading-time-form" class="tool-form" data-body-endpoint="/api/v1/language/reading-time">
+      <form id="reading-time-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/language/reading-time">
         <div class="form-group">
           <label class="form-label">Text</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="Paste or type text here."></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/language/reading-time -d 'Some text to estimate reading time for.'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/language/reading-time -d 'Some text to estimate reading time for.'</pre>
           </div>
         </div>
       </div>

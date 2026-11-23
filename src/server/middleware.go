@@ -159,8 +159,8 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 			if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 				scheme = "https"
 			}
-			reportsURL := fmt.Sprintf("%s://%s/api/v1/server/reports/default", scheme, r.Host)
-			cspReportURI := fmt.Sprintf("%s://%s/api/v1/server/reports/csp", scheme, r.Host)
+			reportsURL := fmt.Sprintf("%s://%s%s/server/reports/default", scheme, r.Host, APIBasePath(cfg))
+			cspReportURI := fmt.Sprintf("%s://%s%s/server/reports/csp", scheme, r.Host, APIBasePath(cfg))
 
 			csp := cfg.Web.CSP
 			if csp.Enabled {

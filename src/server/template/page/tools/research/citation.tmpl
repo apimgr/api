@@ -17,7 +17,7 @@
         Format a reference (title, author, year, source) into an APA, MLA, or Chicago style citation.
       </p>
 
-      <form id="citation-form" class="tool-form" data-body-endpoint="/api/v1/research/citation">
+      <form id="citation-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/research/citation">
         <div class="form-group">
           <label class="form-label">Reference (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"title":"On the Origin of Species","author":"Darwin, C.","year":"1859","source":"John Murray","style":"APA"}'></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/research/citation -d '{"title":"On the Origin of Species","author":"Darwin, C.","year":"1859","source":"John Murray","style":"APA"}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/research/citation -d '{"title":"On the Origin of Species","author":"Darwin, C.","year":"1859","source":"John Murray","style":"APA"}'</pre>
           </div>
         </div>
       </div>

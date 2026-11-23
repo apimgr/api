@@ -18,7 +18,7 @@
         from one value to another (a to b).
       </p>
 
-      <form id="percentage-form" class="tool-form" data-endpoint="/api/v1/math/calculate" method="get" action="/api/v1/math/calculate">
+      <form id="percentage-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="get" action="{{.APIBasePath}}/math/calculate">
         <div class="form-group">
           <label class="form-label">Operation</label>
           <select name="operation" class="form-input">
@@ -50,7 +50,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/calculate?operation=percentage_of&a=20&b=150"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/calculate?operation=percentage_of&a=20&b=150"</pre>
           </div>
         </div>
       </div>

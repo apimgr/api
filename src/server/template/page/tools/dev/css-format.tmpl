@@ -17,7 +17,7 @@
         Format/minify CSS.
       </p>
 
-      <form id="css-format-form" class="tool-form" data-body-endpoint="/api/v1/dev/format/css">
+      <form id="css-format-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/format/css">
         <div class="form-group">
           <label class="form-label">Raw CSS</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="body{color:red;}"></textarea>
@@ -43,7 +43,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/dev/format/css -d 'body{color:red;}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/dev/format/css -d 'body{color:red;}'</pre>
           </div>
         </div>
       </div>

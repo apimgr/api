@@ -17,7 +17,7 @@
         Generate cryptographic hashes using various algorithms (MD5, SHA-1, SHA-256, SHA-512, BLAKE3).
       </p>
 
-      <form id="hash-form" class="tool-form" data-template="/api/v1/crypto/hash/{algorithm}/{input}">
+      <form id="hash-form" class="tool-form" data-template="{{.APIBasePath}}/crypto/hash/{algorithm}/{input}">
         <div class="form-group">
           <label class="form-label">Input Text</label>
           <input type="text" name="input" class="form-input" required placeholder="Hello World">
@@ -47,7 +47,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/crypto/hash/sha256/Hello%20World</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/crypto/hash/sha256/Hello%20World</pre>
           </div>
         </div>
       </div>

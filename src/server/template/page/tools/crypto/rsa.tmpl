@@ -18,7 +18,7 @@
         public key, or decrypt RSA-OAEP ciphertext using a private key.
       </p>
 
-      <form id="rsa-form" class="tool-form" data-body-endpoint="/api/v1/crypto/rsa">
+      <form id="rsa-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/crypto/rsa">
         <div class="form-group">
           <label class="form-label">Request (JSON)</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"mode":"generate","bits":2048}'></textarea>
@@ -38,7 +38,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/crypto/rsa -d '{"mode":"generate","bits":2048}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/crypto/rsa -d '{"mode":"generate","bits":2048}'</pre>
           </div>
         </div>
       </div>

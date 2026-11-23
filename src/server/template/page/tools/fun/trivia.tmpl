@@ -18,7 +18,7 @@
         collection.
       </p>
 
-      <form id="trivia-form" class="tool-form" data-template="/api/v1/fun/trivia">
+      <form id="trivia-form" class="tool-form" data-template="{{.APIBasePath}}/fun/trivia">
         <button type="submit" class="btn btn-primary">Give Me One</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/trivia</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/trivia</pre>
           </div>
         </div>
       </div>

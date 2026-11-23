@@ -17,7 +17,7 @@
         Calculate the sine, cosine, or tangent of an angle given in radians.
       </p>
 
-      <form id="trigonometry-form" class="tool-form" data-endpoint="/api/v1/math/calculate" method="get" action="/api/v1/math/calculate">
+      <form id="trigonometry-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="get" action="{{.APIBasePath}}/math/calculate">
         <div class="form-group">
           <label class="form-label">Operation</label>
           <select name="operation" class="form-input">
@@ -45,7 +45,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/calculate?operation=sin&n=0"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/calculate?operation=sin&n=0"</pre>
           </div>
         </div>
       </div>

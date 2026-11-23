@@ -17,7 +17,7 @@
         Lint and validate Dockerfiles for common anti-patterns.
       </p>
 
-      <form id="dockerfile-lint-form" class="tool-form" data-body-endpoint="/api/v1/docker/dockerfile-lint">
+      <form id="dockerfile-lint-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/dockerfile-lint">
         <div class="form-group">
           <label class="form-label">Dockerfile</label>
           <textarea name="body" class="form-input" rows="10" required placeholder="FROM ubuntu&#10;RUN apt-get update"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/docker/dockerfile-lint -d 'FROM ubuntu'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/dockerfile-lint -d 'FROM ubuntu'</pre>
           </div>
         </div>
       </div>

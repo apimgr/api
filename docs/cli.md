@@ -1,441 +1,65 @@
-# CLI Reference
+# CLI reference
 
-Complete command-line interface reference for the API server binary.
+The project provides two binaries: `api` runs the server; `api-cli` connects to a configured server. This page describes the server binary. Use each binary's `--help` output for the options available in the built release.
 
-## Usage
+## Server options
 
-```bash
-api [options]
-```
+| Option | Purpose |
+|--------|---------|
+| `--help` | Show server usage |
+| `--version` | Print version and build information |
+| `--status` | Show local service status |
+| `--config DIR` | Select the configuration directory |
+| `--data DIR` | Select the data directory |
+| `--cache DIR` | Select the cache directory |
+| `--log DIR` | Select the log directory |
+| `--backup DIR` | Select the backup directory |
+| `--address ADDRESS` | Set the listen address |
+| `--port PORT` | Set the listen port |
+| `--baseurl PATH` | Set the public URL path prefix |
+| `--mode MODE` | Select the configured application mode |
+| `--debug` | Enable debug behavior |
+| `--daemon` | Run as a background daemon where supported |
+| `--pid FILE` | Set the PID file path |
+| `--i2p` | Enable the I2P eepsite |
+| `--color auto\|yes\|no` | Set colored output behavior |
+| `--lang CODE` | Set the output language |
+| `--shell completions\|init [SHELL]` | Print shell integration output |
+| `--service ACTION` | Manage the native service |
+| `--maintenance ACTION` | Run an operator maintenance command |
+| `--update ACTION` | Check or apply an update |
 
-## Global Options
+Paths and values are validated by the server. Defaults are resolved from the platform and runtime environment; do not assume fixed root-owned paths for an unprivileged installation.
 
-### --help, -h
+## Service management
 
-Show help message and exit.
-
-```bash
-api --help
-```
-
-### --version, -v
-
-Show version information.
-
-```bash
-api --version
-```
-
-**Output:**
-```
-API v1.0.0 (built: 2025-01-15T10:00:00Z)
-Go version: go1.24.0
-OS/Arch: linux/amd64
-```
-
-### --status
-
-Check if the service is running and display status.
+The `--service` option takes a single action. Installation is written with two dashes:
 
 ```bash
-api --status
-```
-
-**Output:**
-```
-✅ Service is running
-   Port: 64580
-   Config: /etc/apimgr/api/server.yml
-```
-
-## Server Configuration
-
-### --mode
-
-Set application mode.
-
-```bash
-api --mode production
-api --mode development
-```
-
-**Values:**
-- `production` - Production mode (strict security, minimal logging)
-- `development` - Development mode (debug endpoints, verbose logging)
-
-### --config
-
-Specify configuration directory.
-
-```bash
-api --config /path/to/config
-```
-
-**Default:**
-- Root: `/etc/apimgr/api/`
-- User: `~/.config/apimgr/api/`
-
-### --data
-
-Specify data directory.
-
-```bash
-api --data /path/to/data
-```
-
-**Default:**
-- Root: `/var/lib/apimgr/api/`
-- User: `~/.local/share/apimgr/api/`
-
-### --log
-
-Specify log directory.
-
-```bash
-api --log /path/to/logs
-```
-
-**Default:**
-- Root: `/var/log/apimgr/api/`
-- User: `~/.local/share/apimgr/api/logs/`
-
-### --pid
-
-Specify PID file path.
-
-```bash
-api --pid /var/run/api.pid
-```
-
-**Default:**
-- Root: `/var/run/apimgr/api.pid`
-- User: `~/.local/share/apimgr/api/api.pid`
-
-### --address
-
-Set listen address.
-
-```bash
-api --address 0.0.0.0
-api --address 192.168.1.100
-```
-
-**Default:** `0.0.0.0` (all interfaces)
-
-### --port
-
-Set listen port.
-
-```bash
-api --port 8080
-```
-
-**Default:** `64580`
-
-### --debug
-
-Enable debug mode (verbose logging, debug endpoints).
-
-```bash
-api --debug
-```
-
-**Debug endpoints:**
-- `/debug/pprof` - Go profiling
-- `/debug/vars` - Exported variables
-- `/debug/config` - Current configuration
-- `/debug/routes` - Registered routes
-
-### --daemon
-
-Run in background (daemonize).
-
-```bash
-api --daemon
-```
-
-!!! note
-    Not needed when using `--service start`. Service managers handle daemonization automatically.
-
-## Service Management
-
-### --service install
-
-Install as system service.
-
-```bash
-sudo api --service install
-```
-
-Creates systemd service file and enables auto-start.
-
-### --service start
-
-Start the service.
-
-```bash
-sudo api --service start
-```
-
-### --service stop
-
-Stop the service.
-
-```bash
-sudo api --service stop
-```
-
-### --service restart
-
-Restart the service.
-
-```bash
-sudo api --service restart
-```
-
-### --service reload
-
-Reload configuration without restarting.
-
-```bash
-sudo api --service reload
-```
-
-Sends `SIGHUP` signal to reload config.
-
-### --service uninstall
-
-Uninstall the system service.
-
-```bash
-sudo api --service uninstall
-```
-
-### --service --help
-
-Show service command help.
-
-```bash
+sudo api --service --install
 api --service --help
 ```
 
-## Maintenance Commands
+Supported actions include `start`, `restart`, `stop`, `reload`, `--install`, `--uninstall`, `--disable`, and `--help`. Available service managers depend on the operating system. Installation and removal affect the host service configuration and require the appropriate operator privileges.
 
-### --maintenance backup
+## Maintenance and updates
 
-Create a backup.
-
-```bash
-api --maintenance backup /path/to/backup.json
-```
-
-**Backs up:**
-- Configuration file
-- Database
-- SSL certificates
-- Scheduler state
-
-### --maintenance restore
-
-Restore from backup.
+Maintenance operations include setup, backup and restore, secret rotation, security-report management, and other operator workflows. The exact subcommands and arguments are shown by:
 
 ```bash
-api --maintenance restore /path/to/backup.json
+api --maintenance --help
+api --update --help
 ```
 
-!!! warning
-    Service must be stopped before restoring.
+Sensitive operations require operator authorization and are recorded in the audit log. Passwords for configuration and backup data are not accepted as command-line arguments; interactive flows prompt securely where required.
 
-### --maintenance update
+## Client
 
-Update server configuration.
+`api-cli` is the companion API client. Its options, commands, output formats, and configuration are documented by its own help output:
 
 ```bash
-api --maintenance update setting_name value
+api-cli --help
+api-cli [command] --help
 ```
 
-### --maintenance mode
-
-Change application mode.
-
-```bash
-api --maintenance mode production
-api --maintenance mode development
-```
-
-### --maintenance setup
-
-Run first-time setup wizard.
-
-```bash
-api --maintenance setup
-```
-
-Generates project secrets, writes default `server.yml`, and initializes the
-database. There are no user/admin accounts to create — see
-[Administration](#administration).
-
-## Update Commands
-
-### --update check
-
-Check for available updates.
-
-```bash
-api --update check
-```
-
-**Output:**
-```
-Current version: 1.0.0
-Latest version: 1.1.0
-Update available: https://github.com/apimgr/api/releases/tag/v1.1.0
-```
-
-### --update yes
-
-Download and install updates.
-
-```bash
-sudo api --update yes
-```
-
-!!! warning
-    Requires root/admin privileges.
-
-### --update branch
-
-Switch update channel.
-
-```bash
-api --update branch stable
-api --update branch beta
-api --update branch daily
-```
-
-**Channels:**
-- `stable` - Stable releases only (recommended)
-- `beta` - Beta releases
-- `daily` - Daily builds (development only)
-
-## Administration
-
-There is no web-based admin panel or admin UI. All server administration —
-service lifecycle, backup/restore, mode changes, and update management — is
-performed through this CLI, either interactively or via a service manager
-(systemd, launchd, rc.d, etc.). The sections above (Service Management,
-Maintenance Commands, Update Commands) are the complete administration
-surface.
-
-### Monitoring
-
-- **Health endpoint:** `GET /server/healthz` (and its unversioned/JSON
-  aliases) — public-safe status only, no credentials or internal detail.
-- **Status check:** `api --status` — reports whether the service is
-  running, its port, and config path.
-- **Metrics:** `GET /metrics` (Prometheus format) — internal-only, not
-  meant to be exposed publicly.
-
-### Logs
-
-Logs are files on disk, not a web view:
-
-| Log | Default location |
-|-----|-------------------|
-| Access log | `{log_dir}/access.log` |
-| Server log | `{log_dir}/server.log` |
-| Error log | `{log_dir}/error.log` |
-| Audit log | `{log_dir}/audit.log` |
-| Security log | `{log_dir}/security.log` |
-
-```bash
-tail -f /var/log/apimgr/api/server.log
-```
-
-### Troubleshooting
-
-**Check service status:**
-
-```bash
-api --status
-```
-
-**Check logs:**
-
-```bash
-tail -f /var/log/apimgr/api/server.log
-```
-
-**Reload configuration without restarting:**
-
-```bash
-sudo api --service reload
-# or
-kill -HUP $(cat /var/run/apimgr/api.pid)
-```
-
-## Environment Variables
-
-All flags can be set via environment variables:
-
-```bash
-export API_MODE=production
-export API_CONFIG=/path/to/config
-export API_DATA=/path/to/data
-export API_LOG=/path/to/logs
-export API_ADDRESS=0.0.0.0
-export API_PORT=8080
-export API_DEBUG=true
-```
-
-## Signals
-
-The server responds to Unix signals:
-
-| Signal | Action |
-|--------|--------|
-| `SIGTERM` | Graceful shutdown |
-| `SIGINT` | Graceful shutdown (Ctrl+C) |
-| `SIGHUP` | Reload configuration |
-
-```bash
-# Reload config
-kill -HUP $(cat /var/run/apimgr/api.pid)
-
-# Graceful shutdown
-kill -TERM $(cat /var/run/apimgr/api.pid)
-```
-
-## Examples
-
-### Development Server
-
-```bash
-api --mode development --debug --port 8080
-```
-
-### Production Server
-
-```bash
-api --mode production \
-  --config /etc/api \
-  --data /var/lib/api \
-  --log /var/log/api
-```
-
-### Docker Container
-
-```bash
-docker run -d \
-  -p 64580:80 \
-  -e API_MODE=production \
-  -e API_DEBUG=false \
-  -v $(pwd)/data:/var/lib/apimgr/api \
-  ghcr.io/apimgr/api:latest
-```
-
-## Next Steps
-
-- [API Reference](api.md)
-- [Security](security.md)
-- [Configuration Guide](configuration.md)
+The client can select the server URL and API version through its configuration or flags. Use separate linked tokens for independent MCP clients; never use an operator token as a general-purpose client credential.

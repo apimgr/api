@@ -17,7 +17,7 @@ Use the method shown in the route table. Path and query values are supplied in t
 
 ## Project utility routes
 
-The routes below are registered by the project and covered by the route contract test. Each response follows the endpoint-specific format described in the generated [OpenAPI document](/api/swagger).
+The routes below are registered by the project and covered by the route contract test. The generated OpenAPI document is served by a running instance at `/api/swagger`.
 
 | Method | Path | Authentication | Purpose | Request/response summary |
 |--------|------|----------------|---------|----------------------------|
@@ -359,9 +359,9 @@ JSON is the default for API operations. Use `Accept: text/plain` or the `.txt` r
 
 ## Interactive references
 
-- [OpenAPI UI](/server/docs/swagger)
-- [OpenAPI JSON](/api/swagger)
-- [GraphQL UI](/server/docs/graphql)
-- [GraphQL endpoint](/api/graphql)
+- OpenAPI UI: `/server/docs/swagger`
+- OpenAPI JSON: `/api/swagger`
+- GraphQL UI: `/server/docs/graphql`
+- GraphQL endpoint: `/api/graphql`
 
 For CLI access, see [CLI Reference](cli.md). For credential and rate-limit behavior, see [Security](security.md).

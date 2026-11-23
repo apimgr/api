@@ -18,7 +18,7 @@
         it.
       </p>
 
-      <form id="env-parser-form" class="tool-form" data-body-endpoint="/api/v1/docker/env-parser">
+      <form id="env-parser-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/env-parser">
         <div class="form-group">
           <label class="form-label">.env content</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="# comment&#10;DEBUG=true&#10;PORT=8080"></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/docker/env-parser -d 'PORT=8080'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/env-parser -d 'PORT=8080'</pre>
           </div>
         </div>
       </div>

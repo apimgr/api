@@ -17,7 +17,7 @@
         Calculate network, broadcast, and host range details for a CIDR block.
       </p>
 
-      <form id="subnet-form" class="tool-form" data-endpoint="/api/v1/network/subnet" method="get" action="/api/v1/network/subnet">
+      <form id="subnet-form" class="tool-form" data-endpoint="{{.APIBasePath}}/network/subnet" method="get" action="{{.APIBasePath}}/network/subnet">
         <div class="form-group">
           <label class="form-label">CIDR</label>
           <input type="text" name="cidr" class="form-input" required placeholder="192.168.1.0/24">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/network/subnet?cidr=192.168.1.0/24"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/network/subnet?cidr=192.168.1.0/24"</pre>
           </div>
         </div>
       </div>

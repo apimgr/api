@@ -19,7 +19,7 @@
         coordinates.
       </p>
 
-      <form id="bbox-form" class="tool-form" data-endpoint="/api/v1/geo/bbox" method="get" action="/api/v1/geo/bbox">
+      <form id="bbox-form" class="tool-form" data-endpoint="{{.APIBasePath}}/geo/bbox" method="get" action="{{.APIBasePath}}/geo/bbox">
         <div class="form-group">
           <label class="form-label">Center latitude</label>
           <input type="text" name="lat" class="form-input" value="40.7128">
@@ -53,8 +53,8 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/geo/bbox?lat=40.7128&lon=-74.0060&radius=10"
-curl "{{.BaseURL}}/api/v1/geo/bbox?coords=40.7128,-74.0060|34.0522,-118.2437"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/geo/bbox?lat=40.7128&lon=-74.0060&radius=10"
+curl "{{.BaseURL}}{{.APIBasePath}}/geo/bbox?coords=40.7128,-74.0060|34.0522,-118.2437"</pre>
           </div>
         </div>
       </div>

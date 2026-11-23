@@ -17,7 +17,7 @@
         Look up the IANA timezone name for a pair of coordinates.
       </p>
 
-      <form id="timezone-form" class="tool-form" data-endpoint="/api/v1/geo/timezone" method="get" action="/api/v1/geo/timezone">
+      <form id="timezone-form" class="tool-form" data-endpoint="{{.APIBasePath}}/geo/timezone" method="get" action="{{.APIBasePath}}/geo/timezone">
         <div class="form-group">
           <label class="form-label">Latitude</label>
           <input type="text" name="lat" class="form-input" required value="40.7128">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/geo/timezone?lat=40.7128&lon=-74.0060"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/geo/timezone?lat=40.7128&lon=-74.0060"</pre>
           </div>
         </div>
       </div>

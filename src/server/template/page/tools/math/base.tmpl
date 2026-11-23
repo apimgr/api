@@ -17,7 +17,7 @@
         Convert a number between bases 2-36.
       </p>
 
-      <form id="base-form" class="tool-form" data-endpoint="/api/v1/math/base" method="get" action="/api/v1/math/base">
+      <form id="base-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/base" method="get" action="{{.APIBasePath}}/math/base">
         <div class="form-group">
           <label class="form-label">Number</label>
           <input type="text" name="number" class="form-input" required value="255">
@@ -46,7 +46,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/base?number=255&from_base=10&to_base=16"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/base?number=255&from_base=10&to_base=16"</pre>
           </div>
         </div>
       </div>

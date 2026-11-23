@@ -17,7 +17,7 @@
         Get a random compliment from the built-in curated collection.
       </p>
 
-      <form id="compliment-form" class="tool-form" data-template="/api/v1/fun/compliment">
+      <form id="compliment-form" class="tool-form" data-template="{{.APIBasePath}}/fun/compliment">
         <button type="submit" class="btn btn-primary">Compliment Me</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/compliment</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/compliment</pre>
           </div>
         </div>
       </div>

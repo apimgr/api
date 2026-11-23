@@ -17,7 +17,7 @@
         Check a credit card number against the Luhn algorithm.
       </p>
 
-      <form id="validate-credit-card-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/credit-card">
+      <form id="validate-credit-card-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/credit-card">
         <div class="form-group">
           <label class="form-label">Validate Credit Card</label>
           <input type="text" name="number" class="form-input" required placeholder="4111111111111111">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/credit-card?number=4111111111111111"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/credit-card?number=4111111111111111"</pre>
           </div>
         </div>
       </div>

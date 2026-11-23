@@ -18,7 +18,7 @@
         slow, salted hash designed for storing passwords securely.
       </p>
 
-      <form id="bcrypt-form" class="tool-form" data-template="/api/v1/crypto/bcrypt/{cost}/{password}">
+      <form id="bcrypt-form" class="tool-form" data-template="{{.APIBasePath}}/crypto/bcrypt/{cost}/{password}">
         <div class="form-group">
           <label class="form-label">Password</label>
           <input type="text" name="password" class="form-input" required placeholder="Password to hash">
@@ -43,7 +43,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/crypto/bcrypt/12/hunter2</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/crypto/bcrypt/12/hunter2</pre>
           </div>
         </div>
       </div>

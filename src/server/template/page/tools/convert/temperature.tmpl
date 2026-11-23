@@ -17,7 +17,7 @@
         Convert a temperature value between Celsius, Fahrenheit, and Kelvin.
       </p>
 
-      <form id="temperature-form" class="tool-form" data-template="/api/v1/convert/temperature/{value}/{from}/{to}">
+      <form id="temperature-form" class="tool-form" data-template="{{.APIBasePath}}/convert/temperature/{value}/{from}/{to}">
         <div class="form-group">
           <label class="form-label">Value</label>
           <input type="number" name="value" class="form-input" step="any" required value="0">
@@ -54,7 +54,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/convert/temperature/0/c/f</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/temperature/0/c/f</pre>
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@
         subdomain labels through the system DNS resolver.
       </p>
 
-      <form id="subdomain-form" class="tool-form" data-template="/api/v1/osint/subdomain/{domain}">
+      <form id="subdomain-form" class="tool-form" data-template="{{.APIBasePath}}/osint/subdomain/{domain}">
         <div class="form-group">
           <label class="form-label">Domain</label>
           <input type="text" name="domain" class="form-input" required placeholder="example.com">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/osint/subdomain/example.com</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/osint/subdomain/example.com</pre>
           </div>
         </div>
       </div>

@@ -15,7 +15,7 @@
         Inspect the method, path, query parameters, headers, and body of the request
         you just sent.
       </p>
-      <form id="request-inspector-form" class="tool-form" data-template="/api/v1/test/request-inspector">
+      <form id="request-inspector-form" class="tool-form" data-template="{{.APIBasePath}}/test/request-inspector">
         <button type="submit" class="btn btn-primary">Inspect</button>
       </form>
       <div id="request-inspector-form-result" class="tool-result" hidden></div>
@@ -27,7 +27,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/test/request-inspector</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/test/request-inspector</pre>
           </div>
         </div>
       </div>

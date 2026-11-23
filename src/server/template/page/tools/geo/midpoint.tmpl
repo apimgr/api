@@ -17,7 +17,7 @@
         Calculate the geographic midpoint between two coordinates.
       </p>
 
-      <form id="midpoint-form" class="tool-form" data-endpoint="/api/v1/geo/midpoint" method="get" action="/api/v1/geo/midpoint">
+      <form id="midpoint-form" class="tool-form" data-endpoint="{{.APIBasePath}}/geo/midpoint" method="get" action="{{.APIBasePath}}/geo/midpoint">
         <div class="form-group">
           <label class="form-label">Latitude 1</label>
           <input type="text" name="lat1" class="form-input" required value="40.7128">
@@ -51,7 +51,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/geo/midpoint?lat1=40.7128&lon1=-74.0060&lat2=34.0522&lon2=-118.2437"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/geo/midpoint?lat1=40.7128&lon1=-74.0060&lat2=34.0522&lon2=-118.2437"</pre>
           </div>
         </div>
       </div>

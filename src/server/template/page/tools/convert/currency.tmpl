@@ -18,7 +18,7 @@
         rates.
       </p>
 
-      <form id="currency-form" class="tool-form" data-endpoint="/api/v1/convert/currency" method="get" action="/api/v1/convert/currency">
+      <form id="currency-form" class="tool-form" data-endpoint="{{.APIBasePath}}/convert/currency" method="get" action="{{.APIBasePath}}/convert/currency">
         <div class="form-group">
           <label class="form-label">Amount</label>
           <input type="number" name="amount" class="form-input" step="any" value="1">
@@ -47,7 +47,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/convert/currency?amount=1&from=USD&to=EUR"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/convert/currency?amount=1&from=USD&to=EUR"</pre>
           </div>
         </div>
       </div>

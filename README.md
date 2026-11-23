@@ -37,15 +37,32 @@ The stack publishes HTTP on `172.17.0.1:64580`, persists configuration and data 
 Download the server binary for your operating system and architecture from [GitHub Releases](https://github.com/apimgr/api/releases). The release also includes `api-cli` binaries.
 
 ```bash
+curl -q -LSsf -O https://github.com/apimgr/api/releases/latest/download/api-linux-amd64
+chmod +x api-linux-amd64
 ./api-linux-amd64 --help
-./api-linux-amd64
 ```
 
 The server chooses its configuration, data, and log directories according to the operating system. It reports its listening address at startup. Use `--config`, `--data`, `--log`, and the other directory flags to select explicit locations.
 
 ### System Service
 
-The server includes native service installation and management for supported operating systems. See the [installation guide](https://apimgr-api.readthedocs.io/en/latest/installation/) for platform-specific steps and service commands.
+On a supported Unix-like host, install the native service from the downloaded binary:
+
+```bash
+sudo ./api-linux-amd64 --service --install
+```
+
+The command installs, enables, and starts the service using the host's supported service manager. See the [installation guide](https://apimgr-api.readthedocs.io/en/latest/installation/) for platform-specific details and service lifecycle commands.
+
+### System Service
+
+On a supported host, install, enable, and start the native service with:
+
+```bash
+sudo ./api-linux-amd64 --service --install
+```
+
+Use the platform's matching binary. The command installs and starts the service manager entry; inspect the available service commands with `./api-linux-amd64 --service --help`. See the [installation guide](https://apimgr-api.readthedocs.io/en/latest/installation/) for service behavior on other platforms.
 
 ## Client
 

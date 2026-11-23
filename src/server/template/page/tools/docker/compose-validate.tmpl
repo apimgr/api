@@ -17,7 +17,7 @@
         Validate a docker-compose.yml file for structural errors.
       </p>
 
-      <form id="compose-validate-form" class="tool-form" data-body-endpoint="/api/v1/docker/compose-validate">
+      <form id="compose-validate-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/compose-validate">
         <div class="form-group">
           <label class="form-label">docker-compose.yml</label>
           <textarea name="body" class="form-input" rows="10" required placeholder="services:&#10;  web:&#10;    image: nginx:latest"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/docker/compose-validate -d 'services:
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/compose-validate -d 'services:
   web:
     image: nginx:latest'</pre>
           </div>

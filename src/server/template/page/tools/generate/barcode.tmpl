@@ -17,7 +17,7 @@
         Generate a 1D barcode image: EAN-13, UPC-A, Code128, or Code39.
       </p>
 
-      <form id="barcode-form" class="tool-form" data-image-template="/api/v1/generate/barcode">
+      <form id="barcode-form" class="tool-form" data-image-template="{{.APIBasePath}}/generate/barcode">
         <div class="form-group">
           <label class="form-label">Format</label>
           <select name="format" class="form-input">
@@ -56,7 +56,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/barcode?format=code128&data=Hello" -o barcode.png</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/barcode?format=code128&data=Hello" -o barcode.png</pre>
           </div>
         </div>
       </div>

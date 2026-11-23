@@ -17,7 +17,7 @@
         Check whether a string is a correctly formatted URL.
       </p>
 
-      <form id="validate-url-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/url">
+      <form id="validate-url-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/url">
         <div class="form-group">
           <label class="form-label">Validate URL</label>
           <input type="text" name="url" class="form-input" required placeholder="https://example.com">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/url?url=https://example.com"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/url?url=https://example.com"</pre>
           </div>
         </div>
       </div>

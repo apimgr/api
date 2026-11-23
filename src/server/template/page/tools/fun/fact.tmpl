@@ -17,7 +17,7 @@
         Get an interesting fact from the built-in curated collection.
       </p>
 
-      <form id="fact-form" class="tool-form" data-template="/api/v1/fun/fact">
+      <form id="fact-form" class="tool-form" data-template="{{.APIBasePath}}/fun/fact">
         <button type="submit" class="btn btn-primary">Tell Me One</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/fun/fact</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/fact</pre>
           </div>
         </div>
       </div>

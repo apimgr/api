@@ -18,7 +18,7 @@
         is persisted server-side — the private key is shown only once.
       </p>
 
-      <form id="ssh-key-form" class="tool-form" data-template="/api/v1/generate/ssh-key">
+      <form id="ssh-key-form" class="tool-form" data-template="{{.APIBasePath}}/generate/ssh-key">
         <button type="submit" class="btn btn-primary">Generate</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/generate/ssh-key</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/generate/ssh-key</pre>
           </div>
         </div>
       </div>

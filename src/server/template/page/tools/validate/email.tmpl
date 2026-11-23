@@ -17,7 +17,7 @@
         Check whether an email address is correctly formatted.
       </p>
 
-      <form id="email-form" class="tool-form" data-query-post-endpoint="/api/v1/validate/email">
+      <form id="email-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/email">
         <div class="form-group">
           <label class="form-label">Email address</label>
           <input type="text" name="email" class="form-input" required placeholder="user@example.com">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/validate/email?email=user@example.com"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/email?email=user@example.com"</pre>
           </div>
         </div>
       </div>

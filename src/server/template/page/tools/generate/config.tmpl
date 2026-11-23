@@ -18,7 +18,7 @@
         format from a set of key=value pairs.
       </p>
 
-      <form id="config-form" class="tool-form" data-template="/api/v1/generate/config?format={format}&host={host}&port={port}&name={name}&debug={debug}">
+      <form id="config-form" class="tool-form" data-template="{{.APIBasePath}}/generate/config?format={format}&host={host}&port={port}&name={name}&debug={debug}">
         <div class="form-group">
           <label class="form-label">Format</label>
           <select name="format" class="form-input">
@@ -62,7 +62,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/generate/config?format=yaml&host=0.0.0.0&port=8080"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/config?format=yaml&host=0.0.0.0&port=8080"</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Generate a fake street address for use in tests and mock data.
       </p>
 
-      <form id="address-form" class="tool-form" data-template="/api/v1/lorem/address">
+      <form id="address-form" class="tool-form" data-template="{{.APIBasePath}}/lorem/address">
         <button type="submit" class="btn btn-primary">Generate</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/lorem/address</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/lorem/address</pre>
           </div>
         </div>
       </div>

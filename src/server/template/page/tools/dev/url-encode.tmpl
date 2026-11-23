@@ -17,7 +17,7 @@
         Encode or decode text for safe use in URLs.
       </p>
 
-      <form id="url-encode-form" class="tool-form" data-body-endpoint="/api/v1/dev/url-encode">
+      <form id="url-encode-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/url-encode">
         <div class="form-group">
           <label class="form-label">Action</label>
           <select name="action" class="form-input">
@@ -44,7 +44,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/dev/url-encode?action=encode" -d 'Hello, world!'</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/dev/url-encode?action=encode" -d 'Hello, world!'</pre>
           </div>
         </div>
       </div>

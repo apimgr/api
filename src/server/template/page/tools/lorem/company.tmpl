@@ -18,7 +18,7 @@
         mock data.
       </p>
 
-      <form id="company-form" class="tool-form" data-template="/api/v1/lorem/company">
+      <form id="company-form" class="tool-form" data-template="{{.APIBasePath}}/lorem/company">
         <button type="submit" class="btn btn-primary">Generate</button>
       </form>
 
@@ -32,7 +32,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/lorem/company</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/lorem/company</pre>
           </div>
         </div>
       </div>

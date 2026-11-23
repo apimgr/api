@@ -20,7 +20,7 @@
         provider; other regions return an explanatory coverage note.
       </p>
 
-      <form id="pollen-form" class="tool-form" data-template="/api/v1/weather/pollen/{location}">
+      <form id="pollen-form" class="tool-form" data-template="{{.APIBasePath}}/weather/pollen/{location}">
         <div class="form-group">
           <label class="form-label">Location</label>
           <input type="text" name="location" class="form-input" required placeholder="Berlin, or 52.5,13.4">
@@ -39,7 +39,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/weather/pollen/Berlin</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/weather/pollen/Berlin</pre>
           </div>
         </div>
       </div>

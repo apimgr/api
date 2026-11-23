@@ -17,7 +17,7 @@
         Get the current Unix timestamp (seconds since the epoch).
       </p>
 
-      <form id="timestamp-form" class="tool-form" data-template="/api/v1/datetime/timestamp.txt">
+      <form id="timestamp-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/timestamp.txt">
         <button type="submit" class="btn btn-primary">Get Timestamp</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/timestamp</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/timestamp</pre>
           </div>
         </div>
       </div>

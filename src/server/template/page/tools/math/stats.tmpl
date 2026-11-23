@@ -18,7 +18,7 @@
         list of numbers.
       </p>
 
-      <form id="stats-form" class="tool-form" data-endpoint="/api/v1/math/stats" method="get" action="/api/v1/math/stats">
+      <form id="stats-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/stats" method="get" action="{{.APIBasePath}}/math/stats">
         <div class="form-group">
           <label class="form-label">Numbers (comma-separated)</label>
           <input type="text" name="numbers" class="form-input" required value="4,8,15,16,23,42">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl "{{.BaseURL}}/api/v1/math/stats?numbers=4,8,15,16,23,42"</pre>
+            <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/stats?numbers=4,8,15,16,23,42"</pre>
           </div>
         </div>
       </div>

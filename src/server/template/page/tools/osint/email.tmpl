@@ -18,7 +18,7 @@
         mail-exchange (MX) records.
       </p>
 
-      <form id="email-form" class="tool-form" data-template="/api/v1/osint/email/{email}">
+      <form id="email-form" class="tool-form" data-template="{{.APIBasePath}}/osint/email/{email}">
         <div class="form-group">
           <label class="form-label">Email address</label>
           <input type="text" name="email" class="form-input" required placeholder="user@example.com">
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/osint/email/user@example.com</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/osint/email/user@example.com</pre>
           </div>
         </div>
       </div>

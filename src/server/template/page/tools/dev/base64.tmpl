@@ -17,7 +17,7 @@
         Encode or decode text using standard or URL-safe base64.
       </p>
 
-      <form id="base64-form" class="tool-form" data-body-endpoint="/api/v1/dev/base64">
+      <form id="base64-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/base64">
         <div class="form-group">
           <label class="form-label">Action</label>
           <select name="action" class="form-input">
@@ -51,7 +51,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/dev/base64?action=encode" -d 'Hello, world!'</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/dev/base64?action=encode" -d 'Hello, world!'</pre>
           </div>
         </div>
       </div>

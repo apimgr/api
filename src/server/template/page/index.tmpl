@@ -180,7 +180,7 @@
         <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
-        <pre>curl {{.BaseURL}}/api/v1/text/uuid</pre>
+        <pre>curl {{.BaseURL}}{{.APIBasePath}}/text/uuid</pre>
       </div>
     </div>
     
@@ -190,7 +190,7 @@
         <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
-        <pre>curl {{.BaseURL}}/api/v1/crypto/hash/sha256/hello</pre>
+        <pre>curl {{.BaseURL}}{{.APIBasePath}}/crypto/hash/sha256/hello</pre>
       </div>
     </div>
     
@@ -200,7 +200,7 @@
         <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
-        <pre>curl {{.BaseURL}}/api/v1/datetime/now</pre>
+        <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/now</pre>
       </div>
     </div>
     
@@ -210,7 +210,7 @@
         <button class="btn btn-sm code-copy" data-copy>Copy</button>
       </div>
       <div class="code-content">
-        <pre>curl {{.BaseURL}}/api/v1/convert/temperature -d '{"value":32,"from":"f","to":"c"}'</pre>
+        <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/temperature -d '{"value":32,"from":"f","to":"c"}'</pre>
       </div>
     </div>
   </div>

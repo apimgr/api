@@ -18,7 +18,7 @@
         longitude, and optional date (defaults to today).
       </p>
 
-      <form id="sunrise-form" class="tool-form" data-template="/api/v1/datetime/sunrise/{lat}/{lon}/{date}">
+      <form id="sunrise-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/sunrise/{lat}/{lon}/{date}">
         <div class="form-group">
           <label class="form-label">Latitude</label>
           <input type="number" step="any" name="lat" class="form-input" required value="40.7128">
@@ -47,7 +47,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/sunrise/40.7128/-74.0060/2024-06-21</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/sunrise/40.7128/-74.0060/2024-06-21</pre>
           </div>
         </div>
       </div>

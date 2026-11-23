@@ -17,7 +17,7 @@
         Generate a random integer within an inclusive range.
       </p>
 
-      <form id="random-form" class="tool-form" data-template="/api/v1/math/random/{min}/{max}">
+      <form id="random-form" class="tool-form" data-template="{{.APIBasePath}}/math/random/{min}/{max}">
         <div class="form-group">
           <label class="form-label">Min</label>
           <input type="number" name="min" class="form-input" step="1" required value="1">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/math/random/1/100</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/math/random/1/100</pre>
           </div>
         </div>
       </div>

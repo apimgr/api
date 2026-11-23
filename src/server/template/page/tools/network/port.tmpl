@@ -17,7 +17,7 @@
         Suggest a random unprivileged TCP/UDP port for local development use.
       </p>
 
-      <form id="port-form" class="tool-form" data-template="/api/v1/network/port">
+      <form id="port-form" class="tool-form" data-template="{{.APIBasePath}}/network/port">
         <button type="submit" class="btn btn-primary">Generate</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/network/port</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/network/port</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Upload an image and resize it to a new width and height.
       </p>
 
-      <form id="resize-form" class="tool-form" method="post" action="/api/v1/image/resize" enctype="multipart/form-data">
+      <form id="resize-form" class="tool-form" method="post" action="{{.APIBasePath}}/image/resize" enctype="multipart/form-data">
         {{csrfField .CSRFToken}}
         <div class="form-group">
           <label class="form-label" for="resize-image">Image File</label>
@@ -54,7 +54,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/image/resize?width=200&amp;height=200&amp;format=png" --data-binary @image.png -o resized.png</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/image/resize?width=200&amp;height=200&amp;format=png" --data-binary @image.png -o resized.png</pre>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@
         Inspect the User-Agent header your browser is sending with this request.
       </p>
 
-      <form id="user-agent-form" class="tool-form" data-template="/api/v1/network/user-agent">
+      <form id="user-agent-form" class="tool-form" data-template="{{.APIBasePath}}/network/user-agent">
         <button type="submit" class="btn btn-primary">Check User-Agent</button>
       </form>
 
@@ -31,7 +31,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/network/user-agent</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/network/user-agent</pre>
           </div>
         </div>
       </div>

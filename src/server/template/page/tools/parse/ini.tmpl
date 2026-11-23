@@ -17,7 +17,7 @@
         Parse an INI document into sections of key/value pairs.
       </p>
 
-      <form id="ini-form" class="tool-form" data-body-endpoint="/api/v1/parse/ini">
+      <form id="ini-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/ini">
         <div class="form-group">
           <label class="form-label">INI document</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="[section]&#10;key=value"></textarea>
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/parse/ini -d '[section]
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/ini -d '[section]
 key=value'</pre>
           </div>
         </div>

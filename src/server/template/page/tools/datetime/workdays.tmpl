@@ -17,7 +17,7 @@
         Count weekdays (Monday-Friday) between two dates, inclusive.
       </p>
 
-      <form id="workdays-form" class="tool-form" data-template="/api/v1/datetime/workdays/{start}/{end}">
+      <form id="workdays-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/workdays/{start}/{end}">
         <div class="form-group">
           <label class="form-label">Start date</label>
           <input type="date" name="start" class="form-input" required value="2024-01-01">
@@ -41,7 +41,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl {{.BaseURL}}/api/v1/datetime/workdays/2024-01-01/2024-01-31</pre>
+            <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/workdays/2024-01-01/2024-01-31</pre>
           </div>
         </div>
       </div>

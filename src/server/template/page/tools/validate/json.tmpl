@@ -18,7 +18,7 @@
         parsed directly — it does not need to be wrapped in a field.
       </p>
 
-      <form id="json-form" class="tool-form" data-body-endpoint="/api/v1/validate/json">
+      <form id="json-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/validate/json">
         <div class="form-group">
           <label class="form-label">JSON document</label>
           <textarea name="body" class="form-input" rows="6" required placeholder='{"a":1}'></textarea>
@@ -37,7 +37,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/validate/json -d '{"a":1}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/validate/json -d '{"a":1}'</pre>
           </div>
         </div>
       </div>

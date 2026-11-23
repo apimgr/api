@@ -17,7 +17,7 @@
         Format/minify JavaScript.
       </p>
 
-      <form id="js-format-form" class="tool-form" data-body-endpoint="/api/v1/dev/format/js">
+      <form id="js-format-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/format/js">
         <div class="form-group">
           <label class="form-label">Raw JavaScript</label>
           <textarea name="body" class="form-input" rows="8" required placeholder="function greet(){console.log('hi');}"></textarea>
@@ -43,7 +43,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST {{.BaseURL}}/api/v1/dev/format/js -d 'function greet(){console.log("hi");}'</pre>
+            <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/dev/format/js -d 'function greet(){console.log("hi");}'</pre>
           </div>
         </div>
       </div>

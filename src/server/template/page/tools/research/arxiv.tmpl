@@ -17,7 +17,7 @@
         Look up an arXiv paper by ID using the free, keyless arXiv query API.
       </p>
 
-      <form id="arxiv-form" class="tool-form" data-query-post-endpoint="/api/v1/research/arxiv">
+      <form id="arxiv-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/research/arxiv">
         <div class="form-group">
           <label class="form-label">arXiv ID</label>
           <input type="text" name="id" class="form-input" required placeholder="2101.00001">
@@ -36,7 +36,7 @@
             <button class="btn btn-sm" data-copy title="Copy">Copy</button>
           </div>
           <div class="code-content">
-            <pre>curl -X POST "{{.BaseURL}}/api/v1/research/arxiv?id=2101.00001"</pre>
+            <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/research/arxiv?id=2101.00001"</pre>
           </div>
         </div>
       </div>
