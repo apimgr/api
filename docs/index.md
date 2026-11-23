@@ -1,76 +1,44 @@
-# API Toolkit Documentation
+# API
 
-Welcome to the **API Toolkit** documentation. This is a versatile REST API service providing multiple utility endpoints for common development tasks.
+API is a self-hosted utility service with a server-rendered web interface, versioned REST API, GraphQL, and a companion `api-cli` client.
 
-## What is API Toolkit?
+## Features
 
-API Toolkit is a universal API platform that offers various utility services through a unified interface:
+- Text, cryptography, conversion, date and time, generators, validators, math, and developer utilities
+- Parsing, networking, geolocation, weather, image, language, research, Docker, testing, and entertainment tools
+- Server-rendered forms that work without JavaScript
+- OpenAPI and GraphQL documentation interfaces
+- Seven interface locales: English, Arabic, German, Spanish, French, Japanese, and Chinese
+- Anonymous credential-based resource ownership without user accounts or login
 
-- **Text Utilities** - String manipulation, encoding, hashing, and formatting
-- **Cryptographic Operations** - Password hashing, encryption, token generation
-- **Date/Time Utilities** - Timezone conversions, timestamp calculations, formatting
-- **Network Utilities** - IP information, header inspection, GeoIP lookups
+## Quick start
 
-## Key Features
-
-### Multiple API Interfaces
-
-- **REST API** - Standard HTTP/JSON endpoints at `/api/v1/`
-- **Swagger/OpenAPI** - Interactive API documentation at `/server/docs/swagger`
-- **GraphQL** - Flexible query interface at `/server/docs/graphql`
-
-### Modern Web Interface
-
-- Responsive web UI with dark/light/auto theme support
-- Real-time API testing and exploration
-- No web-based admin panel — server administration is done via the CLI
-  (see [CLI Reference](cli.md#administration))
-
-### Production Ready
-
-- SSL/TLS support with Let's Encrypt integration
-- Rate limiting and security headers
-- Comprehensive logging and monitoring
-- Automated backup and restore
-- Docker containerization
-- Systemd service integration
-
-## Quick Start
+From a repository clone, start the production Docker Compose stack:
 
 ```bash
-# Run with Docker
-docker run -p 64580:80 ghcr.io/apimgr/api:latest
-
-# Or install as system service
-./api --service install
-./api --service start
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-Visit `http://localhost:64580` to access the web interface.
+The included Compose configuration publishes the web interface on `http://172.17.0.1:64580/`. For other installation methods, see [Installation](installation.md).
 
-## Documentation Structure
+## Documentation
 
-- **[Installation](installation.md)** - How to install and deploy
-- **[Configuration](configuration.md)** - Server configuration options
-- **[API Reference](api.md)** - Complete API endpoint documentation
-- **[CLI Reference](cli.md)** - Command-line interface usage
-- **[Security](security.md)** - Rate limiting and security reporting
-- **[Integrations](integrations.md)** - Discovery endpoints and API formats
-- **[Development](development.md)** - Contributing and development guide
+- [Installation](installation.md)
+- [Configuration](configuration.md)
+- [REST API, OpenAPI, and GraphQL](api.md)
+- [CLI Reference](cli.md)
+- [Security](security.md)
+- [Integrations](integrations.md)
+- [Development](development.md)
+- [Translating](translating.md)
 
-## Use Cases
+## Project links
 
-- **Development Workflows** - Utility endpoints for development and testing
-- **CI/CD Pipelines** - Automated text processing and crypto operations
-- **Infrastructure Automation** - Date/time calculations and network utilities
-- **Microservice Architecture** - Shared utility services across applications
+- [Repository](https://github.com/apimgr/api)
+- [Issue tracker](https://github.com/apimgr/api/issues)
+- [Interactive OpenAPI UI](/server/docs/swagger)
+- [Interactive GraphQL UI](/server/docs/graphql)
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE.md](https://github.com/apimgr/api/blob/main/LICENSE.md) for details.
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/apimgr/api/issues)
-- **Source Code**: [GitHub Repository](https://github.com/apimgr/api)
-- **Documentation**: [ReadTheDocs](https://apimgr-api.readthedocs.io)
+MIT. See the repository’s [LICENSE.md](https://github.com/apimgr/api/blob/main/LICENSE.md).

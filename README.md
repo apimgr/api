@@ -1,258 +1,113 @@
-# API - Universal API Toolkit
+# API — Universal API Toolkit
 
-[![Build Status](https://github.com/apimgr/api/workflows/Release/badge.svg)](https://github.com/apimgr/api/actions)
-[![Docker](https://github.com/apimgr/api/workflows/Docker%20Build/badge.svg)](https://github.com/apimgr/api/actions)
-[![Documentation](https://readthedocs.org/projects/apimgr-api/badge/?version=latest)](https://apimgr-api.readthedocs.io)
+[![CI](https://github.com/apimgr/api/actions/workflows/ci.yml/badge.svg)](https://github.com/apimgr/api/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/apimgr/api)](https://github.com/apimgr/api/releases)
 [![License](https://img.shields.io/github/license/apimgr/api)](LICENSE.md)
+[![Documentation](https://readthedocs.org/projects/apimgr-api/badge/?version=latest)](https://apimgr-api.readthedocs.io)
 
-A versatile REST API toolkit providing multiple utility services through a unified interface.
+## About
+
+API is a self-hosted utility service with a server-rendered web interface, a versioned REST API, GraphQL, and a companion command-line client.
 
 ## Features
 
-- **Multiple Utility Services**
-  - Text manipulation (encoding, hashing, formatting)
-  - Cryptographic operations (hashing, password generation, JWT)
-  - Date/time utilities (timezone conversion, calculations)
-  - Network utilities (IP info, headers, GeoIP)
+- Text, cryptography, conversion, date and time, generators, validators, math, and developer utilities
+- Parsing, network, geolocation, weather, image, language, research, Docker, testing, and entertainment tools
+- Server-rendered tool pages that support form submissions without JavaScript
+- Machine-readable REST, OpenAPI, and GraphQL interfaces
+- Seven interface locales: English, Arabic, German, Spanish, French, Japanese, and Chinese
+- Anonymous credential-based ownership for resources that need an owner; no user accounts or login
+- Configuration-driven health, security, localization, scheduling, backup, update, and Tor support
+- The `api-cli` client for command-line and terminal use
 
-- **Multiple API Interfaces**
-  - REST API at `/api/v1/`
-  - Swagger/OpenAPI documentation at `/server/docs/swagger`
-  - GraphQL interface at `/server/docs/graphql`
+## Production
 
-- **Production Ready**
-  - SSL/TLS with Let's Encrypt integration
-  - Dark/light/auto theme support
-  - Comprehensive security headers
-  - Rate limiting and request tracking
-  - Multi-format logging (access, server, error, audit, security)
-  - Automated backup and restore
-  - Background task scheduler
-  - Cross-platform service integration (systemd, runit, launchd, Windows Service Manager, BSD rc.d)
-  - Docker containerization
+### Docker Compose
 
-## Quick Start
-
-### Docker (Recommended)
+From a clone of this repository, start the production Compose stack:
 
 ```bash
-docker run -d \
-  --name api \
-  -p 64580:80 \
-  -v ./data:/data \
-  -v ./config:/config \
-  ghcr.io/apimgr/api:latest
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-Visit `http://localhost:64580` to access the API.
+The stack publishes HTTP on `172.17.0.1:64580`, persists configuration and data under `docker/volumes/`, and starts Valkey for caching. Open `http://172.17.0.1:64580/` from the host.
 
-### Binary Installation
+### Binary
 
-Download the latest release for your platform:
+Download the server binary for your operating system and architecture from [GitHub Releases](https://github.com/apimgr/api/releases). The release also includes `api-cli` binaries.
 
 ```bash
-# Linux AMD64
-wget https://github.com/apimgr/api/releases/latest/download/api-linux-amd64
-chmod +x api-linux-amd64
-sudo mv api-linux-amd64 /usr/local/bin/api
-
-# Install as system service
-sudo api --service --install
-sudo api --service start
+./api-linux-amd64 --help
+./api-linux-amd64
 ```
 
-### Build from Source
+The server chooses its configuration, data, and log directories according to the operating system. It reports its listening address at startup. Use `--config`, `--data`, `--log`, and the other directory flags to select explicit locations.
+
+### System Service
+
+The server includes native service installation and management for supported operating systems. See the [installation guide](https://apimgr-api.readthedocs.io/en/latest/installation/) for platform-specific steps and service commands.
+
+## Client
+
+Install the `api-cli` binary for your platform from [GitHub Releases](https://github.com/apimgr/api/releases). Configure the target server with `--server` or `server.primary` in the CLI configuration file.
 
 ```bash
-git clone https://github.com/apimgr/api.git
-cd api
-make build
+api-cli --server http://172.17.0.1:64580 raw get /api/v1/text/uuid
+api-cli --help
 ```
 
-Binaries will be in `binaries/` directory.
-
-## Usage
-
-### API Examples
-
-**Text Utilities:**
-```bash
-# Convert to uppercase
-curl -X POST http://localhost:64580/api/v1/text/uppercase \
-  -H "Content-Type: application/json" \
-  -d '{"text":"hello world"}'
-
-# Base64 encode
-curl -X POST http://localhost:64580/api/v1/text/base64/encode \
-  -H "Content-Type: application/json" \
-  -d '{"text":"hello"}'
-```
-
-**Crypto Utilities:**
-```bash
-# Generate SHA-256 hash
-curl -X POST http://localhost:64580/api/v1/crypto/hash/sha256 \
-  -H "Content-Type: application/json" \
-  -d '{"input":"hello world"}'
-
-# Generate random UUID
-curl http://localhost:64580/api/v1/crypto/random/uuid
-```
-
-**DateTime Utilities:**
-```bash
-# Get current time
-curl http://localhost:64580/api/v1/datetime/now
-
-# Convert timezone
-curl -X POST http://localhost:64580/api/v1/datetime/convert \
-  -H "Content-Type: application/json" \
-  -d '{"timestamp":"2025-01-15T10:30:45Z","from_timezone":"UTC","to_timezone":"America/New_York"}'
-```
-
-**Network Utilities:**
-```bash
-# Get client IP
-curl http://localhost:64580/api/v1/network/ip
-
-# Parse user agent
-curl http://localhost:64580/api/v1/network/useragent
-```
-
-### CLI Commands
-
-```bash
-# Show version
-api --version
-api -v
-
-# Show help
-api --help
-api -h
-
-# Check service status
-api --status
-
-# Start in development mode
-api --mode development --debug
-
-# Service management
-api --service --install
-api --service start
-api --service stop
-api --service restart
-
-# Backup and restore
-api --maintenance backup /path/to/backup.json
-api --maintenance restore /path/to/backup.json
-
-# Check for updates
-api --update check
-
-# Directory overrides
-api --config /etc/apimgr/api --data /var/lib/apimgr/api \
-    --log /var/log/apimgr/api --cache /var/cache/apimgr/api \
-    --backup /mnt/Backups/apimgr/api
-```
-
-## Documentation
-
-**Complete documentation available at:** [apimgr-api.readthedocs.io](https://apimgr-api.readthedocs.io)
-
-- [Installation Guide](https://apimgr-api.readthedocs.io/en/latest/installation/)
-- [Configuration Reference](https://apimgr-api.readthedocs.io/en/latest/configuration/)
-- [API Reference](https://apimgr-api.readthedocs.io/en/latest/api/)
-- [CLI Reference](https://apimgr-api.readthedocs.io/en/latest/cli/)
-- [Security Guide](https://apimgr-api.readthedocs.io/en/latest/security/)
-- [Development Guide](https://apimgr-api.readthedocs.io/en/latest/development/)
-
-## Interactive Documentation
-
-- **Swagger UI:** `http://localhost:64580/server/docs/swagger`
-- **GraphQL:** `http://localhost:64580/server/docs/graphql`
+The CLI configuration supports an API version setting; its default is `v1`. The client also provides command groups, output formatting, shell completions, and an interactive terminal interface.
 
 ## Configuration
 
-Create `server.yml`:
+The server reads `server.yml` from its platform-specific configuration directory. Use `api --help` to see supported flags and `api --config DIR` to select a configuration directory. Server settings include the listen address and port, API version, database and cache, security controls, logging, integrations, and scheduled services.
 
-```yaml
-server:
-  address: "0.0.0.0"
-  port: "64580"
-  mode: production
+The client has a separate `cli.yml` file. See the [server configuration reference](https://apimgr-api.readthedocs.io/en/latest/configuration/) and [CLI reference](https://apimgr-api.readthedocs.io/en/latest/cli/).
 
-  branding:
-    title: "API Toolkit"
-    tagline: "Universal API Services"
+## API
 
-  rate_limit:
-    enabled: true
-    read:
-      requests: 120
-      window: 60
-    write:
-      requests: 10
-      window: 60
-    health:
-      requests: 120
-      window: 60
-    global_burst: 240
+The REST API base path is `/api/{api_version}/`; the default version is `v1`. Utility operations are public. Credentials are used for owner-linked and operator-protected features according to the server's credential model.
 
-  schedule:
-    enabled: true
+```bash
+curl -q -LSsf http://172.17.0.1:64580/api/v1/text/uuid
+curl -q -LSsf 'http://172.17.0.1:64580/api/v1/datetime/now?timezone=UTC'
 ```
+
+Interactive API references are available at `/server/docs/swagger` and `/server/docs/graphql`. The corresponding JSON/OpenAPI and GraphQL endpoints are also available under the versioned API path, with the documented unversioned aliases.
+
+## Other
+
+- [Documentation](https://apimgr-api.readthedocs.io)
+- [Installation](https://apimgr-api.readthedocs.io/en/latest/installation/)
+- [API reference](https://apimgr-api.readthedocs.io/en/latest/api/)
+- [Security model](https://apimgr-api.readthedocs.io/en/latest/security/)
+- [Integrations](https://apimgr-api.readthedocs.io/en/latest/integrations/)
+- [Translation guide](https://apimgr-api.readthedocs.io/en/latest/translating/)
+- [Source code and issue tracker](https://github.com/apimgr/api)
 
 ## Development
 
+Build and test inside the project’s Docker-based Go toolchain:
+
 ```bash
-# Quick development build
-make dev
-
-# Full build (all 8 platforms)
 make build
-
-# Run tests
 make test
-
-# Build Docker image
-make docker
-
-# Show all targets
-make help
 ```
 
-## Supported Platforms
+`make build` produces server and client binaries for Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. See the [development guide](https://apimgr-api.readthedocs.io/en/latest/development/) before changing code or documentation.
 
-- Linux (amd64, arm64)
-- macOS (amd64, arm64)
-- Windows (amd64, arm64)
-- FreeBSD (amd64, arm64)
+## Disclaimer
 
-All binaries are statically compiled with no external dependencies.
+This software is provided “as is” without warranty of any kind.
 
-## Architecture
+- **No warranty:** The maintainers are not responsible for damages, data loss, or other issues arising from use of this software.
+- **Not professional advice:** The software does not provide legal, financial, medical, or other professional advice.
+- **Third-party services:** External service providers have separate terms that apply to their use.
+- **Security:** The project follows security practices, but no software can be guaranteed free of vulnerabilities.
+- **Production use:** Review the configuration and evaluate the service for your environment before deployment.
 
-- **Language:** Go 1.24+
-- **Web Framework:** Chi router
-- **Template Engine:** Go html/template
-- **Database:** SQLite (default), libSQL/Turso (remote)
-- **Caching:** In-memory (default), Valkey/Redis (cluster mode)
-- **Deployment:** Docker, systemd, standalone binary
+By using this software, you acknowledge that you have read and understood this disclaimer.
 
 ## License
 
-MIT License - See [LICENSE.md](LICENSE.md) for details.
-
-## Contributing
-
-Contributions are welcome! Please see the [Development Guide](https://apimgr-api.readthedocs.io/en/latest/development/) for details.
-
-## Support
-
-- **Documentation:** [apimgr-api.readthedocs.io](https://apimgr-api.readthedocs.io)
-- **Issues:** [GitHub Issues](https://github.com/apimgr/api/issues)
-- **Source Code:** [GitHub](https://github.com/apimgr/api)
-
----
-
-**Author:** [casjay](https://github.com/casjay)
+MIT. See [LICENSE.md](LICENSE.md).

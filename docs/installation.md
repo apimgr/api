@@ -1,186 +1,73 @@
 # Installation
 
-This guide covers different installation methods for the API Toolkit.
+API runs as a self-hosted server. Its companion command-line client, `api-cli`, is distributed separately in the same release.
 
-## Docker (Recommended)
+## Docker Compose
 
-The fastest way to get started is using Docker.
-
-### Docker Run
+The repository includes the production Compose stack. From a clone, start it with:
 
 ```bash
-docker run -d \
-  --name api \
-  -p 64580:80 \
-  -v ./data:/var/lib/apimgr/api \
-  -v ./config:/etc/apimgr/api \
-  ghcr.io/apimgr/api:latest
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-### Docker Compose
+The Compose file runs the API server with Valkey, maps host address `172.17.0.1:64580` to the container's HTTP port `80`, and persists configuration and data under `docker/volumes/`. Open `http://172.17.0.1:64580/` from the host.
 
-Create `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  api:
-    image: ghcr.io/apimgr/api:latest
-    container_name: api
-    ports:
-      - "64580:80"
-    volumes:
-      - ./data:/var/lib/apimgr/api
-      - ./config:/etc/apimgr/api
-      - ./logs:/var/log/apimgr/api
-    environment:
-      - TZ=America/New_York
-    restart: unless-stopped
-```
-
-Start the service:
+To stop the stack:
 
 ```bash
-docker-compose up -d
+docker compose -f docker/docker-compose.yml down
 ```
 
-## Binary Installation
+Keep `docker/volumes/config` and `docker/volumes/data` when upgrading so the server configuration and application data remain available.
 
-### Download Pre-built Binary
+## Release binaries
 
-Download the latest release for your platform:
+Download the matching server and client binaries from [GitHub Releases](https://github.com/apimgr/api/releases). The server targets Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. The release assets are named `api-{os}-{arch}` and `api-cli-{os}-{arch}`; Windows assets end in `.exe`.
+
+On Linux or macOS, make the server executable and start it:
 
 ```bash
-# Linux AMD64
-wget https://github.com/apimgr/api/releases/latest/download/api-linux-amd64
-
-# Linux ARM64
-wget https://github.com/apimgr/api/releases/latest/download/api-linux-arm64
-
-# macOS AMD64
-wget https://github.com/apimgr/api/releases/latest/download/api-darwin-amd64
-
-# macOS ARM64 (Apple Silicon)
-wget https://github.com/apimgr/api/releases/latest/download/api-darwin-arm64
-
-# Windows AMD64
-wget https://github.com/apimgr/api/releases/latest/download/api-windows-amd64.exe
+chmod +x api-linux-amd64
+./api-linux-amd64 --help
+./api-linux-amd64
 ```
 
-Make it executable (Linux/macOS):
+The server chooses its platform-specific configuration, data, cache, and log directories. Its default listen port is selected at runtime. The startup banner reports the active address. Set the listen port in `server.yml` or with the `--port` flag when a fixed port is needed.
+
+The companion client can be run from its downloaded binary:
 
 ```bash
-chmod +x api-*
-sudo mv api-* /usr/local/bin/api
+chmod +x api-cli-linux-amd64
+./api-cli-linux-amd64 --help
 ```
 
-### Build from Source
+## Build from source
 
-Requirements:
-- Go 1.24 or later (for building only, not required for running)
-- Git
+The project builds inside the Docker-based Go toolchain and produces server and client binaries for all eight supported OS/architecture combinations:
 
 ```bash
-# Clone the repository
 git clone https://github.com/apimgr/api.git
 cd api
-
-# Build
 make build
-
-# The binary will be in binaries/api
-sudo mv binaries/api /usr/local/bin/
 ```
 
-## System Service Installation
+The resulting binaries are written to the git-ignored `binaries/` directory.
 
-### Linux (systemd)
+## Service management
 
-Install as a system service:
-
-```bash
-# Install the service
-sudo api --service install
-
-# Enable start on boot
-sudo systemctl enable api
-
-# Start the service
-sudo api --service start
-
-# Check status
-sudo api --status
-```
-
-### macOS (launchd)
-
-Create `/Library/LaunchDaemons/com.apimgr.api.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.apimgr.api</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/api</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>
-```
-
-Load the service:
-
-```bash
-sudo launchctl load /Library/LaunchDaemons/com.apimgr.api.plist
-```
+The server provides native service management through its `--service` command. Use `api --service=--help` to see commands supported by the current platform. Installation and removal may create or delete system files, so run those commands as the system operator.
 
 ## Verification
 
-After installation, verify the service is running:
+Check the server process and version with:
 
 ```bash
-# Check status
 api --status
-
-# Check version
 api --version
-
-# Access web interface
-curl http://localhost:64580/healthz
 ```
 
-Expected response:
+For a running server, request its health page at `/server/healthz` or its configured versioned API health route at `/api/{api_version}/server/healthz`. The unversioned `/api/healthz` alias is also available.
 
-```json
-{
-  "status": "ok",
-  "uptime": 3600,
-  "version": "1.0.0"
-}
-```
+## Configuration
 
-## Next Steps
-
-- [Configure the server](configuration.md)
-- [Explore the API](api.md)
-- [Security](security.md)
-
-## Ports
-
-Default ports:
-
-| Service | Port | Description |
-|---------|------|-------------|
-| HTTP Server | 64580 | Main API and web interface |
-| HTTPS Server | 64543 | Secure API (if SSL enabled) |
-
-!!! note
-    The default external port is `64580` (Docker maps this to internal port `80`). You can change this in your Docker configuration or via the `--port` flag.
+The server configuration file is `server.yml` in the platform-specific configuration directory. The CLI client has a separate `cli.yml` file. See [Configuration](configuration.md) and [CLI Reference](cli.md).
