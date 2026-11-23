@@ -15,7 +15,7 @@ API is a self-hosted utility service with a server-rendered web interface, a ver
 - Parsing, network, geolocation, weather, image, language, research, Docker, testing, and entertainment tools
 - Server-rendered tool pages that support form submissions without JavaScript
 - Machine-readable REST, OpenAPI, and GraphQL interfaces
-- Seven interface locales: English, Arabic, German, Spanish, French, Japanese, and Chinese
+- Eight interface locales: English, Spanish, French, German, Italian, Arabic, Chinese, and Japanese
 - Anonymous credential-based ownership for resources that need an owner; no user accounts or login
 - Configuration-driven health, security, localization, scheduling, backup, update, and Tor support
 - The `api-cli` client for command-line and terminal use

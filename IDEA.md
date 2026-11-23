@@ -123,701 +123,337 @@ Failure mode for GeoIP: if databases unavailable, the geo/network tools return I
 
 Project-defined API routes are inventoried below. AI.md PART 14 defines the shared server-template routes; those are not repeated here.
 
-- GET /api/{api_version}/convert/area: no authentication; area. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/area/{value}/{from}/{to}: no authentication; area value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/color: no authentication; color. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/currency: no authentication; currency. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/data: no authentication; data. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/data/{value}/{from}/{to}: no authentication; data value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/energy: no authentication; energy. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/energy/{value}/{from}/{to}: no authentication; energy value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/length: no authentication; length. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/length/{value}/{from}/{to}: no authentication; length value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/pressure: no authentication; pressure. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/pressure/{value}/{from}/{to}: no authentication; pressure value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/speed: no authentication; speed. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/speed/{value}/{from}/{to}: no authentication; speed value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/temperature: no authentication; temperature. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/temperature/{value}/{from}/{to}: no authentication; temperature value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/time: no authentication; time. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/time/{value}/{from}/{to}: no authentication; time value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/volume: no authentication; volume. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/volume/{value}/{from}/{to}: no authentication; volume value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/weight: no authentication; weight. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/convert/weight/{value}/{from}/{to}: no authentication; weight value from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/bcrypt: no authentication; bcrypt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/bcrypt/hash: no authentication; bcrypt hash. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/bcrypt/hash/{password}: no authentication; bcrypt hash password. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/bcrypt/verify: no authentication; bcrypt verify. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/bcrypt/verify/{password}/{hash}: no authentication; bcrypt verify password hash. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/bcrypt/{cost}/{password}: no authentication; bcrypt cost password. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/bcrypt/{password}: no authentication; bcrypt password. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/hash: no authentication; hash. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/hash.txt: no authentication; hash.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/hash/{algorithm}/{input}: no authentication; hash algorithm input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/hash/{algorithm}/{input}.txt: no authentication; hash algorithm input.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/jwt: no authentication; jwt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/jwt/{token}: no authentication; jwt token. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/password: no authentication; password. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/password.txt: no authentication; password.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/password/strength: no authentication; password strength. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/password/strength/{password}: no authentication; password strength password. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/password/{length}: no authentication; password length. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/password/{length}.txt: no authentication; password length.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/pin: no authentication; pin. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/pin.txt: no authentication; pin.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/pin/{length}: no authentication; pin length. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/pin/{length}.txt: no authentication; pin length.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/random/bytes: no authentication; random bytes. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/random/bytes/{count}: no authentication; random bytes count. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/random/hex: no authentication; random hex. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/random/hex/{count}: no authentication; random hex count. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/code: no authentication; totp code. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/code.txt: no authentication; totp code.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/code/{secret}: no authentication; totp code secret. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/code/{secret}.txt: no authentication; totp code secret.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/generate: no authentication; totp generate. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/secret: no authentication; totp secret. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/verify: no authentication; totp verify. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/crypto/totp/verify/{secret}/{code}: no authentication; totp verify secret code. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/add: no authentication; add. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/add/{timestamp}/{duration}: no authentication; add timestamp duration. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/calendar: no authentication; calendar. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/calendar/{year}/{month}: no authentication; calendar year month. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/convert: no authentication; convert. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/convert/{timestamp}: no authentication; convert timestamp. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/convert/{timestamp}/{timezone}: no authentication; convert timestamp timezone. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/cron: no authentication; cron. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/diff: no authentication; diff. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/diff/{timestamp1}/{timestamp2}: no authentication; diff timestamp1 timestamp2. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/format: no authentication; format. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/format/{timestamp}/{format}: no authentication; format timestamp format. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/moon: no authentication; moon. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/moon/{date}: no authentication; moon date. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/now: no authentication; now. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/now.txt: no authentication; now.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/now/{timezone}: no authentication; now timezone. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/parse: no authentication; parse. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/parse/{value}: no authentication; parse value. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/sunrise: no authentication; sunrise. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/sunrise/{lat}/{lon}: no authentication; sunrise lat lon. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/sunrise/{lat}/{lon}/{date}: no authentication; sunrise lat lon date. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/timestamp: no authentication; timestamp. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/timestamp.txt: no authentication; timestamp.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/timezone: no authentication; timezone. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/timezone/convert: no authentication; timezone convert. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/timezone/convert/{timestamp}/{from}/{to}: no authentication; timezone convert timestamp from to. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/timezone/{timezone}: no authentication; timezone timezone. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/timezones: no authentication; timezones. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/to-unix: no authentication; to unix. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/to-unix/{datetime}: no authentication; to unix datetime. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/workdays: no authentication; workdays. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/datetime/workdays/{start}/{end}: no authentication; workdays start end. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/dev/cron: no authentication; cron. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/dev/echo: no authentication; echo. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/dev/jwt: no authentication; jwt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/dev/jwt/{token}: no authentication; jwt token. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/docker/best-practices: no authentication; best practices. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/docker/network-helper: no authentication; network helper. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/docker/port-mapping: no authentication; port mapping. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/docker/version: no authentication; version. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/docker/volume-helper: no authentication; volume helper. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/compliment: no authentication; compliment. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/dad-joke: no authentication; dad joke. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/fact: no authentication; fact. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/fortune: no authentication; fortune. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/insult: no authentication; insult. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/joke: no authentication; joke. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/meme: no authentication; meme. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/motivational: no authentication; motivational. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/programming-joke: no authentication; programming joke. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/quote: no authentication; quote. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/riddle: no authentication; riddle. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/fun/trivia: no authentication; trivia. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/api-docs: no authentication; api docs. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/avatar: no authentication; avatar. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/barcode: no authentication; barcode. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/config: no authentication; config. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/dockerfile: no authentication; dockerfile. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/gitignore: no authentication; gitignore. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/identicon: no authentication; identicon. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/license: no authentication; license. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/placeholder: no authentication; placeholder. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/placeholder/{width}/{height}: no authentication; placeholder width height. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/qr: no authentication; qr. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/generate/ssh-key: no authentication; ssh key. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/bbox: no authentication; bbox. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/bearing: no authentication; bearing. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/country: no authentication; country. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/distance: no authentication; distance. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/geocode: no authentication; geocode. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/geohash: no authentication; geohash. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/h3: no authentication; h3. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/ip: no authentication; ip. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/ip/{ip}: no authentication; ip ip. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/midpoint: no authentication; midpoint. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/pluscode: no authentication; pluscode. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/reverse: no authentication; reverse. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/geo/timezone: no authentication; timezone. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/image/avatar: no authentication; avatar. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/image/barcode: no authentication; barcode. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/image/identicon: no authentication; identicon. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/image/placeholder: no authentication; placeholder. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/image/placeholder/{width}/{height}: no authentication; placeholder width height. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/image/qr: no authentication; qr. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/language/phonetic: no authentication; phonetic. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/lorem/address: no authentication; address. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/lorem/company: no authentication; company. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/lorem/person: no authentication; person. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/base: no authentication; base. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/calculate: no authentication; calculate. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/fibonacci: no authentication; fibonacci. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/prime: no authentication; prime. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/prime/{n}: no authentication; prime n. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/random: no authentication; random. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/random/{min}/{max}: no authentication; random min max. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/sequence: no authentication; sequence. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/math/stats: no authentication; stats. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/dns: no authentication; dns. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/dns/{domain}: no authentication; dns domain. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/dns/{domain}/{type}: no authentication; dns domain type. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/headers: no authentication; headers. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/ip: no authentication; ip. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/ip/{ip}: no authentication; ip ip. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/mac: no authentication; mac. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/mac/{mac}: no authentication; mac mac. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/ping: no authentication; ping. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/port: no authentication; port. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/ssl: no authentication; ssl. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/subnet: no authentication; subnet. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-- GET /api/{api_version}/network/ula: no authentication; ula. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/url: no authentication; url. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/user-agent: no authentication; user agent. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/network/whois: no authentication; whois. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- GET /api/{api_version}/osint/cert: no authentication; cert. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/cert/{domain}: no authentication; cert domain. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- GET /api/{api_version}/osint/domain: no authentication; domain. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/domain/{domain}: no authentication; domain domain. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/email: no authentication; email. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/email/{email}: no authentication; email email. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/ip: no authentication; ip. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/ip/{ip}: no authentication; ip ip. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-
-
-
-
-- GET /api/{api_version}/osint/subdomain: no authentication; subdomain. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/subdomain/{domain}: no authentication; subdomain domain. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/osint/tech-stack: no authentication; tech stack. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- GET /api/{api_version}/parse/jwt: no authentication; jwt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/parse/jwt/{token}: no authentication; jwt token. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/research/doi: no authentication; doi. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/research/doi/{path}: no authentication; doi path. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/test/fake-data: no authentication; fake data. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/test/fixture: no authentication; fixture. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/test/fixture/{type}: no authentication; fixture type. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/test/http: no authentication; http. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- GET /api/{api_version}/test/request-inspector: no authentication; request inspector. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/test/response-generator: no authentication; response generator. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/test/status-codes: no authentication; status codes. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/test/status-codes/{code}: no authentication; status codes code. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/case: no authentication; case. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/case.txt: no authentication; case.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/case/{style}/{input}: no authentication; case style input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/case/{style}/{input}.txt: no authentication; case style input.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/decode: no authentication; decode. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/decode.txt: no authentication; decode.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/decode/{encoding}/{input}: no authentication; decode encoding input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/decode/{encoding}/{input}.txt: no authentication; decode encoding input.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/encode: no authentication; encode. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/encode.txt: no authentication; encode.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/encode/{encoding}/{input}: no authentication; encode encoding input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/encode/{encoding}/{input}.txt: no authentication; encode encoding input.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/hash: no authentication; hash. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/hash.txt: no authentication; hash.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/hash/multi: no authentication; hash multi. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/hash/multi/{input}: no authentication; hash multi input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/hash/{algorithm}/{input}: no authentication; hash algorithm input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/hash/{algorithm}/{input}.txt: no authentication; hash algorithm input.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/lorem: no authentication; lorem. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/lorem.txt: no authentication; lorem.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/lorem/{type}: no authentication; lorem type. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/lorem/{type}/{count}: no authentication; lorem type count. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/lorem/{type}/{count}.txt: no authentication; lorem type count.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/nanoid: no authentication; nanoid. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/reverse: no authentication; reverse. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/reverse.txt: no authentication; reverse.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/reverse/{input}: no authentication; reverse input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/reverse/{input}.txt: no authentication; reverse input.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/rot13: no authentication; rot13. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/rot13.txt: no authentication; rot13.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/rot13/{input}: no authentication; rot13 input. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/rot13/{input}.txt: no authentication; rot13 input.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/ulid: no authentication; ulid. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/uuid: no authentication; uuid. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/uuid.txt: no authentication; uuid.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/uuid/{version}: no authentication; uuid version. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/uuid/{version}.txt: no authentication; uuid version.txt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/text/uuid/{version}/{count}: no authentication; uuid version count. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/air-quality: no authentication; air quality. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/air-quality/{location}: no authentication; air quality location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/alerts: no authentication; alerts. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/alerts/{location}: no authentication; alerts location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/astronomy: no authentication; astronomy. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/astronomy/{location}: no authentication; astronomy location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/current: no authentication; current. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/current/{location}: no authentication; current location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/forecast: no authentication; forecast. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/forecast/{location}: no authentication; forecast location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/historical: no authentication; historical. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/historical/{location}: no authentication; historical location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/hourly: no authentication; hourly. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/hourly/{location}: no authentication; hourly location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- GET /api/{api_version}/weather/marine: no authentication; marine. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/marine/{location}: no authentication; marine location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/pollen: no authentication; pollen. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/pollen/{location}: no authentication; pollen location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- GET /api/{api_version}/weather/uv: no authentication; uv. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- GET /api/{api_version}/weather/uv/{location}: no authentication; uv location. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/bcrypt/verify: no authentication; bcrypt verify. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/certificate: no authentication; certificate. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/decrypt: no authentication; decrypt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/ed25519: no authentication; ed25519. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/encrypt: no authentication; encrypt. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/hmac: no authentication; hmac. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/password/strength: no authentication; password strength. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/pgp: no authentication; pgp. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/crypto/rsa: no authentication; rsa. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/base64: no authentication; base64. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/format/css: no authentication; format css. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/format/html: no authentication; format html. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/format/js: no authentication; format js. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/format/json: no authentication; format json. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/format/sql: no authentication; format sql. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/format/xml: no authentication; format xml. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/regex: no authentication; regex. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/dev/url-encode: no authentication; url encode. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/compose-to-run: no authentication; compose to run. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/compose-validate: no authentication; compose validate. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/dockerfile-generate: no authentication; dockerfile generate. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/dockerfile-lint: no authentication; dockerfile lint. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/env-parser: no authentication; env parser. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/run-to-compose: no authentication; run to compose. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/security-scan: no authentication; security scan. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/docker/size-optimizer: no authentication; size optimizer. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/generate/sql: no authentication; sql. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/image/convert: no authentication; convert. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/image/crop: no authentication; crop. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/image/filter: no authentication; filter. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/image/metadata: no authentication; metadata. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/image/optimize: no authentication; optimize. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/image/resize: no authentication; resize. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/image/watermark: no authentication; watermark. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-- POST /api/{api_version}/language/dictionary: no authentication; dictionary. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-- POST /api/{api_version}/language/keywords: no authentication; keywords. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/language/readability: no authentication; readability. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/language/reading-time: no authentication; reading time. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/language/sentiment: no authentication; sentiment. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-- POST /api/{api_version}/language/thesaurus: no authentication; thesaurus. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-- POST /api/{api_version}/language/word-count: no authentication; word count. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/math/matrix: no authentication; matrix. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/csv: no authentication; csv. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/env: no authentication; env. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/html: no authentication; html. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/ini: no authentication; ini. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/json: no authentication; json. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/log: no authentication; log. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/markdown: no authentication; markdown. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/sql: no authentication; sql. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/toml: no authentication; toml. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/xml: no authentication; xml. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/parse/yaml: no authentication; yaml. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/research/arxiv: no authentication; arxiv. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-- POST /api/{api_version}/research/citation: no authentication; citation. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- POST /api/{api_version}/research/isbn: no authentication; isbn. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-
-
-
-
-- POST /api/{api_version}/test/api-client: no authentication; api client. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/test/assert: no authentication; assert. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/test/curl-generator: no authentication; curl generator. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-
-
-- POST /api/{api_version}/test/postman: no authentication; postman. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/test/request-inspector: no authentication; request inspector. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/test/webhook: no authentication; webhook. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/text/compress: no authentication; compress. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/text/diff: no authentication; diff. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/text/extract: no authentication; extract. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/text/regex: no authentication; regex. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/text/stats: no authentication; stats. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/credit-card: no authentication; credit card. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/domain: no authentication; domain. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/email: no authentication; email. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/iban: no authentication; iban. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/ip: no authentication; ip. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/isbn: no authentication; isbn. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/json: no authentication; json. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/mac: no authentication; mac. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/phone: no authentication; phone. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/url: no authentication; url. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/uuid: no authentication; uuid. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
-
-- POST /api/{api_version}/validate/vat: no authentication; vat. Request: applicable path, query, or POST body input. Response: requested result in the endpoint format.
+- GET /api/{api_version}/convert/area: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/area/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/color: no authentication; Converts a color value between hex, RGB ("r,g,b"), and HSL ("h,s,l") representations. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/currency: no authentication; Converts an amount between two currencies using the current reference rate. Request: Query (also accepted by the no-JavaScript form fallback): `amount`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `amount`, `from`, `to`, `rate`, `result`, `date`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/data: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/data/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/energy: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/energy/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/length: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/length/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/pressure: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/pressure/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/speed: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/speed/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/temperature: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/temperature/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/time: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/time/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/volume: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/volume/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/weight: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/convert/weight/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/bcrypt: no authentication; Hash a password with bcrypt. Request: Query (also accepted by the no-JavaScript form fallback): `password`, `cost`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `cost`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/bcrypt/hash: no authentication; Hash a password with bcrypt. Request: Query (also accepted by the no-JavaScript form fallback): `password`, `cost`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `cost`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/bcrypt/hash/{password}: no authentication; Hash the supplied password. Request: Path: `password`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `cost`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/bcrypt/verify: no authentication; Verify a password against a bcrypt hash. Request: Query (also accepted by the no-JavaScript form fallback): `password`, `hash`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/bcrypt/verify/{password}/{hash}: no authentication; Check whether the supplied password matches the hash. Request: Path: `password`, `hash`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/bcrypt/{cost}/{password}: no authentication; Hash the supplied password using the requested cost. Request: Path: `cost`, `password`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `cost`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/bcrypt/{password}: no authentication; Hash the supplied password. Request: Path: `password`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `cost`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/hash: no authentication; Hashes the supplied input with the selected algorithm.. Request: Query (also accepted by the no-JavaScript form fallback): `algorithm`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `input`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/hash.txt: no authentication; Hashes the supplied input with the selected algorithm.. Request: Query (also accepted by the no-JavaScript form fallback): `algorithm`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/hash/{algorithm}/{input}: no authentication; Hashes the supplied input with the selected algorithm.. Request: Path: `algorithm`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `input`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/hash/{algorithm}/{input}.txt: no authentication; Hashes the supplied input with the selected algorithm.. Request: Path: `algorithm`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/jwt: no authentication; Decodes (never verifies) the header and payload of a JSON Web Token. Request: Query (also accepted by the no-JavaScript form fallback): `token`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `header`, `payload`, `signature`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/jwt/{token}: no authentication; Decodes (never verifies) the header and payload of a JSON Web Token. Request: Path: `token`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `header`, `payload`, `signature`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/password: no authentication; Generate a random password. Request: Query (also accepted by the no-JavaScript form fallback): `length`, `uppercase`, `lowercase`, `numbers`, `symbols`, `exclude_similar`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `password`, `length`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/password.txt: no authentication; Generate a random password. Request: Query (also accepted by the no-JavaScript form fallback): `length`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/password/strength: no authentication; Assess password strength. Request: Query (also accepted by the no-JavaScript form fallback): `password`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `score`, `strength`, `length`, `entropy_bits`, `has_uppercase`, `has_lowercase`, `has_numbers`, `has_symbols`, `charset_size`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/password/strength/{password}: no authentication; Assess password strength. Request: Path: `password`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `score`, `strength`, `length`, `entropy_bits`, `has_uppercase`, `has_lowercase`, `has_numbers`, `has_symbols`, `charset_size`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/password/{length}: no authentication; Generates a cryptographically random password of the requested length.. Request: Path: `length`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `password`, `length`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/password/{length}.txt: no authentication; Generates a cryptographically random password of the requested length.. Request: Path: `length`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/pin: no authentication; Generate a numeric PIN. Request: Query (also accepted by the no-JavaScript form fallback): `length`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `pin`, `length`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/pin.txt: no authentication; Generate a numeric PIN. Request: Query (also accepted by the no-JavaScript form fallback): `length`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/pin/{length}: no authentication; Generates a cryptographically random numeric PIN of the requested length.. Request: Path: `length`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `pin`, `length`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/pin/{length}.txt: no authentication; Generates a cryptographically random numeric PIN of the requested length.. Request: Path: `length`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/random/bytes: no authentication; Generates cryptographically random bytes.. Request: Query (also accepted by the no-JavaScript form fallback): `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `bytes`, `hex`, `length`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/random/bytes/{count}: no authentication; Generate random bytes. Request: Path: `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `bytes`, `hex`, `length`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/random/hex: no authentication; Generates cryptographically random hexadecimal text.. Request: Query (also accepted by the no-JavaScript form fallback): `count`. Response: Raw hexadecimal text response (`text/plain`).
+- GET /api/{api_version}/crypto/random/hex/{count}: no authentication; Generate random hexadecimal data. Request: Path: `count`. Response: Raw hexadecimal text response (`text/plain`).
+- GET /api/{api_version}/crypto/totp/code: no authentication; Generates a time-based one-time password from the supplied secret.. Request: Query (also accepted by the no-JavaScript form fallback): `secret`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `code`, `remaining_seconds`, `period`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/totp/code.txt: no authentication; Generates a time-based one-time password from the supplied secret.. Request: Query (also accepted by the no-JavaScript form fallback): `secret`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/totp/code/{secret}: no authentication; Generate a time-based code for the TOTP secret. Request: Path: `secret`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `code`, `remaining_seconds`, `period`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/totp/code/{secret}.txt: no authentication; Generate a time-based code for the TOTP secret. Request: Path: `secret`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/crypto/totp/generate: no authentication; Generate a TOTP secret. Request: Query (also accepted by the no-JavaScript form fallback): `issuer`, `account`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `secret`, `uri`, `current_code`, `issuer`, `account`, `algorithm`, `digits`, `period`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/totp/secret: no authentication; Generate a TOTP secret. Request: Query (also accepted by the no-JavaScript form fallback): `issuer`, `account`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `secret`, `uri`, `current_code`, `issuer`, `account`, `algorithm`, `digits`, `period`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/totp/verify: no authentication; Checks a time-based one-time password against the supplied secret.. Request: Query (also accepted by the no-JavaScript form fallback): `secret`, `code`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/crypto/totp/verify/{secret}/{code}: no authentication; Verify a TOTP code. Request: Path: `secret`, `code`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/add: no authentication; Adds a duration to a Unix timestamp.. Request: Query (also accepted by the no-JavaScript form fallback): `timestamp`, `duration`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `original`, `duration`, `result`, `result_unix`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/add/{timestamp}/{duration}: no authentication; Adds a duration to a Unix timestamp.. Request: Path: `timestamp`, `duration`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `original`, `duration`, `result`, `result_unix`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/calendar: no authentication; Builds a week-grid calendar for a given year/month. Request: Query (also accepted by the no-JavaScript form fallback): `year`, `month`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `year`, `month`, `month_name`, `days_in_month`, `starts_on`, `weeks` (seven-day integer arrays with `0` padding), `is_leap_year`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/calendar/{year}/{month}: no authentication; Builds a week-grid calendar for a given year/month. Request: Path: `year`, `month`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `year`, `month`, `month_name`, `days_in_month`, `starts_on`, `weeks` (seven-day integer arrays with `0` padding), `is_leap_year`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/convert: no authentication; Converts a Unix timestamp to date and time representations.. Request: Query (also accepted by the no-JavaScript form fallback): `timestamp`, `timezone`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `unix_ms`, `iso8601`, `rfc2822`, `human`, `date`, `time`, `timezone`, `offset`, `day_of_week`, `day_of_year`, `is_leap_year`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/convert/{timestamp}: no authentication; Converts a Unix timestamp to date and time representations.. Request: Path: `timestamp`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `unix_ms`, `iso8601`, `rfc2822`, `human`, `date`, `time`, `timezone`, `offset`, `day_of_week`, `day_of_year`, `is_leap_year`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/convert/{timestamp}/{timezone}: no authentication; Converts a Unix timestamp to date and time representations.. Request: Path: `timestamp`, `timezone`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `unix_ms`, `iso8601`, `rfc2822`, `human`, `date`, `time`, `timezone`, `offset`, `day_of_week`, `day_of_year`, `is_leap_year`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/cron: no authentication; Parses a standard 5-field cron expression and returns a breakdown plus next scheduled run times. Request: Query (also accepted by the no-JavaScript form fallback): `expression`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `expression`, `fields` (`minute`, `hour`, `day_of_month`, `month`, `day_of_week`), `next_runs`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/diff: no authentication; Calculates the difference between two Unix timestamps.. Request: Query (also accepted by the no-JavaScript form fallback): `timestamp1`, `timestamp2`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `from`, `to`, `days`, `hours`, `minutes`, `seconds`, `milliseconds`, `human`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/diff/{timestamp1}/{timestamp2}: no authentication; Calculates the difference between two Unix timestamps.. Request: Path: `timestamp1`, `timestamp2`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `from`, `to`, `days`, `hours`, `minutes`, `seconds`, `milliseconds`, `human`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/format: no authentication; Formats a Unix timestamp. Request: Query (also accepted by the no-JavaScript form fallback): `timestamp`, `format`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `format`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/format/{timestamp}/{format}: no authentication; Formats a Unix timestamp. Request: Path: `timestamp`, `format`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `format`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/moon: no authentication; Computes the current lunar phase for an optional YYYY-MM-DD date. Request: Query (also accepted by the no-JavaScript form fallback): `date`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `date`, `age_days`, `phase`, `illumination`, `illumination_pct`, `synodic_month_days`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/moon/{date}: no authentication; Computes the current lunar phase for an optional YYYY-MM-DD date. Request: Path: `date`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `date`, `age_days`, `phase`, `illumination`, `illumination_pct`, `synodic_month_days`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/now: no authentication; Return the current date and time. Request: Query (also accepted by the no-JavaScript form fallback): `timezone`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `unix_ms`, `unix_ns`, `iso8601`, `rfc2822`, `rfc3339`, `rfc3339_nano`, `human`, `date`, `time`, `timezone`, `offset`, `offset_seconds`, `day_of_week`, `day_of_week_name`, `day_of_year`, `week_number`, `quarter`, `is_leap_year`, `days_in_month`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/now.txt: no authentication; Return the current date and time. Request: No request parameters. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/datetime/now/{timezone}: no authentication; Returns the current date and time in the requested timezone.. Request: Path: `timezone`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `unix_ms`, `unix_ns`, `iso8601`, `rfc2822`, `rfc3339`, `rfc3339_nano`, `human`, `date`, `time`, `timezone`, `offset`, `offset_seconds`, `day_of_week`, `day_of_week_name`, `day_of_year`, `week_number`, `quarter`, `is_leap_year`, `days_in_month`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/parse: no authentication; Parses a free-form date/time string against a list of common layouts. Request: Query (also accepted by the no-JavaScript form fallback): `value`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `matched_layout`, `unix`, `iso8601`, `date`, `time`, `year`, `month`, `day`, `day_of_week`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/parse/{value}: no authentication; Parses a free-form date/time string against a list of common layouts. Request: Path: `value`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `matched_layout`, `unix`, `iso8601`, `date`, `time`, `year`, `month`, `day`, `day_of_week`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/sunrise: no authentication; Computes sunrise/sunset UTC times for a given latitude, longitude, and optional YYYY-MM-DD date. Request: Query (also accepted by the no-JavaScript form fallback): `lat`, `lon`, `date`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `date`, `latitude`, `longitude`, and either `sunrise_utc`, `sunset_utc`, `sunrise_iso8601`, `sunset_iso8601` or `polar_event`, `description`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/sunrise/{lat}/{lon}: no authentication; Computes sunrise/sunset UTC times for a given latitude, longitude, and optional YYYY-MM-DD date. Request: Path: `lat`, `lon`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `date`, `latitude`, `longitude`, and either `sunrise_utc`, `sunset_utc`, `sunrise_iso8601`, `sunset_iso8601` or `polar_event`, `description`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/sunrise/{lat}/{lon}/{date}: no authentication; Computes sunrise/sunset UTC times for a given latitude, longitude, and optional YYYY-MM-DD date. Request: Path: `lat`, `lon`, `date`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `date`, `latitude`, `longitude`, and either `sunrise_utc`, `sunset_utc`, `sunrise_iso8601`, `sunset_iso8601` or `polar_event`, `description`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/timestamp: no authentication; Return the current Unix timestamp. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `unix_ms`, `unix_ns`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/timestamp.txt: no authentication; Return the current Unix timestamp. Request: No request parameters. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/datetime/timezone: no authentication; Lists supported timezone names.. Request: Query (also accepted by the no-JavaScript form fallback): `timezone`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `timezones` (array of timezone names). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/timezone/convert: no authentication; Converts a Unix timestamp between timezones.. Request: Query (also accepted by the no-JavaScript form fallback): `timestamp`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `from`, `from_zone`, `to`, `to_zone`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/timezone/convert/{timestamp}/{from}/{to}: no authentication; Converts a Unix timestamp between timezones.. Request: Path: `timestamp`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `unix`, `from`, `from_zone`, `to`, `to_zone`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/timezone/{timezone}: no authentication; Returns current time and offset information for the requested timezone.. Request: Path: `timezone`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `name`, `abbreviation`, `offset`, `offset_seconds`, `current_time`, `date`, `time`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/timezones: no authentication; List supported time zones. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `timezones`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/to-unix: no authentication; Converts a date and time string to a Unix timestamp.. Request: Query (also accepted by the no-JavaScript form fallback): `datetime`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `datetime`, `unix`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/to-unix/{datetime}: no authentication; Converts a date and time string to a Unix timestamp.. Request: Path: `datetime`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `datetime`, `unix`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/workdays: no authentication; Counts weekdays (Mon-Fri) between two YYYY-MM-DD dates inclusive. Request: Query (also accepted by the no-JavaScript form fallback): `start`, `end`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `start`, `end`, `total_days`, `workdays`, `weekend_days`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/datetime/workdays/{start}/{end}: no authentication; Counts weekdays (Mon-Fri) between two YYYY-MM-DD dates inclusive. Request: Path: `start`, `end`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `start`, `end`, `total_days`, `workdays`, `weekend_days`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/dev/cron: no authentication; Parses a 5-field cron expression, reusing the same datetime.ParseCron helper as apiDatetimeCronHandler. Request: Query (also accepted by the no-JavaScript form fallback): `expression`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `expression`, `fields` (`minute`, `hour`, `day_of_month`, `month`, `day_of_week`), `next_runs` (array of timestamps). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/dev/echo: no authentication; Reflects the caller's own request details back as JSON: method, path, query parameters, headers, remote address, and raw body. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `method`, `path`, `query`, `headers`, `remote_addr`, `body`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/dev/jwt: no authentication; Decodes (never verifies) the header and payload of a JSON Web Token, reusing the same decodeJWTSegment helper as apiParseJWTHandler and apiCryptoJWTDecodeHandler. Request: Query (also accepted by the no-JavaScript form fallback): `token`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `header`, `payload`, `signature`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/dev/jwt/{token}: no authentication; Decodes (never verifies) the header and payload of a JSON Web Token, reusing the same decodeJWTSegment helper as apiParseJWTHandler and apiCryptoJWTDecodeHandler. Request: Path: `token`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `header`, `payload`, `signature`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/docker/best-practices: no authentication; Returns the static curated Docker best practices guide. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `tips`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/docker/network-helper: no authentication; Generates a docker network create command and a matching compose networks: block from query-string parameters. Request: Query (also accepted by the no-JavaScript form fallback): `name`, `driver`, `subnet`, `gateway`, `internal`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `run_command`, `compose_block`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/docker/port-mapping: no authentication; Formats a host/container/protocol triple into a "host:container/protocol" string (?action=format, the default) or parses an existing mapping string back into its parts (?action=parse&mapping=) Request: Query (also accepted by the no-JavaScript form fallback): `action`, `host`, `container`, `protocol`, `mapping`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` has one of two shapes: format returns `mapping`; parse returns `host_port`, `container_port`, `protocol`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/docker/version: no authentication; Parses a docker image reference passed as ?image= and reports its registry/namespace/repository/tag breakdown. Request: Query (also accepted by the no-JavaScript form fallback): `image`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `original`, `registry`, `namespace`, `repository`, `tag`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/docker/volume-helper: no authentication; Formats a host/container path pair into a "host:container[:ro]" volume mount string. Request: Query (also accepted by the no-JavaScript form fallback): `host`, `container`, `readonly`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mount`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/compliment: no authentication; Returns a random compliment. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/dad-joke: no authentication; Returns a random dad joke. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/fact: no authentication; Returns a random fact. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/fortune: no authentication; Returns a random fortune-cookie saying. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/insult: no authentication; Returns a random playful insult. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/joke: no authentication; Returns a joke category and a fortune-cookie saying. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `text`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/meme: no authentication; Returns a random meme caption. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/motivational: no authentication; Returns a random motivational quote. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/programming-joke: no authentication; Returns a random programming joke. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/quote: no authentication; Returns a random inspirational quote. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `text` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/riddle: no authentication; Returns a random riddle with its answer. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `question`, `answer` (strings). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/fun/trivia: no authentication; Returns a random trivia question with its answer. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `question`, `answer` (strings). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/generate/api-docs: no authentication; Renders API documentation for ?format= (markdown, default, or json — which duplicates /api/swagger's structure) and ?version= Request: Query (also accepted by the no-JavaScript form fallback): `format`, `version`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `docs`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/generate/avatar: no authentication; Generate an avatar image. Request: Query (also accepted by the no-JavaScript form fallback): `initials`, `size`. Response: PNG image bytes (`image/png`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/generate/barcode: no authentication; Generate a barcode image. Request: Query (also accepted by the no-JavaScript form fallback): `format`, `data`, `width`, `height`. Response: PNG image bytes (`image/png`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/generate/config: no authentication; Renders a configuration-file scaffold in the requested format (yaml, json, env, toml) from the request's query parameters (excluding "format") as key=value pairs. Request: Query (also accepted by the no-JavaScript form fallback): `format`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `config`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/generate/dockerfile: no authentication; Renders a minimal idiomatic multi-stage Dockerfile for the requested language. Request: Query (also accepted by the no-JavaScript form fallback): `lang`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `dockerfile`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/generate/gitignore: no authentication; Renders a union of curated .gitignore boilerplate for the comma-separated languages/tools in ?lang= Request: Query (also accepted by the no-JavaScript form fallback): `lang`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `gitignore`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/generate/identicon: no authentication; Generate an identicon image. Request: Query (also accepted by the no-JavaScript form fallback): `seed`, `size`. Response: PNG image bytes (`image/png`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/generate/license: no authentication; Renders canonical license text for ?type= (mit, apache-2.0, gpl-3.0, bsd-3-clause, isc), optionally substituting ?author=/?year= Request: Query (also accepted by the no-JavaScript form fallback): `type`, `author`, `year`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `license`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/generate/placeholder: no authentication; Generate a placeholder image. Request: Query (also accepted by the no-JavaScript form fallback): `width`, `height`, `format`, `bg`. Response: Image bytes (`image/png`, `image/jpeg`, or `image/gif` selected by `format`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/generate/placeholder/{width}/{height}: no authentication; Generate a placeholder image at the requested dimensions. Request: Path: `width`, `height`. Response: Image bytes (`image/png`, `image/jpeg`, or `image/gif` selected by `format`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/generate/qr: no authentication; Renders a QR code PNG for the given data, or for a Wi-Fi join payload when ssid is supplied instead of data. Request: Query (also accepted by the no-JavaScript form fallback): `data`, `ssid`, `password`, `security`, `hidden`, `width`, `height`. Response: Returns a PNG image; generation errors use the JSON error envelope.
+- GET /api/{api_version}/generate/ssh-key: no authentication; Generates a stateless Ed25519 SSH key pair and returns both keys in the JSON envelope; nothing is persisted, so the private key is returned in full (this is the only time it is available) Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `private_key`, `public_key`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/bbox: no authentication; Computes a bounding box either from a center coordinate plus radius in kilometers (?lat/?lon/?radius) or from a list of coordinates (?coords=lat1,lon1|lat2,lon2|...) Request: Query (also accepted by the no-JavaScript form fallback): `coords`, `radius`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `min_latitude`, `min_longitude`, `max_latitude`, `max_longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/bearing: no authentication; Computes the initial compass bearing (in degrees) from one coordinate to another. Request: Query: `lat1`, `lon1`, `lat2`, `lon2`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `bearing`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/country: no authentication; Resolves country reference data (name, alpha-2/ alpha-3/numeric codes, capital, currency. Request: Query (also accepted by the no-JavaScript form fallback): `q`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `name`, `alpha2`, `alpha3`, `numeric`, `capital`, `currency`, optional `calling_code`, `tld`, `region`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/distance: no authentication; Computes the great-circle distance between two coordinates, in kilometers (default) or miles. Request: Query: `lat1`, `lon1`, `lat2`, `lon2`; optional `unit` (`km` or `mi`). Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `distance`, `unit`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/geocode: no authentication; Converts an address or place name to coordinates. Request: Query (also accepted by the no-JavaScript form fallback): `q`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `query`, `results`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/geohash: no authentication; Encodes a coordinate to a base32 geohash (?lat/?lon, optional ?precision, default 9), or decodes a geohash back to a coordinate (?hash) Request: Query (also accepted by the no-JavaScript form fallback): `hash`, `precision`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `geohash`, `coordinate`, `latitude`, `longitude`, `precision`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/h3: no authentication; Encodes a coordinate to an Uber H3 hexagonal cell index (?lat/?lon, optional ?resolution, default 9) Request: Query (also accepted by the no-JavaScript form fallback): `resolution`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `index`, `resolution`, `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/ip: no authentication; Resolves geolocation for the {ip} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `ip`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, `country`, `region`, `city`, `isp`, `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/ip/{ip}: no authentication; Resolves geolocation for the {ip} path parameter. Request: Path: `ip`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, `country`, `region`, `city`, `isp`, `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/midpoint: no authentication; Computes the geographic midpoint between two coordinates. Request: Query: `lat1`, `lon1`, `lat2`, `lon2`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/pluscode: no authentication; Encodes a coordinate to a Google Open Location Code (?lat/?lon), or decodes a plus code back to a coordinate (?code) Request: Query (also accepted by the no-JavaScript form fallback): `code`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `code`, `coordinate`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/reverse: no authentication; Converts coordinates to a human-readable address. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `display_name`, optional `road`, `city`, `county`, `state`, `postcode`, `country`, `country_code`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/geo/timezone: no authentication; Resolves the IANA timezone name for a coordinate. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `timezone`, `abbreviation`, `utc_offset_seconds`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/image/avatar: no authentication; Generate an avatar image. Request: Query (also accepted by the no-JavaScript form fallback): `initials`, `size`. Response: PNG image bytes (`image/png`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/image/barcode: no authentication; Generate a barcode image. Request: Query (also accepted by the no-JavaScript form fallback): `format`, `data`, `width`, `height`. Response: PNG image bytes (`image/png`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/image/identicon: no authentication; Generate an identicon image. Request: Query (also accepted by the no-JavaScript form fallback): `seed`, `size`. Response: PNG image bytes (`image/png`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/image/placeholder: no authentication; Generates a placeholder image of {width}x{height} and writes it as raw binary content. Request: Query (also accepted by the no-JavaScript form fallback): `width`, `height`, `format`, `bg`. Response: Image bytes (`image/png`, `image/jpeg`, or `image/gif` selected by `format`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/image/placeholder/{width}/{height}: no authentication; Generates a placeholder image of {width}x{height} and writes it as raw binary content. Request: Path: `width`, `height`. Response: Image bytes (`image/png`, `image/jpeg`, or `image/gif` selected by `format`); generation errors use the JSON error envelope.
+- GET /api/{api_version}/image/qr: no authentication; Renders a QR code PNG for the given data, or for a Wi-Fi join payload when ssid is supplied instead of data. Request: Query (also accepted by the no-JavaScript form fallback): `data`, `ssid`, `password`, `security`, `hidden`, `width`, `height`. Response: Returns a PNG image; generation errors use the JSON error envelope.
+- GET /api/{api_version}/language/phonetic: no authentication; Returns the Soundex and Metaphone phonetic codes for a word supplied. Request: Query (also accepted by the no-JavaScript form fallback): `word`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `word`, `soundex`, `metaphone`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/lorem/address: no authentication; Generates a fake street address. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `street`, `city`, `state`, `zip` (strings). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/lorem/company: no authentication; Generates a fake company name and catchphrase. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `name`, `industry` (strings). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/lorem/person: no authentication; Generates a fake person (name/email/phone) Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `name`, `email`, `phone` (strings). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/base: no authentication; Converts ?number= from ?from_base= to ?to_base= Request: Query (also accepted by the no-JavaScript form fallback): `number`, `from_base`, `to_base`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `number`, `from_base`, `to_base`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/calculate: no authentication; Performs the requested calculation. Request: Query (also accepted by the no-JavaScript form fallback): `operation`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `result`; numeric for arithmetic operations and a decimal string for `factorial`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/fibonacci: no authentication; Returns the first {count} Fibonacci numbers. Request: Query (also accepted by the no-JavaScript form fallback): `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `count`, `sequence`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/prime: no authentication; Reports whether the {n} path parameter is a prime number. Request: Query (also accepted by the no-JavaScript form fallback): `n`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `n`, `is_prime`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/prime/{n}: no authentication; Reports whether the {n} path parameter is a prime number. Request: Path: `n`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `n`, `is_prime`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/random: no authentication; Returns a random integer in the inclusive range [{min}, {max}] Request: Query (also accepted by the no-JavaScript form fallback): `min`, `max`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `min`, `max`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/random/{min}/{max}: no authentication; Returns a random integer in the inclusive range [{min}, {max}] Request: Path: `min`, `max`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `min`, `max`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/sequence: no authentication; Generates ?count= numbers of ?type= (arithmetic or geometric) starting at ?start= and stepping by ?step= Request: Query (also accepted by the no-JavaScript form fallback): `type`, `start`, `step`, `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `start`, `step`, `count`, `sequence`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/math/stats: no authentication; Computes min/max/sum/average/median over the comma-separated ?numbers= query parameter. Request: Query (also accepted by the no-JavaScript form fallback): `numbers`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `count`, `min`, `max`, `sum`, `average`, `median`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/dns: no authentication; Queries DNS records for a domain. Request: Query (also accepted by the no-JavaScript form fallback): `domain`, `type`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `type`, `records`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/dns/{domain}: no authentication; Queries DNS records for a domain. Request: Path: `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `type`, `records`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/dns/{domain}/{type}: no authentication; Queries DNS records for a domain. Request: Path: `domain`, `type`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `type`, `records`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/headers: no authentication; Returns the caller's resolved IP/port and the caller-identifying request headers. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, optional `port`, `headers` (caller-identifying request headers). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/ip: no authentication; Returns the caller's resolved IP/port and the caller-identifying request headers. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, `country`, `region`, `city`, `isp`, `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/ip/{ip}: no authentication; Resolves geolocation/ISP details for the {ip} path parameter. Request: Path: `ip`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, `country`, `region`, `city`, `isp`, `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/mac: no authentication; Looks up the vendor for a MAC address's OUI prefix. Request: Query (also accepted by the no-JavaScript form fallback): `mac`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mac`, `vendor`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/mac/{mac}: no authentication; Looks up the vendor for a MAC address's OUI prefix. Request: Path: `mac`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mac`, `vendor`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/ping: no authentication; Measures TCP connect round-trip latency to ?host= (optionally ?count=, default 4, max 20) Request: Query (also accepted by the no-JavaScript form fallback): `host`, `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `host`, `packets_sent`, `packets_received`, `packet_loss_percent`, `min_ms`, `max_ms`, `avg_ms`, `times_ms`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/port: no authentication; Suggests a random unprivileged port. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `port` (integer). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/ssl: no authentication; Reports the leaf TLS certificate details for ?host= Request: Query (also accepted by the no-JavaScript form fallback): `host`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `host`, `subject`, `issuer`, `not_before`, `not_after`, `dns_names`, `serial_number`, `is_expired`, `days_until_expiry`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/subnet: no authentication; Computes network/broadcast/host details for a CIDR block passed as ?cidr= Request: Query (also accepted by the no-JavaScript form fallback): `cidr`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `cidr`, `version`, `network_address`, optional `broadcast_address`, `subnet_mask`, `first_host`, `last_host`, `prefix_length`, `total_addresses`, `usable_hosts`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/ula: no authentication; Generates an RFC 4193 IPv6 unique-local-address prefix. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `ula` (string). Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/url: no authentication; Parses ?url= into its component parts. Request: Query (also accepted by the no-JavaScript form fallback): `url`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `scheme`, optional `user`, `host`, `hostname`, optional `port`, `path`, optional `raw_query`, `query`, `fragment`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/user-agent: no authentication; Parses the caller's User-Agent header (or an explicit ?ua= override) into browser/OS/device components. Request: Query (also accepted by the no-JavaScript form fallback): `ua`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `raw`, `browser`, `os`, `device`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/network/whois: no authentication; Looks up WHOIS information for ?domain= Request: Query (also accepted by the no-JavaScript form fallback): `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `raw`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/cert: no authentication; Connects to the {domain} path parameter (host:443 by default, or host:port if a port is present) and reports the peer TLS certificate's details. Request: Query (also accepted by the no-JavaScript form fallback): `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `host`, `subject`, `issuer`, `not_before`, `not_after`, `dns_names`, `serial_number`, `is_expired`, `days_until_expiry`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/cert/{domain}: no authentication; Connects to the {domain} path parameter (host:443 by default, or host:port if a port is present) and reports the peer TLS certificate's details. Request: Path: `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `host`, `subject`, `issuer`, `not_before`, `not_after`, `dns_names`, `serial_number`, `is_expired`, `days_until_expiry`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/domain: no authentication; Performs a free, keyless WHOIS lookup for the {domain} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `registrar`, `created`, `expires`, `nameservers`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/domain/{domain}: no authentication; Performs a free, keyless WHOIS lookup for the {domain} path parameter. Request: Path: `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `registrar`, `created`, `expires`, `nameservers`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/email: no authentication; Checks the email address format and whether its domain has mail-exchange (MX) records. Request: Query (also accepted by the no-JavaScript form fallback): `email`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `email`, `domain`, `valid_format`, `has_mx_records`, `mx_records`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/email/{email}: no authentication; Checks the email address format and whether its domain has mail-exchange (MX) records. Request: Path: `email`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `email`, `domain`, `valid_format`, `has_mx_records`, `mx_records`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/ip: no authentication; Resolves geolocation/ISP intelligence for the {ip} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `ip`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, `country`, `region`, `city`, `isp`, `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/ip/{ip}: no authentication; Resolves geolocation/ISP intelligence for the {ip} path parameter. Request: Path: `ip`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, `country`, `region`, `city`, `isp`, `latitude`, `longitude`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/subdomain: no authentication; Discovers subdomains of the {domain} path parameter by resolving a small fixed wordlist of common subdomain labels. Request: Query (also accepted by the no-JavaScript form fallback): `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `subdomains`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/subdomain/{domain}: no authentication; Discovers subdomains of the {domain} path parameter by resolving a small fixed wordlist of common subdomain labels. Request: Path: `domain`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `subdomains`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/osint/tech-stack: no authentication; Performs a single direct HTTP GET to the ?url= query parameter and reports technology signatures observed in the response headers/cookies/HTML. Request: Query (also accepted by the no-JavaScript form fallback): `url`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `url`, `status_code`, optional `server`, `x_powered_by`, `generator`, `cookie_names`, and `detected`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/parse/jwt: no authentication; Decodes (never verifies) the header and payload of a JSON Web Token supplied. Request: Query (also accepted by the no-JavaScript form fallback): `token`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `header`, `payload`, `signature`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/parse/jwt/{token}: no authentication; Decodes (never verifies) the header and payload of a JSON Web Token supplied. Request: Path: `token`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `header`, `payload`, `signature`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/research/doi: no authentication; Validates the wildcard path suffix as a DOI and returns its canonical resolver URL. Request: Query (also accepted by the no-JavaScript form fallback): `doi`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `doi`, `valid`, `url`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/research/doi/{path}: no authentication; Validates the wildcard path suffix as a DOI and returns its canonical resolver URL. Request: Path: `path`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `doi`, `valid`, `url`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/fake-data: no authentication; Generates fake test data (email, username, or a full mock user) Request: Query (also accepted by the no-JavaScript form fallback): `type`, `prefix`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `email`, `username`, `user`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/fixture: no authentication; Returns a named test fixture, dispatching to rather than re-implementing per-type fixture shapes here. Request: Query (also accepted by the no-JavaScript form fallback): `type`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `fixture`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/fixture/{type}: no authentication; Returns a named test fixture, dispatching to rather than re-implementing per-type fixture shapes here. Request: Path: `type`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `fixture`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/http: no authentication; Exercises the mock HTTP response fixture generator under a measured execution window. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `response`, `duration_ms`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/request-inspector: no authentication; Echoes back the caller's own request: method, path, query parameters, headers, and raw body. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `method`, `path`, `query`, `headers`, `body`, `remote_addr`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/response-generator: no authentication; Generates a mock API response fixture. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `success`, `message`, nested `data` (`test`), `timestamp`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/status-codes: no authentication; Returns a single HTTP status code's canonical reason phrase and description when a {code} path parameter is given, or the full reference table when it is omitted. Request: Query (also accepted by the no-JavaScript form fallback): `code`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `codes`, `code`, `text`, `description`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/test/status-codes/{code}: no authentication; Returns a single HTTP status code's canonical reason phrase and description when a {code} path parameter is given, or the full reference table when it is omitted. Request: Path: `code`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `codes`, `code`, `text`, `description`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/case: no authentication; Converts input text to the selected letter case.. Request: Query (also accepted by the no-JavaScript form fallback): `style`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `style`, `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/case.txt: no authentication; Converts input text to the selected letter case.. Request: Query (also accepted by the no-JavaScript form fallback): `style`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/case/{style}/{input}: no authentication; Converts input text to the selected letter case.. Request: Path: `style`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `style`, `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/case/{style}/{input}.txt: no authentication; Converts input text to the selected letter case.. Request: Path: `style`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/decode: no authentication; Decodes input text using the selected encoding.. Request: Query (also accepted by the no-JavaScript form fallback): `encoding`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `encoding`, `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/decode.txt: no authentication; Decodes input text using the selected encoding.. Request: Query (also accepted by the no-JavaScript form fallback): `encoding`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/decode/{encoding}/{input}: no authentication; Decodes input text using the selected encoding.. Request: Path: `encoding`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `encoding`, `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/decode/{encoding}/{input}.txt: no authentication; Decodes input text using the selected encoding.. Request: Path: `encoding`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/encode: no authentication; Encodes input text using the selected encoding.. Request: Query (also accepted by the no-JavaScript form fallback): `encoding`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `encoding`, `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/encode.txt: no authentication; Encodes input text using the selected encoding.. Request: Query (also accepted by the no-JavaScript form fallback): `encoding`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/encode/{encoding}/{input}: no authentication; Encodes input text using the selected encoding.. Request: Path: `encoding`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `encoding`, `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/encode/{encoding}/{input}.txt: no authentication; Encodes input text using the selected encoding.. Request: Path: `encoding`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/hash: no authentication; Hash text with the selected algorithm. Request: Query (also accepted by the no-JavaScript form fallback): `algorithm`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `input`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/hash.txt: no authentication; Hash text with the selected algorithm. Request: Query (also accepted by the no-JavaScript form fallback): `algorithm`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/hash/multi: no authentication; Computes multiple hashes for the supplied input.. Request: Query (also accepted by the no-JavaScript form fallback): `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `hashes`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/hash/multi/{input}: no authentication; Generate several hashes of the input text. Request: Path: `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `hashes`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/hash/{algorithm}/{input}: no authentication; Computes a hash of the supplied input with the selected algorithm.. Request: Path: `algorithm`, `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `input`, `hash`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/hash/{algorithm}/{input}.txt: no authentication; Computes a hash of the supplied input with the selected algorithm.. Request: Path: `algorithm`, `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/lorem: no authentication; Generates Lorem Ipsum text of the selected type and count.. Request: Query (also accepted by the no-JavaScript form fallback): `type`, `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `count`, `text`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/lorem.txt: no authentication; Generates Lorem Ipsum text of the selected type and count.. Request: Query (also accepted by the no-JavaScript form fallback): `type`, `count`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/lorem/{type}: no authentication; Generates Lorem Ipsum text of the selected type and count.. Request: Path: `type`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `count`, `text`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/lorem/{type}/{count}: no authentication; Generates Lorem Ipsum text of the selected type and count.. Request: Path: `type`, `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `count`, `text`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/lorem/{type}/{count}.txt: no authentication; Generates Lorem Ipsum text of the selected type and count.. Request: Path: `type`, `count`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/nanoid: no authentication; Returns a newly generated NanoID. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `nanoid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/reverse: no authentication; Reverses the supplied input text.. Request: Query (also accepted by the no-JavaScript form fallback): `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/reverse.txt: no authentication; Reverses the supplied input text.. Request: Query (also accepted by the no-JavaScript form fallback): `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/reverse/{input}: no authentication; Reverses the supplied input text.. Request: Path: `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/reverse/{input}.txt: no authentication; Reverses the supplied input text.. Request: Path: `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/rot13: no authentication; Applies the ROT13 transformation to the supplied input.. Request: Query (also accepted by the no-JavaScript form fallback): `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/rot13.txt: no authentication; Applies the ROT13 transformation to the supplied input.. Request: Query (also accepted by the no-JavaScript form fallback): `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/rot13/{input}: no authentication; Applies the ROT13 transformation to the supplied input.. Request: Path: `input`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `input`, `output`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/rot13/{input}.txt: no authentication; Applies the ROT13 transformation to the supplied input.. Request: Path: `input`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/ulid: no authentication; Returns a newly generated ULID. Request: No request parameters. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ulid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/uuid: no authentication; Generate a UUID. Request: Query (also accepted by the no-JavaScript form fallback): `version`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `uuid`, `version`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/uuid.txt: no authentication; Generate a UUID. Request: Query (also accepted by the no-JavaScript form fallback): `version`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/uuid/{version}: no authentication; Generates a UUID using the requested version.. Request: Path: `version`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `uuid`, `version`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/text/uuid/{version}.txt: no authentication; Generates a UUID using the requested version.. Request: Path: `version`. Response: Raw operation text (`text/plain`).
+- GET /api/{api_version}/text/uuid/{version}/{count}: no authentication; Generates a UUID using the requested version.. Request: Path: `version`, `count`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `uuids`, `version`, `count`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/air-quality: no authentication; Returns current air quality (AQI and pollutant concentrations) for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `european_aqi`, `us_aqi`, `pm10`, `pm2_5`, `carbon_monoxide`, `nitrogen_dioxide`, `sulphur_dioxide`, `ozone`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/air-quality/{location}: no authentication; Returns current air quality (AQI and pollutant concentrations) for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `european_aqi`, `us_aqi`, `pm10`, `pm2_5`, `carbon_monoxide`, `nitrogen_dioxide`, `sulphur_dioxide`, `ozone`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/alerts: no authentication; Returns active government weather alerts for the {location} path parameter, aggregated across NWS (US), Environment Canada (CA), and MeteoAlarm (Europe), normalized into a uniform shape. Request: Query (also accepted by the no-JavaScript form fallback): `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `alerts`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/alerts/{location}: no authentication; Returns active government weather alerts for the {location} path parameter, aggregated across NWS (US), Environment Canada (CA), and MeteoAlarm (Europe), normalized into a uniform shape. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `alerts`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/astronomy: no authentication; Returns sunrise/sunset and daylight data for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `date`, `sunrise`, `sunset`, `daylight_duration_seconds`, `sunshine_duration_seconds`, `uv_index_max`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/astronomy/{location}: no authentication; Returns sunrise/sunset and daylight data for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `date`, `sunrise`, `sunset`, `daylight_duration_seconds`, `sunshine_duration_seconds`, `uv_index_max`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/current: no authentication; Returns current weather for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `temperature`, `feels_like`, `humidity`, `pressure`, `wind_speed`, `wind_direction`, `clouds`, `visibility`, `description`, `icon`, `timestamp`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/current/{location}: no authentication; Returns current weather for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `temperature`, `feels_like`, `humidity`, `pressure`, `wind_speed`, `wind_direction`, `clouds`, `visibility`, `description`, `icon`, `timestamp`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/forecast: no authentication; Returns a daily weather forecast for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`, `days`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `days`, `forecast`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/forecast/{location}: no authentication; Returns a daily weather forecast for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `days`, `forecast`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/historical: no authentication; Returns historical daily weather for the {location} path parameter between the required ?start= and ?end= query parameters (each YYYY-MM-DD) Request: Query (also accepted by the no-JavaScript form fallback): `location`, `start`, `end`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `start`, `end`, `days`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/historical/{location}: no authentication; Returns historical daily weather for the {location} path parameter between the required ?start= and ?end= query parameters (each YYYY-MM-DD) Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `start`, `end`, `days`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/hourly: no authentication; Returns an hourly weather forecast for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`, `hours`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `hours`, `hourly`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/hourly/{location}: no authentication; Returns an hourly weather forecast for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `hours`, `hourly`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/marine: no authentication; Returns current marine/ocean conditions for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `wave_height_m`, `wave_direction_deg`, `wave_period_s`, `swell_wave_height_m`, `wind_wave_height_m`, `ocean_current_velocity_kmh`, `sea_surface_temperature_c`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/marine/{location}: no authentication; Returns current marine/ocean conditions for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `wave_height_m`, `wave_direction_deg`, `wave_period_s`, `swell_wave_height_m`, `wind_wave_height_m`, `ocean_current_velocity_kmh`, `sea_surface_temperature_c`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/pollen: no authentication; Returns current pollen counts for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `alder_pollen`, `birch_pollen`, `grass_pollen`, `mugwort_pollen`, `olive_pollen`, `ragweed_pollen`, `coverage_region`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/pollen/{location}: no authentication; Returns current pollen counts for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `alder_pollen`, `birch_pollen`, `grass_pollen`, `mugwort_pollen`, `olive_pollen`, `ragweed_pollen`, `coverage_region`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/uv: no authentication; Returns the current UV index for the {location} path parameter. Request: Query (also accepted by the no-JavaScript form fallback): `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `uv_index`, `uv_index_clear_sky`. Errors use `ok`, `error`, `message`, and optional `details`.
+- GET /api/{api_version}/weather/uv/{location}: no authentication; Returns the current UV index for the {location} path parameter. Request: Path: `location`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `location`, `time`, `uv_index`, `uv_index_clear_sky`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/bcrypt/verify: no authentication; Verify a password against a bcrypt hash. Request: Body fields: `password`, `hash`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `valid`, `cost`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/certificate: no authentication; Handles self-signed X.509 certificate generation and PEM certificate parsing in one endpoint, selected by Mode. Request: Body fields: `mode`, `message`, `signature`, `public_key`, `private_key`, `common_name`, `valid_days`, `certificate`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mode`, `certificate`, `private_key`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/decrypt: no authentication; Decrypts a base64-encoded AES-256-GCM payload produced by apiCryptoEncryptHandler. Request: Body fields: `mode`, `plaintext`, `ciphertext`, `public_key`, `private_key`, `bits`, `key`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `plaintext`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/ed25519: no authentication; Handles Ed25519 keypair generation, signing, and signature verification in one endpoint, selected by Mode. Request: Body fields: `mode`, `name`, `email`, `plaintext`, `ciphertext`, `public_key`, `private_key`, `message`, `signature`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mode`, `private_key`, `public_key`, `signature`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/encrypt: no authentication; Encrypts plaintext with AES-256-GCM. Request: Body fields: `plaintext`, `ciphertext`, `key`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ciphertext`, `algorithm`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/hmac: no authentication; Computes an HMAC of Message. Request: Body fields: `mode`, `common_name`, `valid_days`, `certificate`, `algorithm`, `key`, `message`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `algorithm`, `hmac`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/password/strength: no authentication; Assess password strength. Request: Body fields: `password`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `score`, `strength`, `length`, `entropy_bits`, `has_uppercase`, `has_lowercase`, `has_numbers`, `has_symbols`, `charset_size`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/pgp: no authentication; Handles PGP keypair generation, encryption, and decryption in one endpoint, selected by Mode. Request: Body fields: `mode`, `name`, `email`, `plaintext`, `ciphertext`, `public_key`, `private_key`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mode`, `public_key`, `private_key`, `ciphertext`, `plaintext`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/crypto/rsa: no authentication; Handles RSA keypair generation, RSA-OAEP encryption, and RSA-OAEP decryption in one endpoint, selected by Mode. Request: Body fields: `algorithm`, `key`, `message`, `mode`, `plaintext`, `ciphertext`, `public_key`, `private_key`, `bits`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mode`, `private_key`, `public_key`, `bits`, `ciphertext`, `plaintext`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/base64: no authentication; Encodes or decodes the raw request body as base64 (standard or URL-safe, per ?urlsafe=) depending on the ?action= query parameter (encode, the default, or decode) Request: Body fields: `raw text body`; query: `action`, `urlsafe`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `result` (encoded or decoded text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/format/css: no authentication; Formats (or, with ?minify=true, minifies) the raw CSS document supplied in the request body. Request: Body fields: `raw text body`; query: `minify`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `formatted` (formatted or minified CSS text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/format/html: no authentication; Formats (or, with ?minify=true, minifies) the raw HTML document supplied in the request body. Request: Body fields: `raw text body`; query: `minify`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `formatted` (formatted or minified HTML text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/format/js: no authentication; Formats (or, with ?minify=true, minifies) the raw JavaScript source supplied in the request body. Request: Body fields: `raw text body`; query: `minify`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `formatted` (formatted or minified JavaScript text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/format/json: no authentication; Process dev format json. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `formatted` (formatted or minified JavaScript text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/format/sql: no authentication; Formats the raw SQL query supplied in the request body by breaking it onto multiple lines by clause keyword. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `formatted` (formatted SQL text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/format/xml: no authentication; Formats (or, with ?minify=true, minifies) the raw XML document supplied in the request body. Request: Body fields: `raw text body`; query: `minify`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `formatted` (formatted XML text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/regex: no authentication; Tests a regular expression against input text. Request: Body fields: `plaintext`, `ciphertext`, `key`, `pattern`, `text`, `replacement`, `mode`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mode`, `matches`, `result`, `explanation`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/dev/url-encode: no authentication; URL-encodes or URL-decodes the raw request body depending on the ?action= query parameter (encode, the default, or decode) Request: Body fields: `raw text body`; query: `action`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `result` (encoded or decoded URL text, depending on action). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/compose-to-run: no authentication; Converts compose YAML into a `docker run` command for the selected service. Request: Body fields: `raw text body`; query: `service`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `command` (generated Docker run command). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/compose-validate: no authentication; Validates Docker Compose YAML. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `valid`, `errors`, `warnings`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/dockerfile-generate: no authentication; Decodes a JSON docker.DockerfileConfig from the request body and returns the generated Dockerfile text. Request: Body fields: `JSON body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `dockerfile`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/dockerfile-lint: no authentication; Lints the Dockerfile text supplied in the request body for common anti-patterns. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `issues` (each has `line`, `severity`, `rule`, `message`), `passed`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/env-parser: no authentication; Parses the .env file text supplied in the request body into structured key/value entries. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `variables` (each has `key`, `value`, `line`), `errors`, `warnings`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/run-to-compose: no authentication; Converts a `docker run` command into a Compose service definition. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `compose` (generated Compose service text). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/security-scan: no authentication; Checks Dockerfile or Compose input for common security risks. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `issues` (each has `severity`, `rule`, `message`), `passed`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/docker/size-optimizer: no authentication; Statically analyzes the Dockerfile text supplied in the request body and suggests image-size reduction changes. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` field: `suggestions` (array of strings). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/generate/sql: no authentication; Decodes a JSON {"table": "...", "columns": [...]} body and returns the generated CREATE TABLE statement. Request: Body fields: `table`, `columns`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `sql`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/image/convert: no authentication; Process image convert. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` Raw encoded image bytes (`image/png`, `image/jpeg`, or `image/gif` based on `format`); failures use the JSON error envelope. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/image/crop: no authentication; Process image crop. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` Raw cropped image bytes (`image/png`, `image/jpeg`, or `image/gif` based on `format`); failures use the JSON error envelope. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/image/filter: no authentication; Process image filter. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` Raw filtered image bytes (`image/png`, `image/jpeg`, or `image/gif` based on `format`); failures use the JSON error envelope. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/image/metadata: no authentication; Decodes an uploaded image and reports its dimensions, format, and byte size as JSON. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `width`, `height`, `format`, `size` (bytes). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/image/optimize: no authentication; Decodes an uploaded image and re-encodes it in the requested format, reporting the original and optimized byte sizes. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` Raw optimized image bytes (`image/png`, `image/jpeg`, or `image/gif` based on `format`); response headers include `X-Original-Size` and `X-Optimized-Size`; failures use the JSON error envelope. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/image/resize: no authentication; Process image resize. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` Raw resized image bytes (`image/png`, `image/jpeg`, or `image/gif` based on `format`); failures use the JSON error envelope. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/image/watermark: no authentication; Process image watermark. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` Raw watermarked image bytes (`image/png`, `image/jpeg`, or `image/gif` based on `format`); failures use the JSON error envelope. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/language/dictionary: no authentication; Looks up a word's definitions. Request: Body fields: `word`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `word`, optional `phonetics` (text/audio), `meanings` (part of speech and definitions with optional examples, synonyms, antonyms). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/language/keywords: no authentication; Returns the most frequent non-stopword words in text supplied. Request: Body fields: `raw text body`; query: `text`, `limit`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `keywords`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/language/readability: no authentication; Returns Flesch Reading Ease, Flesch-Kincaid Grade Level, and Gunning Fog Index scores for text supplied. Request: Body fields: `raw text body`; query: `text`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `flesch_reading_ease`, `flesch_kincaid_grade`, `gunning_fog`, `words`, `sentences`, `syllables`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/language/reading-time: no authentication; Estimates reading time for text supplied. Request: Body fields: `raw text body`; query: `text`, `wpm`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `words`, `minutes`, `seconds`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/language/sentiment: no authentication; Scores text supplied. Request: Body fields: `raw text body`; query: `text`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `score`, `label`, `positive_matches`, `negative_matches`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/language/thesaurus: no authentication; Looks up a word's synonyms and antonyms. Request: Body fields: `word`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `word`, `synonyms`, `antonyms`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/language/word-count: no authentication; Returns word/character/line/sentence counts for text supplied. Request: Body fields: `raw text body`; query: `text`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `words`, `characters`, `characters_no_spaces`, `lines`, `sentences`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/math/matrix: no authentication; Performs add, multiply, or determinant on the matrices supplied in the JSON request body. Request: Body fields: `operation`, `a`, `b`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `operation`, `result` (matrix for add/multiply, number for determinant). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/csv: no authentication; Parses the raw CSV document supplied in the request body (first row treated as headers) Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` is the parsed CSV rows as an array of objects keyed by the first row’s column headers. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/env: no authentication; Parses the raw .env-style document supplied in the request body. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` is the parsed `.env` document as a JSON object of key/value entries. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/html: no authentication; Parses the raw HTML document supplied in the request body into a structural summary. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `title`, `meta`, `headings` (`level`, `text`), `links`, `images`, `form_count`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/ini: no authentication; Parses the raw INI document supplied in the request body. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` is the parsed INI document as a nested JSON object of sections and key/value strings. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/json: no authentication; Parses the raw JSON document supplied in the request body and returns its JSON value. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` is the parsed JSON value and preserves its input structure. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/log: no authentication; Parses the raw log document supplied in the request body, one best-effort entry per line. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` Array of entries with `raw`, optional `timestamp`, optional `level`, and `message`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/markdown: no authentication; Parses the raw Markdown document supplied in the request body into a structure summary. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `headings` (items with `level`, `text`), `links` (items with `text`, `url`), `code_blocks` (items with `language`, `code`). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/sql: no authentication; Parses the raw SQL statement supplied in the request body into a best-effort structure summary. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `statement_type`, `tables`, and optional `columns`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/toml: no authentication; Parses the raw TOML document supplied in the request body. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` is the parsed TOML document as its JSON object representation. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/xml: no authentication; Parses the raw XML document supplied in the request body into a nested JSON object. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` is a nested JSON object keyed by the XML root element; child elements and text are represented in nested values. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/parse/yaml: no authentication; Parses the raw YAML document supplied in the request body. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` is the parsed YAML document as its JSON value representation. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/research/arxiv: no authentication; Looks up an arXiv paper by ID (JSON body {"id":"..."} or ?id= query parameter) Request: Body fields: `JSON body`; query: `id`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `id`, `title`, `summary`, `authors`, `published`, `updated`, `link`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/research/citation: no authentication; Formats a single caller-supplied reference into a citation string. Request: Body fields: `title`, `author`, `year`, `source`, `style`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `style`, `citation`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/research/isbn: no authentication; Looks up a book's metadata by ISBN (JSON body {"isbn":"..."} or ?isbn= query parameter) Request: Body fields: `JSON body`; query: `isbn`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `isbn`, `title`, optional `authors`, `publish_date`, `publishers`, `page_count`, `url`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/test/api-client: no authentication; Renders a caller-described HTTP request as generated client code snippets (curl, JavaScript fetch, Python requests, and Go net/http) so a developer can copy working request code for their language of choice. Request: Body fields: `method`, `url`, `headers`, `body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `curl`, `javascript`, `python`, `go`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/test/assert: no authentication; Evaluates the requested assertion against the supplied values and reports whether it passed. Request: Body fields: `op`, `expected`, `actual`, `haystack`, `needle`, `value`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `op`, `passed`, `message`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/test/curl-generator: no authentication; Renders a caller-described HTTP request as a single curl command string. Request: Body fields: `name`, `schema`, `info`, `item`, `request`, `method`, `header`, `body`, `url`, `key`, `value`, `mode`, `raw`, `headers`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `curl`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/test/postman: no authentication; Renders a caller-described HTTP request as a minimal Postman Collection v2.1 JSON document containing that single request. Request: Body fields: `method`, `url`, `headers`, `body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `info` (`name`, `schema`) and `item` (single request with `name`, `request`; request has `method`, `header`, optional `body`, `url`). Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/test/request-inspector: no authentication; Echoes back the caller's own request: method, path, query parameters, headers, and raw body. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `method`, `path`, `query`, `headers`, `body`, `remote_addr`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/test/webhook: no authentication; Accepts a caller-submitted webhook POST and echoes back a structured inspection of it (headers, parsed/raw body) in the same response cycle. Request: Body fields: `raw text body`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `method`, `headers`, `raw_body`, `parsed_body`, `json_valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/text/compress: no authentication; Compresses or decompresses data. Request: Body fields: `text1`, `text2`, `data`, `algorithm`, `mode`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mode`, `algorithm`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/text/diff: no authentication; Returns a unified line diff between two texts. Request: Body fields: `text`, `type`, `text1`, `text2`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `diff`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/text/extract: no authentication; Pulls emails, URLs, IPs, or phone numbers out of free-form text. Request: Body fields: `text`, `type`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `type`, `matches`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/text/regex: no authentication; Tests a regular expression against input text. Request: Body fields: `plaintext`, `ciphertext`, `key`, `pattern`, `text`, `replacement`, `mode`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mode`, `matches`, `result`, `explanation`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/text/stats: no authentication; Process text stats. Request: Body fields: `text`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `characters`, `characters_no_space`, `words`, `lines`, `bytes`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/credit-card: no authentication; Validates a credit card number (Luhn check) supplied as ?number= or a JSON {"number":"..."} body. Request: Body fields: `JSON body`; query: `number`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `number`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/domain: no authentication; Validates a domain name supplied as ?domain= or a JSON {"domain":"..."} body. Request: Body fields: `JSON body`; query: `domain`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `domain`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/email: no authentication; Validates the email address supplied in the JSON body ({"email":"..."}) or as an ?email= query parameter. Request: Body fields: `email`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `email`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/iban: no authentication; Validates an IBAN supplied as ?iban= or a JSON {"iban":"..."} body against the ISO 13616 mod-97 checksum. Request: Body fields: `JSON body`; query: `iban`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `iban`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/ip: no authentication; Validates an IPv4 or IPv6 address supplied as ?ip= or a JSON {"ip":"..."} body. Request: Body fields: `JSON body`; query: `ip`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `ip`, `valid`, `is_ipv4`, `is_ipv6`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/isbn: no authentication; Validates an ISBN-10 or ISBN-13 supplied as ?isbn= or a JSON {"isbn":"..."} body. Request: Body fields: `JSON body`; query: `isbn`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `isbn`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/json: no authentication; Validates that the raw request body is well-formed JSON. Request: Operation request body; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/mac: no authentication; Validates a MAC address supplied as ?mac= or a JSON {"mac":"..."} body. Request: Body fields: `JSON body`; query: `mac`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `mac`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/phone: no authentication; Validates a phone number supplied as ?phone= or a JSON {"phone":"..."} body. Request: Body fields: `JSON body`; query: `phone`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `phone`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/url: no authentication; Validates a URL supplied as ?url= or a JSON {"url":"..."} body. Request: Body fields: `JSON body`; query: `url`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `url`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/uuid: no authentication; Validates a UUID supplied as ?uuid= or a JSON {"uuid":"..."} body. Request: Body fields: `JSON body`; query: `uuid`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `uuid`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
+- POST /api/{api_version}/validate/vat: no authentication; Validates the structural format of an EU/UK/CH/NO VAT registration number supplied as ?vat= or a JSON {"vat":"..."} body. Request: Body fields: `JSON body`; query: `vat`; URL-encoded and multipart forms are also accepted. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `vat`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`.
 
 ### Product data and compliance scope
 

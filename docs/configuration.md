@@ -22,6 +22,7 @@ Use `yaml.d/` for optional area files such as networking, email, or logging when
 | `server.logs` | Access, application, audit, and security logging |
 | `server.scheduler`, `server.backup`, `server.update` | Scheduled tasks, encrypted backups, retention, and release channel |
 | `server.notifications`, `server.contact`, `server.privacy`, `server.csrf` | Email delivery and contact/privacy protections |
+| `server.i18n` | Default interface language and the enabled locale set |
 | `server.metrics`, `server.geoip`, `server.tor` | Metrics, local GeoIP data, and Tor service behavior |
 | `server.compliance`, `server.tracking` | Compliance-driven defaults and privacy choices |
 | `web.robots`, `web.security`, `web.cors`, `web.hsts`, `web.csp`, `web.headers`, `web.reports` | Public web policy, security metadata, browser headers, and reporting endpoints |
@@ -29,6 +30,19 @@ Use `yaml.d/` for optional area files such as networking, email, or logging when
 | `output.color`, `output.emoji` | CLI output preferences |
 
 Configuration is validated per setting. Consult the matching sections of `AI.md` for field-specific accepted values, defaults, and interactions; this table names the complete configuration areas, not a substitute for those detailed constraints.
+
+## Languages
+
+`server.i18n.default_language` sets the language used when a workflow has no request language, such as operator notifications. `server.i18n.available_languages` controls which embedded locales visitors can select and receive through language negotiation.
+
+By default, every embedded locale is enabled. Operators may disable optional locales, but the required English, Spanish, French, German, Italian, and Arabic locales are always enabled. Unsupported codes are ignored with a startup warning, and missing required codes are restored with a warning.
+
+```yaml
+server:
+  i18n:
+    default_language: en
+    available_languages: [en, es, fr, de, it, ar, zh, ja]
+```
 
 ## Secrets and credentials
 

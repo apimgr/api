@@ -4,7 +4,7 @@
 
 ## Current locales
 
-The repository currently contains seven locale files: English (`en`), Arabic (`ar`), German (`de`), Spanish (`es`), French (`fr`), Japanese (`ja`), and Chinese (`zh`). The locale registry is the authority for language names, direction, and plural categories. The README, CLI help, and language selector must list the same supported set and count.
+The repository currently contains eight locale files: English (`en`), Spanish (`es`), French (`fr`), German (`de`), Italian (`it`), Arabic (`ar`), Chinese (`zh`), and Japanese (`ja`). The locale registry is the authority for language names, direction, and plural categories. The README, CLI help, and language selector must list the same supported set and count.
 
 ## Translating an existing locale
 
@@ -13,11 +13,11 @@ The repository currently contains seven locale files: English (`en`), Arabic (`a
 3. Use UTF-8, two-space indentation, and valid JSON without comments or trailing commas.
 4. Keep every placeholder unchanged, including braces and spelling, such as `{count}`, `{total}`, and `{datetime}`. A placeholder may move within a translated sentence.
 5. Provide every CLDR plural category required by the locale.
-6. Write complete phrases rather than fragments intended to be joined by code. Use a consistent, neutral register.
+6. Write complete phrases rather than fragments intended to be joined by code. Italian uses the formal `Lei` register consistently.
 7. Keep product and brand names, protocols, technology names, code, file names, configuration keys, URLs, and literal user values such as `dark` and `auto` untranslated.
 8. Follow the locale's punctuation, quotation, decimal, and grouping conventions. French text, for example, uses its required spacing before punctuation.
 
-A developer or translator fluent in the language can prepare the translation; others can review and refine it through the normal contribution process. Machine translation is not a substitute for reliable wording in a language the contributor cannot translate competently. Human corrections take precedence over earlier wording.
+AI assistants write translations in languages they can translate reliably; human translators can review and refine every locale through the normal contribution process. When a language is outside the contributor's fluency, wait for a human translator instead of shipping uncertain text. Human corrections take precedence over earlier wording.
 
 ## Adding a locale
 
@@ -37,13 +37,13 @@ Use these terms consistently; keep product and protocol names unchanged.
 |--------------|----------|
 | API | Keep the protocol name API |
 | CLI | Keep the abbreviation CLI |
-| token | Translate as a credential token, not as a session or account |
-| paste | Use the agreed term for inserting copied content |
-| rotate | Replacing a credential while retaining its identity |
-| revoke | Invalidating a credential |
-| server | The running `api` service |
-| client | The companion `api-cli` application |
-| theme | The appearance setting: light, dark, or automatic |
+| token | Italian: `token di accesso`; translate as a credential, not as a session or account |
+| paste | Italian: `incollare` |
+| rotate | Italian: `ruotare`; replacing a credential while retaining its identity |
+| revoke | Italian: `revocare`; invalidating a credential |
+| server | Italian: `server`; the running `api` service |
+| client | Italian: `client`; the companion `api-cli` application |
+| theme | Italian: `tema`; the appearance setting: chiaro, scuro, or automatico |
 
 If English text is incomplete, ambiguous, or appears to require concatenated fragments, report it for correction instead of working around it in translations.
 
