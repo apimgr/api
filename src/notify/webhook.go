@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,7 +46,7 @@ type Webhook struct {
 
 // Event is the caller-composed delivery payload. Message is used by chat
 // transports; the structured fields are used by generic and custom adapters.
-// Timestamp is serialized as RFC3339Nano in the generic JSON payload.
+// Timestamp is the immutable UTC event time serialized to whole seconds.
 type Event struct {
 	Role           string
 	Event          string
@@ -122,9 +123,9 @@ func NewID() (string, error) {
 	return id.String(), nil
 }
 
-// BuildRequest constructs a signed request. Pass the same id and timestamp
-// when rebuilding a retry so the receiver can recognize it as the same event.
-// An empty id creates a UUID v7; an empty timestamp uses the current time.
+// BuildRequest constructs a signed request. Reuse id across retries; timestamp
+// identifies this delivery attempt and should be fresh on every retry. The
+// generic payload timestamp always comes from the immutable event time.
 func BuildRequest(ctx context.Context, hook Webhook, event Event, id string, timestamp time.Time) (*http.Request, error) {
 	if hook.Secret == "" {
 		return nil, errors.New("webhook signing secret is required")
@@ -147,12 +148,14 @@ func BuildRequest(ctx context.Context, hook Webhook, event Event, id string, tim
 		return nil, errors.New("webhook id must be a UUID v7")
 	}
 	if timestamp.IsZero() {
-		timestamp = event.Timestamp
-	}
-	if timestamp.IsZero() {
 		timestamp = time.Now()
 	}
 	timestamp = timestamp.UTC()
+	eventTime := event.Timestamp
+	if eventTime.IsZero() {
+		eventTime = timestamp
+	}
+	eventTime = eventTime.UTC()
 
 	var body []byte
 	contentType := "application/json"
@@ -169,12 +172,42 @@ func BuildRequest(ctx context.Context, hook Webhook, event Event, id string, tim
 		body, err = json.Marshal(struct {
 			Text string `json:"text"`
 		}{event.Message})
-	case Pushover, Gotify:
+	case Pushover:
+		query := endpoint.Query()
+		user, token := query.Get("user"), query.Get("token")
+		if user == "" || token == "" {
+			return nil, errors.New("pushover webhook URL requires user and token query parameters")
+		}
+		form := url.Values{
+			"user":     {user},
+			"token":    {token},
+			"title":    {event.Subject},
+			"message":  {event.Message},
+			"priority": {strconv.Itoa(pushoverPriority(event.Severity))},
+		}
+		endpoint.RawQuery = ""
+		body = []byte(form.Encode())
+		contentType = "application/x-www-form-urlencoded"
+	case Gotify:
+		query := endpoint.Query()
+		token := query.Get("token")
+		if token == "" {
+			return nil, errors.New("gotify webhook URL requires a token query parameter")
+		}
+		endpoint.Path = strings.TrimSuffix(endpoint.Path, "/") + "/message"
+		endpoint.RawPath = ""
+		query.Set("token", token)
+		endpoint.RawQuery = query.Encode()
+		body, err = json.Marshal(struct {
+			Title    string `json:"title"`
+			Message  string `json:"message"`
+			Priority int    `json:"priority"`
+		}{event.Subject, event.Message, gotifyPriority(event.Severity)})
 	case Generic:
 		body, err = json.Marshal(genericPayload{
 			Role: event.Role, Event: event.Event, Subject: event.Subject,
 			Body: event.Body, Severity: event.Severity,
-			Timestamp:   timestamp.Format(time.RFC3339Nano),
+			Timestamp:   eventTime.Format(time.RFC3339),
 			ProjectName: event.ProjectName, ProjectVersion: event.ProjectVersion,
 			AppURL: event.AppURL, TrackingID: event.TrackingID,
 		})
@@ -182,13 +215,6 @@ func BuildRequest(ctx context.Context, hook Webhook, event Event, id string, tim
 		adapter := lookupAdapter(hook.Transport)
 		if adapter == nil {
 			return nil, fmt.Errorf("unsupported webhook transport %q", hook.Transport)
-		}
-		endpoint, body, contentType, err = adapter.Build(endpoint, event)
-	}
-	if hook.Transport == Pushover || hook.Transport == Gotify {
-		adapter := lookupAdapter(hook.Transport)
-		if adapter == nil {
-			return nil, fmt.Errorf("webhook transport %q requires a registered provider adapter", hook.Transport)
 		}
 		endpoint, body, contentType, err = adapter.Build(endpoint, event)
 	}
@@ -207,6 +233,24 @@ func BuildRequest(ctx context.Context, hook Webhook, event Event, id string, tim
 	request.Header.Set("X-Webhook-Event", event.Event)
 	request.Header.Set("X-Webhook-Signature", Signature(hook.Secret, body))
 	return request, nil
+}
+
+func pushoverPriority(severity string) int {
+	if severity == "critical" {
+		return 1
+	}
+	return 0
+}
+
+func gotifyPriority(severity string) int {
+	switch severity {
+	case "critical":
+		return 8
+	case "warning":
+		return 5
+	default:
+		return 2
+	}
 }
 
 type genericPayload struct {

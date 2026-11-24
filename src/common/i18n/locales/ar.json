@@ -753,6 +753,10 @@
   "graphql": {
     "title": "مستعرض GraphQL - {app_name}",
     "description": "مستعرض GraphQL التفاعلي",
+    "endpoint_usage": "نقطة نهاية GraphQL. قدّم معامل query لتنفيذ استعلام للقراءة فقط.",
+    "invalid_variables": "يجب أن يكون معامل variables كائن JSON",
+    "unknown_operation": "عملية غير معروفة بالاسم \"{operation_name}\".",
+    "queries_only": "تدعم واجهة GraphQL هذه عمليات الاستعلام فقط.",
     "query": "استعلام",
     "mutation": "طفرة",
     "subscription": "اشتراك",

@@ -729,6 +729,10 @@
   "graphql": {
     "title": "GraphQL Explorer - {app_name}",
     "description": "Interactive GraphQL explorer",
+    "endpoint_usage": "GraphQL endpoint. Supply a query parameter to run a read-only query.",
+    "invalid_variables": "The variables parameter must be a JSON object",
+    "unknown_operation": "Unknown operation named \"{operation_name}\".",
+    "queries_only": "This GraphQL API supports query operations only.",
     "query": "Query",
     "mutation": "Mutation",
     "subscription": "Subscription",

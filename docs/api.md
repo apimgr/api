@@ -23,7 +23,7 @@ Use the method shown in the route table. Path and query values are supplied in t
 - `GET`/`POST /api/{api_version}/server/preferences` read and partially update guest preferences; `GET /api/{api_version}/server/preferences/sync` exports them and `GET /api/{api_version}/server/preferences/sync/import` imports them.
 - `GET /api/healthz` is the direct unversioned health alias.
 - `GET /api/swagger` serves the generated OpenAPI JSON; the versioned server route is `/api/{api_version}/server/swagger`.
-- `POST /api/graphql` and `POST /api/{api_version}/server/graphql` serve GraphQL; `/server/docs/graphql` is the browser interface.
+- `GET` and `POST /api/graphql` and `/api/{api_version}/server/graphql` serve read-only GraphQL queries; `/server/docs/graphql` is the browser interface.
 - `/server/docs/swagger` is the browser interface for OpenAPI.
 - `POST /api/{api_version}/server/reports/{name}` accepts sanitized browser Reporting API reports. Supported report names include CSP, NEL, deprecation, intervention, crash, and `default`.
 - Metrics routes are mounted only when `server.metrics.enabled` is true. `/server/metrics[/{service}]`, `/api/{api_version}/server/metrics[/{service}]`, and `/api/metrics[/{service}]` are aliases; `/metrics[/{service}]` is also mounted when `server.metrics.root.enabled` is true. Services are `prometheus`, `grafana`, and `loki`; each requires its configured Bearer token unless unauthenticated access is explicitly enabled.
@@ -393,17 +393,22 @@ Frontend pages default to HTML, explicit `Accept: text/plain` and curl-style HTT
 
 ## Interactive references
 
-The GraphQL endpoint follows the GraphQL response format rather than the REST
-`ok` envelope. Successful requests return `{"data": ...}`. Parse, validation,
-and execution errors return HTTP 200 with `data` set to `null` or partial data
-and an `errors` array whose entries include `extensions.code`. Requests rejected
-before GraphQL execution, such as malformed JSON or transport/authentication
-failures, use the standard API error envelope and their corresponding HTTP
-status.
+The GraphQL endpoint is query-only and accepts GET and POST requests. GET uses
+`query`, optional JSON `variables`, and optional `operationName` query
+parameters; POST accepts those fields as JSON. GET requests cannot run
+mutations. A request without `query` returns a short plain-text usage message,
+which makes the no-JavaScript GraphQL documentation link useful.
+
+GraphQL follows its response format rather than the REST `ok` envelope.
+Successful requests return `{"data": ...}`. Parse, validation, and execution
+errors return HTTP 200 with `data` set to `null` or partial data and an `errors`
+array whose entries include `extensions.code`. Requests rejected before
+GraphQL execution, such as malformed JSON or malformed GET variables, use the
+standard API error envelope and their corresponding HTTP status.
 
 - OpenAPI UI: `/server/docs/swagger`
 - OpenAPI JSON: `/api/swagger`
 - GraphQL UI: `/server/docs/graphql`
-- GraphQL endpoint: `/api/graphql`
+- GraphQL endpoint: `/api/graphql` (GET and POST; queries only)
 
 For CLI access, see [CLI Reference](cli.md). For credential and rate-limit behavior, see [Security](security.md).

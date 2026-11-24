@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -443,6 +444,22 @@ func TestInteractiveDocsUseSharedShellAndLocalAssets(t *testing.T) {
 			assert.Contains(t, body, "<noscript>")
 			assert.NotContains(t, body, "https://cdn.")
 			assert.NotContains(t, body, "<script>")
+		})
+	}
+}
+
+func TestGraphQLGETAliasesServeReadOnlyQueries(t *testing.T) {
+	srv := newTestServer(t, newTestConfig(t))
+	query := url.QueryEscape("{ health { status } }")
+	for _, endpoint := range []string{"/api/graphql", "/api/v1/server/graphql"} {
+		t.Run(endpoint, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, endpoint+"?query="+query, nil)
+			req.Header.Set("Accept", "application/json")
+			rec := httptest.NewRecorder()
+			srv.Handler.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code)
+			assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+			assert.Contains(t, rec.Body.String(), `"data"`)
 		})
 	}
 }

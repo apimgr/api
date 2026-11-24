@@ -86,7 +86,7 @@ curl -q -LSsf http://172.17.0.1:64580/api/v1/text/uuid
 curl -q -LSsf 'http://172.17.0.1:64580/api/v1/datetime/now?timezone=UTC'
 ```
 
-Interactive API references are available at `/server/docs/swagger` and `/server/docs/graphql`. The corresponding JSON/OpenAPI and GraphQL endpoints are also available under the versioned API path, with the documented unversioned aliases.
+Interactive API references are available at `/server/docs/swagger` and `/server/docs/graphql`. The corresponding JSON/OpenAPI and read-only GraphQL endpoints are also available under the versioned API path, with the documented unversioned aliases; GraphQL accepts GET and POST queries.
 
 ## Other
 

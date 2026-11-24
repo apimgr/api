@@ -718,6 +718,10 @@
   "graphql": {
     "title": "GraphQLエクスプローラー - {app_name}",
     "description": "インタラクティブなGraphQLエクスプローラー",
+    "endpoint_usage": "GraphQLエンドポイントです。読み取り専用クエリを実行するにはqueryパラメーターを指定してください。",
+    "invalid_variables": "variablesパラメーターはJSONオブジェクトである必要があります",
+    "unknown_operation": "操作名「{operation_name}」は不明です。",
+    "queries_only": "このGraphQL APIはクエリ操作のみをサポートします。",
     "query": "クエリ",
     "mutation": "ミューテーション",
     "subscription": "サブスクリプション",

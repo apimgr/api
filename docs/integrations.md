@@ -11,7 +11,7 @@ The API server exposes documented HTTP interfaces and standards-based discovery 
 | `/cli/binaries/{api-cli-os-arch}` | Operator-provisioned CLI release binary, served only when its `sha256.txt` checksum matches; optionally requires a Bearer token |
 | OpenAPI JSON | `/api/{api_version}/server/swagger`; direct alias `/api/swagger` |
 | Swagger UI | `/server/docs/swagger` |
-| GraphQL | POST `/api/{api_version}/server/graphql`; direct alias `/api/graphql` |
+| GraphQL | GET and POST `/api/{api_version}/server/graphql`; direct alias `/api/graphql`; read-only queries |
 | GraphiQL UI | `/server/docs/graphql` |
 | MCP Streamable HTTP | `/api/{api_version}/server/mcp`; aliases `/api/mcp` and `/mcp` |
 
@@ -42,6 +42,8 @@ The project has no user accounts, account profiles, OAuth/OIDC provider, or fede
 Contact destinations support the built-in `telegram`, `discord`, `slack`, `mattermost`, `pushover`, `gotify`, and `generic` adapters. Configure a role's URL under `server.contact.{role}.webhooks.{transport}`; fallback between roles and secret handling are described in [Configuration](configuration.md#contact-destinations-and-webhooks).
 
 Every webhook request carries `X-Webhook-ID` for retry deduplication, `X-Webhook-Timestamp` as Unix seconds, the event name in `X-Webhook-Event`, and `X-Webhook-Signature` in `sha256=<hex_hmac>` form. The signing secret is stored in protected `secrets.yml`. The `generic` adapter sends JSON with `role`, `event`, `subject`, `body`, `severity`, `timestamp`, `project_name`, `project_version`, `app_url`, and optional `tracking_id`. Non-2xx responses are retried with exponential backoff at 1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours, and 24 hours; after the final attempt, the delivery is dropped and logged.
+
+Security-report webhooks contain only a summary with the tracking ID, severity, component, and `{project_name} --maintenance security show {tracking_id}` command. They never contain the report body, researcher contact, or a report-view URL.
 
 ## Overlay services
 

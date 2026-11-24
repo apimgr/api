@@ -135,13 +135,16 @@ func New(cfg *config.Config) *http.Server {
 	// The old root paths (/openapi, /openapi.json, /openapi.yaml, /swagger,
 	// /graphql) are no longer served — do not implement redirects from
 	// them. The unversioned /api/swagger and /api/graphql aliases mount
-	// the SAME handler as their versioned /api/{api_version}/server/* counterparts (no
-	// redirect), per PART 14's "Unversioned API aliases" rules.
+	// the same handlers as their versioned /api/{api_version}/server/* counterparts
+	// (no redirect), per PART 14's "Unversioned API aliases" rules. GraphQL is
+	// query-only and accepts GET for linkable queries and POST for GraphiQL.
 	r.Get("/server/docs/swagger", swaggerUIHandler(cfg))
 	r.Get("/server/docs/graphql", graphqlUIHandler(cfg))
 	r.Get("/api/swagger", apiSwaggerSpecHandler(cfg, &apiRoutes))
+	r.Get("/api/graphql", graphql.HandleQuery)
 	r.Post("/api/graphql", graphql.HandleQuery)
 	r.Get(APIBasePath(cfg)+"/server/swagger", apiSwaggerSpecHandler(cfg, &apiRoutes))
+	r.Get(APIBasePath(cfg)+"/server/graphql", graphql.HandleQuery)
 	r.Post(APIBasePath(cfg)+"/server/graphql", graphql.HandleQuery)
 
 	// Standard pages (/server/*)
@@ -1559,7 +1562,7 @@ func apiSwaggerSpecHandler(cfg *config.Config, routes *[]swagger.Route) http.Han
 }
 
 // graphqlUIHandler serves the GraphiQL UI at the PART 14 canonical
-// /server/docs/graphql path; it POSTs to /api/graphql.
+// /server/docs/graphql path; it posts queries to the versioned endpoint.
 func graphqlUIHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "api")

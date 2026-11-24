@@ -42,7 +42,7 @@ var ThemePaletteDark = ThemePalette{
 	Background: "#1a1b26", Foreground: "#c0caf5",
 	Primary: "#7aa2f7", Secondary: "#9ece6a", Accent: "#bb9af7",
 	Success: "#9ece6a", Warning: "#e0af68", Error: "#f7768e", Info: "#7dcfff",
-	Surface: "#24283b", SurfaceAlt: "#1f2335", Border: "#656f9f", Muted: "#868eb3",
+	Surface: "#24283b", SurfaceAlt: "#1f2335", Border: "#656f9f", Muted: "#939fcc",
 	OnColor: "#1a1b26", OnDark: "#ffffff",
 }
 

@@ -55,7 +55,7 @@ func TestAutocertRenewalWindowMatchesAI(t *testing.T) {
 	})
 	_, err := manager.getLetsEncryptTLSConfig([]string{"renewal.example.test"})
 	require.NoError(t, err)
-	assert.Equal(t, 7*24*time.Hour, manager.certManager.RenewBefore)
+	assert.Equal(t, 30*24*time.Hour, manager.certManager.RenewBefore)
 }
 
 func TestAppManagedCertificateLoadsThroughAutocertCache(t *testing.T) {

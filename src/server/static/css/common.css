@@ -46,7 +46,8 @@
   /* Background & Text */
   --bg-color: #1a1b26;
   --text-color: #c0caf5;
-  --text-muted: #868eb3;
+  --color-muted: #939fcc;
+  --text-muted: var(--color-muted);
   --border-color: #656f9f;
 
   /* Typography */
@@ -110,7 +111,8 @@ html.theme-light {
 
   --bg-color: #ffffff;
   --text-color: #1a1b26;
-  --text-muted: #5466a8;
+  --color-muted: #5466a8;
+  --text-muted: var(--color-muted);
   --border-color: #7d8bca;
 }
 
@@ -286,19 +288,21 @@ pre code {
 }
 
 /* ============================================================================
-   Responsive Container per PART 17
-   Desktop: 90% width with 5% margins
-   Mobile: 98% width with 1% margins
+   Responsive container per AI.md CSS Formatting.
    ============================================================================ */
 .container {
-  width: 98%;
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
   margin: 0 auto;
-  max-width: 56rem;
 }
 
 @media (min-width: 768px) {
   .container {
     width: 90%;
+    padding-left: 0;
+    padding-right: 0;
+    max-width: 1400px;
   }
 }
 

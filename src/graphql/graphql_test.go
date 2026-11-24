@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -18,10 +19,8 @@ import (
 func TestBuildSchema(t *testing.T) {
 	schema := BuildSchema()
 	require.NotNil(t, schema.Query)
-	require.NotNil(t, schema.Mutation)
 
 	assert.Equal(t, "Query", schema.Query.Name)
-	assert.Equal(t, "Mutation", schema.Mutation.Name)
 
 	t.Run("health resolver", func(t *testing.T) {
 		field, ok := schema.Query.Fields["health"]
@@ -68,41 +67,6 @@ func TestBuildSchema(t *testing.T) {
 		assert.Len(t, s, 36)
 	})
 
-	t.Run("mutation textUppercase", func(t *testing.T) {
-		field, ok := schema.Mutation.Fields["textUppercase"]
-		require.True(t, ok)
-		result, err := field.Resolve(map[string]interface{}{"text": "abc"})
-		require.NoError(t, err)
-		data := result.(map[string]interface{})
-		assert.Equal(t, "ABC", data["result"])
-	})
-
-	t.Run("mutation textLowercase", func(t *testing.T) {
-		field, ok := schema.Mutation.Fields["textLowercase"]
-		require.True(t, ok)
-		result, err := field.Resolve(map[string]interface{}{"text": "ABC"})
-		require.NoError(t, err)
-		data := result.(map[string]interface{})
-		assert.Equal(t, "abc", data["result"])
-	})
-
-	t.Run("mutation textLowercase errors on missing arg", func(t *testing.T) {
-		field := schema.Mutation.Fields["textLowercase"]
-		_, err := field.Resolve(map[string]interface{}{})
-		assert.Error(t, err)
-	})
-
-	t.Run("mutation bcryptHash returns a real bcrypt hash", func(t *testing.T) {
-		field, ok := schema.Mutation.Fields["bcryptHash"]
-		require.True(t, ok)
-		result, err := field.Resolve(map[string]interface{}{"password": "secret"})
-		require.NoError(t, err)
-		data := result.(map[string]interface{})
-		hash, ok := data["result"].(string)
-		require.True(t, ok)
-		assert.NotEqual(t, "hashed", hash)
-		assert.True(t, strings.HasPrefix(hash, "$2"))
-	})
 }
 
 // TestGenerateSchemaSDL checks the SDL text contains the type/field
@@ -111,12 +75,12 @@ func TestGenerateSchemaSDL(t *testing.T) {
 	sdl := GenerateSchemaSDL()
 
 	for _, want := range []string{
-		"type Query", "type Mutation", "type Health", "type Version",
-		"type TextResult", "health: Health!", "textUppercase(text: String!): String!",
-		"bcryptHash(password: String!): TextResult!",
+		"type Query", "type Health", "type Version",
+		"health: Health!", "textUppercase(text: String!): String!",
 	} {
 		assert.Contains(t, sdl, want)
 	}
+	assert.NotContains(t, sdl, "type Mutation")
 }
 
 // TestServeSchema verifies the introspection endpoint serves the SDL as
@@ -137,8 +101,8 @@ func TestServeSchema(t *testing.T) {
 // pattern-matched "health"/"version"/default response branches of
 // executeQuery via the HTTP handler.
 func TestHandleQuery(t *testing.T) {
-	t.Run("rejects non-POST", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/graphql", nil)
+	t.Run("rejects methods other than GET and POST", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPatch, "/graphql", nil)
 		rec := httptest.NewRecorder()
 		HandleQuery(rec, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
@@ -211,6 +175,72 @@ func TestHandleQuery(t *testing.T) {
 		assert.Equal(t, "GRAPHQL_PARSE_FAILED", resp.Errors[0].Extensions["code"])
 	})
 
+	t.Run("GET query returns GraphQL data", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/graphql?query=%7B%20health%20%7B%20status%20%7D%20%7D", nil)
+		rec := httptest.NewRecorder()
+		HandleQuery(rec, req)
+
+		var resp Response
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Contains(t, resp.Data.(map[string]interface{}), "health")
+	})
+
+	t.Run("GET supports variables and operationName", func(t *testing.T) {
+		params := url.Values{}
+		params.Set("query", "query Upper($t: String!) { textUppercase(text: $t) }")
+		params.Set("variables", `{"t":"abc"}`)
+		params.Set("operationName", "Upper")
+		req := httptest.NewRequest(http.MethodGet, "/graphql?"+params.Encode(), nil)
+		rec := httptest.NewRecorder()
+		HandleQuery(rec, req)
+
+		var resp Response
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "ABC", resp.Data.(map[string]interface{})["textUppercase"])
+	})
+
+	t.Run("GET rejects an unknown operationName", func(t *testing.T) {
+		params := url.Values{}
+		params.Set("query", "query Upper { version { version } }")
+		params.Set("operationName", "Other")
+		req := httptest.NewRequest(http.MethodGet, "/graphql?"+params.Encode(), nil)
+		req.Header.Set("Accept-Language", "fr")
+		rec := httptest.NewRecorder()
+		HandleQuery(rec, req)
+
+		var resp Response
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotEmpty(t, resp.Errors)
+		assert.Equal(t, "GRAPHQL_VALIDATION_FAILED", resp.Errors[0].Extensions["code"])
+		assert.Contains(t, resp.Errors[0].Message, "Opération inconnue")
+	})
+
+	t.Run("GET without a query returns a human-readable usage message", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/graphql", nil)
+		req.Header.Set("Accept-Language", "fr")
+		rec := httptest.NewRecorder()
+		HandleQuery(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Header().Get("Content-Type"), "text/plain")
+		assert.Contains(t, rec.Body.String(), "Fournissez un paramètre query")
+	})
+
+	t.Run("GET rejects malformed variables as a canonical transport error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/graphql?query=%7B%20health%20%7D&variables=not-json", nil)
+		req.Header.Set("Accept-Language", "fr")
+		rec := httptest.NewRecorder()
+		HandleQuery(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var response map[string]interface{}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, "INVALID_JSON", response["error"])
+		assert.Contains(t, response["message"], "paramètre variables")
+	})
+
 	t.Run("empty body decodes to empty query and gets default response", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader("{}"))
 		rec := httptest.NewRecorder()
@@ -230,20 +260,37 @@ func TestHandleQuery(t *testing.T) {
 		assert.Equal(t, "ABC", data["textUppercase"])
 	})
 
-	t.Run("mutation with a variable argument resolves through the parser", func(t *testing.T) {
+	t.Run("mutation is rejected by the query-only API", func(t *testing.T) {
 		body, _ := json.Marshal(Request{
 			Query:     `mutation($t: String!) { textLowercase(text: $t) { result } }`,
 			Variables: map[string]interface{}{"t": "ABC"},
 		})
 		req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(body))
+		req.Header.Set("Accept-Language", "fr")
 		rec := httptest.NewRecorder()
 		HandleQuery(rec, req)
 
 		var resp Response
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-		data := resp.Data.(map[string]interface{})
-		result := data["textLowercase"].(map[string]interface{})
-		assert.Equal(t, "abc", result["result"])
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Nil(t, resp.Data)
+		require.NotEmpty(t, resp.Errors)
+		assert.Equal(t, "GRAPHQL_VALIDATION_FAILED", resp.Errors[0].Extensions["code"])
+		assert.Contains(t, resp.Errors[0].Message, "accepte uniquement les opérations de lecture")
+	})
+
+	t.Run("GET mutation is rejected by the query-only API", func(t *testing.T) {
+		query := url.QueryEscape("mutation { textUppercase(text: \"abc\") }")
+		req := httptest.NewRequest(http.MethodGet, "/graphql?query="+query, nil)
+		rec := httptest.NewRecorder()
+		HandleQuery(rec, req)
+
+		var resp Response
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Nil(t, resp.Data)
+		require.NotEmpty(t, resp.Errors)
+		assert.Equal(t, "GRAPHQL_VALIDATION_FAILED", resp.Errors[0].Extensions["code"])
 	})
 }
 

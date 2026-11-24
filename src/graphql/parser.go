@@ -36,16 +36,17 @@ func (a argValue) resolve(variables map[string]interface{}) interface{} {
 	return a.literal
 }
 
-// operation is a parsed GraphQL document: its type (query/mutation) and its
-// top-level field selections.
+// operation is a parsed GraphQL document: its type and name and its top-level
+// field selections.
 type operation struct {
 	Type       string
+	Name       string
 	Selections []selection
 }
 
 // docParser is a minimal hand-rolled parser for the subset of the GraphQL
-// language this project's schema needs: a single anonymous or named query/
-// mutation operation, aliased field selections, nested selection sets, and
+// language this project's schema needs: a single anonymous or named query,
+// mutation, or subscription operation, aliased field selections, nested selection sets, and
 // scalar/variable arguments. It intentionally does not support fragments,
 // directives, or multiple operations per document — the schema in
 // graphql.go doesn't use them, and pulling in a full GraphQL library only
@@ -69,14 +70,17 @@ func (p *docParser) parseDocument() (operation, error) {
 	opType := "query"
 	if p.consumeKeyword("mutation") {
 		opType = "mutation"
+	} else if p.consumeKeyword("subscription") {
+		opType = "subscription"
 	} else {
 		p.consumeKeyword("query")
 	}
 	p.skipIgnored()
 
 	// Optional operation name (anonymous shorthand omits it).
+	operationName := ""
 	if p.pos < len(p.input) && p.input[p.pos] != '{' && p.input[p.pos] != '(' {
-		p.parseName()
+		operationName = p.parseName()
 		p.skipIgnored()
 	}
 
@@ -90,7 +94,7 @@ func (p *docParser) parseDocument() (operation, error) {
 	if err != nil {
 		return operation{}, err
 	}
-	return operation{Type: opType, Selections: sels}, nil
+	return operation{Type: opType, Name: operationName, Selections: sels}, nil
 }
 
 // parseVariableDefinitions consumes an optional operation variable

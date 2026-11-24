@@ -725,6 +725,10 @@
   "graphql": {
     "title": "GraphQL-Explorer - {app_name}",
     "description": "Interaktiver GraphQL-Explorer",
+    "endpoint_usage": "GraphQL-Endpunkt. Geben Sie den Parameter query an, um eine schreibgeschützte Abfrage auszuführen.",
+    "invalid_variables": "Der Parameter variables muss ein JSON-Objekt sein",
+    "unknown_operation": "Unbekannte Operation: {operation_name}.",
+    "queries_only": "Diese GraphQL-API unterstützt nur Abfrageoperationen.",
     "query": "Abfrage",
     "mutation": "Mutation",
     "subscription": "Abonnement",

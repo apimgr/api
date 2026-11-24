@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -108,8 +109,9 @@ func TestBuildRequestBuiltInPayloadsAndHeaders(t *testing.T) {
 	}
 }
 
-func TestBuildRequestRetryReusesIDAndTimestamp(t *testing.T) {
-	event := Event{Event: "backup.failed", Message: "failed"}
+func TestBuildRequestRetryReusesIDAndEventTimestamp(t *testing.T) {
+	eventTime := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	event := Event{Event: "backup.failed", Message: "failed", Timestamp: eventTime}
 	hook := Webhook{Transport: Discord, URL: "https://hooks.example.test", Secret: "secret"}
 	id, err := NewID()
 	if err != nil {
@@ -120,19 +122,79 @@ func TestBuildRequestRetryReusesIDAndTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	retry, err := BuildRequest(context.Background(), hook, event, id, timestamp)
+	retry, err := BuildRequest(context.Background(), hook, event, id, timestamp.Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first.Header.Get("X-Webhook-ID") != retry.Header.Get("X-Webhook-ID") {
 		t.Fatal("retry changed webhook ID")
 	}
-	if first.Header.Get("X-Webhook-Timestamp") != retry.Header.Get("X-Webhook-Timestamp") {
-		t.Fatal("retry changed webhook timestamp")
+	if first.Header.Get("X-Webhook-Timestamp") == retry.Header.Get("X-Webhook-Timestamp") {
+		t.Fatal("retry reused the previous attempt timestamp")
 	}
 	if first.Header.Get("X-Webhook-Signature") != retry.Header.Get("X-Webhook-Signature") {
 		t.Fatal("retry changed signature")
 	}
+}
+
+func TestSendWithRetryKeepsPayloadTimeAndIDButRefreshesAttemptTime(t *testing.T) {
+	eventTime := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	event := Event{Role: "admin", Event: "backup.failed", Subject: "Backup failed", Body: "summary", Timestamp: eventTime}
+	hook := Webhook{Transport: Generic, URL: "https://hooks.example.test", Secret: "secret", Name: "admin"}
+	client := &retryCaptureClient{statuses: []int{http.StatusServiceUnavailable, http.StatusInternalServerError, http.StatusOK}}
+	waits := []time.Duration{}
+	attemptTime := eventTime
+	id, err := NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = sendWithRetry(context.Background(), client, hook, event, id, func(_ context.Context, delay time.Duration) bool {
+		waits = append(waits, delay)
+		attemptTime = attemptTime.Add(time.Second)
+		return true
+	}, func() time.Time { return attemptTime })
+	if err != nil {
+		t.Fatalf("sendWithRetry() error = %v", err)
+	}
+	if len(client.requests) != 3 || len(waits) != 2 || waits[0] != time.Minute || waits[1] != 5*time.Minute {
+		t.Fatalf("attempts=%d waits=%v, want 3 attempts and 1m/5m backoff", len(client.requests), waits)
+	}
+	var firstPayload, lastPayload genericPayload
+	if err := json.Unmarshal(client.bodies[0], &firstPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(client.bodies[2], &lastPayload); err != nil {
+		t.Fatal(err)
+	}
+	if firstPayload.Timestamp != "2026-11-24T12:00:00Z" || lastPayload.Timestamp != firstPayload.Timestamp {
+		t.Fatalf("payload timestamps = %q, %q; want stable event time", firstPayload.Timestamp, lastPayload.Timestamp)
+	}
+	firstHeader := client.requests[0].Header.Get("X-Webhook-Timestamp")
+	for i, request := range client.requests {
+		if request.Header.Get("X-Webhook-ID") != id {
+			t.Fatal("retry changed webhook ID")
+		}
+		if i > 0 && request.Header.Get("X-Webhook-Timestamp") == firstHeader {
+			t.Fatal("retry reused X-Webhook-Timestamp")
+		}
+	}
+}
+
+type retryCaptureClient struct {
+	statuses []int
+	requests []*http.Request
+	bodies   [][]byte
+}
+
+func (c *retryCaptureClient) Do(request *http.Request) (*http.Response, error) {
+	body, err := io.ReadAll(request.Body)
+	if err != nil {
+		return nil, err
+	}
+	c.requests = append(c.requests, request.Clone(request.Context()))
+	c.bodies = append(c.bodies, body)
+	status := c.statuses[len(c.requests)-1]
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
 }
 
 func TestBuildRequestRejectsNonHTTPSURLs(t *testing.T) {
@@ -142,15 +204,52 @@ func TestBuildRequestRejectsNonHTTPSURLs(t *testing.T) {
 	}
 }
 
-func TestProviderTransportsRequireAdapterRegistration(t *testing.T) {
-	for _, transport := range []Transport{Pushover, Gotify} {
-		t.Run(string(transport), func(t *testing.T) {
-			hook := Webhook{Transport: transport, URL: "https://hooks.example.test", Secret: "secret"}
-			if _, err := BuildRequest(context.Background(), hook, Event{Event: "test"}, "", time.Time{}); err == nil || !strings.Contains(err.Error(), "requires a registered provider adapter") {
-				t.Fatalf("BuildRequest error = %v, want missing-adapter error", err)
-			}
-		})
+func TestBuiltInPushoverAndGotifyTransports(t *testing.T) {
+	id, err := NewID()
+	if err != nil {
+		t.Fatal(err)
 	}
+	event := Event{Event: "security.report_received", Subject: "Report", Message: "summary", Severity: "critical"}
+	t.Run("pushover", func(t *testing.T) {
+		hook := Webhook{Transport: Pushover, URL: "https://api.pushover.net/1/messages.json?user=user-id&token=api-token", Secret: "secret"}
+		req, err := BuildRequest(context.Background(), hook, event, id, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if req.URL.RawQuery != "" || req.Header.Get("Content-Type") != "application/x-www-form-urlencoded" {
+			t.Fatalf("Pushover request URL/content type = %q / %q", req.URL, req.Header.Get("Content-Type"))
+		}
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		form, err := url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for key, want := range map[string]string{"user": "user-id", "token": "api-token", "title": "Report", "message": "summary", "priority": "1"} {
+			if got := form.Get(key); got != want {
+				t.Errorf("Pushover %s = %q, want %q", key, got, want)
+			}
+		}
+	})
+	t.Run("gotify", func(t *testing.T) {
+		hook := Webhook{Transport: Gotify, URL: "https://push.example.test/base?token=api-token", Secret: "secret"}
+		req, err := BuildRequest(context.Background(), hook, event, id, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if req.URL.Path != "/base/message" || req.URL.Query().Get("token") != "api-token" {
+			t.Fatalf("Gotify URL = %q, want /base/message with token", req.URL)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["priority"] != float64(8) || body["title"] != "Report" || body["message"] != "summary" {
+			t.Fatalf("Gotify payload = %#v", body)
+		}
+	})
 }
 
 func TestRegisterAdapter(t *testing.T) {

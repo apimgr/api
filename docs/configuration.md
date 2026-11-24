@@ -6,7 +6,7 @@ The server reads `server.yml`, optional drop-in files from `yaml.d/`, and protec
 
 Configuration is merged in this order: built-in defaults, `server.yml`, `yaml.d/` files in byte-wise filename order, and `secrets.yml`. Command-line flags and runtime environment overrides have higher priority. Maps merge recursively; later scalar values and lists replace earlier values. Invalid values fall back to their documented defaults with a warning rather than preventing startup. Configuration and secret files are private files; do not commit them or include their contents in logs or support messages.
 
-Use `yaml.d/` for optional area files such as networking, email, or logging when the corresponding workflow creates them. Only regular `.yml` and `.yaml` files are loaded. Secrets belong in `secrets.yml`, not in README examples or source control.
+Use `yaml.d/` for optional area files. Project help and report-form settings belong in `yaml.d/pages.yml`; only regular `.yml` and `.yaml` files are loaded. Secrets belong in `secrets.yml`, not in README examples or source control.
 
 ## Configuration areas
 
@@ -39,7 +39,7 @@ Configuration is validated per setting. Consult the matching sections of `AI.md`
 
 ## TLS and Let's Encrypt
 
-The server supports HTTP-01, TLS-ALPN-01, and DNS-01 ACME challenges. HTTP-01 is answered by the server's HTTP listener and TLS-ALPN-01 by its HTTPS listener; the server does not open separate challenge listeners. Use DNS-01 when those public ports are unavailable or a wildcard certificate is needed.
+The server supports HTTP-01, TLS-ALPN-01, and DNS-01 ACME challenges. HTTP-01 is answered by the server's HTTP listener and TLS-ALPN-01 by its HTTPS listener; the server does not open separate challenge listeners. Managed Let's Encrypt certificates renew when 30 days or fewer remain; this window is fixed. Use DNS-01 when those public ports are unavailable or a wildcard certificate is needed.
 
 DNS-01 uses the provider name and environment-variable credential names defined by lego. All lego DNS providers are available; no provider allowlist is configured. Store credentials as one flat map under `server.ssl.letsencrypt.dns_credentials` in `secrets.yml`. Values may be entered as plaintext and are rewritten atomically as AES-256-GCM `enc:v1:` values using `server.security.encryption_key`; credentials are decrypted only in memory, never logged, and shown masked in configuration views. Provider construction is checked at startup and before each certificate request. A provider or credential error fails that DNS-01 request and is logged without trying another ACME challenge. See [lego's DNS provider documentation](https://go-acme.github.io/lego/dns/) for the provider's exact environment-variable names.
 
@@ -98,7 +98,7 @@ The example follows AI.md PART 10; only `enabled: false` is explicitly identifie
 
 ## Debug diagnostics
 
-Debug endpoints and detailed diagnostics require the explicit `--debug` flag or `DEBUG=true`. The selected `debug` mode enables the debug flag by default, while an explicit `--debug=false` or `DEBUG=false` keeps the endpoints off. Every `/debug/*` route also requires `Authorization: Bearer <server.token>`; the debug flag never bypasses authentication.
+Debug endpoints and detailed diagnostics require the explicit `--debug` flag or `DEBUG=true`. The selected `debug` mode enables the debug flag by default, while an explicit `--debug=false` or `DEBUG=false` keeps the endpoints off. They exist only under root `/debug/*`; there are no `/api/debug/*` or versioned debug aliases. Every `/debug/*` route also requires `Authorization: Bearer <server.token>`; the debug flag never bypasses authentication.
 
 ```yaml
 server:

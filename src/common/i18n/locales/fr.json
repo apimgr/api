@@ -725,6 +725,10 @@
   "graphql": {
     "title": "Explorateur GraphQL - {app_name}",
     "description": "Explorateur interactif GraphQL",
+    "endpoint_usage": "Point de terminaison GraphQL. Fournissez un paramètre query pour exécuter une requête en lecture seule.",
+    "invalid_variables": "Le paramètre variables doit être un objet JSON",
+    "unknown_operation": "Opération inconnue nommée « {operation_name} ».",
+    "queries_only": "Cette API GraphQL accepte uniquement les opérations de lecture.",
     "query": "Requête",
     "mutation": "Mutation",
     "subscription": "Abonnement",

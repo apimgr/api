@@ -26,6 +26,8 @@ import (
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/email"
+	"github.com/apimgr/api/src/notify"
+	"github.com/apimgr/api/src/paths"
 	servicecrypto "github.com/apimgr/api/src/service/crypto"
 	"github.com/go-chi/chi/v5"
 )
@@ -868,6 +870,7 @@ func acceptSecurityReport(cfg *config.Config, ctx context.Context, r *http.Reque
 		}
 		notified = mailClient.Send(maintainerMessage) == nil
 	}
+	dispatchSecurityReportWebhooks(cfg, r, trackingID, fields["severity"], fields["component"])
 	statusURL := BuildURL(r, "/server/security/report/"+trackingID+"?token="+url.QueryEscape(statusToken))
 	ackBody := i18n.TranslateFormat(requestLanguage, "contact.tracking_message", map[string]string{"tracking_id": trackingID}) + "\n" + i18n.Translate(requestLanguage, "security.status_title") + ": " + statusURL
 	if publicKey := strings.TrimSpace(fields["researcher_gpg"]); publicKey != "" && !strings.HasPrefix(publicKey, "https://") {
@@ -883,6 +886,79 @@ func acceptSecurityReport(cfg *config.Config, ctx context.Context, r *http.Reque
 		logger.LogSecurity("security.report_received", getClientIP(r), map[string]interface{}{"tracking_id": trackingID, "notified": notified, "severity": fields["severity"], "component": sanitizeSecurityComponent(fields["component"])})
 	}
 	return trackingID, acknowledged, nil
+}
+
+func dispatchSecurityReportWebhooks(cfg *config.Config, r *http.Request, trackingID, reportSeverity, component string) {
+	for _, delivery := range securityReportWebhookDeliveries(cfg, r, trackingID, reportSeverity, component) {
+		notify.Dispatch(delivery.webhook, delivery.event)
+	}
+}
+
+type securityReportWebhookDelivery struct {
+	webhook notify.Webhook
+	event   notify.Event
+}
+
+func securityReportWebhookDeliveries(cfg *config.Config, r *http.Request, trackingID, reportSeverity, component string) []securityReportWebhookDelivery {
+	securityWebhooks := cfg.Server.Contact.Security.Webhooks
+	adminWebhooks := cfg.Server.Contact.Admin.Webhooks
+	transports := make(map[string]struct{}, len(securityWebhooks)+len(adminWebhooks))
+	for transport := range securityWebhooks {
+		if !strings.HasSuffix(transport, "_secret") {
+			transports[transport] = struct{}{}
+		}
+	}
+	for transport := range adminWebhooks {
+		if !strings.HasSuffix(transport, "_secret") {
+			transports[transport] = struct{}{}
+		}
+	}
+
+	severity := "info"
+	switch strings.ToLower(strings.TrimSpace(reportSeverity)) {
+	case "critical":
+		severity = "critical"
+	case "high", "medium":
+		severity = "warning"
+	}
+
+	component = sanitizeSecurityComponent(component)
+	command := paths.ProjectName + " --maintenance security show " + trackingID
+	subject := "[" + cfg.Server.Branding.Title + " security report] " + reportSeverity
+	message := fmt.Sprintf("Security report received. Severity: %s. Tracking ID: %s. Component: %s. Read the report with: %s", reportSeverity, trackingID, component, command)
+	event := notify.Event{
+		Event:          "security.report_received",
+		Subject:        subject,
+		Body:           message,
+		Message:        message,
+		Severity:       severity,
+		Timestamp:      time.Now().UTC(),
+		ProjectName:    paths.ProjectName,
+		ProjectVersion: Version,
+		AppURL:         BuildURL(r, "/"),
+		TrackingID:     trackingID,
+	}
+	deliveries := make([]securityReportWebhookDelivery, 0, len(transports))
+	for transport := range transports {
+		webhookURL := strings.TrimSpace(securityWebhooks[transport])
+		role := "security"
+		secret := strings.TrimSpace(securityWebhooks[transport+"_secret"])
+		if webhookURL == "" {
+			webhookURL = strings.TrimSpace(adminWebhooks[transport])
+			secret = strings.TrimSpace(adminWebhooks[transport+"_secret"])
+			role = "admin"
+		}
+		if webhookURL == "" {
+			continue
+		}
+		webhookEvent := event
+		webhookEvent.Role = role
+		deliveries = append(deliveries, securityReportWebhookDelivery{
+			webhook: notify.Webhook{Name: role, Transport: notify.Transport(transport), URL: webhookURL, Secret: secret},
+			event:   webhookEvent,
+		})
+	}
+	return deliveries
 }
 
 func sanitizeSecurityComponent(value string) string {

@@ -5,18 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/server/handler"
-	"github.com/apimgr/api/src/service/crypto"
-	"github.com/apimgr/api/src/service/datetime"
 	"github.com/apimgr/api/src/service/text"
 )
 
 // Schema represents a basic GraphQL schema
 type Schema struct {
-	Query    *ObjectType
-	Mutation *ObjectType
+	Query *ObjectType
 }
 
 // ObjectType represents a GraphQL object type
@@ -112,172 +109,6 @@ func BuildSchema() *Schema {
 				},
 			},
 		},
-		Mutation: &ObjectType{
-			Name: "Mutation",
-			Fields: map[string]*Field{
-				"textUppercase": {
-					Type:        "TextResult",
-					Description: "Convert text to uppercase",
-					Args: map[string]*Argument{
-						"text": {
-							Type:        "String!",
-							Description: "Text to convert",
-						},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						input, ok := args["text"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"text\" is required")
-						}
-						return map[string]interface{}{
-							"result": text.ToUpper(input),
-						}, nil
-					},
-				},
-				"textLowercase": {
-					Type:        "TextResult",
-					Description: "Convert text to lowercase",
-					Args: map[string]*Argument{
-						"text": {Type: "String!", Description: "Text to convert"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						input, ok := args["text"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"text\" is required")
-						}
-						return map[string]interface{}{"result": text.ToLower(input)}, nil
-					},
-				},
-				"bcryptHash": {
-					Type:        "TextResult",
-					Description: "Hash password with bcrypt",
-					Args: map[string]*Argument{
-						"password": {Type: "String!", Description: "Password to hash"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						password, ok := args["password"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"password\" is required")
-						}
-						hash, err := crypto.BcryptHash(password, 12)
-						if err != nil {
-							return nil, err
-						}
-						return map[string]interface{}{"result": hash}, nil
-					},
-				},
-				"textReverse": {
-					Type:        "TextResult",
-					Description: "Reverse text",
-					Args: map[string]*Argument{
-						"text": {Type: "String!", Description: "Text to reverse"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						input, ok := args["text"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"text\" is required")
-						}
-						return map[string]interface{}{"result": text.Reverse(input)}, nil
-					},
-				},
-				"textBase64Encode": {
-					Type:        "TextResult",
-					Description: "Base64-encode text",
-					Args: map[string]*Argument{
-						"text": {Type: "String!", Description: "Text to encode"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						input, ok := args["text"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"text\" is required")
-						}
-						return map[string]interface{}{"result": text.Base64Encode(input)}, nil
-					},
-				},
-				"textBase64Decode": {
-					Type:        "TextResult",
-					Description: "Base64-decode text",
-					Args: map[string]*Argument{
-						"text": {Type: "String!", Description: "Text to decode"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						input, ok := args["text"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"text\" is required")
-						}
-						result, err := text.Base64Decode(input)
-						if err != nil {
-							return nil, err
-						}
-						return map[string]interface{}{"result": result}, nil
-					},
-				},
-				"textSlug": {
-					Type:        "TextResult",
-					Description: "Slugify text",
-					Args: map[string]*Argument{
-						"text": {Type: "String!", Description: "Text to slugify"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						input, ok := args["text"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"text\" is required")
-						}
-						return map[string]interface{}{"result": text.Slugify(input)}, nil
-					},
-				},
-				"textHash": {
-					Type:        "TextResult",
-					Description: "Hash text with SHA-256",
-					Args: map[string]*Argument{
-						"text": {Type: "String!", Description: "Text to hash"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						input, ok := args["text"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"text\" is required")
-						}
-						result, err := text.Hash("sha256", input)
-						if err != nil {
-							return nil, err
-						}
-						return map[string]interface{}{"result": result}, nil
-					},
-				},
-				"convertTimezone": {
-					Type:        "TextResult",
-					Description: "Convert a Unix timestamp between timezones",
-					Args: map[string]*Argument{
-						"timestamp": {Type: "String!", Description: "Unix timestamp (seconds)"},
-						"from":      {Type: "String!", Description: "Source IANA timezone"},
-						"to":        {Type: "String!", Description: "Target IANA timezone"},
-					},
-					Resolve: func(args map[string]interface{}) (interface{}, error) {
-						ts, ok := args["timestamp"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"timestamp\" is required")
-						}
-						from, ok := args["from"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"from\" is required")
-						}
-						to, ok := args["to"].(string)
-						if !ok {
-							return nil, fmt.Errorf("argument \"to\" is required")
-						}
-						unix, err := strconv.ParseInt(ts, 10, 64)
-						if err != nil {
-							return nil, fmt.Errorf("invalid timestamp %q", ts)
-						}
-						converted, err := datetime.ConvertTimezone(unix, from, to)
-						if err != nil {
-							return nil, err
-						}
-						return map[string]interface{}{"result": converted["to"]}, nil
-					},
-				},
-			},
-		},
 	}
 }
 
@@ -302,22 +133,6 @@ type Query {
 	# Network utilities (implement as needed)
 }
 
-type Mutation {
-	# Text utilities
-	textUppercase(text: String!): TextResult!
-	textLowercase(text: String!): TextResult!
-	textReverse(text: String!): TextResult!
-	textBase64Encode(text: String!): TextResult!
-	textBase64Decode(text: String!): TextResult!
-	textSlug(text: String!): TextResult!
-	textHash(text: String!): TextResult!
-
-	# Crypto utilities
-	bcryptHash(password: String!): TextResult!
-
-	# DateTime utilities
-	convertTimezone(timestamp: String!, from: String!, to: String!): TextResult!
-}
 
 type Health {
 	status: String!
@@ -330,34 +145,37 @@ type Version {
 	build_date: String!
 }
 
-type TextResult {
-	result: String!
-}
-
-type CryptoResult {
-	result: String!
-}
-
-type DateTimeResult {
-	result: String!
-}
 `
 }
 
-// HandleQuery handles GraphQL queries
+// HandleQuery handles read-only GraphQL queries over GET or POST.
 func HandleQuery(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		writeTransportError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
 		return
 	}
 
 	var req Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if r.Method == http.MethodGet {
+		req.Query = r.URL.Query().Get("query")
+		req.OperationName = r.URL.Query().Get("operationName")
+		if rawVariables := r.URL.Query().Get("variables"); rawVariables != "" {
+			if err := json.Unmarshal([]byte(rawVariables), &req.Variables); err != nil {
+				writeTransportError(w, http.StatusBadRequest, "INVALID_JSON", i18n.Translate(i18n.LangFromRequest(r), "graphql.invalid_variables"))
+				return
+			}
+		}
+		if req.Query == "" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte(i18n.Translate(i18n.LangFromRequest(r), "graphql.endpoint_usage") + "\n"))
+			return
+		}
+	} else if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeTransportError(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON")
 		return
 	}
 
-	resp := executeQuery(req.Query, req.Variables)
+	resp := executeQuery(req.Query, req.Variables, req.OperationName, i18n.LangFromRequest(r))
 
 	body, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
@@ -374,32 +192,35 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeTransportError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	body, _ := json.MarshalIndent(map[string]interface{}{
 		"ok":      false,
 		"error":   code,
 		"message": message,
 		"details": map[string]interface{}{},
-	})
+	}, "", "  ")
+	body = append(body, '\n')
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
 }
 
-// executeQuery parses and resolves a GraphQL query/mutation against the
+// executeQuery parses and resolves a GraphQL query against the
 // schema built by BuildSchema(), returning real resolver output rather than
 // pattern-matched placeholders.
-func executeQuery(query string, variables map[string]interface{}) Response {
+func executeQuery(query string, variables map[string]interface{}, operationName, language string) Response {
 	op, err := newDocParser(query).parseDocument()
 	if err != nil {
 		return Response{Errors: []Error{{Message: err.Error(), Extensions: map[string]string{"code": "GRAPHQL_PARSE_FAILED"}}}}
 	}
 
-	schema := BuildSchema()
-	root := schema.Query
-	rootName := "Query"
-	if op.Type == "mutation" {
-		root = schema.Mutation
-		rootName = "Mutation"
+	if operationName != "" && operationName != op.Name {
+		return Response{Errors: []Error{{Message: i18n.TranslateFormat(language, "graphql.unknown_operation", map[string]string{"operation_name": operationName}), Extensions: map[string]string{"code": "GRAPHQL_VALIDATION_FAILED"}}}}
 	}
+	if op.Type != "query" {
+		return Response{Errors: []Error{{Message: i18n.Translate(language, "graphql.queries_only"), Extensions: map[string]string{"code": "GRAPHQL_VALIDATION_FAILED"}}}}
+	}
+
+	root := BuildSchema().Query
 
 	if variables == nil {
 		variables = map[string]interface{}{}
@@ -412,7 +233,7 @@ func executeQuery(query string, variables map[string]interface{}) Response {
 		field, ok := root.Fields[sel.Name]
 		if !ok {
 			errs = append(errs, Error{
-				Message:    fmt.Sprintf("Cannot query field %q on type %q.", sel.Name, rootName),
+				Message:    fmt.Sprintf("Cannot query field %q on type %q.", sel.Name, root.Name),
 				Path:       []string{sel.Name},
 				Extensions: map[string]string{"code": "GRAPHQL_VALIDATION_FAILED"},
 			})

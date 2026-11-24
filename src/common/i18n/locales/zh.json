@@ -718,6 +718,10 @@
   "graphql": {
     "title": "GraphQL 浏览器 - {app_name}",
     "description": "交互式 GraphQL 浏览器",
+    "endpoint_usage": "GraphQL 端点。请提供 query 参数以运行只读查询。",
+    "invalid_variables": "variables 参数必须是 JSON 对象",
+    "unknown_operation": "未知操作名称“{operation_name}”。",
+    "queries_only": "此 GraphQL API 仅支持查询操作。",
     "query": "查询",
     "mutation": "变更",
     "subscription": "订阅",

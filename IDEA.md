@@ -1,6 +1,6 @@
 ## Project description
 
-API bundles text, cryptography, conversion, date/time, generator, validator, math, developer, network, parsing, geo, GeoIP/OSINT, weather, image, fun/faker, language, research, and Docker tools into one utility service. People can use its public HTTP and GraphQL APIs or its web interface. A companion command-line client supports terminal use.
+API bundles text, cryptography, conversion, date/time, generator, validator, math, developer, network, parsing, geo, GeoIP/OSINT, weather, image, fun/faker, language, research, and Docker tools into one utility service. People can use its public HTTP and read-only GraphQL APIs or its web interface. A companion command-line client supports terminal use.
 
 ## Project variables
 

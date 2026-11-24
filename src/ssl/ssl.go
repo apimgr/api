@@ -203,7 +203,7 @@ func (m *Manager) getLetsEncryptTLSConfig(domains []string) (*tls.Config, error)
 			CertPath: m.config.CertPath,
 		},
 		Email:       m.config.LetsEncrypt.Email,
-		RenewBefore: 7 * 24 * time.Hour,
+		RenewBefore: 30 * 24 * time.Hour,
 	}
 
 	tlsConfig := m.certManager.TLSConfig()

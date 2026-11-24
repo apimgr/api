@@ -122,6 +122,6 @@
   icons+text 60-79, minimal 40-59, single line <40, plain text under NO_COLOR/
   TERM=dumb); logs themselves are always raw plain text regardless of banner mode.
 
-**GraphQL response exception (PART 13/14).** Success uses `{"data": {...}}`; execution errors use `{"data": null or partial, "errors": [{"message": ..., "extensions": {"code": ...}}]}` with HTTP 200. Pre-execution failures such as authentication, rate limiting, or malformed JSON retain the canonical error envelope and HTTP status.
+**GraphQL exception (PART 13/14).** The API is query-only: POST accepts GraphQL query documents and GET accepts `query`, optional JSON `variables`, and optional `operationName`; mutations are rejected. Success uses `{"data": {...}}`; execution errors use `{"data": null or partial, "errors": [{"message": ..., "extensions": {"code": ...}}]}` with HTTP 200. Pre-execution failures such as authentication, rate limiting, or malformed JSON retain the canonical error envelope and HTTP status.
 
 For complete details, see AI.md PART 13, 14, 15
