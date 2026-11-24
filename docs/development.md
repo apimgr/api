@@ -16,6 +16,8 @@ The release build targets Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64.
 
 Run the repository's documented test and lint targets through the project validation workflow before submitting changes. Go commands must run in Docker and use `CGO_ENABLED=0`. The tests cover API behavior, server-rendered pages, generated API descriptions, clients, and platform-specific behavior where applicable. Do not rely on a documentation-only edit to justify claims about runtime behavior; compare the relevant requirement in `AI.md` and implementation first.
 
+`make test` runs the Go test suite. For binary and container integration coverage, run `tests/run_tests.sh`; it prefers Incus when available and otherwise uses Docker. The Docker path builds the server and client into a temporary directory, exercises their command-line and HTTP behavior, builds the production image, checks its required runtime commands, and waits for Tor health. If outbound networking is unavailable, the Tor health check may be skipped unless `REQUIRE_OVERLAY=1` is set.
+
 ## Server-rendered pages
 
 Pages use Go `html/template` and the shared server shell. Keep the primary flow usable without JavaScript, use semantic labels and headings, provide keyboard-accessible controls, and preserve responsive behavior at narrow widths. Use the shared template functions and components rather than introducing a second page framework. Interactive API explorers are the documented exception to the no-JavaScript requirement; surrounding page chrome and explanatory content remain usable without JavaScript.

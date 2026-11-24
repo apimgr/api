@@ -54,16 +54,6 @@ sudo ./api-linux-amd64 --service --install
 
 The command installs, enables, and starts the service using the host's supported service manager. See the [installation guide](https://apimgr-api.readthedocs.io/en/latest/installation/) for platform-specific details and service lifecycle commands.
 
-### System Service
-
-On a supported host, install, enable, and start the native service with:
-
-```bash
-sudo ./api-linux-amd64 --service --install
-```
-
-Use the platform's matching binary. The command installs and starts the service manager entry; inspect the available service commands with `./api-linux-amd64 --service --help`. See the [installation guide](https://apimgr-api.readthedocs.io/en/latest/installation/) for service behavior on other platforms.
-
 ## Client
 
 Install the `api-cli` binary for your platform from [GitHub Releases](https://github.com/apimgr/api/releases). Configure the target server with `--server` or `server.primary` in the CLI configuration file.
@@ -112,6 +102,8 @@ make test
 ```
 
 `make build` produces server and client binaries for Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. See the [development guide](https://apimgr-api.readthedocs.io/en/latest/development/) before changing code or documentation.
+
+`make test` runs the Go test suite. Run `tests/run_tests.sh` for binary and container integration checks, including the production image runtime-command and Tor health checks.
 
 ## Disclaimer
 

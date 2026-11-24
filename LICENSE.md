@@ -53,6 +53,8 @@ This software includes the following third-party libraries:
 | gopkg.in/yaml.v3 | v3.0.1 | MIT / Apache-2.0 | 2006-2011 Kirill Simonov; 2011-2019 Canonical Ltd |
 | modernc.org/sqlite | v1.34.5 | BSD-3-Clause | 2017 The Sqlite Authors |
 
+BSD-3-Clause: neither the names of the copyright holders nor the names of their contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
 Full license texts available at: https://spdx.org/licenses/
 
 ## Third-Party Data Attribution
