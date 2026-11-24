@@ -2,16 +2,17 @@
 
 ## P0: Project Contract
 
-- [ ] Align IDEA.md business behavior with AI.md without changing Project variables.
-- [ ] Inventory all project-defined API routes in IDEA.md and make route drift checking enforce the contract.
-- [ ] Remove or complete any advertised page/API capability that is a stub, incomplete, or outside the declared product scope.
+- [ ] Record the user-approved 8-letter owner-token cookie suffix in IDEA.md and mount the owner-token web routes that depend on it.
+- [ ] Verify that IDEA.md behavior and its route inventory match AI.md and that route-drift checks enforce the contract.
+- [ ] Finish the full implementation review for advertised pages and API capabilities, including any remaining stubs.
 
 ## P1: Server, Client, and Infrastructure
 
 - [ ] Reconcile all required AI.md parts against implementation, including server configuration, security, persistence, services, scheduler, integrations, CLI client, and eight-platform builds.
 - [ ] Reconcile every server page and tool page with AI.md frontend, accessibility, localization, and no-JavaScript requirements.
-- [ ] Add complete Italian locale support required by AI.md PART 30; obtain a complete Italian translation source rather than shipping English fallback text as an Italian locale.
-- [ ] Implement the coordinated-disclosure PGP key lifecycle from AI.md PART 11: Ed25519/Curve25519 key generation with expiry, installation-secret encrypted private-key storage, transactional rotation of retained reports, import/export/delete, keyserver publishing with durable retry state, metadata, and backup/restore verification.
+- [ ] Verify complete translated-key parity and Italian coverage under AI.md PART 30 after the current catalog changes.
+- [ ] Verify the coordinated-disclosure PGP lifecycle implementation under AI.md PART 11, including expiry, encrypted storage, report rotation, import/export/delete, retry persistence, metadata, and backup/restore.
+- [ ] Complete and verify AI.md PART 11 encryption-key rotation, including recovery from interrupted rotation and re-encryption of every dependent value.
 - [ ] Bring Docker, Compose, CI/CD, release, and GitHub policy files into AI.md compliance.
 - [ ] Add and verify the required GitLab, Gitea, Forgejo, and Jenkins CI workflows plus Renovate configuration under AI.md PART 27.
 
