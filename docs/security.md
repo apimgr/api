@@ -18,7 +18,7 @@ Rate limits distinguish read, write, health, and global burst classes. Defaults 
 
 | Endpoint | Purpose |
 |----------|---------|
-| `/.well-known/security.txt` and `/security.txt` | RFC 9116 contact, policy, and expiry information, generated per request |
+| `/.well-known/security.txt` | RFC 9116 contact, policy, and expiry information, generated per request |
 | `/.well-known/llms.txt` and `/llms.txt` | Public machine-readable application and API discovery |
 | `/.well-known/pgp-key.asc` | Project security public key when one has been generated and publishing is enabled |
 | `/server/security` | Human-readable security overview and reporting channels |
