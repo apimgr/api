@@ -100,7 +100,7 @@ func queryWHOIS(ctx context.Context, server, query string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to WHOIS server %s: %w", server, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := conn.SetDeadline(time.Now().Add(whoisDialTimeout)); err != nil {
 		return "", fmt.Errorf("failed to set WHOIS deadline: %w", err)
@@ -330,7 +330,7 @@ func (s *Service) SSLInfo(domain string) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("TLS handshake with %s failed: %w", domain, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	certs := conn.ConnectionState().PeerCertificates
 	if len(certs) == 0 {
@@ -471,7 +471,7 @@ func (s *Service) TechStack(rawURL string) (*TechStackInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("request to %s failed: %w", parsed.String(), err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
 	if err != nil {

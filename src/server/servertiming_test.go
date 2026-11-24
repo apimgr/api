@@ -71,6 +71,7 @@ func TestServerTimingMiddleware_HeaderFormat(t *testing.T) {
 	cfg := config.DefaultConfig()
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		findServerTimingWriter(w).RecordDatabaseTiming(0)
 		recordServerTiming(w, "render", 0)
 		w.WriteHeader(http.StatusOK)
 	})
@@ -85,12 +86,15 @@ func TestServerTimingMiddleware_HeaderFormat(t *testing.T) {
 	require.NotEmpty(t, header)
 
 	entries := splitServerTimingEntries(header)
-	require.Len(t, entries, 2, "expected exactly render and total entries, got %q", header)
+	require.Len(t, entries, 3, "expected exactly db, render and total entries, got %q", header)
+	assert.Equal(t, []string{"db;dur=0.0", "render;dur=0.0", entries[2]}, entries)
+	assert.Equal(t, "total;dur=0.0", entries[2])
 	for _, entry := range entries {
 		assert.Regexp(t, serverTimingEntryPattern, entry, "each entry must match `name;dur=N.N`")
 	}
-	assert.Equal(t, "render", entriesName(entries[0]))
-	assert.Equal(t, "total", entriesName(entries[1]))
+	assert.Equal(t, "db", entriesName(entries[0]))
+	assert.Equal(t, "render", entriesName(entries[1]))
+	assert.Equal(t, "total", entriesName(entries[2]))
 }
 
 func TestServerTimingMiddleware_OperatorToggleSuppressesInDebugMode(t *testing.T) {

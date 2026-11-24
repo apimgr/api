@@ -86,11 +86,11 @@ func redactQuery(rawQuery string) string {
 // isHealthCheckPath reports whether path is a health-check endpoint
 // eligible for access-log suppression on a successful response
 func isHealthCheckPath(path string) bool {
-	return isHealthCheckPathForBase(path, APIBasePath(config.Get()))
+	return isHealthCheckPathForBase(path, "/api")
 }
 
 func isHealthCheckPathForBase(path, apiBase string) bool {
-	return healthCheckPaths[path] || path == apiBase+"/server/healthz"
+	return healthCheckPaths[path] || (strings.HasPrefix(path, apiBase+"/") && strings.HasSuffix(path, "/server/healthz"))
 }
 
 // NewLogger creates a new logger instance
@@ -534,7 +534,7 @@ func (l *Logger) formatCustom(format string, r *http.Request, status int, size i
 	}
 
 	for key, value := range replacements {
-		result = strings.Replace(result, key, value, -1)
+		result = strings.ReplaceAll(result, key, value)
 	}
 
 	return result

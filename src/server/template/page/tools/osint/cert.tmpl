@@ -4,36 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/osint">OSINT Tools</a> / TLS Certificate Lookup
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/osint"}}">{{t .Lang "categories.osint.name"}}</a> {{t .Lang "tool_pages.text.tls.certificate.lookup.61a842bbfa"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">TLS Certificate Lookup</h1>
-        <button class="btn btn-icon" data-favorite="osint-cert" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.tls.certificate.lookup.7b4b92c441"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="osint-cert" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Inspect a domain's TLS certificate details (subject, issuer, validity, and more).
+        {{t .Lang "tool_pages.text.inspect.a.domain.s.tls.certificate.details.s.4b00d50b8b"}}
       </p>
 
-      <form id="cert-form" class="tool-form" data-template="{{.APIBasePath}}/osint/cert/{domain}">
+      <form id="cert-form" class="tool-form" data-template="{{.APIBasePath}}/osint/cert/{domain}" method="post" action="{{path .BaseURL "/osint/cert"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Domain</label>
-          <input type="text" name="domain" class="form-input" required placeholder="example.com">
+          <label class="form-label" for="cert-form-domain">{{t .Lang "tool_pages.text.domain.79fa33618d"}}</label>
+          <input type="text" name="domain" class="form-input" required placeholder="example.com" id="cert-form-domain">
         </div>
 
-        <button type="submit" class="btn btn-primary">Investigate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.investigate.e264109347"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="cert-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/osint/cert/example.com</pre>

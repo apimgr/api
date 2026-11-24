@@ -1,6 +1,8 @@
 package geoip
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -10,8 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/health"
 	maxminddb "github.com/oschwald/maxminddb-golang"
 )
 
@@ -53,7 +57,7 @@ type asnRecord struct {
 	Org string `maxminddb:"autonomous_system_organization"`
 }
 
-// countryRecord maps the combined geo-whois-asn-country MMDB
+// countryRecord maps the iptoasn-country MMDB
 type countryRecord struct {
 	CountryCode string `maxminddb:"country_code"`
 }
@@ -70,30 +74,22 @@ type cityRecord struct {
 	Timezone    string  `maxminddb:"timezone"`
 }
 
-// Database category names used to gate downloads and lookups against
-// server.geoip.databases.
+// MMDB file names on disk. They match the upstream ip-location-db release
+// asset names exactly; the country dataset exposes only country_code.
 const (
-	categoryASN     = "asn"
-	categoryCountry = "country"
-	categoryCity    = "city"
-)
-
-// MMDB file names on disk. They match the upstream ip-location-db artifact
-// names exactly, so the country file keeps its package name
-// geo-whois-asn-country.mmdb even though it exposes only country_code - there
-// is no separate WHOIS database and nothing here is labelled "WHOIS".
-const (
-	fileASN      = "asn.mmdb"
-	fileCountry  = "geo-whois-asn-country.mmdb"
+	fileASN      = "iptoasn-asn.mmdb"
+	fileCountry  = "iptoasn-country.mmdb"
 	fileCityIPv4 = "dbip-city-ipv4.mmdb"
 	fileCityIPv6 = "dbip-city-ipv6.mmdb"
+	lastUpdated  = ".last_updated"
 )
+
+const maxDatabaseAge = 21 * 24 * time.Hour
 
 // dbFile describes one downloadable MMDB database
 type dbFile struct {
-	name     string
-	url      string
-	category string
+	name string
+	url  string
 }
 
 // geoipFiles is the exact set of MMDB databases per AI.md PART 19. There is
@@ -101,39 +97,16 @@ type dbFile struct {
 // database's autonomous_system_organization field, combined with the country
 // database at query time.
 var geoipFiles = []dbFile{
-	{name: fileASN, url: "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb", category: categoryASN},
-	{name: fileCountry, url: "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb", category: categoryCountry},
-	{name: fileCityIPv4, url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv4.mmdb", category: categoryCity},
-	{name: fileCityIPv6, url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv6.mmdb", category: categoryCity},
+	{name: fileASN, url: "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-asn.mmdb"},
+	{name: fileCountry, url: "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-country.mmdb"},
+	{name: fileCityIPv4, url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv4.mmdb"},
+	{name: fileCityIPv6, url: "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv6.mmdb"},
 }
 
-// allDatabases enables every MMDB category, the PART 19 first-run default
-// used by the config-free Load/Download entry points.
-func allDatabases() config.GeoIPDatabasesConfig {
-	return config.GeoIPDatabasesConfig{ASN: true, Country: true, City: true}
-}
+var geoipHTTPClient = &http.Client{Timeout: 90 * time.Second}
 
-// categoryEnabled reports whether a database category is selected by the
-// server.geoip.databases config tree.
-func categoryEnabled(dbs config.GeoIPDatabasesConfig, category string) bool {
-	switch category {
-	case categoryASN:
-		return dbs.ASN
-	case categoryCountry:
-		return dbs.Country
-	case categoryCity:
-		return dbs.City
-	}
-	return false
-}
-
-// ResolveDir returns the directory the MMDB files live in: the operator's
-// server.geoip.dir when set, otherwise the PART 19 default of
-// {data_dir}/security/geoip.
-func ResolveDir(geo config.GeoIPConfig, dataDir string) string {
-	if dir := strings.TrimSpace(geo.Dir); dir != "" {
-		return dir
-	}
+// ResolveDir returns the fixed PART 19 database directory.
+func ResolveDir(_ config.GeoIPConfig, dataDir string) string {
 	return geoipDir(dataDir)
 }
 
@@ -156,12 +129,56 @@ func geoipDir(dataDir string) string {
 	return filepath.Join(dataDir, "security", "geoip")
 }
 
+// NeedsInitialDownload reports whether this installation has no successful
+// full GeoIP database refresh recorded yet.
+func NeedsInitialDownload(dataDir string) bool {
+	_, err := os.Stat(filepath.Join(geoipDir(dataDir), lastUpdated))
+	return os.IsNotExist(err)
+}
+
+// RegisterHealthChecks exposes the freshness of each required GeoIP dataset.
+func RegisterHealthChecks(dataDir string) {
+	dir := geoipDir(dataDir)
+	datasets := []struct {
+		key   string
+		files []string
+	}{
+		{key: "asn", files: []string{fileASN}},
+		{key: "country", files: []string{fileCountry}},
+		{key: "city", files: []string{fileCityIPv4, fileCityIPv6}},
+	}
+	for _, dataset := range datasets {
+		datasetKey, datasetFiles := dataset.key, dataset.files
+		health.Register("geoip_"+datasetKey, false, func() string {
+			return databaseStatus(dir, datasetFiles, time.Now().UTC())
+		})
+	}
+}
+
+func databaseStatus(dir string, files []string, now time.Time) string {
+	for _, name := range files {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil || info.Size() == 0 {
+			return "degraded"
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(dir, lastUpdated))
+	if err != nil {
+		return "degraded"
+	}
+	updated, err := time.Parse(time.RFC3339, strings.TrimSpace(string(data)))
+	if err != nil || now.Sub(updated) > maxDatabaseAge || updated.After(now.Add(time.Minute)) {
+		return "degraded"
+	}
+	return "ok"
+}
+
 // Load opens whatever MMDB databases are present on disk. Missing files are
 // not an error - GeoIP is a risk signal only, and per IDEA.md the geo/
 // network tools must keep returning IP-only results when databases are
 // unavailable. All other tools are unaffected.
 func (g *GeoIPDB) Load(dataDir string) error {
-	return g.loadFrom(geoipDir(dataDir), allDatabases())
+	return g.loadFrom(geoipDir(dataDir))
 }
 
 // LoadFromConfig opens the MMDB databases selected by the server.geoip
@@ -182,35 +199,29 @@ func (g *GeoIPDB) LoadFromConfig(geo config.GeoIPConfig, dataDir string) error {
 		log.Printf("GeoIP: presets with invalid ISO 3166-1 alpha-2 codes are ignored: %s", strings.Join(invalid, ", "))
 	}
 
-	return g.loadFrom(ResolveDir(geo, dataDir), geo.Databases)
+	return g.loadFrom(ResolveDir(geo, dataDir))
 }
 
 // loadFrom opens every enabled MMDB file found in dir, replacing whatever was
 // previously open. Missing and disabled databases are skipped rather than
 // treated as errors.
-func (g *GeoIPDB) loadFrom(dir string, dbs config.GeoIPDatabasesConfig) error {
+func (g *GeoIPDB) loadFrom(dir string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	g.closeLocked()
 
-	if dbs.ASN {
-		if reader, ok := openIfExists(filepath.Join(dir, fileASN)); ok {
-			g.asnDB = reader
-		}
+	if reader, ok := openIfExists(filepath.Join(dir, fileASN)); ok {
+		g.asnDB = reader
 	}
-	if dbs.Country {
-		if reader, ok := openIfExists(filepath.Join(dir, fileCountry)); ok {
-			g.countryDB = reader
-		}
+	if reader, ok := openIfExists(filepath.Join(dir, fileCountry)); ok {
+		g.countryDB = reader
 	}
-	if dbs.City {
-		if reader, ok := openIfExists(filepath.Join(dir, fileCityIPv4)); ok {
-			g.cityIPv4DB = reader
-		}
-		if reader, ok := openIfExists(filepath.Join(dir, fileCityIPv6)); ok {
-			g.cityIPv6DB = reader
-		}
+	if reader, ok := openIfExists(filepath.Join(dir, fileCityIPv4)); ok {
+		g.cityIPv4DB = reader
+	}
+	if reader, ok := openIfExists(filepath.Join(dir, fileCityIPv6)); ok {
+		g.cityIPv6DB = reader
 	}
 
 	g.loaded = g.asnDB != nil || g.countryDB != nil || g.cityIPv4DB != nil || g.cityIPv6DB != nil
@@ -251,7 +262,7 @@ func openIfExists(path string) (*maxminddb.Reader, bool) {
 func (g *GeoIPDB) closeLocked() {
 	for _, reader := range []*maxminddb.Reader{g.asnDB, g.countryDB, g.cityIPv4DB, g.cityIPv6DB} {
 		if reader != nil {
-			reader.Close()
+			_ = reader.Close()
 		}
 	}
 	g.asnDB = nil
@@ -322,7 +333,7 @@ func (g *GeoIPDB) Lookup(ip string) (*GeoIPEntry, error) {
 // Each file is downloaded independently - a failure on one database logs
 // a warning and continues with the rest, preserving graceful degradation.
 func Download(dataDir string) error {
-	return downloadInto(geoipDir(dataDir), allDatabases())
+	return downloadInto(geoipDir(dataDir))
 }
 
 // DownloadFromConfig fetches only the databases enabled by the server.geoip
@@ -335,14 +346,15 @@ func DownloadFromConfig(geo config.GeoIPConfig, dataDir string) error {
 		return nil
 	}
 
-	return downloadInto(ResolveDir(geo, dataDir), geo.Databases)
+	return downloadInto(ResolveDir(geo, dataDir))
 }
 
 // downloadInto fetches every enabled MMDB file into dir and reloads the
 // singleton from it. Each file is downloaded independently - a failure on one
 // database logs a warning and continues with the rest, preserving graceful
 // degradation.
-func downloadInto(dir string, dbs config.GeoIPDatabasesConfig) error {
+func downloadInto(dir string) error {
+	defer health.Refresh()
 	log.Println("GeoIP: Downloading latest databases...")
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -354,12 +366,9 @@ func downloadInto(dir string, dbs config.GeoIPDatabasesConfig) error {
 	selected := 0
 
 	for _, f := range geoipFiles {
-		if !categoryEnabled(dbs, f.category) {
-			continue
-		}
 		selected++
 
-		if err := downloadFile(f.url, filepath.Join(dir, f.name)); err != nil {
+		if err := downloadVerifiedFile(f.url, "https://github.com/sapics/ip-location-db/releases/download/checksum/"+f.name+".sha256", filepath.Join(dir, f.name)); err != nil {
 			log.Printf("GeoIP: failed to download %s: %v", f.name, err)
 			if firstErr == nil {
 				firstErr = err
@@ -371,51 +380,100 @@ func downloadInto(dir string, dbs config.GeoIPDatabasesConfig) error {
 
 	log.Printf("GeoIP: Downloaded %d/%d databases", downloaded, selected)
 
-	if err := Get().loadFrom(dir, dbs); err != nil {
+	if err := Get().loadFrom(dir); err != nil {
 		return err
 	}
 
-	if selected > 0 && downloaded == 0 {
-		return fmt.Errorf("all GeoIP database downloads failed: %w", firstErr)
+	if downloaded != selected {
+		if firstErr != nil {
+			return fmt.Errorf("downloaded %d of %d GeoIP databases: %w", downloaded, selected, firstErr)
+		}
+		return fmt.Errorf("downloaded %d of %d GeoIP databases", downloaded, selected)
+	}
+	if err := os.WriteFile(filepath.Join(dir, lastUpdated), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0600); err != nil {
+		return fmt.Errorf("write GeoIP update marker: %w", err)
 	}
 
 	return nil
 }
 
-// downloadFile fetches url and atomically writes it to path.
-func downloadFile(url, path string) error {
-	resp, err := http.Get(url)
+func downloadVerifiedFile(sourceURL, checksumURL, target string) error {
+	checksumResponse, err := geoipHTTPClient.Get(checksumURL)
+	if err != nil {
+		return fmt.Errorf("checksum download failed: %w", err)
+	}
+	defer func() {
+		if err := checksumResponse.Body.Close(); err != nil {
+			log.Printf("GeoIP: failed to close checksum response: %v", err)
+		}
+	}()
+	if checksumResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("checksum download failed with status: %d", checksumResponse.StatusCode)
+	}
+	checksumBody, err := io.ReadAll(io.LimitReader(checksumResponse.Body, 4096))
+	if err != nil {
+		return fmt.Errorf("checksum read failed: %w", err)
+	}
+	fields := strings.Fields(string(checksumBody))
+	if len(fields) == 0 || len(fields[0]) != sha256.Size*2 {
+		return fmt.Errorf("checksum file has invalid format")
+	}
+	want, err := hex.DecodeString(fields[0])
+	if err != nil {
+		return fmt.Errorf("checksum file has invalid SHA-256: %w", err)
+	}
+
+	response, err := geoipHTTPClient.Get(sourceURL)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("GeoIP: failed to close download response: %v", err)
+		}
+	}()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status: %d", response.StatusCode)
 	}
 
-	tmpPath := path + ".tmp"
-
-	file, err := os.Create(tmpPath)
+	file, err := os.CreateTemp(filepath.Dir(target), ".geoip-*.tmp")
 	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
+		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
-
-	written, err := io.Copy(file, resp.Body)
-	file.Close()
-
-	if err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("failed to write file: %w", err)
+	tmpPath := file.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	if err := file.Chmod(0600); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("failed to set temporary file permissions: %w", err)
 	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("failed to rename file: %w", err)
+	hasher := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(file, hasher), response.Body)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return fmt.Errorf("failed to write downloaded database: %w", copyErr)
 	}
-
-	log.Printf("GeoIP: Downloaded %d bytes to %s", written, path)
+	if closeErr != nil {
+		return fmt.Errorf("failed to close downloaded database: %w", closeErr)
+	}
+	if !equalSHA256(hasher.Sum(nil), want) {
+		return fmt.Errorf("downloaded database checksum mismatch")
+	}
+	if err := replaceFileAtomically(tmpPath, target); err != nil {
+		return fmt.Errorf("failed to replace database: %w", err)
+	}
+	log.Printf("GeoIP: Downloaded and verified %d bytes to %s", written, target)
 	return nil
+}
+
+func equalSHA256(left, right []byte) bool {
+	if len(left) != sha256.Size || len(right) != sha256.Size {
+		return false
+	}
+	var difference byte
+	for i := range left {
+		difference |= left[i] ^ right[i]
+	}
+	return difference == 0
 }
 
 // IsCountryBlocked checks if a country code is in the block list

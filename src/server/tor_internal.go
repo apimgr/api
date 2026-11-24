@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/tor"
 )
 
@@ -76,18 +77,18 @@ func torStatusHandler(w http.ResponseWriter, r *http.Request) {
 func torValidateHandler(w http.ResponseWriter, r *http.Request) {
 	m := tor.Get()
 	if m == nil {
-		writeEnvelopeError(w, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED", "Tor is not configured on this server", nil)
+		writeLocalizedAPIError(w, r, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED")
 		return
 	}
 
 	var issues []string
 	cfg := m.ConfigSnapshot()
 	if cfg.VirtualPort < 1 || cfg.VirtualPort > 65535 {
-		issues = append(issues, "virtual_port must be between 1 and 65535")
+		issues = append(issues, i18n.Translate(i18n.LangFromRequest(r), "tor.validation.virtual_port_range"))
 	}
 	if m.Running() {
 		if err := m.Ping(); err != nil {
-			issues = append(issues, "control connection unresponsive: "+err.Error())
+			issues = append(issues, i18n.Translate(i18n.LangFromRequest(r), "tor.validation.control_unresponsive"))
 		}
 	}
 
@@ -102,7 +103,7 @@ func torValidateHandler(w http.ResponseWriter, r *http.Request) {
 func torRestartHandler(w http.ResponseWriter, r *http.Request) {
 	m := tor.Get()
 	if m == nil {
-		writeEnvelopeError(w, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED", "Tor is not configured on this server", nil)
+		writeLocalizedAPIError(w, r, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED")
 		return
 	}
 
@@ -110,7 +111,7 @@ func torRestartHandler(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := m.Restart(ctx); err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "TOR_RESTART_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "TOR_RESTART_FAILED")
 		return
 	}
 
@@ -124,7 +125,7 @@ func torRestartHandler(w http.ResponseWriter, r *http.Request) {
 func torRegenerateHandler(w http.ResponseWriter, r *http.Request) {
 	m := tor.Get()
 	if m == nil {
-		writeEnvelopeError(w, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED", "Tor is not configured on this server", nil)
+		writeLocalizedAPIError(w, r, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED")
 		return
 	}
 
@@ -133,7 +134,7 @@ func torRegenerateHandler(w http.ResponseWriter, r *http.Request) {
 
 	address, err := m.RegenerateAddress(ctx)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "TOR_REGENERATE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "TOR_REGENERATE_FAILED")
 		return
 	}
 
@@ -157,18 +158,18 @@ type torVanityStartRequest struct {
 func torVanityStartHandler(w http.ResponseWriter, r *http.Request) {
 	m := tor.Get()
 	if m == nil {
-		writeEnvelopeError(w, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED", "Tor is not configured on this server", nil)
+		writeLocalizedAPIError(w, r, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED")
 		return
 	}
 
 	var req torVanityStartRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "BAD_REQUEST")
 		return
 	}
 
 	if err := tor.ValidateVanityPrefix(req.Prefix); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED")
 		return
 	}
 
@@ -185,7 +186,7 @@ func torVanityStartHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := tor.GenerateVanityAddress(ctx, req.Prefix, req.MaxAttempts)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusRequestTimeout, "VANITY_SEARCH_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusRequestTimeout, "VANITY_SEARCH_FAILED")
 		return
 	}
 
@@ -204,7 +205,7 @@ func torVanityStartHandler(w http.ResponseWriter, r *http.Request) {
 func torVanityApplyHandler(w http.ResponseWriter, r *http.Request) {
 	m := tor.Get()
 	if m == nil {
-		writeEnvelopeError(w, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED", "Tor is not configured on this server", nil)
+		writeLocalizedAPIError(w, r, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED")
 		return
 	}
 
@@ -213,7 +214,7 @@ func torVanityApplyHandler(w http.ResponseWriter, r *http.Request) {
 
 	address, err := m.ApplyLastVanity(ctx)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusConflict, "NO_PENDING_VANITY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusConflict, "NO_PENDING_VANITY")
 		return
 	}
 
@@ -235,19 +236,19 @@ type torImportKeysRequest struct {
 func torImportKeysHandler(w http.ResponseWriter, r *http.Request) {
 	m := tor.Get()
 	if m == nil {
-		writeEnvelopeError(w, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED", "Tor is not configured on this server", nil)
+		writeLocalizedAPIError(w, r, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED")
 		return
 	}
 
 	var req torImportKeysRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON body", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "BAD_REQUEST")
 		return
 	}
 
 	raw, err := base64.StdEncoding.DecodeString(req.KeyBlob)
 	if err != nil || len(raw) != 64 {
-		writeEnvelopeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "key_blob must be base64 of a raw 64-byte ed25519 private key", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED")
 		return
 	}
 
@@ -256,7 +257,7 @@ func torImportKeysHandler(w http.ResponseWriter, r *http.Request) {
 
 	address, err := m.ApplyKeys(ctx, []byte(req.KeyBlob))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "TOR_IMPORT_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "TOR_IMPORT_FAILED")
 		return
 	}
 

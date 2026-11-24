@@ -8,8 +8,8 @@ import (
 
 // recordStarted publishes the PART 20 Tor gauges for a successfully started
 // hidden service: the binary was found (enabled), the owned child process is
-// up (running), and bootstrap plus ADD_ONION both completed, which means a
-// circuit to the network is established.
+// up (running), and bootstrap plus hidden-service hostname publication
+// completed, which means Tor's service is ready.
 func recordStarted() {
 	m := metrics.Get()
 	m.SetTorEnabled(true)

@@ -4,45 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/image">Images</a> / Apply Image Filter
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/image"}}">{{t .Lang "categories.image.name"}}</a> {{t .Lang "tool_pages.text.apply.image.filter.61a1489476"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Apply Image Filter</h1>
-        <button class="btn btn-icon" data-favorite="image-filter" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.apply.image.filter.c1445e494b"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="image-filter" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Upload an image and apply a grayscale, sepia, invert, blur, brighten, or darken filter.
+        {{t .Lang "tool_pages.text.upload.an.image.and.apply.a.grayscale.sepia.1c4f99ae6b"}}
       </p>
 
-      <form id="filter-form" class="tool-form" method="post" action="{{.APIBasePath}}/image/filter" enctype="multipart/form-data">
+      <form id="filter-form" class="tool-form" method="post" action="{{path .BaseURL "/image/filter"}}" enctype="multipart/form-data" data-api-endpoint="{{.APIBasePath}}/image/filter">
         {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label" for="filter-image">Image File</label>
+          <label class="form-label" for="filter-image">{{t .Lang "tool_pages.text.image.file.93d41abc35"}}</label>
           <input type="file" id="filter-image" name="image" class="form-input" accept="image/png,image/jpeg,image/gif" required>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="filter-name">Filter</label>
+          <label class="form-label" for="filter-name">{{t .Lang "common.filter"}}</label>
           <select id="filter-name" name="name" class="form-input">
-            <option value="grayscale">Grayscale</option>
-            <option value="sepia">Sepia</option>
-            <option value="invert">Invert</option>
-            <option value="blur">Blur</option>
-            <option value="brighten">Brighten</option>
-            <option value="darken">Darken</option>
+            <option value="grayscale">{{t .Lang "tool_pages.text.grayscale.93638ea9e0"}}</option>
+            <option value="sepia">{{t .Lang "tool_pages.text.sepia.7464e26f38"}}</option>
+            <option value="invert">{{t .Lang "tool_pages.text.invert.7e04f2ffb9"}}</option>
+            <option value="blur">{{t .Lang "tool_pages.text.blur.cd83e6731d"}}</option>
+            <option value="brighten">{{t .Lang "tool_pages.text.brighten.1f0fdb9a84"}}</option>
+            <option value="darken">{{t .Lang "tool_pages.text.darken.d540e5346b"}}</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="filter-amount">Amount</label>
+          <label class="form-label" for="filter-amount">{{t .Lang "tool_pages.text.amount.49e96d7cdf"}}</label>
           <input type="number" id="filter-amount" name="amount" class="form-input" min="0" step="0.1" value="0.3">
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="filter-format">Output Format</label>
+          <label class="form-label" for="filter-format">{{t .Lang "tool_pages.text.output.format.ef22a51c86"}}</label>
           <select id="filter-format" name="format" class="form-input">
             <option value="png">PNG</option>
             <option value="jpeg">JPEG</option>
@@ -50,15 +50,23 @@
           </select>
         </div>
 
-        <button type="submit" class="btn btn-primary">Apply Filter</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.apply.filter.fa8f08b9e1"}}</button>
       </form>
 
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
+
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/image/filter?name=grayscale&amp;amount=0.3&amp;format=png" --data-binary @image.png -o filtered.png</pre>

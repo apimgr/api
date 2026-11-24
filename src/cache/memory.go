@@ -123,8 +123,33 @@ func (m *memoryStore) SlidingWindow(_ context.Context, key string, now time.Time
 	return len(valid), resetAt, nil
 }
 
+// CountWindow reads and prunes a window without recording a hit.
+func (m *memoryStore) CountWindow(_ context.Context, key string, now time.Time, dur time.Duration) (int, time.Time, error) {
+	m.mu.Lock()
+	w := m.windows[key]
+	m.mu.Unlock()
+	if w == nil {
+		return 0, time.Time{}, nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	windowStart := now.Add(-dur)
+	valid := w.timestamps[:0]
+	for _, ts := range w.timestamps {
+		if ts.After(windowStart) {
+			valid = append(valid, ts)
+		}
+	}
+	w.timestamps = valid
+	if len(valid) == 0 {
+		return 0, time.Time{}, nil
+	}
+	return len(valid), valid[0].Add(dur), nil
+}
+
 // recordLookup reports one sliding-window lookup to the PART 20 cache metrics.
 func (m *memoryStore) recordLookup(hit bool, expired, size int) {
+	debugCacheLog(memoryCacheName, hit, expired, size)
 	mx := metrics.Get()
 	if hit {
 		mx.RecordCacheHit(memoryCacheName)

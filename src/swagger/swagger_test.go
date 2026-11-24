@@ -92,3 +92,21 @@ func TestServeSpec(t *testing.T) {
 	require.Len(t, decoded.Servers, 1)
 	assert.Equal(t, "https://example.com", decoded.Servers[0].URL)
 }
+
+func TestServeSpecIncludesRouteTextMetadata(t *testing.T) {
+	handler := ServeSpecWithRoutes("1.0.0", "", "v1", []Route{{
+		Method:      http.MethodGet,
+		Path:        "/api/v1/fun/joke",
+		Primary:     "text",
+		TextMessage: "Retrieved successfully",
+	}})
+	recorder := httptest.NewRecorder()
+	handler(recorder, httptest.NewRequest(http.MethodGet, "/api/swagger", nil))
+
+	var spec Spec
+	require.NoError(t, json.NewDecoder(recorder.Body).Decode(&spec))
+	operation := spec.Paths["/api/v1/fun/joke"].Get
+	require.NotNil(t, operation)
+	assert.Equal(t, "text", operation.Primary)
+	assert.Equal(t, "Retrieved successfully", operation.TextMessage)
+}

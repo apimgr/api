@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/paths"
 )
 
@@ -43,6 +44,7 @@ const (
 	ServiceLaunchd
 	ServiceWindows
 	ServiceBSDRC
+	ServiceS6
 )
 
 // Status reports the current install/run/autostart state of the service,
@@ -71,9 +73,8 @@ func DetectServiceManager() ServiceType {
 }
 
 // detectLinuxServiceManager picks the first Linux service manager present,
-// in the priority order AI.md PART 23/24 describe: systemd, then OpenRC,
-// then runit, then SysVinit (chosen only once systemd and OpenRC are both
-// confirmed absent and a working update-rc.d/chkconfig exists).
+// in the priority order AI.md PART 23/24 describe: systemd, OpenRC, runit,
+// s6, then SysVinit (chosen only when the earlier managers are absent).
 func detectLinuxServiceManager() ServiceType {
 	if hasSystemd() {
 		return ServiceSystemd
@@ -81,8 +82,11 @@ func detectLinuxServiceManager() ServiceType {
 	if hasOpenRC() {
 		return ServiceOpenRC
 	}
-	if _, err := os.Stat("/run/runit"); err == nil {
+	if fileExists("/etc/runit") || commandExists("sv") {
 		return ServiceRunit
+	}
+	if commandExists("s6-svc") && hasRunningS6SVScan() {
+		return ServiceS6
 	}
 	if hasSysVinit() {
 		return ServiceSysVinit
@@ -90,24 +94,14 @@ func detectLinuxServiceManager() ServiceType {
 	return ServiceUnknown
 }
 
-// hasSystemd reports whether systemd manages this host, either through a
-// live /run/systemd/system booted marker, an /etc/systemd tree, or a
-// systemctl binary on PATH.
+// hasSystemd reports whether systemd is the running host init.
 func hasSystemd() bool {
-	if fileExists("/run/systemd/system") {
-		return true
-	}
-	if fileExists("/etc/systemd") {
-		return true
-	}
-	return commandExists("systemctl")
+	return fileExists("/run/systemd/system")
 }
 
-// hasOpenRC reports whether OpenRC manages this host. AI.md PART 24 keys
-// the check on /sbin/openrc-run specifically; a PATH lookup is accepted as
-// well for distributions that install it elsewhere.
+// hasOpenRC reports whether OpenRC is installed and running on this host.
 func hasOpenRC() bool {
-	return fileExists("/sbin/openrc-run") || commandExists("openrc-run")
+	return fileExists("/sbin/openrc-run") && fileExists("/run/openrc")
 }
 
 // hasSysVinit reports whether this host should use the SysVinit init
@@ -115,7 +109,7 @@ func hasOpenRC() bool {
 // /sbin/openrc-run and systemctl are both confirmed absent and /etc/init.d
 // exists alongside a working update-rc.d or chkconfig.
 func hasSysVinit() bool {
-	if hasOpenRC() || hasSystemd() {
+	if fileExists("/sbin/openrc-run") || commandExists("systemctl") {
 		return false
 	}
 	if !fileExists("/etc/init.d") {
@@ -173,7 +167,21 @@ func writeServiceDefinition() error {
 		return installUserService()
 	}
 
-	switch DetectServiceManager() {
+	manager := DetectServiceManager()
+	if manager == ServiceUnknown {
+		return fmt.Errorf("unsupported service manager")
+	}
+	if runtime.GOOS != "windows" {
+		uid, gid, err := RootSetup()
+		if err != nil {
+			return fmt.Errorf("prepare service account and runtime directories: %w", err)
+		}
+		if err := ClaimRuntimeDirs(uid, gid); err != nil {
+			return fmt.Errorf("set runtime directory ownership for service account: %w", err)
+		}
+	}
+
+	switch manager {
 	case ServiceSystemd:
 		return installSystemd()
 	case ServiceOpenRC:
@@ -182,6 +190,8 @@ func writeServiceDefinition() error {
 		return installSysVinit()
 	case ServiceRunit:
 		return installRunit()
+	case ServiceS6:
+		return installS6()
 	case ServiceLaunchd:
 		return installLaunchd()
 	case ServiceWindows:
@@ -263,6 +273,8 @@ func removeServiceDefinition() error {
 		return uninstallSysVinit()
 	case ServiceRunit:
 		return uninstallRunit()
+	case ServiceS6:
+		return uninstallS6()
 	case ServiceLaunchd:
 		return uninstallLaunchd()
 	case ServiceWindows:
@@ -294,13 +306,19 @@ func confirmDestructive(prompt string) (bool, error) {
 func Disable() error {
 	switch DetectServiceManager() {
 	case ServiceSystemd:
-		exec.Command("systemctl", systemctlArgs("stop")...).Run()
+		if err := exec.Command("systemctl", systemctlArgs("stop")...).Run(); err != nil {
+			return err
+		}
 		return exec.Command("systemctl", systemctlArgs("disable")...).Run()
 	case ServiceOpenRC:
-		exec.Command("rc-service", appName, "stop").Run()
+		if err := exec.Command("rc-service", appName, "stop").Run(); err != nil {
+			return err
+		}
 		return exec.Command("rc-update", "del", appName, "default").Run()
 	case ServiceSysVinit:
-		exec.Command(fmt.Sprintf("/etc/init.d/%s", appName), "stop").Run()
+		if err := exec.Command(fmt.Sprintf("/etc/init.d/%s", appName), "stop").Run(); err != nil {
+			return err
+		}
 		if commandExists("update-rc.d") {
 			return exec.Command("update-rc.d", "-f", appName, "remove").Run()
 		}
@@ -309,15 +327,31 @@ func Disable() error {
 		}
 		return nil
 	case ServiceRunit:
-		exec.Command("sv", "stop", appName).Run()
+		if GetStatus().Running {
+			if err := exec.Command("sv", "stop", appName).Run(); err != nil {
+				return err
+			}
+		}
 		downFile := fmt.Sprintf("/etc/sv/%s/down", appName)
 		return os.WriteFile(downFile, []byte{}, 0644)
+	case ServiceS6:
+		if err := exec.Command("s6-svc", "-d", s6ServicePath()).Run(); err != nil {
+			return err
+		}
+		if err := os.Remove(s6ServiceLink()); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return exec.Command("s6-svscanctl", "-a", s6ScanDir()).Run()
 	case ServiceLaunchd:
 		return exec.Command("launchctl", "unload", "-w", launchdPlistPath()).Run()
 	case ServiceWindows:
 		return disableWindows()
 	case ServiceBSDRC:
-		exec.Command("service", appName, "stop").Run()
+		if GetStatus().Running {
+			if err := exec.Command("service", appName, "stop").Run(); err != nil {
+				return err
+			}
+		}
 		return exec.Command("sysrc", fmt.Sprintf("%s_enable=NO", appName)).Run()
 	default:
 		return fmt.Errorf("unsupported service manager")
@@ -329,10 +363,14 @@ func Start() error {
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("start")...).Run()
-	case ServiceOpenRC, ServiceSysVinit:
-		return exec.Command("service", appName, "start").Run()
+	case ServiceOpenRC:
+		return exec.Command("rc-service", appName, "start").Run()
+	case ServiceSysVinit:
+		return exec.Command(fmt.Sprintf("/etc/init.d/%s", appName), "start").Run()
 	case ServiceRunit:
 		return exec.Command("sv", "start", appName).Run()
+	case ServiceS6:
+		return exec.Command("s6-svc", "-u", s6ServicePath()).Run()
 	case ServiceLaunchd:
 		return exec.Command("launchctl", "load", launchdPlistPath()).Run()
 	case ServiceWindows:
@@ -349,10 +387,14 @@ func Stop() error {
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("stop")...).Run()
-	case ServiceOpenRC, ServiceSysVinit:
-		return exec.Command("service", appName, "stop").Run()
+	case ServiceOpenRC:
+		return exec.Command("rc-service", appName, "stop").Run()
+	case ServiceSysVinit:
+		return exec.Command(fmt.Sprintf("/etc/init.d/%s", appName), "stop").Run()
 	case ServiceRunit:
 		return exec.Command("sv", "stop", appName).Run()
+	case ServiceS6:
+		return exec.Command("s6-svc", "-d", s6ServicePath()).Run()
 	case ServiceLaunchd:
 		return exec.Command("launchctl", "unload", launchdPlistPath()).Run()
 	case ServiceWindows:
@@ -370,16 +412,26 @@ func Restart() error {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("restart")...).Run()
 	case ServiceOpenRC:
-		return exec.Command("rc-service", appName, "restart").Run()
+		output, err := exec.Command("rc-service", appName, "restart").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("rc-service %s restart failed: %w: %s", appName, err, strings.TrimSpace(string(output)))
+		}
+		return nil
 	case ServiceSysVinit:
 		return exec.Command(fmt.Sprintf("/etc/init.d/%s", appName), "restart").Run()
 	case ServiceRunit:
 		return exec.Command("sv", "restart", appName).Run()
+	case ServiceS6:
+		return exec.Command("s6-svc", "-r", s6ServicePath()).Run()
 	case ServiceLaunchd:
-		Stop()
+		if err := Stop(); err != nil {
+			return err
+		}
 		return Start()
 	case ServiceWindows:
-		exec.Command("sc.exe", "stop", appName).Run()
+		if err := exec.Command("sc.exe", "stop", appName).Run(); err != nil {
+			return err
+		}
 		return exec.Command("sc.exe", "start", appName).Run()
 	case ServiceBSDRC:
 		return exec.Command("service", appName, "restart").Run()
@@ -394,10 +446,14 @@ func Reload() error {
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("reload")...).Run()
-	case ServiceOpenRC, ServiceSysVinit:
-		return exec.Command("service", appName, "reload").Run()
+	case ServiceOpenRC:
+		return exec.Command("rc-service", appName, "reload").Run()
+	case ServiceSysVinit:
+		return exec.Command(fmt.Sprintf("/etc/init.d/%s", appName), "reload").Run()
 	case ServiceRunit:
 		return exec.Command("sv", "hup", appName).Run()
+	case ServiceS6:
+		return Restart()
 	default:
 		return Restart()
 	}
@@ -417,7 +473,7 @@ func GetStatus() Status {
 		st.Enabled = exec.Command("systemctl", "is-enabled", "--quiet", appName).Run() == nil
 	case ServiceOpenRC:
 		st.Installed = fileExists(fmt.Sprintf("/etc/init.d/%s", appName))
-		st.Running = exec.Command("service", appName, "status").Run() == nil
+		st.Running = exec.Command("rc-service", appName, "status").Run() == nil
 		if out, err := exec.Command("rc-update", "show", "default").Output(); err == nil {
 			st.Enabled = strings.Contains(string(out), appName)
 		}
@@ -429,6 +485,13 @@ func GetStatus() Status {
 		st.Installed = fileExists(fmt.Sprintf("/etc/sv/%s", appName))
 		st.Running = exec.Command("sv", "status", appName).Run() == nil
 		st.Enabled = st.Installed && !fileExists(fmt.Sprintf("/etc/sv/%s/down", appName))
+	case ServiceS6:
+		st.Installed = fileExists(s6ServiceDefinition())
+		st.Enabled = fileExists(s6ServiceLink())
+		if st.Enabled {
+			out, err := exec.Command("s6-svstat", s6ServicePath()).Output()
+			st.Running = err == nil && strings.HasPrefix(strings.TrimSpace(string(out)), "up ")
+		}
 	case ServiceLaunchd:
 		st.Installed = fileExists(fmt.Sprintf("/Library/LaunchDaemons/%s.plist", plistName)) || fileExists(userLaunchAgentPath())
 		st.Running = exec.Command("launchctl", "list", plistName).Run() == nil
@@ -524,6 +587,8 @@ func (s ServiceType) String() string {
 		return "windows"
 	case ServiceBSDRC:
 		return "rc.d"
+	case ServiceS6:
+		return "s6"
 	default:
 		return "unknown"
 	}
@@ -532,29 +597,27 @@ func (s ServiceType) String() string {
 // HelpText renders the --service --help output for binaryName, including the
 // live status block AI.md PART 23 requires. binaryName is the actual
 // (possibly renamed) binary name so help always reflects how it was invoked.
-func HelpText(binaryName string) string {
+func HelpText(binaryName, lang string) string {
 	st := GetStatus()
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "Usage: %s --service <command>\n\n", binaryName)
-	b.WriteString("Service control:\n")
-	b.WriteString("  start                 Start the service\n")
-	b.WriteString("  stop                  Stop the service\n")
-	b.WriteString("  restart               Restart the service\n")
-	b.WriteString("  reload                Reload the service configuration\n\n")
-	b.WriteString("Service management:\n")
-	b.WriteString("  --install             Install, enable, and start the service\n")
-	b.WriteString("  --disable             Stop and disable the service (keeps data and config)\n")
-	b.WriteString("  --uninstall           Remove the service, all data, config, and the system user\n\n")
-	b.WriteString("Current status:\n")
-	fmt.Fprintf(&b, "  Service manager:      %s\n", DetectServiceManager())
-	fmt.Fprintf(&b, "  Installed:            %s\n", yesNo(st.Installed))
-	fmt.Fprintf(&b, "  Running:              %s\n", yesNo(st.Running))
-	fmt.Fprintf(&b, "  Enabled at boot:      %s\n", yesNo(st.Enabled))
-	if st.PID > 0 {
-		fmt.Fprintf(&b, "  PID:                  %d\n", st.PID)
+	values := map[string]string{
+		"binary_name":     binaryName,
+		"service_manager": fmt.Sprint(DetectServiceManager()),
+		"installed":       i18n.Translate(lang, boolTranslationKey(st.Installed)),
+		"running":         i18n.Translate(lang, boolTranslationKey(st.Running)),
+		"enabled":         i18n.Translate(lang, boolTranslationKey(st.Enabled)),
+		"pid_line":        "",
 	}
-	return b.String()
+	if st.PID > 0 {
+		values["pid_line"] = i18n.TranslateFormat(lang, "cli.service_pid", map[string]string{"pid": strconv.Itoa(st.PID)})
+	}
+	return i18n.TranslateFormat(lang, "cli.service_help", values)
+}
+
+func boolTranslationKey(value bool) string {
+	if value {
+		return "cli.status_yes"
+	}
+	return "cli.status_no"
 }
 
 // yesNo renders a boolean as the yes/no wording used by the status block.

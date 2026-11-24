@@ -14,6 +14,9 @@ const (
 	OrgName = "apimgr"
 	// ProjectName is the project name
 	ProjectName = "api"
+	// OwnerTokenCookieName is the project-unique cookie and localStorage key
+	// recorded in IDEA.md for the anonymous owner credential.
+	OwnerTokenCookieName = "api_owner_token_suexgbvs"
 )
 
 var (
@@ -28,15 +31,6 @@ var (
 // privileges, evaluated once at package init before any privilege drop.
 // GetBackupDir's fallback logic must not flip modes mid-run.
 var startedElevated = isElevatedNow()
-
-// isElevatedNow reports whether the current process is running with
-// root/Administrator privileges at this instant
-func isElevatedNow() bool {
-	if runtime.GOOS == "windows" {
-		return os.Getenv("USERDOMAIN") == os.Getenv("COMPUTERNAME")
-	}
-	return os.Geteuid() == 0
-}
 
 // IsElevated returns whether the process started with elevated privileges,
 // captured once at startup before any privilege drop (see startedElevated).
@@ -134,13 +128,8 @@ func GetDefaultDirs() (configDir, dataDir, logsDir string) {
 			filepath.Join("/data/log", ProjectName)
 	}
 
-	// Check if running as root/admin
-	isRoot := false
-	if runtime.GOOS == "windows" {
-		isRoot = os.Getenv("USERDOMAIN") == os.Getenv("COMPUTERNAME")
-	} else {
-		isRoot = os.Geteuid() == 0
-	}
+	// Use the startup privilege state for path selection.
+	isRoot := startedElevated
 
 	if isRoot {
 		switch runtime.GOOS {
@@ -224,12 +213,7 @@ func GetCacheDir() string {
 		return filepath.Join("/data", ProjectName, "cache")
 	}
 
-	isRoot := false
-	if runtime.GOOS == "windows" {
-		isRoot = os.Getenv("USERDOMAIN") == os.Getenv("COMPUTERNAME")
-	} else {
-		isRoot = os.Geteuid() == 0
-	}
+	isRoot := startedElevated
 
 	if isRoot {
 		switch runtime.GOOS {
@@ -381,11 +365,15 @@ func userBackupDir() string {
 // data directory since the PID file is skipped entirely at write time
 // anyway (see IsRunningInContainer callers in pidfile.WritePIDFile).
 func DefaultPIDPath() string {
-	if IsRunningInContainer() {
+	return defaultPIDPath(IsRunningInContainer(), startedElevated)
+}
+
+func defaultPIDPath(inContainer, isElevated bool) string {
+	if inContainer {
 		return filepath.Join("/data", ProjectName, ProjectName+".pid")
 	}
 
-	if startedElevated {
+	if isElevated {
 		switch runtime.GOOS {
 		case "windows":
 			programData := os.Getenv("ProgramData")
@@ -394,7 +382,7 @@ func DefaultPIDPath() string {
 			}
 			return filepath.Join(programData, OrgName, ProjectName, ProjectName+".pid")
 		default:
-			return filepath.Join("/var/run", OrgName, ProjectName+".pid")
+			return filepath.Join("/var/run", OrgName, ProjectName, ProjectName+".pid")
 		}
 	}
 
@@ -432,7 +420,7 @@ func isWritable(path string) bool {
 	if err != nil {
 		return false
 	}
-	f.Close()
-	os.Remove(testFile)
+	_ = f.Close()
+	_ = os.Remove(testFile)
 	return true
 }

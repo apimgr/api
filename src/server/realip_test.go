@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -157,6 +158,25 @@ func TestRealIPMiddleware(t *testing.T) {
 
 		assert.Equal(t, "127.0.0.1:9999", capturedRemoteAddr)
 	})
+}
+
+func TestRealIPMiddlewarePreservesTorCircuitIdentity(t *testing.T) {
+	cfg := config.DefaultConfig()
+	var remote, original string
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		remote = r.RemoteAddr
+		original, _ = r.Context().Value(originalPeerContextKey).(string)
+		if !IsTorRequest(r) {
+			t.Error("expected request to be identified as Tor")
+		}
+	})
+	request := httptest.NewRequest(http.MethodGet, "http://example.onion/", nil)
+	request.Header.Set("X-Forwarded-For", "198.51.100.8")
+	request = request.WithContext(context.WithValue(request.Context(), torCircuitContextKey, "tor:0123456789abcdef"))
+	recorder := httptest.NewRecorder()
+	realIPMiddleware(cfg)(next).ServeHTTP(recorder, request)
+	assert.Equal(t, "tor:0123456789abcdef", remote)
+	assert.Equal(t, "tor:0123456789abcdef", original)
 }
 
 // trustedProxyResolver.resolve must accept CIDR entries, bare IP entries,

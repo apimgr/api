@@ -35,25 +35,41 @@ func TestSetBranch(t *testing.T) {
 	assert.Equal(t, BranchBeta, cfg.Branch)
 }
 
+func TestNormalizeBranchAliases(t *testing.T) {
+	for _, alias := range []string{"devel", "daily", "rolling", "dev", "development"} {
+		got, ok := NormalizeBranch(alias)
+		assert.True(t, ok, alias)
+		assert.Equal(t, BranchDevel, got, alias)
+	}
+}
+
+func TestIsNewerRelease(t *testing.T) {
+	assert.True(t, isNewerRelease("1.2.4", "1.2.3"))
+	assert.True(t, isNewerRelease("20261123000000-beta", "1.2.3"))
+	assert.True(t, isNewerRelease("devel", "1.2.3"))
+	assert.False(t, isNewerRelease("1.2.3", "1.2.3"))
+	assert.False(t, isNewerRelease("1.2.2", "1.2.3"))
+}
+
 func TestMatchesBranch(t *testing.T) {
 	stable := Release{TagName: "1.2.3", Prerelease: false}
 	beta := Release{TagName: "20260101000000-beta", Prerelease: true}
-	daily := Release{TagName: "daily", Prerelease: true}
+	devel := Release{TagName: "devel", Prerelease: true}
 
 	// Stable releases match every channel.
 	assert.True(t, matchesBranch(stable, BranchStable))
 	assert.True(t, matchesBranch(stable, BranchBeta))
 	assert.True(t, matchesBranch(stable, BranchDaily))
 
-	// Beta releases match beta and daily, never stable.
+	// Beta releases match beta and devel, never stable.
 	assert.False(t, matchesBranch(beta, BranchStable))
 	assert.True(t, matchesBranch(beta, BranchBeta))
 	assert.True(t, matchesBranch(beta, BranchDaily))
 
-	// The rolling daily release matches only the daily channel.
-	assert.False(t, matchesBranch(daily, BranchStable))
-	assert.False(t, matchesBranch(daily, BranchBeta))
-	assert.True(t, matchesBranch(daily, BranchDaily))
+	// The rolling devel release matches only the devel channel.
+	assert.False(t, matchesBranch(devel, BranchStable))
+	assert.False(t, matchesBranch(devel, BranchBeta))
+	assert.True(t, matchesBranch(devel, BranchDaily))
 }
 
 func TestBinaryAssetName(t *testing.T) {
@@ -75,7 +91,7 @@ func TestVerifyChecksum(t *testing.T) {
 
 func TestFetchExpectedChecksum(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("abc123  api-linux-amd64\ndef456  api-darwin-arm64\n"))
+		_, _ = w.Write([]byte("abc123  api-linux-amd64\ndef456  api-darwin-arm64\n"))
 	}))
 	defer srv.Close()
 
@@ -113,7 +129,9 @@ func withStubGitHubAPI(t *testing.T, handler http.HandlerFunc) {
 func TestCheckForUpdateStableAlreadyCurrent(t *testing.T) {
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		require.Contains(t, r.URL.Path, "/releases/latest")
-		json.NewEncoder(w).Encode(Release{TagName: "1.2.3", Prerelease: false, PublishedAt: time.Now()})
+		if err := json.NewEncoder(w).Encode(Release{TagName: "1.2.3", Prerelease: false, PublishedAt: time.Now()}); err != nil {
+			t.Errorf("encode release: %v", err)
+		}
 	})
 
 	release, err := CheckForUpdate(context.Background(), "1.2.3", BranchStable, 0)
@@ -123,7 +141,9 @@ func TestCheckForUpdateStableAlreadyCurrent(t *testing.T) {
 
 func TestCheckForUpdateStableNewer(t *testing.T) {
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(Release{TagName: "1.3.0", Prerelease: false, PublishedAt: time.Now()})
+		if err := json.NewEncoder(w).Encode(Release{TagName: "1.3.0", Prerelease: false, PublishedAt: time.Now()}); err != nil {
+			t.Errorf("encode release: %v", err)
+		}
 	})
 
 	release, err := CheckForUpdate(context.Background(), "1.2.3", BranchStable, 0)
@@ -145,10 +165,12 @@ func TestCheckForUpdateStableNotFound(t *testing.T) {
 func TestCheckForUpdateBetaSkipsOlderMatchesFirstNewer(t *testing.T) {
 	now := time.Now()
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]Release{
+		if err := json.NewEncoder(w).Encode([]Release{
 			{TagName: "20260201000000-beta", Prerelease: true, PublishedAt: now},
 			{TagName: "1.2.3", Prerelease: false, PublishedAt: now.Add(-time.Hour)},
-		})
+		}); err != nil {
+			t.Errorf("encode release response: %v", err)
+		}
 	})
 
 	release, err := CheckForUpdate(context.Background(), "1.2.3", BranchBeta, 0)
@@ -157,28 +179,32 @@ func TestCheckForUpdateBetaSkipsOlderMatchesFirstNewer(t *testing.T) {
 	assert.Equal(t, "20260201000000-beta", release.TagName)
 }
 
-func TestCheckForUpdateDailyNewerNightly(t *testing.T) {
+func TestCheckForUpdateDevelNewerNightly(t *testing.T) {
 	buildEpoch := time.Now().Add(-48 * time.Hour).Unix()
 	publishedAt := time.Now().Add(-time.Hour)
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]Release{
-			{TagName: "daily", Prerelease: true, PublishedAt: publishedAt},
-		})
+		if err := json.NewEncoder(w).Encode([]Release{
+			{TagName: "devel", Prerelease: true, PublishedAt: publishedAt},
+		}); err != nil {
+			t.Errorf("encode release response: %v", err)
+		}
 	})
 
 	release, err := CheckForUpdate(context.Background(), "1.2.3", BranchDaily, buildEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, release)
-	assert.Equal(t, "daily", release.TagName)
+	assert.Equal(t, "devel", release.TagName)
 }
 
-func TestCheckForUpdateDailyStaleNightly(t *testing.T) {
+func TestCheckForUpdateDevelStaleNightly(t *testing.T) {
 	buildEpoch := time.Now().Unix()
 	publishedAt := time.Now().Add(-48 * time.Hour)
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]Release{
-			{TagName: "daily", Prerelease: true, PublishedAt: publishedAt},
-		})
+		if err := json.NewEncoder(w).Encode([]Release{
+			{TagName: "devel", Prerelease: true, PublishedAt: publishedAt},
+		}); err != nil {
+			t.Errorf("encode release response: %v", err)
+		}
 	})
 
 	release, err := CheckForUpdate(context.Background(), "1.2.3", BranchDaily, buildEpoch)
@@ -189,7 +215,7 @@ func TestCheckForUpdateDailyStaleNightly(t *testing.T) {
 func TestCheckEligibleRespectsDeferDays(t *testing.T) {
 	now := time.Now()
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]Release{
+		_ = json.NewEncoder(w).Encode([]Release{
 			{TagName: "1.2.5", Prerelease: false, PublishedAt: now.Add(-5 * 24 * time.Hour)},
 			{TagName: "1.2.4", Prerelease: false, PublishedAt: now.Add(-40 * 24 * time.Hour)},
 		})
@@ -206,7 +232,7 @@ func TestCheckEligibleRespectsDeferDays(t *testing.T) {
 func TestCheckEligibleZeroDeferAdoptsNewest(t *testing.T) {
 	now := time.Now()
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]Release{
+		_ = json.NewEncoder(w).Encode([]Release{
 			{TagName: "1.2.5", Prerelease: false, PublishedAt: now},
 		})
 	})
@@ -220,7 +246,7 @@ func TestCheckEligibleZeroDeferAdoptsNewest(t *testing.T) {
 func TestCheckEligibleNoneEligible(t *testing.T) {
 	now := time.Now()
 	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode([]Release{
+		_ = json.NewEncoder(w).Encode([]Release{
 			{TagName: "1.2.5", Prerelease: false, PublishedAt: now},
 		})
 	})

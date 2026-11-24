@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -21,6 +20,10 @@ import (
 func geoIPMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isAllowlistedRequest(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if !cfg.Server.GeoIP.Enabled {
 				next.ServeHTTP(w, r)
 				return
@@ -34,7 +37,7 @@ func geoIPMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 			}
 
 			logCountryBlocked(r, clientIP, decision)
-			writeCountryBlocked(w)
+			writeCountryBlocked(w, r)
 		})
 	}
 }
@@ -59,12 +62,6 @@ func logCountryBlocked(r *http.Request, clientIP string, decision geoip.CountryD
 
 // writeCountryBlocked writes the canonical 403 body. The response never
 // reveals which rule matched or which country list is configured.
-func writeCountryBlocked(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusForbidden)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":      false,
-		"error":   "FORBIDDEN",
-		"message": "Access denied",
-	})
+func writeCountryBlocked(w http.ResponseWriter, r *http.Request) {
+	writeLocalizedAPIError(w, r, http.StatusForbidden, "FORBIDDEN")
 }

@@ -23,8 +23,8 @@ type grafanaDashboard struct {
 	Panels []grafanaPanel `json:"panels"`
 }
 
-// buildGrafanaDashboard returns the fixed 9-panel dashboard document for
-// projectName, per AI.md PART 20's "Grafana Dashboard JSON".
+// buildGrafanaDashboard returns the dashboard document for projectName,
+// covering every metric category required by AI.md PART 20.
 func buildGrafanaDashboard(projectName string) grafanaDashboard {
 	ns := namespace
 
@@ -83,11 +83,19 @@ func buildGrafanaDashboard(projectName string) grafanaDashboard {
 				},
 			},
 			{
+				Title: "Scheduler Tasks",
+				Type:  "graph",
+				Targets: []grafanaTarget{
+					{Expr: fmt.Sprintf("%s_scheduler_tasks_running", ns), LegendFormat: "{{task}}"},
+					{Expr: fmt.Sprintf("rate(%s_scheduler_tasks_total[5m])", ns), LegendFormat: "{{task}} {{status}}"},
+				},
+			},
+			{
 				Title: "Memory Usage",
 				Type:  "graph",
 				Targets: []grafanaTarget{
-					{Expr: fmt.Sprintf("%s_go_mem_alloc_bytes", ns), LegendFormat: "heap alloc"},
-					{Expr: fmt.Sprintf("%s_go_mem_sys_bytes", ns), LegendFormat: "sys"},
+					{Expr: fmt.Sprintf("%s_system_memory_usage_percent", ns), LegendFormat: "memory usage percent"},
+					{Expr: fmt.Sprintf("%s_system_disk_usage_percent", ns), LegendFormat: "disk usage percent"},
 				},
 			},
 			{
@@ -102,6 +110,13 @@ func buildGrafanaDashboard(projectName string) grafanaDashboard {
 				Type:  "stat",
 				Targets: []grafanaTarget{
 					{Expr: fmt.Sprintf("%s_app_uptime_seconds", ns), LegendFormat: "uptime"},
+				},
+			},
+			{
+				Title: "Active Owner Tokens",
+				Type:  "graph",
+				Targets: []grafanaTarget{
+					{Expr: fmt.Sprintf("%s_owner_tokens_active", ns), LegendFormat: "{{kind}}"},
 				},
 			},
 		},

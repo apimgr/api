@@ -143,11 +143,35 @@ func (r *redisStore) SlidingWindow(ctx context.Context, key string, now time.Tim
 	return int(card.Val()), resetAt, nil
 }
 
+// CountWindow reads and prunes a window without recording a hit.
+func (r *redisStore) CountWindow(ctx context.Context, key string, now time.Time, window time.Duration) (int, time.Time, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+	fullKey := r.prefix + key
+	windowStart := now.Add(-window)
+	pipe := r.client.TxPipeline()
+	pipe.ZRemRangeByScore(ctx, fullKey, "-inf", fmt.Sprintf("%d", windowStart.UnixNano()))
+	card := pipe.ZCard(ctx, fullKey)
+	oldest := pipe.ZRangeWithScores(ctx, fullKey, 0, 0)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, time.Time{}, fmt.Errorf("cache count sliding window: %w", err)
+	}
+	if card.Val() == 0 {
+		return 0, time.Time{}, nil
+	}
+	resetAt := now.Add(window)
+	if scores, err := oldest.Result(); err == nil && len(scores) > 0 {
+		resetAt = time.Unix(0, int64(scores[0].Score)).Add(window)
+	}
+	return int(card.Val()), resetAt, nil
+}
+
 // recordLookup reports one sliding-window lookup to the PART 20 cache metrics.
 // card counts the entries left in the window including the hit just added, so
 // anything above one means the key was already populated; trimmed counts the
 // entries the window trim expired out of the set.
 func (r *redisStore) recordLookup(card, trimmed int64) {
+	debugCacheLog(r.name, card > 0, int(trimmed), 0)
 	mx := metrics.Get()
 	if card > 1 {
 		mx.RecordCacheHit(r.name)

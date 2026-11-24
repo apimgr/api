@@ -1,56 +1,117 @@
 {{define "content"}}
-<section class="hero">
-  <div class="container">
-    <h1 class="hero-title">🔒 Privacy Policy</h1>
-    <p class="hero-subtitle">Last updated {{.UpdatedAt}}</p>
-  </div>
-</section>
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{t .Lang "privacy.title"}}</h1>
+    {{if .UpdatedAt}}
+    <p class="last-updated">{{t .Lang "privacy.last_updated"}} {{.UpdatedAt}}</p>
+    {{end}}
+  </header>
 
-<section>
-  <div class="container container-sm">
-    <div class="card">
-      <div class="card-header">What We Collect</div>
-      <div class="card-body">
-        <p>
-          {{.SiteTitle}} processes the data you submit to its tools (text,
-          crypto, datetime, and network utilities) only to compute and
-          return a response. Submitted content is not stored beyond the
-          lifetime of the request.
-        </p>
-      </div>
-    </div>
+  <section id="summary" class="section-card" aria-labelledby="privacy-summary">
+    <h2 id="privacy-summary">{{t .Lang "privacy.summary"}}</h2>
+    {{if .Privacy.Data.StoredOnServer}}
+    <p>{{t .Lang "privacy.data_stored"}}</p>
+    {{else}}
+    <p>{{t .Lang "page_text.text.deployment.data.is.not.stored.on.this.server.b5b93968af"}}</p>
+    {{end}}
+    {{if .Privacy.Data.Sold}}
+    <p>{{t .Lang "privacy.may_sell"}}</p>
+    {{else}}
+    <p>{{t .Lang "privacy.never_sell"}}</p>
+    {{end}}
+    <p>{{t .Lang "privacy.you_control"}} <a href="{{path .BaseURL "/server/preferences"}}">{{t .Lang "common.preferences"}}</a>.</p>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Logs</div>
-      <div class="card-body">
-        <p>
-          Standard operational logs (timestamp, route, response code, and
-          source IP for rate limiting and abuse prevention) may be retained
-          for a limited period. Logs are never sold or shared with third
-          parties.
-        </p>
-      </div>
-    </div>
+  <section id="cookies" class="section-card" aria-labelledby="privacy-cookies">
+    <h2 id="privacy-cookies">{{t .Lang "privacy.cookie_policy"}}</h2>
+    <ul>
+      <li><strong>{{t .Lang "page_text.text.essential.c22b83006a"}}</strong> {{.Privacy.Cookies.Essential.Description}}</li>
+      {{if .Privacy.Cookies.Preferences.Enabled}}
+      <li><strong>{{t .Lang "page_text.text.preferences.db81d863b7"}}</strong> {{.Privacy.Cookies.Preferences.Description}}</li>
+      {{end}}
+      {{if .Privacy.Cookies.Analytics.Enabled}}
+      <li><strong>{{t .Lang "page_text.text.analytics.a68019dd91"}}</strong> {{.Privacy.AnalyticsCookieDescription}}</li>
+      {{end}}
+    </ul>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Cookies</div>
-      <div class="card-body">
-        <p>
-          No tracking or advertising cookies are used. A single preference
-          cookie (theme) may be stored locally in your browser.
-        </p>
-      </div>
-    </div>
+  <section id="data-collection" class="section-card" aria-labelledby="privacy-collection">
+    <h2 id="privacy-collection">{{t .Lang "page_text.text.data.collection.ca8e9b8913"}}</h2>
+    <div class="prose">{{.PrivacyCollection}}</div>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Third Parties</div>
-      <div class="card-body">
-        <p>
-          No submitted data is shared with third-party services. This
-          deployment does not use analytics or advertising trackers.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
+  <section id="data-usage" class="section-card" aria-labelledby="privacy-usage">
+    <h2 id="privacy-usage">{{t .Lang "page_text.text.data.usage.49a3c82318"}}</h2>
+    <div class="prose">{{.PrivacyUsage}}</div>
+  </section>
+
+  <section id="data-security" class="section-card" aria-labelledby="privacy-security">
+    <h2 id="privacy-security">{{t .Lang "privacy.data_security"}}</h2>
+    <div class="prose">{{.PrivacySecurity}}</div>
+  </section>
+
+  <section id="data-storage" class="section-card" aria-labelledby="privacy-storage">
+    <h2 id="privacy-storage">{{t .Lang "page_text.text.data.storage.and.sharing.6847425701"}}</h2>
+    {{if .Privacy.Data.StoredOnServer}}
+    <p>{{t .Lang "page_text.text.service.configuration.and.operational.data.a.1efb022392"}}</p>
+    {{end}}
+    {{if .Privacy.Data.Sharing}}
+    <ul>
+      {{range .Privacy.Data.Sharing}}
+      <li><strong>{{.Condition}}:</strong> {{.When}}. Data: {{.Data}}</li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p>{{t .Lang "page_text.text.no.deployment.specific.sharing.conditions.ar.ab16fdc1f9"}}</p>
+    {{end}}
+  </section>
+
+  <section id="data-retention" class="section-card" aria-labelledby="privacy-retention">
+    <h2 id="privacy-retention">{{t .Lang "privacy.data_retention"}}</h2>
+    <p>{{.Privacy.Retention.Period}}</p>
+  </section>
+
+  <section id="your-rights" class="section-card" aria-labelledby="privacy-rights">
+    <h2 id="privacy-rights">{{t .Lang "privacy.your_rights"}}</h2>
+    <ul>
+      <li>{{if .Privacy.Retention.ExportAvailable}}{{t .Lang "privacy.export_available"}}{{else}}{{t .Lang "privacy.export_unavailable"}}{{end}}</li>
+      <li>{{if .Privacy.Retention.DeletionAvailable}}{{t .Lang "privacy.deletion_available"}}{{else}}{{t .Lang "privacy.deletion_unavailable"}}{{end}}</li>
+    </ul>
+    <p><a href="{{path .BaseURL "/server/preferences"}}">{{t .Lang "page_text.text.manage.preferences.b648ff66ed"}}</a></p>
+  </section>
+
+  {{if .Privacy.Data.Sold}}
+  <section id="ccpa-opt-out" class="section-card" aria-labelledby="privacy-ccpa">
+    <h2 id="privacy-ccpa">{{t .Lang "page_text.text.do.not.sell.or.share.my.personal.information.4603e3653d"}}</h2>
+    <form action="{{path .BaseURL "/server/ccpa"}}" method="POST" class="form">
+      {{csrfField .CSRFToken}}
+      <div class="form-group"><input type="checkbox" id="privacy-ccpa-opt-out" name="ccpa_opt_out" value="true"{{if .CCPAOptOut}} checked{{end}}><label for="privacy-ccpa-opt-out">{{t .Lang "page_text.text.do.not.sell.or.share.my.personal.information.115467752c"}}</label></div>
+      <button type="submit" class="btn btn-primary">{{t .Lang "page_text.text.save.privacy.choice.41619cb622"}}</button>
+    </form>
+  </section>
+  {{end}}
+
+  <section id="third-parties" class="section-card" aria-labelledby="privacy-third-parties">
+    <h2 id="privacy-third-parties">{{t .Lang "page_text.text.third.parties.ed717dad6c"}}</h2>
+    {{if .Privacy.ThirdParty.Services}}
+    <ul>
+      {{range .Privacy.ThirdParty.Services}}
+      <li>
+        <strong>{{.Name}}</strong>: {{.Purpose}} Data sent: {{.DataSent}}.
+        {{if .PolicyURL}}<a href="{{.PolicyURL}}" rel="noopener">{{t .Lang "page_text.text.privacy.policy.ba445cff38"}}</a>{{end}}
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p>{{t .Lang "page_text.text.no.deployment.configured.third.party.service.6797e05532"}}</p>
+    {{end}}
+  </section>
+
+  {{if .PrivacyExtension}}<section class="section-card prose">{{.PrivacyExtension}}</section>{{end}}
+
+  <section id="privacy-contact" class="section-card" aria-labelledby="privacy-requests">
+    <h2 id="privacy-requests">{{t .Lang "page_text.text.privacy.requests.d005c92e32"}}</h2>
+    <p>{{t .Lang "page_text.text.for.privacy.and.data.protection.reporting.se.3dfe914e57"}} <a href="{{path .BaseURL "/server/security/policy"}}">{{t .Lang "page_text.text.security.disclosure.policy.ecf9118024"}}</a>.</p>
+  </section>
+</article>
 {{end}}

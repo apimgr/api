@@ -4,36 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/osint">OSINT Tools</a> / WHOIS Lookup
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/osint"}}">{{t .Lang "categories.osint.name"}}</a> {{t .Lang "tool_pages.text.whois.lookup.0e71bba610"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">WHOIS Lookup</h1>
-        <button class="btn btn-icon" data-favorite="osint-domain" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.whois.lookup.8e4cb02877"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="osint-domain" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Look up the registrar, creation/expiry dates, and nameservers for a domain.
+        {{t .Lang "tool_pages.text.look.up.the.registrar.creation.expiry.dates.fdb9719dd6"}}
       </p>
 
-      <form id="domain-form" class="tool-form" data-template="{{.APIBasePath}}/osint/domain/{domain}">
+      <form id="domain-form" class="tool-form" data-template="{{.APIBasePath}}/osint/domain/{domain}" method="post" action="{{path .BaseURL "/osint/domain"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Domain</label>
-          <input type="text" name="domain" class="form-input" required placeholder="example.com">
+          <label class="form-label" for="domain-form-domain">{{t .Lang "tool_pages.text.domain.79fa33618d"}}</label>
+          <input type="text" name="domain" class="form-input" required placeholder="example.com" id="domain-form-domain">
         </div>
 
-        <button type="submit" class="btn btn-primary">Investigate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.investigate.e264109347"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="domain-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/osint/domain/example.com</pre>

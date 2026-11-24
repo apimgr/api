@@ -1,16 +1,30 @@
 package email
 
 import (
+	"bytes"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"html"
 	"log"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
+	"net/mail"
+	"net/netip"
 	"net/smtp"
+	"net/textproto"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	xhtml "golang.org/x/net/html"
 )
 
 // Config holds email configuration
@@ -46,21 +60,51 @@ const implicitTLSPort = 465
 
 // Message represents an email message
 type Message struct {
-	To      []string
-	Subject string
-	Body    string
-	HTML    bool
+	To       []string
+	Subject  string
+	Body     string
+	HTML     bool
+	TextBody string
+	HTMLBody string
+	// ReplyTo overrides the client's default only for this message. Callers
+	// must supply a validated mailbox address, never raw user input.
+	ReplyTo string
+	// OmitReplyTo suppresses both the per-message override and the client's
+	// default for notifications that must not route replies to submitters.
+	OmitReplyTo bool
+	Attachments []Attachment
+}
+
+// Attachment is a binary MIME attachment. Filenames are treated as display
+// metadata and never used as filesystem paths by the mailer.
+type Attachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
 }
 
 // Client represents an email client
 type Client struct {
-	config Config
+	config      Config
+	dialTimeout time.Duration
 }
 
 // NewClient creates a new email client
 func NewClient(config Config) *Client {
+	return newClient(config, true)
+}
+
+func newClient(config Config, logTLSPolicy bool) *Client {
+	mode := strings.ToLower(strings.TrimSpace(config.TLS))
+	if mode == "" {
+		mode = TLSModeAuto
+	}
+	if logTLSPolicy && mode != TLSModeNone && isPrivateSMTPIP(config.SMTPHost) {
+		log.Printf("SMTP host %s is a private address: TLS certificate verification skipped", config.SMTPHost)
+	}
 	return &Client{
-		config: config,
+		config:      config,
+		dialTimeout: dialTimeout,
 	}
 }
 
@@ -108,51 +152,263 @@ func Enabled() bool {
 
 // headerOrder fixes the emission order of the message headers so the
 // rendered message is byte-stable across sends (Go map iteration is not).
-var headerOrder = []string{"From", "To", "Reply-To", "Subject", "MIME-Version", "Content-Type"}
+var headerOrder = []string{"From", "To", "Reply-To", "Subject", "Date", "Message-ID", "MIME-Version", "Auto-Submitted", "Content-Type"}
 
 // buildMessage renders the RFC 5322 headers and body for msg.
-func (c *Client) buildMessage(msg Message, from string) []byte {
+func (c *Client) buildMessage(msg Message, from, recipient string) ([]byte, error) {
+	parsedFrom, err := mail.ParseAddress(from)
+	if err != nil || parsedFrom.Address != from {
+		return nil, fmt.Errorf("email has an invalid sender address")
+	}
+	if strings.ContainsAny(c.config.FromName, "\r\n") {
+		return nil, fmt.Errorf("email has an invalid sender name")
+	}
+	parsedRecipient, err := mail.ParseAddress(recipient)
+	if err != nil || parsedRecipient.Address != recipient || strings.ContainsAny(recipient, "\r\n") {
+		return nil, fmt.Errorf("email has an invalid recipient address")
+	}
+	if strings.TrimSpace(msg.Subject) == "" || strings.ContainsAny(msg.Subject, "\r\n") {
+		return nil, fmt.Errorf("email has an invalid subject")
+	}
+	if strings.ContainsAny(msg.ReplyTo, "\r\n") {
+		return nil, fmt.Errorf("email has an invalid Reply-To address")
+	}
+	messageID, err := createMessageID(parsedFrom.Address)
+	if err != nil {
+		return nil, fmt.Errorf("create email Message-ID: %w", err)
+	}
+	textBody, htmlBody := messageBodies(msg)
+	if strings.TrimSpace(textBody) == "" || strings.TrimSpace(htmlBody) == "" {
+		return nil, fmt.Errorf("email body must include non-empty text and HTML alternatives")
+	}
+	subject := msg.Subject
+	if !isASCII(subject) {
+		subject = mime.QEncoding.Encode("UTF-8", subject)
+	}
 	headers := map[string]string{
-		"From":         fmt.Sprintf("%s <%s>", c.config.FromName, from),
-		"To":           strings.Join(msg.To, ", "),
-		"Subject":      msg.Subject,
-		"MIME-Version": "1.0",
-		"Content-Type": "text/plain; charset=utf-8",
+		"From":           (&mail.Address{Name: c.config.FromName, Address: from}).String(),
+		"To":             recipient,
+		"Subject":        subject,
+		"Date":           time.Now().Format(time.RFC1123Z),
+		"Message-ID":     messageID,
+		"MIME-Version":   "1.0",
+		"Auto-Submitted": "auto-generated",
 	}
-	if msg.HTML {
-		headers["Content-Type"] = "text/html; charset=utf-8"
+	replyTo := msg.ReplyTo
+	if replyTo == "" && !msg.OmitReplyTo {
+		replyTo = c.config.ReplyTo
 	}
-	if c.config.ReplyTo != "" {
-		headers["Reply-To"] = c.config.ReplyTo
+	if replyTo != "" {
+		parsedReply, parseErr := mail.ParseAddress(replyTo)
+		if parseErr != nil || parsedReply.Address != replyTo || strings.ContainsAny(replyTo, "\r\n") {
+			return nil, fmt.Errorf("email has an invalid Reply-To address")
+		}
+		headers["Reply-To"] = replyTo
 	}
 
-	var b strings.Builder
-	for _, k := range headerOrder {
-		v, ok := headers[k]
-		if !ok {
-			continue
+	var body bytes.Buffer
+	var topWriter, alternativeWriter *multipart.Writer
+	if len(msg.Attachments) == 0 {
+		alternativeWriter = multipart.NewWriter(&body)
+		headers["Content-Type"] = "multipart/alternative; boundary=" + alternativeWriter.Boundary()
+		if err := writeAlternatives(alternativeWriter, textBody, htmlBody); err != nil {
+			return nil, err
 		}
-		fmt.Fprintf(&b, "%s: %s\r\n", k, v)
+		if err := alternativeWriter.Close(); err != nil {
+			return nil, err
+		}
+	} else {
+		var alternative bytes.Buffer
+		alternativeWriter = multipart.NewWriter(&alternative)
+		if err := writeAlternatives(alternativeWriter, textBody, htmlBody); err != nil {
+			return nil, err
+		}
+		if err := alternativeWriter.Close(); err != nil {
+			return nil, err
+		}
+		topWriter = multipart.NewWriter(&body)
+		headers["Content-Type"] = "multipart/mixed; boundary=" + topWriter.Boundary()
+		partHeader := make(textproto.MIMEHeader)
+		partHeader.Set("Content-Type", "multipart/alternative; boundary="+alternativeWriter.Boundary())
+		part, err := topWriter.CreatePart(partHeader)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := part.Write(alternative.Bytes()); err != nil {
+			return nil, err
+		}
+		for _, attachment := range msg.Attachments {
+			if strings.ContainsAny(attachment.Filename+attachment.ContentType, "\r\n") {
+				return nil, fmt.Errorf("email attachment has invalid MIME metadata")
+			}
+			filename := filepath.Base(strings.ReplaceAll(attachment.Filename, "\\", "/"))
+			if filename == "" || filename == "." {
+				filename = "attachment.bin"
+			}
+			contentType := strings.TrimSpace(attachment.ContentType)
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			partHeader := make(textproto.MIMEHeader)
+			partHeader.Set("Content-Type", mime.FormatMediaType(contentType, map[string]string{"name": filename}))
+			partHeader.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+			partHeader.Set("Content-Transfer-Encoding", "base64")
+			part, err := topWriter.CreatePart(partHeader)
+			if err != nil {
+				return nil, err
+			}
+			encoded := base64.StdEncoding.EncodeToString(attachment.Data)
+			for len(encoded) > 76 {
+				if _, err := part.Write([]byte(encoded[:76] + "\r\n")); err != nil {
+					return nil, err
+				}
+				encoded = encoded[76:]
+			}
+			if _, err := part.Write([]byte(encoded + "\r\n")); err != nil {
+				return nil, err
+			}
+		}
+		if err := topWriter.Close(); err != nil {
+			return nil, err
+		}
 	}
-	b.WriteString("\r\n")
-	b.WriteString(msg.Body)
-	return []byte(b.String())
+
+	var out bytes.Buffer
+	for _, key := range headerOrder {
+		if value, ok := headers[key]; ok {
+			folded := foldHeader(key, value)
+			for _, line := range strings.Split(key+": "+folded, "\r\n") {
+				if len(line) > 998 {
+					return nil, fmt.Errorf("email header %s exceeds 998 octets", key)
+				}
+			}
+			fmt.Fprintf(&out, "%s: %s\r\n", key, folded)
+		}
+	}
+	out.WriteString("\r\n")
+	out.Write(body.Bytes())
+	return out.Bytes(), nil
 }
 
-// isLoopbackHost reports whether host names the local machine. Local
-// relays almost always present a self-signed certificate, so "auto" mode
-// tolerates an unverifiable certificate there rather than refusing to
-// deliver mail on a zero-config first run.
-func isLoopbackHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
+func writeAlternatives(writer *multipart.Writer, textBody, htmlBody string) error {
+	for _, alternative := range []struct{ contentType, body string }{
+		{"text/plain; charset=UTF-8", textBody},
+		{"text/html; charset=UTF-8", htmlBody},
+	} {
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Type", alternative.contentType)
+		header.Set("Content-Transfer-Encoding", "quoted-printable")
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			return err
+		}
+		encoder := quotedprintable.NewWriter(part)
+		if _, err := encoder.Write([]byte(alternative.body)); err != nil {
+			return err
+		}
+		if err := encoder.Close(); err != nil {
+			return err
+		}
 	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return nil
+}
+
+func messageBodies(msg Message) (plain, rich string) {
+	plain = msg.TextBody
+	rich = msg.HTMLBody
+	if msg.HTML && rich == "" {
+		rich = msg.Body
+	}
+	if !msg.HTML && plain == "" {
+		plain = msg.Body
+	}
+	if plain == "" && rich != "" {
+		plain = plainTextFromHTML(rich)
+	}
+	if rich == "" && plain != "" {
+		rich = "<!doctype html><html><body><pre>" + html.EscapeString(plain) + "</pre></body></html>"
+	}
+	return plain, rich
+}
+
+func plainTextFromHTML(source string) string {
+	doc, err := xhtml.Parse(strings.NewReader(source))
+	if err != nil {
+		return ""
+	}
+	var out strings.Builder
+	var visit func(*xhtml.Node)
+	visit = func(node *xhtml.Node) {
+		if node.Type == xhtml.ElementNode && (node.Data == "script" || node.Data == "style") {
+			return
+		}
+		if node.Type == xhtml.TextNode {
+			out.WriteString(node.Data)
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+		if node.Type == xhtml.ElementNode && (node.Data == "br" || node.Data == "p" || node.Data == "div" || node.Data == "li") {
+			out.WriteByte('\n')
+		}
+	}
+	visit(doc)
+	return strings.TrimSpace(out.String())
+}
+
+func isASCII(value string) bool {
+	for _, r := range value {
+		if r > 127 {
+			return false
+		}
+	}
+	return true
+}
+
+func createMessageID(from string) (string, error) {
+	_, domain, ok := strings.Cut(from, "@")
+	if !ok || domain == "" {
+		return "", fmt.Errorf("sender address has no domain")
+	}
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", err
+	}
+	return "<" + hex.EncodeToString(random[:]) + "@" + domain + ">", nil
+}
+
+func foldHeader(name, value string) string {
+	limit := 78 - len(name) - 2
+	if len(value) <= limit || strings.Contains(value, "\r\n") {
+		return value
+	}
+	words := strings.Fields(value)
+	var out strings.Builder
+	line := 0
+	for index, word := range words {
+		sep := " "
+		if index == 0 {
+			sep = ""
+		}
+		if line+len(sep)+len(word) > limit {
+			out.WriteString("\r\n ")
+			line = 1
+			sep = ""
+		}
+		out.WriteString(sep)
+		out.WriteString(word)
+		line += len(sep) + len(word)
+	}
+	return out.String()
 }
 
 // dialSMTP opens an SMTP session honouring the configured TLS mode.
 func (c *Client) dialSMTP() (*smtp.Client, error) {
+	client, _, err := c.dialSMTPWithConn()
+	return client, err
+}
+
+func (c *Client) dialSMTPWithConn() (*smtp.Client, net.Conn, error) {
 	host := c.config.SMTPHost
 	addr := net.JoinHostPort(host, strconv.Itoa(c.config.SMTPPort))
 	mode := strings.ToLower(strings.TrimSpace(c.config.TLS))
@@ -161,71 +417,57 @@ func (c *Client) dialSMTP() (*smtp.Client, error) {
 	}
 
 	tlsConfig := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
-	loopback := isLoopbackHost(host)
-	if mode == TLSModeAuto && loopback && c.config.SMTPPort == implicitTLSPort {
-		// A loopback relay on the SMTPS port practically always presents a
-		// self-signed certificate, and the connection never leaves this
-		// machine, so there is no network path for an interceptor. Only
-		// this one narrow combination relaxes verification; every remote
-		// host, and every explicitly configured TLS mode, verifies.
+	if mode != TLSModeNone && isPrivateSMTPIP(host) {
 		tlsConfig.InsecureSkipVerify = true
 	}
 
 	implicit := mode == TLSModeImplicit || (mode == TLSModeAuto && c.config.SMTPPort == implicitTLSPort)
 	if implicit {
-		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: dialTimeout}, "tcp", addr, tlsConfig)
+		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: c.dialTimeout}, "tcp", addr, tlsConfig)
 		if err != nil {
-			return nil, fmt.Errorf("TLS connection failed: %w", err)
+			return nil, nil, fmt.Errorf("TLS connection failed: %w", err)
 		}
+		_ = conn.SetDeadline(time.Now().Add(c.dialTimeout))
 		client, err := smtp.NewClient(conn, host)
 		if err != nil {
-			conn.Close()
-			return nil, fmt.Errorf("SMTP handshake failed: %w", err)
+			_ = conn.Close()
+			return nil, nil, fmt.Errorf("SMTP handshake failed: %w", err)
 		}
-		return client, nil
+		_ = conn.SetDeadline(time.Time{})
+		return client, conn, nil
 	}
 
-	client, err := c.dialPlain(addr, host)
+	conn, err := net.DialTimeout("tcp", addr, c.dialTimeout)
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("connection failed: %w", err)
+	}
+	_ = conn.SetDeadline(time.Now().Add(c.dialTimeout))
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, fmt.Errorf("SMTP handshake failed: %w", err)
 	}
 
 	if mode == TLSModeNone {
-		return client, nil
+		_ = conn.SetDeadline(time.Time{})
+		return client, conn, nil
 	}
 
 	ok, _ := client.Extension("STARTTLS")
 	if !ok {
 		if mode == TLSModeSTARTTLS {
-			client.Close()
-			return nil, fmt.Errorf("server does not advertise STARTTLS")
+			_ = client.Close()
+			return nil, nil, fmt.Errorf("server does not advertise STARTTLS")
 		}
-		return client, nil
+		_ = conn.SetDeadline(time.Time{})
+		return client, conn, nil
 	}
 	if err := client.StartTLS(tlsConfig); err != nil {
-		client.Close()
-		if mode == TLSModeAuto && loopback {
-			// A self-signed loopback relay fails verification; fall back to
-			// the plaintext session, which cannot leave this machine.
-			return c.dialPlain(addr, host)
-		}
-		return nil, fmt.Errorf("STARTTLS failed: %w", err)
+		_ = client.Close()
+		return nil, nil, fmt.Errorf("STARTTLS failed: %w", err)
 	}
-	return client, nil
-}
-
-// dialPlain opens an unencrypted SMTP session to addr.
-func (c *Client) dialPlain(addr, host string) (*smtp.Client, error) {
-	conn, err := net.DialTimeout("tcp", addr, dialTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("connection failed: %w", err)
-	}
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("SMTP handshake failed: %w", err)
-	}
-	return client, nil
+	_ = conn.SetDeadline(time.Time{})
+	return client, conn, nil
 }
 
 // Send sends an email message
@@ -236,20 +478,44 @@ func (c *Client) Send(msg Message) error {
 	if len(msg.To) == 0 {
 		return fmt.Errorf("email has no recipients")
 	}
+	replyTo := msg.ReplyTo
+	if replyTo == "" && !msg.OmitReplyTo {
+		replyTo = c.config.ReplyTo
+	}
+	if replyTo != "" {
+		parsed, err := mail.ParseAddress(replyTo)
+		if err != nil || parsed.Address != replyTo || strings.ContainsAny(replyTo, "\r\n") {
+			return fmt.Errorf("email has an invalid Reply-To address")
+		}
+	}
 
 	from := c.config.FromEmail
 	if from == "" {
 		from = "no-reply@localhost"
 	}
-	payload := c.buildMessage(msg, from)
+	for _, recipient := range msg.To {
+		if err := c.sendOne(msg, from, recipient); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func (c *Client) sendOne(msg Message, from, recipient string) error {
+	payload, err := c.buildMessage(msg, from, recipient)
+	if err != nil {
+		return err
+	}
 	client, err := c.dialSMTP()
 	if err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if c.config.Username != "" && c.config.Password != "" {
+		if _, ok := client.TLSConnectionState(); !ok {
+			return fmt.Errorf("SMTP authentication refused without TLS")
+		}
 		auth := smtp.PlainAuth("", c.config.Username, c.config.Password, c.config.SMTPHost)
 		if err := client.Auth(auth); err != nil {
 			return fmt.Errorf("failed to send email: SMTP auth failed: %w", err)
@@ -259,10 +525,8 @@ func (c *Client) Send(msg Message) error {
 	if err := client.Mail(from); err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
 	}
-	for _, rcpt := range msg.To {
-		if err := client.Rcpt(rcpt); err != nil {
-			return fmt.Errorf("failed to send email: %w", err)
-		}
+	if err := client.Rcpt(recipient); err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 	w, err := client.Data()
 	if err != nil {
@@ -278,65 +542,65 @@ func (c *Client) Send(msg Message) error {
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	log.Printf("Email: Sent to %v via %s", msg.To, c.config.SMTPHost)
+	log.Printf("Email: Sent notification via %s", c.config.SMTPHost)
 	return nil
 }
 
-// dialTimeout bounds every SMTP dial - both the startup connection test
-// and the auto-detection probe sweep, which walks up to 7 hosts x 3 ports
-// and must not stall startup on unreachable candidates.
+// dialTimeout bounds normal SMTP dials and configured-host startup checks.
 var dialTimeout = 5 * time.Second
 
-// TestConnection tests the SMTP connection with an EHLO handshake, per
-// AI.md PART 17 "Connection Test (when host is set)". Port 465 is spoken
-// over implicit TLS; every other port is probed in plaintext.
+// autoDetectDialTimeout keeps the ordered first-run probe sweep bounded so
+// unreachable relays do not delay HTTP startup beyond its integration-test
+// readiness window.
+const autoDetectDialTimeout = time.Second
+
+// TestConnection tests an SMTP endpoint using tls:auto, including the
+// port-specific STARTTLS behavior used during SMTP autodetection.
 func TestConnection(host string, port int) error {
-	client, err := probeSMTP(host, port)
+	return testConnectionWithConfig(Config{SMTPHost: host, SMTPPort: port, TLS: TLSModeAuto}, false)
+}
+
+// TestConnectionWithConfig checks the SMTP session using the same TLS mode
+// and certificate policy as actual delivery.
+func TestConnectionWithConfig(config Config) error {
+	return testConnectionWithConfig(config, false)
+}
+
+func testConnectionWithConfig(config Config, logTLSPolicy bool) error {
+	return testConnectionWithTimeout(config, logTLSPolicy, dialTimeout)
+}
+
+func testConnectionWithTimeout(config Config, logTLSPolicy bool, timeout time.Duration) error {
+	smtpClient := newClient(config, logTLSPolicy)
+	smtpClient.dialTimeout = timeout
+	client, conn, err := smtpClient.dialSMTPWithConn()
 	if err != nil {
 		return err
 	}
-	defer client.Quit()
+	defer func() { _ = client.Quit() }()
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 
 	if err := client.Hello("localhost"); err != nil {
 		return fmt.Errorf("EHLO failed: %w", err)
 	}
+	if config.Username != "" && config.Password != "" {
+		if _, ok := client.TLSConnectionState(); !ok {
+			return fmt.Errorf("SMTP authentication requires TLS")
+		}
+	}
 
-	log.Printf("Email: SMTP connection test successful (%s:%d)", host, port)
+	log.Printf("Email: SMTP connection test successful (%s:%d)", config.SMTPHost, config.SMTPPort)
 	return nil
 }
 
-// probeSMTP opens a bare SMTP session for handshake testing. Certificate
-// verification is deliberately skipped here because a probe only needs to
-// establish that something speaking SMTP is listening; no mail and no
-// credentials cross this connection, and local relays are routinely
-// self-signed. Actual delivery in Client.Send verifies certificates.
-func probeSMTP(host string, port int) (*smtp.Client, error) {
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-
-	if port == implicitTLSPort {
-		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: dialTimeout}, "tcp", addr,
-			&tls.Config{ServerName: host, InsecureSkipVerify: true, MinVersion: tls.VersionTLS12})
-		if err != nil {
-			return nil, fmt.Errorf("connection failed: %w", err)
-		}
-		client, err := smtp.NewClient(conn, host)
-		if err != nil {
-			conn.Close()
-			return nil, fmt.Errorf("SMTP handshake failed: %w", err)
-		}
-		return client, nil
-	}
-
-	conn, err := net.DialTimeout("tcp", addr, dialTimeout)
+func isPrivateSMTPIP(host string) bool {
+	addr, err := netip.ParseAddr(strings.Trim(host, "[]"))
 	if err != nil {
-		return nil, fmt.Errorf("connection failed: %w", err)
+		return false
 	}
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("SMTP handshake failed: %w", err)
-	}
-	return client, nil
+	addr = addr.Unmap()
+	sharedIPv4 := netip.MustParsePrefix("100.64.0.0/10")
+	return addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || sharedIPv4.Contains(addr)
 }
 
 // AutoDetectSMTP probes for a usable local SMTP relay using the full
@@ -361,7 +625,7 @@ func AutoDetectSMTPFor(fqdn string) (host string, port int, found bool) {
 
 	for _, h := range detectionHosts(fqdn) {
 		for _, p := range ports {
-			if err := TestConnection(h, p); err == nil {
+			if err := testConnectionWithTimeout(Config{SMTPHost: h, SMTPPort: p, TLS: TLSModeAuto}, false, autoDetectDialTimeout); err == nil {
 				log.Printf("Email: Auto-detected SMTP at %s:%d", h, p)
 				return h, p, true
 			}

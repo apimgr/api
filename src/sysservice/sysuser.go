@@ -1,6 +1,7 @@
 package sysservice
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,8 @@ import (
 	"runtime"
 	"strconv"
 )
+
+var ErrAccountToolsUnavailable = errors.New("no supported account-management tools are available")
 
 const (
 	// ServiceUserName is the dedicated system account the server drops
@@ -85,6 +88,9 @@ func CreateServiceUser(homeDir string) error {
 	if _, err := user.Lookup(ServiceUserName); err == nil {
 		return nil
 	}
+	if err := ensureAccountToolsAvailable(); err != nil {
+		return err
+	}
 
 	if err := os.MkdirAll(homeDir, 0750); err != nil {
 		return fmt.Errorf("failed to create home directory %s: %w", homeDir, err)
@@ -113,6 +119,32 @@ func CreateServiceUser(homeDir string) error {
 	return os.Chown(homeDir, id, id)
 }
 
+func ensureAccountToolsAvailable() error {
+	switch runtime.GOOS {
+	case "darwin":
+		if _, err := exec.LookPath("dscl"); err != nil {
+			return fmt.Errorf("dscl is unavailable: %w", ErrAccountToolsUnavailable)
+		}
+	case "freebsd", "openbsd", "netbsd":
+		if _, err := exec.LookPath("pw"); err != nil {
+			return fmt.Errorf("pw is unavailable: %w", ErrAccountToolsUnavailable)
+		}
+	default:
+		if _, groupErr := exec.LookPath("groupadd"); groupErr == nil {
+			if _, userErr := exec.LookPath("useradd"); userErr == nil {
+				return nil
+			}
+		}
+		if _, groupErr := exec.LookPath("addgroup"); groupErr == nil {
+			if _, userErr := exec.LookPath("adduser"); userErr == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("useradd/groupadd and BusyBox adduser/addgroup are unavailable: %w", ErrAccountToolsUnavailable)
+	}
+	return nil
+}
+
 // resolveServiceIDs determines the UID/GID to use for the service account.
 // A pre-existing "api" group is reused (its GID becomes the UID as well, so
 // the matching-ID rule still holds) instead of being recreated; otherwise a
@@ -128,6 +160,10 @@ func resolveServiceIDs() (int, bool, error) {
 	if convErr != nil {
 		return 0, true, fmt.Errorf("group %s has a non-numeric gid %q: %w", ServiceGroupName, grp.Gid, convErr)
 	}
+	start, floor := systemIDRange()
+	if gid < floor || gid > start || reservedSystemIDs[gid] {
+		return 0, true, fmt.Errorf("group %s has gid %d outside the allowed service-account range %d-%d", ServiceGroupName, gid, floor, start)
+	}
 	if _, lookupErr := user.LookupId(grp.Gid); lookupErr == nil {
 		return 0, true, fmt.Errorf("group %s exists with gid %d but that id is already taken by another user", ServiceGroupName, gid)
 	}
@@ -140,27 +176,37 @@ func resolveServiceIDs() (int, bool, error) {
 // when the group is already present on the host.
 func createLinuxServiceUser(id int, homeDir string, groupExists bool) error {
 	idStr := strconv.Itoa(id)
+	if _, err := exec.LookPath("groupadd"); err == nil {
+		if _, userErr := exec.LookPath("useradd"); userErr != nil {
+			return fmt.Errorf("useradd is unavailable: %w", ErrAccountToolsUnavailable)
+		}
+		if !groupExists {
+			if err := exec.Command("groupadd", "--system", "--gid", idStr, ServiceGroupName).Run(); err != nil {
+				return fmt.Errorf("failed to create group %s: %w", ServiceGroupName, err)
+			}
+		}
+		cmd := exec.Command("useradd", "--system", "--uid", idStr, "--gid", idStr, "--home-dir", homeDir, "--no-create-home", "--shell", nologinShell(), "--comment", serviceGecos, ServiceUserName)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to create user %s: %w", ServiceUserName, err)
+		}
+		return nil
+	}
 
+	if _, err := exec.LookPath("addgroup"); err != nil {
+		return fmt.Errorf("groupadd and BusyBox addgroup are unavailable: %w", ErrAccountToolsUnavailable)
+	}
+	if _, err := exec.LookPath("adduser"); err != nil {
+		return fmt.Errorf("useradd and BusyBox adduser are unavailable: %w", ErrAccountToolsUnavailable)
+	}
 	if !groupExists {
-		if err := exec.Command("groupadd", "--system", "--gid", idStr, ServiceGroupName).Run(); err != nil {
+		if err := exec.Command("addgroup", "-S", "-g", idStr, ServiceGroupName).Run(); err != nil {
 			return fmt.Errorf("failed to create group %s: %w", ServiceGroupName, err)
 		}
 	}
-
-	cmd := exec.Command("useradd",
-		"--system",
-		"--uid", idStr,
-		"--gid", idStr,
-		"--home-dir", homeDir,
-		"--no-create-home",
-		"--shell", nologinShell(),
-		"--comment", serviceGecos,
-		ServiceUserName,
-	)
+	cmd := exec.Command("adduser", "-S", "-D", "-H", "-u", idStr, "-G", ServiceGroupName, "-h", homeDir, "-s", nologinShell(), "-g", serviceGecos, ServiceUserName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create user %s: %w", ServiceUserName, err)
 	}
-
 	return nil
 }
 
@@ -254,18 +300,35 @@ func DeleteServiceUser() error {
 
 	switch runtime.GOOS {
 	case "darwin":
-		exec.Command("dscl", ".", "-delete", "/Users/"+ServiceUserName).Run()
+		if err := exec.Command("dscl", ".", "-delete", "/Users/"+ServiceUserName).Run(); err != nil {
+			return fmt.Errorf("failed to delete service user %s: %w", ServiceUserName, err)
+		}
 		if err := deleteServiceGroup("dscl", ".", "-delete", "/Groups/"+ServiceGroupName); err != nil {
 			return err
 		}
 	case "freebsd", "openbsd", "netbsd":
-		exec.Command("pw", "userdel", ServiceUserName).Run()
+		if err := exec.Command("pw", "userdel", ServiceUserName).Run(); err != nil {
+			return fmt.Errorf("failed to delete service user %s: %w", ServiceUserName, err)
+		}
 		if err := deleteServiceGroup("pw", "groupdel", ServiceGroupName); err != nil {
 			return err
 		}
 	default:
-		exec.Command("userdel", ServiceUserName).Run()
-		if err := deleteServiceGroup("groupdel", ServiceGroupName); err != nil {
+		userDelete := "userdel"
+		if _, err := exec.LookPath(userDelete); err != nil {
+			userDelete = "deluser"
+		}
+		if _, err := exec.LookPath(userDelete); err != nil {
+			return fmt.Errorf("cannot delete service user %s: %w", ServiceUserName, ErrAccountToolsUnavailable)
+		}
+		if err := exec.Command(userDelete, ServiceUserName).Run(); err != nil {
+			return fmt.Errorf("failed to delete service user %s: %w", ServiceUserName, err)
+		}
+		groupDelete := "groupdel"
+		if _, err := exec.LookPath(groupDelete); err != nil {
+			groupDelete = "delgroup"
+		}
+		if err := deleteServiceGroup(groupDelete, ServiceGroupName); err != nil {
 			return err
 		}
 	}

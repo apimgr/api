@@ -11,11 +11,8 @@ import (
 // starts with no running Service.
 func TestNewManager(t *testing.T) {
 	cfg := DefaultConfig()
-	m := NewManager(8080, cfg, "/cfgdir", "/datadir")
+	m := NewManager(cfg, "/cfgdir", "/datadir")
 
-	if m.serverPort != 8080 {
-		t.Errorf("serverPort = %d, want 8080", m.serverPort)
-	}
 	if m.configDir != "/cfgdir" {
 		t.Errorf("configDir = %q, want /cfgdir", m.configDir)
 	}
@@ -46,7 +43,7 @@ func TestSetGet(t *testing.T) {
 		t.Errorf("Get() after Set(nil) = %v, want nil", got)
 	}
 
-	m := NewManager(1, DefaultConfig(), "a", "b")
+	m := NewManager(DefaultConfig(), "a", "b")
 	Set(m)
 	if got := Get(); got != m {
 		t.Errorf("Get() = %v, want %v", got, m)
@@ -114,13 +111,17 @@ func TestManagerStartMissingBinary(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Binary = filepath.Join(t.TempDir(), "does-not-exist-tor")
 
-	m := NewManager(0, cfg, t.TempDir(), t.TempDir())
+	m := NewManager(cfg, t.TempDir(), t.TempDir())
 	err := m.Start(context.Background())
 	if err == nil {
 		t.Fatal("expected an error when the configured Tor binary is missing")
 	}
 	if m.Running() {
 		t.Error("expected Running() to remain false after a failed Start")
+	}
+	enabled, running, status, hostname := m.StatusSnapshot()
+	if enabled || running || status != "disabled" || hostname != "" {
+		t.Errorf("missing binary status = (%v, %v, %q, %q), want (false, false, disabled, empty)", enabled, running, status, hostname)
 	}
 }
 
@@ -129,7 +130,7 @@ func TestManagerStartMissingBinary(t *testing.T) {
 // assigned directly (same-package access) to simulate an already-running
 // Manager without needing a live Tor binary.
 func TestManagerStartAlreadyStarted(t *testing.T) {
-	m := NewManager(0, DefaultConfig(), t.TempDir(), t.TempDir())
+	m := NewManager(DefaultConfig(), t.TempDir(), t.TempDir())
 	m.svc = &Service{}
 
 	err := m.Start(context.Background())
@@ -144,7 +145,7 @@ func TestManagerRestartWithMissingBinary(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Binary = filepath.Join(t.TempDir(), "does-not-exist-tor")
 
-	m := NewManager(0, cfg, t.TempDir(), t.TempDir())
+	m := NewManager(cfg, t.TempDir(), t.TempDir())
 	m.svc = &Service{}
 
 	err := m.Restart(context.Background())
@@ -156,33 +157,19 @@ func TestManagerRestartWithMissingBinary(t *testing.T) {
 	}
 }
 
-// TestManagerUpdateConfigWritesTorrc verifies UpdateConfig regenerates and
-// overwrites torrc on disk even though the subsequent Restart cannot
-// actually start Tor in this sandbox (no Tor binary available).
-func TestManagerUpdateConfigWritesTorrc(t *testing.T) {
-	configDir := t.TempDir()
-	dataDir := t.TempDir()
-
+// TestManagerUpdateConfigPersistsSettings verifies UpdateConfig stores the
+// new settings even when the optional Tor binary cannot be started.
+func TestManagerUpdateConfigPersistsSettings(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Binary = filepath.Join(t.TempDir(), "does-not-exist-tor")
 
-	m := NewManager(0, cfg, configDir, dataDir)
+	m := NewManager(cfg, t.TempDir(), t.TempDir())
 
 	newCfg := cfg
 	newCfg.BandwidthRate = "9 MB"
 
-	// Restart will fail (no Tor binary) - that is expected and asserted
-	// separately; what this test verifies is that torrc was regenerated
-	// before that failure.
-	_ = m.UpdateConfig(context.Background(), newCfg)
-
-	torrcPath := filepath.Join(configDir, "tor", "torrc")
-	data, err := os.ReadFile(torrcPath)
-	if err != nil {
-		t.Fatalf("expected torrc to exist: %v", err)
-	}
-	if got := string(data); got == "" {
-		t.Error("expected non-empty torrc content")
+	if err := m.UpdateConfig(context.Background(), newCfg); err == nil {
+		t.Fatal("expected start failure when the configured Tor binary is missing")
 	}
 	if m.cfg.BandwidthRate != "9 MB" {
 		t.Errorf("expected manager cfg to be updated, got %q", m.cfg.BandwidthRate)
@@ -205,7 +192,7 @@ func TestManagerRegenerateAddress(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Binary = filepath.Join(t.TempDir(), "does-not-exist-tor")
 
-	m := NewManager(0, cfg, t.TempDir(), dataDir)
+	m := NewManager(cfg, t.TempDir(), dataDir)
 	m.svc = &Service{}
 
 	addr, err := m.RegenerateAddress(context.Background())
@@ -228,7 +215,7 @@ func TestManagerApplyKeys(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Binary = filepath.Join(t.TempDir(), "does-not-exist-tor")
 
-	m := NewManager(0, cfg, t.TempDir(), dataDir)
+	m := NewManager(cfg, t.TempDir(), dataDir)
 	m.svc = &Service{}
 
 	blob := []byte("imported-ed25519-key-blob")
@@ -252,12 +239,13 @@ func TestManagerApplyKeys(t *testing.T) {
 // TestManagerOnionAddress verifies OnionAddress returns "" with no Service
 // and delegates to the Service otherwise.
 func TestManagerOnionAddress(t *testing.T) {
-	m := NewManager(0, DefaultConfig(), t.TempDir(), t.TempDir())
+	m := NewManager(DefaultConfig(), t.TempDir(), t.TempDir())
 	if got := m.OnionAddress(); got != "" {
 		t.Errorf("OnionAddress() with no service = %q, want empty", got)
 	}
 
-	m.svc = &Service{onionID: "abcdefghijklmnop"}
+	m.svc = &Service{onionAddress: "abcdefghijklmnop.onion"}
+	m.status = "healthy"
 	if got := m.OnionAddress(); got != "abcdefghijklmnop.onion" {
 		t.Errorf("OnionAddress() = %q, want abcdefghijklmnop.onion", got)
 	}
@@ -266,7 +254,7 @@ func TestManagerOnionAddress(t *testing.T) {
 // TestManagerGetHTTPClient verifies a basic client is returned with no
 // Service running, and that the call is delegated once one exists.
 func TestManagerGetHTTPClient(t *testing.T) {
-	m := NewManager(0, DefaultConfig(), t.TempDir(), t.TempDir())
+	m := NewManager(DefaultConfig(), t.TempDir(), t.TempDir())
 	client := m.GetHTTPClient(true)
 	if client == nil {
 		t.Fatal("expected a non-nil client with no service running")
@@ -283,7 +271,7 @@ func TestManagerGetHTTPClient(t *testing.T) {
 // delegates once one exists (still erroring, since the fake Service has no
 // real Tor control connection).
 func TestManagerPing(t *testing.T) {
-	m := NewManager(0, DefaultConfig(), t.TempDir(), t.TempDir())
+	m := NewManager(DefaultConfig(), t.TempDir(), t.TempDir())
 	if err := m.Ping(); err == nil {
 		t.Error("expected an error when Tor was never started")
 	}
@@ -296,12 +284,13 @@ func TestManagerPing(t *testing.T) {
 
 // TestManagerRunning verifies Running reflects whether a Service is set.
 func TestManagerRunning(t *testing.T) {
-	m := NewManager(0, DefaultConfig(), t.TempDir(), t.TempDir())
+	m := NewManager(DefaultConfig(), t.TempDir(), t.TempDir())
 	if m.Running() {
 		t.Error("expected Running() to be false initially")
 	}
 
 	m.svc = &Service{}
+	m.status = "healthy"
 	if !m.Running() {
 		t.Error("expected Running() to be true once svc is set")
 	}
@@ -310,7 +299,7 @@ func TestManagerRunning(t *testing.T) {
 // TestManagerClose verifies Close is a no-op with no Service, and clears an
 // existing one.
 func TestManagerClose(t *testing.T) {
-	m := NewManager(0, DefaultConfig(), t.TempDir(), t.TempDir())
+	m := NewManager(DefaultConfig(), t.TempDir(), t.TempDir())
 	if err := m.Close(); err != nil {
 		t.Errorf("Close() with no service = %v, want nil", err)
 	}

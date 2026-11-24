@@ -844,7 +844,7 @@ func Metaphone(input string) string {
 				code.WriteRune(c)
 			}
 		case 'B':
-			if !(i == n-1 && prev == 'M') {
+			if i != n-1 || prev != 'M' {
 				code.WriteRune('B')
 			}
 		case 'C':
@@ -992,7 +992,7 @@ func Decompress(data, algorithm string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported algorithm: %s", algorithm)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	out, err := io.ReadAll(r)
 	if err != nil {
@@ -1049,7 +1049,7 @@ func RegexExplain(pattern string) string {
 		case '\\':
 			if i+1 < len(runes) {
 				i++
-				sb.WriteString(fmt.Sprintf("\\%c escaped or special character class\n", runes[i]))
+				_, _ = fmt.Fprintf(&sb, "\\%c escaped or special character class\n", runes[i])
 			}
 		case '(':
 			sb.WriteString("( start of group\n")
@@ -1064,7 +1064,7 @@ func RegexExplain(pattern string) string {
 		case '}':
 			sb.WriteString("} end of repetition count\n")
 		default:
-			sb.WriteString(fmt.Sprintf("%c literal character\n", c))
+			_, _ = fmt.Fprintf(&sb, "%c literal character\n", c)
 		}
 	}
 
@@ -1135,7 +1135,7 @@ func MarkdownTOC(md string) string {
 		title := strings.TrimSpace(m[2])
 		anchor := Slugify(title)
 		indent := strings.Repeat("  ", level-1)
-		sb.WriteString(fmt.Sprintf("%s- [%s](#%s)\n", indent, title, anchor))
+		_, _ = fmt.Fprintf(&sb, "%s- [%s](#%s)\n", indent, title, anchor)
 	}
 
 	return strings.TrimRight(sb.String(), "\n")

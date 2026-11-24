@@ -4,37 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/docker">Docker</a> / ENV Parser
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/docker"}}">{{t .Lang "tool_pages.text.docker.e6169e958b"}}</a> {{t .Lang "tool_pages.text.env.parser.3497899ce5"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">ENV Parser</h1>
-        <button class="btn btn-icon" data-favorite="docker-env-parser" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.env.parser.80577dcaca"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="docker-env-parser" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Parse .env file text into structured key/value entries and validate
-        it.
+        {{t .Lang "tool_pages.text.parse.env.file.text.into.structured.key.valu.3a26bf0939"}}
       </p>
 
-      <form id="env-parser-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/env-parser">
+      <form id="env-parser-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/env-parser" method="post" action="{{path .BaseURL "/docker/env-parser"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">.env content</label>
-          <textarea name="body" class="form-input" rows="8" required placeholder="# comment&#10;DEBUG=true&#10;PORT=8080"></textarea>
+          <label class="form-label" for="env-parser-form-body">{{t .Lang "tool_pages.text.env.content.33cba06d8b"}}</label>
+          <textarea name="body" class="form-input" rows="8" required placeholder="{{t .Lang "tool_pages.text.comment.debug.true.port.8080.9526c70c0a"}}" id="env-parser-form-body"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Parse</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.parse.605537ca5d"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="env-parser-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/env-parser -d 'PORT=8080'</pre>

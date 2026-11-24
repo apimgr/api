@@ -171,7 +171,7 @@ func TestEnsureDirectories(t *testing.T) {
 	for _, dir := range []string{cfg, data, logs} {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			dir := dir
-			t.Cleanup(func() { os.RemoveAll(dir) })
+			t.Cleanup(func() { _ = os.RemoveAll(dir) })
 		}
 	}
 
@@ -247,6 +247,16 @@ func TestDefaultPIDPath(t *testing.T) {
 	path := DefaultPIDPath()
 	require.NotEmpty(t, path)
 	assert.True(t, strings.HasSuffix(path, ProjectName+".pid"))
+	expectedRootPIDPath := filepath.Join("/var/run", OrgName, ProjectName, ProjectName+".pid")
+	if runtime.GOOS == "windows" {
+		programData := os.Getenv("ProgramData")
+		if programData == "" {
+			programData = `C:\ProgramData`
+		}
+		expectedRootPIDPath = filepath.Join(programData, OrgName, ProjectName, ProjectName+".pid")
+	}
+	assert.Equal(t, expectedRootPIDPath, defaultPIDPath(false, true))
+	assert.Equal(t, filepath.Join("/data", ProjectName, ProjectName+".pid"), defaultPIDPath(true, true))
 
 	if IsRunningInContainer() {
 		assert.Equal(t, filepath.Join("/data", ProjectName, ProjectName+".pid"), path)
@@ -291,7 +301,9 @@ func TestIsWritable_ReadOnlyDirFails(t *testing.T) {
 	roDir := filepath.Join(dir, "readonly")
 	require.NoError(t, os.Mkdir(roDir, 0o555))
 	t.Cleanup(func() {
-		os.Chmod(roDir, 0o755)
+		if err := os.Chmod(roDir, 0o755); err != nil {
+			t.Errorf("restore permissions: %v", err)
+		}
 	})
 
 	target := filepath.Join(roDir, "child")

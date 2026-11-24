@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🛠️ Developer Tools</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.developer.tools.b82cc379f7"}}</h1>
     <p class="hero-subtitle">
-      HTTP echo, formatters, minifiers, and development utilities
+      {{t .Lang "categories.dev.description"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/dev/echo" class="category-card">
+      <a href="{{path .BaseURL "/dev/echo"}}" class="category-card">
         <div class="category-icon">📡</div>
-        <h3 class="category-title">HTTP Echo</h3>
-        <p class="category-description">Echo back request details</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.http.echo.899800d72a"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.echo.back.request.details.bd5906cf38"}}</p>
       </a>
       
-      <a href="/dev/format-json" class="category-card">
+      <a href="{{path .BaseURL "/dev/format-json"}}" class="category-card">
         <div class="category-icon">{ }</div>
-        <h3 class="category-title">JSON Formatter</h3>
-        <p class="category-description">Format/minify JSON</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.json.formatter.d1b17529bd"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.format.minify.json.55bb89ce36"}}</p>
       </a>
       
-      <a href="/dev/xml-format" class="category-card">
+      <a href="{{path .BaseURL "/dev/xml-format"}}" class="category-card">
         <div class="category-icon">📃</div>
-        <h3 class="category-title">XML Formatter</h3>
-        <p class="category-description">Format/minify XML</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.xml.formatter.cb5f4ca27c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.format.minify.xml.6926e45f6b"}}</p>
       </a>
       
-      <a href="/dev/html-format" class="category-card">
+      <a href="{{path .BaseURL "/dev/html-format"}}" class="category-card">
         <div class="category-icon">🌐</div>
-        <h3 class="category-title">HTML Formatter</h3>
-        <p class="category-description">Format/minify HTML</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.html.formatter.b843b0141a"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.format.minify.html.caffd8cc01"}}</p>
       </a>
       
-      <a href="/dev/css-format" class="category-card">
+      <a href="{{path .BaseURL "/dev/css-format"}}" class="category-card">
         <div class="category-icon">🎨</div>
-        <h3 class="category-title">CSS Formatter</h3>
-        <p class="category-description">Format/minify CSS</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.css.formatter.b598ab4812"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.format.minify.css.36b9499fdb"}}</p>
       </a>
       
-      <a href="/dev/js-format" class="category-card">
+      <a href="{{path .BaseURL "/dev/js-format"}}" class="category-card">
         <div class="category-icon">📜</div>
-        <h3 class="category-title">JavaScript Formatter</h3>
-        <p class="category-description">Format/minify JavaScript</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.javascript.formatter.9f696fb029"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.format.minify.javascript.d87b34910b"}}</p>
       </a>
       
-      <a href="/dev/sql-format" class="category-card">
+      <a href="{{path .BaseURL "/dev/sql-format"}}" class="category-card">
         <div class="category-icon">🗄️</div>
-        <h3 class="category-title">SQL Formatter</h3>
-        <p class="category-description">Format SQL queries</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.sql.formatter.e74a95e3a6"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.format.sql.queries.295a701be1"}}</p>
       </a>
       
-      <a href="/dev/regex" class="category-card">
+      <a href="{{path .BaseURL "/dev/regex"}}" class="category-card">
         <div class="category-icon">🔍</div>
-        <h3 class="category-title">RegEx Tester</h3>
-        <p class="category-description">Test regular expressions</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.regex.tester.dc91bb5307"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.test.regular.expressions.9590959473"}}</p>
       </a>
       
-      <a href="/dev/cron" class="category-card">
+      <a href="{{path .BaseURL "/dev/cron"}}" class="category-card">
         <div class="category-icon">⏰</div>
-        <h3 class="category-title">Cron Tester</h3>
-        <p class="category-description">Test cron expressions</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.cron.tester.d813d43f88"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.test.cron.expressions.f494507580"}}</p>
       </a>
       
-      <a href="/dev/jwt" class="category-card">
+      <a href="{{path .BaseURL "/dev/jwt"}}" class="category-card">
         <div class="category-icon">🎫</div>
-        <h3 class="category-title">JWT Debugger</h3>
-        <p class="category-description">Debug JSON Web Tokens</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.jwt.debugger.0858ae9afc"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.debug.json.web.tokens.fbbb2be32d"}}</p>
       </a>
       
-      <a href="/dev/base64" class="category-card">
+      <a href="{{path .BaseURL "/dev/base64"}}" class="category-card">
         <div class="category-icon">🔐</div>
-        <h3 class="category-title">Base64 Tool</h3>
-        <p class="category-description">Encode/decode Base64</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.base64.tool.ce86169831"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.encode.decode.base64.79440c0f4c"}}</p>
       </a>
       
-      <a href="/dev/url-encode" class="category-card">
+      <a href="{{path .BaseURL "/dev/url-encode"}}" class="category-card">
         <div class="category-icon">🔗</div>
-        <h3 class="category-title">URL Encoder</h3>
-        <p class="category-description">Encode/decode URLs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.url.encoder.80b3c58842"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.encode.decode.urls.17821c894d"}}</p>
       </a>
     </div>
   </div>

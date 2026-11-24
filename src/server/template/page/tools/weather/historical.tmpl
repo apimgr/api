@@ -4,47 +4,55 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/weather">Weather</a> / Historical Weather
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/weather"}}">{{t .Lang "categories.weather.name"}}</a> {{t .Lang "tool_pages.text.historical.weather.5ba78aaa10"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Historical Weather</h1>
-        <button class="btn btn-icon" data-favorite="weather-historical" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.historical.weather.beadd945d9"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="weather-historical" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Get historical daily weather (high/low temperature, precipitation,
-        max wind speed) for a location over a date range.
+        {{t .Lang "tool_pages.text.get.historical.daily.weather.high.low.temper.93a1704135"}}
       </p>
 
-      <form id="historical-form" class="tool-form" data-template="{{.APIBasePath}}/weather/historical/{location}?start={start}&end={end}">
+      <form id="historical-form" class="tool-form" data-template="{{.APIBasePath}}/weather/historical/{location}?start={start}&end={end}" method="post" action="{{path .BaseURL "/weather/historical"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Location</label>
-          <input type="text" name="location" class="form-input" required placeholder="London, 90210, or 51.5,-0.1">
+          <label class="form-label" for="historical-form-location">{{t .Lang "common.location"}}</label>
+          <input type="text" name="location" class="form-input" required placeholder="{{t .Lang "common.location_example"}}" id="historical-form-location">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Start date</label>
-          <input type="date" name="start" class="form-input" required value="2024-01-01">
+          <label class="form-label" for="historical-form-start">{{t .Lang "common.start_date"}}</label>
+          <input type="date" name="start" class="form-input" required value="2024-01-01" id="historical-form-start">
         </div>
 
         <div class="form-group">
-          <label class="form-label">End date</label>
-          <input type="date" name="end" class="form-input" required value="2024-01-07">
+          <label class="form-label" for="historical-form-end">{{t .Lang "common.end_date"}}</label>
+          <input type="date" name="end" class="form-input" required value="2024-01-07" id="historical-form-end">
         </div>
 
-        <button type="submit" class="btn btn-primary">Get Historical Weather</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.get.historical.weather.179c44d9d2"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="historical-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl "{{.BaseURL}}{{.APIBasePath}}/weather/historical/London?start=2024-01-01&end=2024-01-07"</pre>

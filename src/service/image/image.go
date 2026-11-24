@@ -139,7 +139,7 @@ func (s *Service) GetInfo(imagePath string) (*ImageInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open image file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	cfg, format, err := image.DecodeConfig(file)
 	if err != nil {

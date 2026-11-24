@@ -1,0 +1,12 @@
+Subject: Update Staged - {app_name}
+---
+UPDATE STAGED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+Update {version} is staged and needs a service restart to apply.
+
+--
+{app_name}
+{app_url}

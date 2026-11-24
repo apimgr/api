@@ -1,21 +1,50 @@
 package sysservice
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/apimgr/api/src/paths"
 )
 
 // installSystemd creates the systemd unit file, enables it, and copies the
-// binary into place. Directory creation follows AI.md PART 24's hardened
-// template: ProtectSystem=strict, ProtectHome=yes, PrivateTmp=yes, with a
-// dedicated ReadWritePaths line per writable directory. No User=/Group=
-// line is set since the binary drops its own privileges after bind.
+// binary into place. Directory access follows AI.md PART 24: the startup
+// pre-command creates runtime paths outside the sandbox, and each writable
+// path is explicitly opened while the remaining system paths stay read-only.
+// No User=/Group= line is set since the binary drops its own privileges after bind.
 func installSystemd() error {
 	binaryPath := GetBinaryPath()
+	writePaths := []string{
+		paths.ConfigDir(),
+		paths.DataDir(),
+		paths.GetDatabaseDir(paths.DataDir()),
+		paths.CacheDir(),
+		paths.LogDir(),
+		filepath.Dir(paths.DefaultPIDPath()),
+		paths.BackupDir(),
+		"/usr/local/bin",
+	}
+	uniquePaths := make([]string, 0, len(writePaths))
+	seenPaths := make(map[string]struct{}, len(writePaths))
+	for _, path := range writePaths {
+		if _, ok := seenPaths[path]; ok {
+			continue
+		}
+		seenPaths[path] = struct{}{}
+		uniquePaths = append(uniquePaths, path)
+	}
+	quotedPaths := make([]string, 0, len(uniquePaths))
+	readWritePaths := make([]string, 0, len(uniquePaths))
+	for _, path := range uniquePaths {
+		quotedPaths = append(quotedPaths, strconv.Quote(path))
+		readWritePaths = append(readWritePaths, "ReadWritePaths=-"+path)
+	}
+	installDirs := strings.Join(quotedPaths, " ")
 
 	serviceContent := fmt.Sprintf(`[Unit]
 Description=%s service
@@ -34,17 +63,15 @@ StandardOutput=journal
 StandardError=journal
 
 # Security hardening (binary drops privileges after port binding)
-ProtectSystem=strict
+ProtectSystem=true
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=%s
-ReadWritePaths=%s
-ReadWritePaths=%s
-ReadWritePaths=%s
+ExecStartPre=+/usr/bin/install -d -m 0755 %s
+%s
 
 [Install]
 WantedBy=multi-user.target
-`, appName, orgName, appName, binaryPath, paths.ConfigDir(), paths.DataDir(), paths.CacheDir(), paths.LogDir())
+`, appName, orgName, appName, binaryPath, installDirs, strings.Join(readWritePaths, "\n"))
 
 	servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", appName)
 
@@ -80,15 +107,25 @@ WantedBy=multi-user.target
 // uninstallSystemd stops, disables, and removes the systemd unit file.
 func uninstallSystemd() error {
 	servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", appName)
-
-	exec.Command("systemctl", "stop", appName).Run()
-	exec.Command("systemctl", "disable", appName).Run()
+	status := GetStatus()
+	if status.Running {
+		if err := exec.Command("systemctl", "stop", appName).Run(); err != nil {
+			return fmt.Errorf("failed to stop systemd service: %w", err)
+		}
+	}
+	if status.Enabled {
+		if err := exec.Command("systemctl", "disable", appName).Run(); err != nil {
+			return fmt.Errorf("failed to disable systemd service: %w", err)
+		}
+	}
 
 	if err := os.Remove(servicePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove service file: %w", err)
 	}
 
-	exec.Command("systemctl", "daemon-reload").Run()
+	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+		return fmt.Errorf("failed to reload systemd configuration: %w", err)
+	}
 
 	fmt.Printf("Service uninstalled: %s\n", servicePath)
 	return nil
@@ -132,7 +169,9 @@ WantedBy=default.target
 		return fmt.Errorf("failed to write user unit file: %w", err)
 	}
 
-	exec.Command("systemctl", "--user", "daemon-reload").Run()
+	if err := exec.Command("systemctl", "--user", "daemon-reload").Run(); err != nil {
+		return fmt.Errorf("failed to reload systemd user units: %w", err)
+	}
 	if err := exec.Command("systemctl", "--user", "enable", appName).Run(); err != nil {
 		return fmt.Errorf("failed to enable user service: %w", err)
 	}
@@ -156,9 +195,9 @@ description="API Manager Server"
 # actual binary (may differ from the internal name after a rename)
 command="%s"
 command_args=""
-command_user="%s:%s"
 pidfile="%s"
 command_background=true
+retry="TERM/60/KILL/5"
 output_log="%s/server.log"
 error_log="%s/error.log"
 
@@ -169,13 +208,15 @@ depend() {
 }
 
 start_pre() {
+	checkpath -d -m 0755 %s
+	checkpath -d -m 0755 %s
 	checkpath -d -m 0755 -o %s:%s %s
 	checkpath -d -m 0755 -o %s:%s %s
 }
 `, appName, binaryPath,
-		ServiceUserName, ServiceGroupName,
-		paths.DefaultPIDPath(),
+		filepath.Join("/var/run", orgName+"-"+appName)+".pid",
 		paths.LogDir(), paths.LogDir(),
+		filepath.Join("/var/run", orgName), filepath.Join("/var/log", orgName),
 		ServiceUserName, ServiceGroupName, filepath.Dir(paths.DefaultPIDPath()),
 		ServiceUserName, ServiceGroupName, paths.LogDir())
 
@@ -210,9 +251,17 @@ start_pre() {
 // the OpenRC init script.
 func uninstallOpenRC() error {
 	scriptPath := fmt.Sprintf("/etc/init.d/%s", appName)
-
-	exec.Command("rc-service", appName, "stop").Run()
-	exec.Command("rc-update", "del", appName, "default").Run()
+	status := GetStatus()
+	if status.Running {
+		if err := exec.Command("rc-service", appName, "stop").Run(); err != nil {
+			return fmt.Errorf("failed to stop OpenRC service: %w", err)
+		}
+	}
+	if status.Enabled {
+		if err := exec.Command("rc-update", "del", appName, "default").Run(); err != nil {
+			return fmt.Errorf("failed to disable OpenRC service: %w", err)
+		}
+	}
 
 	if err := os.Remove(scriptPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove OpenRC script: %w", err)
@@ -318,13 +367,24 @@ exit 0
 // script.
 func uninstallSysVinit() error {
 	scriptPath := fmt.Sprintf("/etc/init.d/%s", appName)
-
-	exec.Command(scriptPath, "stop").Run()
-
-	if commandExists("update-rc.d") {
-		exec.Command("update-rc.d", "-f", appName, "remove").Run()
-	} else if commandExists("chkconfig") {
-		exec.Command("chkconfig", "--del", appName).Run()
+	status := GetStatus()
+	if status.Running {
+		if err := exec.Command(scriptPath, "stop").Run(); err != nil {
+			return fmt.Errorf("failed to stop SysVinit service: %w", err)
+		}
+	}
+	if status.Enabled {
+		if commandExists("update-rc.d") {
+			if err := exec.Command("update-rc.d", "-f", appName, "remove").Run(); err != nil {
+				return fmt.Errorf("failed to disable SysVinit service: %w", err)
+			}
+		} else if commandExists("chkconfig") {
+			if err := exec.Command("chkconfig", "--del", appName).Run(); err != nil {
+				return fmt.Errorf("failed to disable SysVinit service: %w", err)
+			}
+		} else {
+			return errors.New("no supported SysVinit service registration tool is available")
+		}
 	}
 
 	if err := os.Remove(scriptPath); err != nil && !os.IsNotExist(err) {
@@ -393,10 +453,17 @@ exec svlogd -tt %s
 func uninstallRunit() error {
 	svDir := fmt.Sprintf("/etc/sv/%s", appName)
 	linkPath := fmt.Sprintf("/var/service/%s", appName)
-
-	exec.Command("sv", "stop", appName).Run()
-	os.Remove(linkPath)
-	os.RemoveAll(svDir)
+	if GetStatus().Running {
+		if err := exec.Command("sv", "stop", appName).Run(); err != nil {
+			return fmt.Errorf("failed to stop runit service: %w", err)
+		}
+	}
+	if err := os.Remove(linkPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.RemoveAll(svDir); err != nil {
+		return err
+	}
 
 	fmt.Println("Runit service uninstalled")
 	return nil
@@ -459,8 +526,11 @@ func installLaunchd() error {
 // uninstallLaunchd unloads and removes the macOS LaunchDaemon plist.
 func uninstallLaunchd() error {
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", plistName)
-
-	exec.Command("launchctl", "unload", plistPath).Run()
+	if fileExists(plistPath) {
+		if err := exec.Command("launchctl", "unload", plistPath).Run(); err != nil {
+			return fmt.Errorf("failed to stop and unload LaunchDaemon: %w", err)
+		}
+	}
 
 	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove plist file: %w", err)
@@ -565,8 +635,17 @@ run_rc_command "$1"
 // uninstallBSDRC stops the service and removes the rc.d script.
 func uninstallBSDRC() error {
 	rcPath := fmt.Sprintf("/usr/local/etc/rc.d/%s", appName)
-
-	exec.Command("service", appName, "stop").Run()
+	status := GetStatus()
+	if status.Running {
+		if err := exec.Command("service", appName, "stop").Run(); err != nil {
+			return fmt.Errorf("failed to stop BSD rc.d service: %w", err)
+		}
+	}
+	if status.Enabled {
+		if err := exec.Command("sysrc", fmt.Sprintf("%s_enable=NO", appName)).Run(); err != nil {
+			return fmt.Errorf("failed to disable BSD rc.d service: %w", err)
+		}
+	}
 
 	if err := os.Remove(rcPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove rc.d script: %w", err)

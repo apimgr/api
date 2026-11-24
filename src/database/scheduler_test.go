@@ -13,9 +13,7 @@ import (
 // mutable fields (task_name, schedule, enabled) on conflict, without
 // resetting run_count/fail_count.
 func TestUpsertAndGetSchedulerTask(t *testing.T) {
-	db := GetServerDB()
-	_, err := db.Exec(`DELETE FROM scheduler_tasks WHERE task_id = ?`, "task-upsert")
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE task_id = ?`, "task-upsert")
 
 	next := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	require.NoError(t, UpsertSchedulerTask("task-upsert", "First Name", "@daily", next, true))
@@ -52,10 +50,8 @@ func TestGetSchedulerTaskNotFound(t *testing.T) {
 func TestRecordSchedulerRun(t *testing.T) {
 	db := GetServerDB()
 	taskID := "task-record"
-	_, err := db.Exec(`DELETE FROM scheduler_tasks WHERE task_id = ?`, taskID)
-	require.NoError(t, err)
-	_, err = db.Exec(`DELETE FROM scheduler_history WHERE task_id = ?`, taskID)
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE task_id = ?`, taskID)
+	execTestWrite(t, `DELETE FROM scheduler_history WHERE task_id = ?`, taskID)
 
 	next := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	require.NoError(t, UpsertSchedulerTask(taskID, "Record Task", "@daily", next, true))
@@ -95,8 +91,7 @@ func TestRecordSchedulerRun(t *testing.T) {
 func TestRecordSchedulerRunUnknownTask(t *testing.T) {
 	db := GetServerDB()
 	taskID := "task-unknown-record"
-	_, err := db.Exec(`DELETE FROM scheduler_history WHERE task_id = ?`, taskID)
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM scheduler_history WHERE task_id = ?`, taskID)
 
 	started := time.Now()
 	RecordSchedulerRun(taskID, started, started.Add(time.Second), "success", nil, started.Add(time.Hour))
@@ -110,9 +105,7 @@ func TestRecordSchedulerRunUnknownTask(t *testing.T) {
 // before "now", excluding disabled tasks and tasks scheduled in the
 // future.
 func TestDueSchedulerTasks(t *testing.T) {
-	db := GetServerDB()
-	_, err := db.Exec(`DELETE FROM scheduler_tasks WHERE task_id LIKE 'due-%'`)
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE task_id LIKE 'due-%'`)
 
 	now := time.Now().UTC().Truncate(time.Second)
 	past := now.Add(-time.Hour)

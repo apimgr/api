@@ -8,6 +8,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/metrics"
@@ -303,7 +304,9 @@ func (s *Scheduler) runCatchUp() {
 		defer s.wg.Done()
 		for i, task := range toRun {
 			log.Printf("Scheduler: Catching up missed run of task '%s' (was due %s)", task.Name, dueAt[i].Format(time.RFC3339))
-			s.execute(task)
+			if err := s.execute(task); err != nil {
+				log.Printf("Scheduler: missed task '%s' failed: %v", task.Name, err)
+			}
 		}
 	}()
 }
@@ -393,7 +396,9 @@ func (s *Scheduler) runTask(t *Task) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.execute(t)
+		if err := s.execute(t); err != nil {
+			log.Printf("Scheduler: task '%s' failed: %v", t.Name, err)
+		}
 	}()
 }
 
@@ -417,7 +422,7 @@ func (s *Scheduler) execute(t *Task) error {
 	taskMetrics := metrics.Get()
 	taskMetrics.RecordSchedulerTaskStart(t.Name)
 
-	runErr := t.Func()
+	runErr := executeTaskSafely(t)
 	completed := time.Now().In(s.loc)
 	taskMetrics.RecordSchedulerTaskEnd(t.Name, completed.Sub(started), runErr)
 
@@ -468,6 +473,15 @@ func (s *Scheduler) execute(t *Task) error {
 	}
 
 	return runErr
+}
+
+func executeTaskSafely(task *Task) (runErr error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			runErr = fmt.Errorf("task panicked: %v", recovered)
+		}
+	}()
+	return task.Func()
 }
 
 // audit records one entry per execution in the database audit log and, when

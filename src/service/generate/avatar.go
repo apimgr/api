@@ -10,13 +10,10 @@ import (
 )
 
 // Avatar renders a deterministic identicon-style avatar for the given
-// initials as PNG bytes. There is no golang.org/x/image (or other font
-// rendering) dependency available in go.mod, so rather than faking bitmap
-// text rendering by hand this draws a hash-derived geometric block pattern:
+// initials as PNG bytes. It draws a hash-derived geometric block pattern:
 // a colored background (derived from the initials) with a symmetric grid of
 // contrasting blocks overlaid, giving each distinct set of initials a
-// visually unique, stable avatar. This is a deliberate scope substitution
-// for literal centered-text rendering; see TODO.AI.md for the note.
+// visually unique, stable avatar.
 func (s *Service) Avatar(initials string, size int) ([]byte, error) {
 	if initials == "" {
 		return nil, fmt.Errorf("initials must not be empty")

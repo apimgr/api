@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">✨ Generators</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.generators.7668e60b96"}}</h1>
     <p class="hero-subtitle">
-      generating QR codes, barcodes, configs, avatars, and more
+      {{t .Lang "page_text.text.generating.qr.codes.barcodes.configs.avatars.5d1f46f729"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/generate/qr" class="category-card">
+      <a href="{{path .BaseURL "/generate/qr"}}" class="category-card">
         <div class="category-icon">📱</div>
-        <h3 class="category-title">QR Code</h3>
-        <p class="category-description">Generate QR codes from text/URLs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.qr.code.5a779155ea"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.qr.codes.from.text.urls.8334096e7c"}}</p>
       </a>
       
-      <a href="/generate/barcode" class="category-card">
-        <div class="category-icon">〡〡〡</div>
-        <h3 class="category-title">Barcode</h3>
-        <p class="category-description">EAN, UPC, Code128, Code39</p>
+      <a href="{{path .BaseURL "/generate/barcode"}}" class="category-card">
+        <div class="category-icon">{{t .Lang "page_text.text.message.d990e76b76"}}</div>
+        <h3 class="category-title">{{t .Lang "page_text.text.barcode.a401f37210"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.ean.upc.code128.code39.f45c16026c"}}</p>
       </a>
       
-      <a href="/generate/avatar" class="category-card">
+      <a href="{{path .BaseURL "/generate/avatar"}}" class="category-card">
         <div class="category-icon">👤</div>
-        <h3 class="category-title">Avatar</h3>
-        <p class="category-description">Generate avatars from initials</p>
+        <h3 class="category-title">{{t .Lang "users.profile.avatar"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.avatars.from.initials.ba51cb0e5b"}}</p>
       </a>
       
-      <a href="/generate/config" class="category-card">
+      <a href="{{path .BaseURL "/generate/config"}}" class="category-card">
         <div class="category-icon">⚙️</div>
-        <h3 class="category-title">Config Files</h3>
-        <p class="category-description">Generate configuration templates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.config.files.0ca95db206"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.configuration.templates.42d393d1d7"}}</p>
       </a>
       
-      <a href="/generate/sql" class="category-card">
+      <a href="{{path .BaseURL "/generate/sql"}}" class="category-card">
         <div class="category-icon">🗄️</div>
-        <h3 class="category-title">SQL Schema</h3>
-        <p class="category-description">Generate SQL database schemas</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.sql.schema.0d878832ad"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.sql.database.schemas.ffb0fff680"}}</p>
       </a>
       
-      <a href="/generate/api-docs" class="category-card">
+      <a href="{{path .BaseURL "/generate/api-docs"}}" class="category-card">
         <div class="category-icon">📖</div>
-        <h3 class="category-title">API Documentation</h3>
-        <p class="category-description">Generate API documentation</p>
+        <h3 class="category-title">{{t .Lang "help.api_documentation"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.api.documentation.963c15256d"}}</p>
       </a>
       
-      <a href="/generate/license" class="category-card">
+      <a href="{{path .BaseURL "/generate/license"}}" class="category-card">
         <div class="category-icon">📜</div>
-        <h3 class="category-title">License File</h3>
-        <p class="category-description">Generate license files</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.license.file.c1c046a538"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.license.files.e0e1839ad7"}}</p>
       </a>
       
-      <a href="/generate/gitignore" class="category-card">
+      <a href="{{path .BaseURL "/generate/gitignore"}}" class="category-card">
         <div class="category-icon">🚫</div>
         <h3 class="category-title">.gitignore</h3>
-        <p class="category-description">Generate .gitignore files</p>
+        <p class="category-description">{{t .Lang "page_text.text.generate.gitignore.files.b250a8840c"}}</p>
       </a>
       
-      <a href="/generate/dockerfile" class="category-card">
+      <a href="{{path .BaseURL "/generate/dockerfile"}}" class="category-card">
         <div class="category-icon">🐋</div>
         <h3 class="category-title">Dockerfile</h3>
-        <p class="category-description">Generate Dockerfile templates</p>
+        <p class="category-description">{{t .Lang "page_text.text.generate.dockerfile.templates.36f36734f9"}}</p>
       </a>
       
-      <a href="/generate/ssh-key" class="category-card">
+      <a href="{{path .BaseURL "/generate/ssh-key"}}" class="category-card">
         <div class="category-icon">🔑</div>
-        <h3 class="category-title">SSH Key</h3>
-        <p class="category-description">Generate SSH key pairs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ssh.key.9338f84d32"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.ssh.key.pairs.4696de4128"}}</p>
       </a>
       
-      <a href="/generate/identicon" class="category-card">
+      <a href="{{path .BaseURL "/generate/identicon"}}" class="category-card">
         <div class="category-icon">🔷</div>
-        <h3 class="category-title">Identicon</h3>
-        <p class="category-description">Generate identicons from hashes</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.identicon.0f3e8a1bd5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.identicons.from.hashes.61eeb32642"}}</p>
       </a>
       
-      <a href="/generate/placeholder" class="category-card">
+      <a href="{{path .BaseURL "/generate/placeholder"}}" class="category-card">
         <div class="category-icon">🖼️</div>
-        <h3 class="category-title">Placeholder Image</h3>
-        <p class="category-description">Generate placeholder images</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.placeholder.image.0a473d657e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.placeholder.images.feb3fb1121"}}</p>
       </a>
     </div>
   </div>

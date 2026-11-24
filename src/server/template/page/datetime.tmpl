@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🕐 Date & Time</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.date.time.212c9284db"}}</h1>
     <p class="hero-subtitle">
-      timestamps, timezone conversion, cron, and astronomy
+      {{t .Lang "page_text.text.timestamps.timezone.conversion.cron.and.astr.490b22040e"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/datetime/now" class="category-card">
+      <a href="{{path .BaseURL "/datetime/now"}}" class="category-card">
         <div class="category-icon">⏰</div>
-        <h3 class="category-title">Current Time</h3>
-        <p class="category-description">Get current timestamp in various formats</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.current.time.f67e8e66bf"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.current.timestamp.in.various.formats.61a11b4181"}}</p>
       </a>
       
-      <a href="/datetime/convert" class="category-card">
+      <a href="{{path .BaseURL "/datetime/convert"}}" class="category-card">
         <div class="category-icon">🔄</div>
-        <h3 class="category-title">Timezone Converter</h3>
-        <p class="category-description">Convert between timezones</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.timezone.converter.e8604981b5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.convert.between.timezones.7f8c6e135e"}}</p>
       </a>
       
-      <a href="/datetime/format" class="category-card">
+      <a href="{{path .BaseURL "/datetime/format"}}" class="category-card">
         <div class="category-icon">📅</div>
-        <h3 class="category-title">Date Formatter</h3>
-        <p class="category-description">Format dates in various styles</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.date.formatter.088c43680c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.format.dates.in.various.styles.bb0f181be9"}}</p>
       </a>
       
-      <a href="/datetime/parse" class="category-card">
+      <a href="{{path .BaseURL "/datetime/parse"}}" class="category-card">
         <div class="category-icon">🔍</div>
-        <h3 class="category-title">Date Parser</h3>
-        <p class="category-description">Parse date strings to timestamps</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.date.parser.3f170d7d6b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.date.strings.to.timestamps.593b79be70"}}</p>
       </a>
       
-      <a href="/datetime/diff" class="category-card">
+      <a href="{{path .BaseURL "/datetime/diff"}}" class="category-card">
         <div class="category-icon">⏱️</div>
-        <h3 class="category-title">Date Difference</h3>
-        <p class="category-description">Calculate time between dates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.date.difference.46327747ed"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.time.between.dates.147c276da7"}}</p>
       </a>
       
-      <a href="/datetime/add" class="category-card">
+      <a href="{{path .BaseURL "/datetime/add"}}" class="category-card">
         <div class="category-icon">➕</div>
-        <h3 class="category-title">Add Duration</h3>
-        <p class="category-description">Add time to a date</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.add.duration.e3421c141e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.add.time.to.a.date.1e20d31a52"}}</p>
       </a>
       
-      <a href="/datetime/cron" class="category-card">
+      <a href="{{path .BaseURL "/datetime/cron"}}" class="category-card">
         <div class="category-icon">⏲️</div>
-        <h3 class="category-title">Cron Parser</h3>
-        <p class="category-description">Parse and explain cron expressions</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.cron.parser.ea867d3caa"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.and.explain.cron.expressions.5736119a70"}}</p>
       </a>
       
-      <a href="/datetime/unix" class="category-card">
+      <a href="{{path .BaseURL "/datetime/unix"}}" class="category-card">
         <div class="category-icon">🔢</div>
-        <h3 class="category-title">Unix Timestamp</h3>
-        <p class="category-description">Convert to/from Unix time</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.unix.timestamp.52deb2280e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.convert.to.from.unix.time.cec256846c"}}</p>
       </a>
       
-      <a href="/datetime/calendar" class="category-card">
+      <a href="{{path .BaseURL "/datetime/calendar"}}" class="category-card">
         <div class="category-icon">📆</div>
-        <h3 class="category-title">Calendar</h3>
-        <p class="category-description">View calendar for any month/year</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.calendar.d5d0a30b51"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.view.calendar.for.any.month.year.d65cdb7342"}}</p>
       </a>
       
-      <a href="/datetime/workdays" class="category-card">
+      <a href="{{path .BaseURL "/datetime/workdays"}}" class="category-card">
         <div class="category-icon">💼</div>
-        <h3 class="category-title">Business Days</h3>
-        <p class="category-description">Calculate working days between dates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.business.days.61c5d0498e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.working.days.between.dates.e5c83d0ce5"}}</p>
       </a>
       
-      <a href="/datetime/sunrise" class="category-card">
+      <a href="{{path .BaseURL "/datetime/sunrise"}}" class="category-card">
         <div class="category-icon">🌅</div>
-        <h3 class="category-title">Sunrise/Sunset</h3>
-        <p class="category-description">Calculate sunrise and sunset times</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.sunrise.sunset.0f1ff6ef93"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.sunrise.and.sunset.times.ec9d42da70"}}</p>
       </a>
       
-      <a href="/datetime/moon" class="category-card">
+      <a href="{{path .BaseURL "/datetime/moon"}}" class="category-card">
         <div class="category-icon">🌙</div>
-        <h3 class="category-title">Moon Phase</h3>
-        <p class="category-description">Calculate current moon phase</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.moon.phase.f4ded72ef7"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.current.moon.phase.e1a270e743"}}</p>
       </a>
     </div>
   </div>

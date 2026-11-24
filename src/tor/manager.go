@@ -2,12 +2,15 @@ package tor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Manager owns the lifecycle of the dedicated Tor Service - start, restart,
@@ -16,12 +19,18 @@ import (
 type Manager struct {
 	mu sync.Mutex
 
-	svc *Service
-	cfg Config
+	svc         *Service
+	cfg         Config
+	enabled     bool
+	starting    bool
+	status      string
+	startCancel context.CancelFunc
+	startDone   chan struct{}
 
-	serverPort int
-	configDir  string
-	dataDir    string
+	configDir         string
+	dataDir           string
+	monitorCancel     context.CancelFunc
+	onBackendListener func(net.Listener)
 
 	// lastVanity holds the most recently found (but not yet applied)
 	// vanity address candidate, so a later "tor vanity apply" CLI
@@ -55,14 +64,14 @@ func Get() *Manager {
 	return global
 }
 
-// NewManager creates a Manager bound to a specific server port and
-// {config_dir}/{data_dir} roots. Start must be called separately.
-func NewManager(serverPort int, cfg Config, configDir, dataDir string) *Manager {
+// NewManager creates a Manager bound to the resolved config and data roots.
+func NewManager(cfg Config, configDir, dataDir string) *Manager {
 	return &Manager{
-		cfg:        cfg,
-		serverPort: serverPort,
-		configDir:  configDir,
-		dataDir:    dataDir,
+		cfg:       cfg,
+		configDir: configDir,
+		dataDir:   dataDir,
+		enabled:   true,
+		status:    "starting",
 	}
 }
 
@@ -87,29 +96,115 @@ func removeOnionKey(keyPath string) error {
 // as non-fatal - the server must continue running without Tor.
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.svc != nil {
+	if m.svc != nil || m.starting {
+		m.mu.Unlock()
 		return fmt.Errorf("tor already started")
 	}
+	m.starting = true
+	m.status = "starting"
+	m.enabled = true
+	cfg, configDir, dataDir := m.cfg, m.configDir, m.dataDir
+	startCtx, cancelStart := context.WithCancel(ctx)
+	done := make(chan struct{})
+	m.startCancel = cancelStart
+	m.startDone = done
+	m.mu.Unlock()
 
-	svc, err := start(ctx, m.serverPort, m.cfg, m.configDir, m.dataDir)
+	svc, err := start(startCtx, cfg, configDir, dataDir)
+	if err == nil && startCtx.Err() != nil {
+		err = startCtx.Err()
+	}
+	if err != nil && svc != nil {
+		_ = svc.Close()
+		svc = nil
+	}
+	cancelStart()
+	m.mu.Lock()
+	m.starting = false
+	m.startCancel = nil
+	m.startDone = nil
+	close(done)
 	if err != nil {
+		m.enabled = !errors.Is(err, ErrBinaryNotFound)
+		if m.enabled {
+			m.status = "unavailable"
+		} else {
+			m.status = "disabled"
+		}
+		m.mu.Unlock()
 		recordStartFailed(err)
 		return err
 	}
 
 	m.svc = svc
+	m.status = "healthy"
 	recordStarted()
+	if m.monitorCancel == nil {
+		monitorCtx, cancel := context.WithCancel(context.Background())
+		m.monitorCancel = cancel
+		go m.monitor(monitorCtx)
+	}
+	backendListener, onBackendListener := svc.backendListener, m.onBackendListener
+	m.mu.Unlock()
+	if onBackendListener != nil {
+		onBackendListener(backendListener)
+	}
 	return nil
+}
+
+// SetBackendListenerHandler registers the HTTP server callback for every
+// private PROXY-protocol listener created during Tor start or restart.
+func (m *Manager) SetBackendListenerHandler(handler func(net.Listener)) {
+	m.mu.Lock()
+	m.onBackendListener = handler
+	listener := net.Listener(nil)
+	if m.svc != nil {
+		listener = m.svc.backendListener
+	}
+	m.mu.Unlock()
+	if handler != nil && listener != nil {
+		handler(listener)
+	}
+}
+
+func (m *Manager) monitor(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := m.Ping(); err != nil {
+				log.Printf("Tor: control connection lost, restarting: %v", err)
+				restartCtx, cancel := context.WithTimeout(ctx, time.Duration(m.ConfigSnapshot().BootstrapTimeout)*time.Second)
+				if restartErr := m.Restart(restartCtx); restartErr != nil {
+					log.Printf("Tor: restart failed: %v", restartErr)
+				}
+				cancel()
+			}
+		}
+	}
 }
 
 // Restart stops and restarts the dedicated Tor process using the current
 // configuration.
 func (m *Manager) Restart(ctx context.Context) error {
 	m.mu.Lock()
+	if m.starting {
+		cancelStart, done := m.startCancel, m.startDone
+		m.mu.Unlock()
+		if cancelStart != nil {
+			cancelStart()
+		}
+		if done != nil {
+			<-done
+		}
+		return m.Restart(ctx)
+	}
 	svc := m.svc
 	m.svc = nil
+	m.status = "starting"
 	m.mu.Unlock()
 
 	if svc != nil {
@@ -130,14 +225,7 @@ func (m *Manager) Restart(ctx context.Context) error {
 func (m *Manager) UpdateConfig(ctx context.Context, cfg Config) error {
 	m.mu.Lock()
 	m.cfg = cfg
-	torrcPath := filepath.Join(m.configDir, "tor", "torrc")
 	m.mu.Unlock()
-
-	if err := updateTorrc(torrcPath, []byte(generateTorrc(cfg))); err != nil {
-		return fmt.Errorf("failed to update torrc: %w", err)
-	}
-	log.Println("Tor: updated torrc with new settings")
-
 	return m.Restart(ctx)
 }
 
@@ -248,7 +336,7 @@ func (m *Manager) OnionAddress() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.svc == nil {
+	if m.svc == nil || m.status != "healthy" {
 		return ""
 	}
 	return m.svc.OnionAddress()
@@ -274,11 +362,17 @@ func (m *Manager) Ping() error {
 	m.mu.Unlock()
 
 	if svc == nil {
-		recordStopped()
 		return fmt.Errorf("tor not running")
 	}
 
 	err := svc.Ping()
+	m.mu.Lock()
+	if err != nil {
+		m.status = "unavailable"
+	} else if m.svc == svc {
+		m.status = "healthy"
+	}
+	m.mu.Unlock()
 	recordHealth(err)
 	return err
 }
@@ -287,7 +381,27 @@ func (m *Manager) Ping() error {
 func (m *Manager) Running() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.svc != nil
+	return m.svc != nil && m.status == "healthy"
+}
+
+// StatusSnapshot returns Tor's fixed health state without waiting for bootstrap.
+func (m *Manager) StatusSnapshot() (enabled, running bool, status, hostname string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.svc != nil && m.status == "healthy" {
+		hostname = m.svc.OnionAddress()
+	}
+	return m.enabled, m.svc != nil && m.status == "healthy", m.status, hostname
+}
+
+// BackendListener returns the private Tor-only listener after successful start.
+func (m *Manager) BackendListener() net.Listener {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.svc == nil {
+		return nil
+	}
+	return m.svc.backendListener
 }
 
 // Close stops the dedicated Tor process, if running.
@@ -295,7 +409,24 @@ func (m *Manager) Close() error {
 	m.mu.Lock()
 	svc := m.svc
 	m.svc = nil
+	m.status = "unavailable"
+	startCancel, startDone := m.startCancel, m.startDone
+	cancel := m.monitorCancel
+	m.monitorCancel = nil
 	m.mu.Unlock()
+	if startCancel != nil {
+		startCancel()
+	}
+	if startDone != nil {
+		<-startDone
+		m.mu.Lock()
+		svc = m.svc
+		m.svc = nil
+		m.mu.Unlock()
+	}
+	if cancel != nil {
+		cancel()
+	}
 
 	recordStopped()
 

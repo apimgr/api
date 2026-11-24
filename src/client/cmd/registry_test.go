@@ -130,7 +130,7 @@ func TestRequireArg(t *testing.T) {
 
 // TestRealRegistry_CommandsAreWellFormed sanity-checks the actual registry
 // populated by every category file's init() (crypto, datetime, network,
-// raw, system, text): every command must have a non-empty category, name,
+// raw, text): every command must have a non-empty category, name,
 // and a non-nil Run function that satisfies the expected signature.
 func TestRealRegistry_CommandsAreWellFormed(t *testing.T) {
 	require.NotEmpty(t, registry, "expected category init() functions to have registered commands")
@@ -156,7 +156,6 @@ func TestRealRegistry_KnownCommandsPresent(t *testing.T) {
 		{"datetime", "now"},
 		{"network", "ip"},
 		{"raw", "get"},
-		{"system", "health"},
 		{"text", "uuid"},
 	}
 	for _, tc := range tests {

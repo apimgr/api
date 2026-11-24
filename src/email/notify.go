@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/apimgr/api/src/common/i18n"
 )
 
 // GlobalVars holds the values substituted into every template's global
@@ -55,11 +57,15 @@ type EventToggles struct {
 	SSLRenewalFailed bool
 	SecurityAlert    bool
 	SchedulerError   bool
+	DiskLow          bool
+	DatabaseError    bool
 	UpdateAvailable  bool
 	UpdateInstalled  bool
+	UpdateFailed     bool
+	UpdateStaged     bool
 }
 
-// Notifier dispatches operator notification emails for the 9 events plus
+// Notifier dispatches operator notification emails for the configured events plus
 // the manual "test" template (AI.md PART 17 "Default Templates"). It
 // owns only the send decision (toggle check, suppression, SMTP
 // availability) and the actual send - the structured, leveled log line
@@ -71,6 +77,7 @@ type Notifier struct {
 	client     *Client
 	configDir  string
 	vars       GlobalVars
+	language   string
 	toggles    EventToggles
 	recipients []string
 	suppressed map[string]time.Time
@@ -94,10 +101,25 @@ func NewNotifier(client *Client, configDir string, vars GlobalVars, toggles Even
 		client:     client,
 		configDir:  configDir,
 		vars:       vars,
+		language:   i18n.DefaultLanguage,
 		toggles:    toggles,
 		recipients: append([]string(nil), recipients...),
 		suppressed: make(map[string]time.Time),
 	}
+}
+
+// SetLanguage selects the language used for built-in operator email templates.
+// A custom template remains literal operator-authored content.
+func (n *Notifier) SetLanguage(language string) {
+	if n == nil {
+		return
+	}
+	if !i18n.IsSupported(language) {
+		language = i18n.DefaultLanguage
+	}
+	n.mu.Lock()
+	n.language = language
+	n.mu.Unlock()
 }
 
 // defaultNotifier holds the process-wide Notifier, registered once from
@@ -245,6 +267,7 @@ func (n *Notifier) send(templateName string, vars map[string]string, to []string
 	n.mu.Lock()
 	client := n.client
 	configDir := n.configDir
+	language := n.language
 	globals := n.vars.toMap()
 	if len(to) == 0 {
 		to = append([]string(nil), n.recipients...)
@@ -260,6 +283,9 @@ func (n *Notifier) send(templateName string, vars map[string]string, to []string
 	}
 	for k, v := range vars {
 		globals[k] = v
+	}
+	if !HasCustomTemplate(templateName, configDir) {
+		localizeTemplate(tmpl, language, globals)
 	}
 	subject, body := RenderTemplate(tmpl, globals)
 	return client.Send(Message{To: to, Subject: subject, Body: body})
@@ -371,6 +397,48 @@ func (n *Notifier) NotifySchedulerError(executionID string, to []string, taskNam
 	}, to)
 }
 
+// NotifyStartup sends the optional process-start notification after the
+// server has completed startup and reports ready.
+func (n *Notifier) NotifyStartup(to []string, hostname, version, mode string) error {
+	if !n.eventEnabled(func(t EventToggles) bool { return t.Startup }) {
+		return nil
+	}
+	return n.send("startup", map[string]string{
+		"hostname": hostname, "version": version, "mode": mode,
+	}, to)
+}
+
+// NotifyShutdown sends the optional graceful-shutdown notification.
+func (n *Notifier) NotifyShutdown(to []string, hostname, version, mode, reason string) error {
+	if !n.eventEnabled(func(t EventToggles) bool { return t.Shutdown }) {
+		return nil
+	}
+	return n.send("shutdown", map[string]string{
+		"hostname": hostname, "version": version, "mode": mode, "reason": reason,
+	}, to)
+}
+
+// NotifyDiskLow sends an operator alert for a volume that crossed its
+// configured notification threshold.
+func (n *Notifier) NotifyDiskLow(to []string, path, usedPercent, free, thresholdPercent string) error {
+	if !n.eventEnabled(func(t EventToggles) bool { return t.DiskLow }) {
+		return nil
+	}
+	return n.send("disk_low", map[string]string{
+		"path": path, "used_percent": usedPercent, "free": free,
+		"threshold_percent": thresholdPercent,
+	}, to)
+}
+
+// NotifyDatabaseError sends a sanitized database connectivity failure
+// alert; callers must omit credentials and connection strings from errMsg.
+func (n *Notifier) NotifyDatabaseError(to []string, errMsg, since string) error {
+	if !n.eventEnabled(func(t EventToggles) bool { return t.DatabaseError }) {
+		return nil
+	}
+	return n.send("database_error", map[string]string{"error": errMsg, "since": since}, to)
+}
+
 // NotifyUpdateAvailable sends the update_available template.
 func (n *Notifier) NotifyUpdateAvailable(to []string, currentVersion, newVersion, channel string) error {
 	if !n.eventEnabled(func(t EventToggles) bool { return t.UpdateAvailable }) {
@@ -389,6 +457,22 @@ func (n *Notifier) NotifyUpdateInstalled(to []string, previousVersion, newVersio
 	return n.send("update_installed", map[string]string{
 		"previous_version": previousVersion, "new_version": newVersion,
 	}, to)
+}
+
+// NotifyUpdateFailed reports a failed staged update while the old binary remains active.
+func (n *Notifier) NotifyUpdateFailed(to []string, version, reason string) error {
+	if !n.eventEnabled(func(t EventToggles) bool { return t.UpdateFailed }) {
+		return nil
+	}
+	return n.send("update_failed", map[string]string{"version": version, "error": reason}, to)
+}
+
+// NotifyUpdateStaged tells operators that a staged version needs a service restart before it can be applied.
+func (n *Notifier) NotifyUpdateStaged(to []string, version string) error {
+	if !n.eventEnabled(func(t EventToggles) bool { return t.UpdateStaged }) {
+		return nil
+	}
+	return n.send("update_staged", map[string]string{"version": version}, to)
 }
 
 // TestResult reports what a manual test email actually delivered, so
@@ -411,6 +495,7 @@ func (n *Notifier) SendTest(to []string) (TestResult, error) {
 	n.mu.Lock()
 	client := n.client
 	configDir := n.configDir
+	language := n.language
 	vars := SampleVars("test", n.vars)
 	if len(to) == 0 {
 		to = append([]string(nil), n.recipients...)
@@ -426,6 +511,9 @@ func (n *Notifier) SendTest(to []string) (TestResult, error) {
 	tmpl, err := LoadTemplate("test", configDir)
 	if err != nil {
 		return TestResult{}, fmt.Errorf("load template %q: %w", "test", err)
+	}
+	if !HasCustomTemplate("test", configDir) {
+		localizeTemplate(tmpl, language, vars)
 	}
 	subject, body := RenderTemplate(tmpl, vars)
 	subject = "[TEST] " + subject

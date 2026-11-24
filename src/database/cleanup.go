@@ -2,15 +2,13 @@ package database
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"log"
 	"time"
 )
 
 // CleanupExpiredRateLimits removes stale rate-limit sliding-window rows.
-// This project has no user accounts, sessions, or API tokens (IDEA.md
-// non-goals, confirmed against AI.md's own "no admin web UI" statements) —
-// the closest real expiring state to PART 18's "token_cleanup" task is the
-// rate_limits sliding-window table, so that is what this task cleans.
 // A window row is stale once it is more than one hour past window_start.
 func CleanupExpiredRateLimits() (int64, error) {
 	db := GetServerDB()
@@ -18,22 +16,18 @@ func CleanupExpiredRateLimits() (int64, error) {
 		return 0, nil
 	}
 
-	cutoff := time.Now().Add(-1 * time.Hour)
+	cutoff := time.Now().Add(-time.Hour).Unix()
 
 	// A sweep may touch every window row accumulated since the last run, so
 	// it is bounded as a bulk operation rather than a single write.
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutBulk)
 	defer cancel()
 
-	result, err := execContext(ctx, db, `
-		DELETE FROM rate_limits
-		WHERE window_start < ?
-	`, cutoff)
+	table := TableName("rate_limits")
+	count, err := deleteBatches(ctx, db, fmt.Sprintf(`DELETE FROM %s WHERE rowid IN (SELECT rowid FROM %s WHERE window_start < ? LIMIT 500)`, table, table), cutoff)
 	if err != nil {
-		return 0, err
+		return count, err
 	}
-
-	count, _ := result.RowsAffected()
 	if count > 0 {
 		log.Printf("Database: Cleaned %d stale rate-limit entries", count)
 	}
@@ -55,16 +49,10 @@ func CleanupOldAuditLogs(retentionDays int) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutBulk)
 	defer cancel()
 
-	result, err := execContext(ctx, db, `
-		DELETE FROM audit_log
-		WHERE timestamp < ?
-	`, cutoff)
-
+	count, err := deleteBatches(ctx, db, `DELETE FROM audit_log WHERE id IN (SELECT id FROM audit_log WHERE timestamp < ? LIMIT 500)`, cutoff)
 	if err != nil {
-		return 0, err
+		return count, err
 	}
-
-	count, _ := result.RowsAffected()
 	if count > 0 {
 		log.Printf("Database: Cleaned %d old audit log entries (older than %d days)", count, retentionDays)
 	}
@@ -84,21 +72,15 @@ func CleanupOldSchedulerHistory() (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutBulk)
 	defer cancel()
 
-	result, err := execContext(ctx, db, `
-		DELETE FROM scheduler_history
-		WHERE id NOT IN (
-			SELECT id FROM scheduler_history
-			WHERE task_id = scheduler_history.task_id
-			ORDER BY started_at DESC
-			LIMIT 100
-		)
-	`)
-
+	count, err := deleteBatches(ctx, db, `DELETE FROM scheduler_history WHERE id IN (
+		SELECT id FROM (
+			SELECT id, row_number() OVER (PARTITION BY task_id ORDER BY started_at DESC, id DESC) AS position
+			FROM scheduler_history
+		) WHERE position > 100 LIMIT 500
+	)`)
 	if err != nil {
-		return 0, err
+		return count, err
 	}
-
-	count, _ := result.RowsAffected()
 	if count > 0 {
 		log.Printf("Database: Cleaned %d old scheduler history entries", count)
 	}
@@ -116,13 +98,44 @@ func VacuumDatabases() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSchema)
 	defer cancel()
 
-	if db := GetServerDB(); db != nil {
+	var vacuumErr error
+	if store := GetStore(); store != nil {
+		if err := store.Vacuum(ctx); err != nil {
+			log.Printf("Database: Failed to vacuum server.db: %v", err)
+			vacuumErr = err
+		} else {
+			log.Println("Database: Vacuumed server.db")
+		}
+	} else if db := GetServerDB(); db != nil {
 		if _, err := execContext(ctx, db, "VACUUM"); err != nil {
 			log.Printf("Database: Failed to vacuum server.db: %v", err)
+			vacuumErr = err
 		} else {
 			log.Println("Database: Vacuumed server.db")
 		}
 	}
 
-	return nil
+	return vacuumErr
+}
+
+func deleteBatches(ctx context.Context, db *sql.DB, statement string, args ...any) (int64, error) {
+	var total int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		result, err := execContext(ctx, db, statement, args...)
+		if err != nil {
+			return total, err
+		}
+		removed, err := result.RowsAffected()
+		if err != nil {
+			return total, err
+		}
+		total += removed
+		if removed < 500 {
+			return total, nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

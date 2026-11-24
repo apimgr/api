@@ -3,11 +3,17 @@ package backup
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"os/user"
 	"time"
+)
+
+var (
+	ErrBaseMissing = errors.New("ERR_BASE_MISSING: incremental base archive is missing")
+	ErrBaseCorrupt = errors.New("ERR_BASE_CORRUPT: incremental base archive failed verification")
 )
 
 // ManifestName is the archive entry holding the PART 21 manifest.
@@ -30,20 +36,45 @@ const manifestVersion = "1.0.0"
 type Manifest struct {
 	Version    string    `json:"version"`
 	CreatedAt  time.Time `json:"created_at"`
+	SnapshotAt time.Time `json:"snapshot_at,omitempty"`
 	CreatedBy  string    `json:"created_by"`
 	AppVersion string    `json:"app_version"`
 	Contents   []string  `json:"contents"`
+	Type       string    `json:"type,omitempty"`
 	Encrypted  bool      `json:"encrypted"`
 	// EncryptionMethod is omitted entirely for unencrypted archives.
 	EncryptionMethod string `json:"encryption_method,omitempty"`
 	// Checksum is "sha256:" plus the hex digest of every payload entry.
 	Checksum string `json:"checksum"`
+	SHA256   string `json:"sha256,omitempty"`
 	// Kind records which PART 21 naming pattern produced this archive.
 	Kind Kind `json:"kind"`
 	// BaseBackup names the full backup an incremental was taken against.
-	BaseBackup string `json:"base_backup,omitempty"`
+	BaseBackup string         `json:"base_backup,omitempty"`
+	BaseSHA256 string         `json:"base_sha256,omitempty"`
+	Deleted    []string       `json:"deleted,omitempty"`
+	Files      []ManifestFile `json:"files,omitempty"`
 	// ModifiedSince is the cutoff an incremental archive was built from.
 	ModifiedSince *time.Time `json:"modified_since,omitempty"`
+}
+
+// ManifestFile records the content and stable metadata for one archived file.
+type ManifestFile struct {
+	Path     string    `json:"path"`
+	Size     int64     `json:"size"`
+	Modified time.Time `json:"modified_at"`
+	SHA256   string    `json:"sha256"`
+}
+
+func manifestType(kind Kind) string {
+	switch kind {
+	case KindFull, KindManual:
+		return "full"
+	case KindDailyIncremental, KindHourlyIncremental:
+		return "incremental"
+	default:
+		return "full"
+	}
 }
 
 // payloadDigest accumulates the SHA-256 checksum recorded in the manifest.
@@ -63,7 +94,7 @@ func (d *payloadDigest) entry(name string, size int64) {
 	if d == nil {
 		return
 	}
-	fmt.Fprintf(d.hash, "%s\x00%d\n", name, size)
+	_, _ = fmt.Fprintf(d.hash, "%s\x00%d\n", name, size)
 }
 
 // Write mixes payload bytes into the digest, satisfying io.Writer so entries

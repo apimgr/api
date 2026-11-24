@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apimgr/api/src/sysservice"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/runtime"
@@ -150,6 +151,9 @@ func newHarness() (*harness, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := prepareArtifactPermissions(artifactDir); err != nil {
+		return nil, err
+	}
 
 	port, err := freePort()
 	if err != nil {
@@ -181,6 +185,35 @@ func newHarness() (*harness, error) {
 		return nil, err
 	}
 	return h, nil
+}
+
+// prepareArtifactPermissions lets the server's dedicated account traverse
+// the private mounted artifact root after startup drops root privileges.
+func prepareArtifactPermissions(artifactDir string) error {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	dataDir := filepath.Join(artifactDir, "data")
+	if err := sysservice.CreateServiceUser(dataDir); err != nil {
+		return fmt.Errorf("create service account for E2E server: %w", err)
+	}
+	uid, gid, err := sysservice.ServiceAccountIDs()
+	if err != nil {
+		return fmt.Errorf("resolve E2E server service account: %w", err)
+	}
+	paths := []string{artifactDir}
+	if artifactRoot := os.Getenv("E2E_ARTIFACT_ROOT"); artifactRoot != "" {
+		paths = append(paths, artifactRoot)
+	}
+	for _, path := range paths {
+		if err := os.Chown(path, uid, gid); err != nil {
+			return fmt.Errorf("assign E2E artifact path %s to service account: %w", path, err)
+		}
+		if err := os.Chmod(path, 0o700); err != nil {
+			return fmt.Errorf("restrict E2E artifact path %s: %w", path, err)
+		}
+	}
+	return nil
 }
 
 // newArtifactDir creates the run directory under the mandated tempdir
@@ -234,10 +267,10 @@ func freePort() (int, error) {
 	return 0, fmt.Errorf("no free port in %d-%d", portRangeLow, portRangeHigh)
 }
 
-// fixtureConfig is the per-run server.yml. It disables the scheduler (the only
-// component that reaches the public internet) and rate limiting (the crawl
-// tier would otherwise trip the limiter), and enables the root /healthz alias
-// so the suite can assert both health routes.
+// fixtureConfig is the per-run server.yml. It disables scheduled work and
+// GeoIP downloads, raises rate limits for the internal-link crawl, and enables
+// the root /healthz alias so the suite can assert both health routes. Rate
+// limiting has no disable toggle.
 const fixtureConfig = `# Generated per e2e run by tests/e2e - never committed, never reused.
 server:
   address: 0.0.0.0
@@ -248,8 +281,25 @@ server:
     tagline: Universal API Toolkit
   schedule:
     enabled: false
-  rate_limit:
+  geoip:
     enabled: false
+  rate_limit:
+    read:
+      requests: 100000
+      window: 60
+    write:
+      requests: 100000
+      window: 60
+    health:
+      requests: 100000
+      window: 60
+    strict:
+      requests: 100000
+      window: 900
+    auth_failures:
+      requests: 100000
+      window: 900
+    global_burst: 100000
   healthz:
     root:
       enabled: true
@@ -472,7 +522,12 @@ func newTab(t *testing.T, scriptsDisabled bool) (context.Context, *pageRecorder)
 				rec.addRequest(e.Request.URL)
 			}
 		case *network.EventLoadingFailed:
-			if !e.Canceled {
+			// GraphiQL's published stylesheet includes data: font faces, which
+			// the project's required font-src policy intentionally blocks. The
+			// UI has system-font fallbacks; external origins are checked by the
+			// hermetic-origin tier, so these policy-blocked font faces are not
+			// treated as failed page assets.
+			if !e.Canceled && !(e.Type == network.ResourceTypeFont && e.BlockedReason == network.BlockedReasonCsp) {
 				rec.addFailed(fmt.Sprintf("%s load failed: %s", e.Type, e.ErrorText))
 			}
 		case *network.EventResponseReceived:

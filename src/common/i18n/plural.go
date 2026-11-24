@@ -5,24 +5,10 @@ import (
 	"strings"
 )
 
-// pluralCategoriesFor lists, per language, the CLDR plural categories that
-// language actually uses (matching AI.md PART 30's Supported Languages
-// table). Every category listed here must have a translation under each
-// "plurals.<group>.<category>" key.
-var pluralCategoriesFor = map[string][]string{
-	"en": {"one", "other"},
-	"es": {"one", "other"},
-	"zh": {"other"},
-	"fr": {"one", "other"},
-	"ar": {"zero", "one", "two", "few", "many", "other"},
-	"de": {"one", "other"},
-	"ja": {"other"},
-}
-
 // PluralCategory selects the CLDR plural category for n in lang, using the
 // rules from AI.md PART 30: en/es/de use one (n==1) / other; fr treats 0 as
-// "one"; zh/ja have no plural forms and always select "other"; ar implements
-// the full CLDR Arabic rule (zero, one, two, few, many, other).
+// "one"; zh/ja always select "other"; it uses "many" for round millions;
+// and ar implements the full CLDR Arabic rule.
 func PluralCategory(lang string, n int) string {
 	switch lang {
 	case "zh", "ja":
@@ -34,6 +20,14 @@ func PluralCategory(lang string, n int) string {
 		return "other"
 	case "ar":
 		return arabicPluralCategory(n)
+	case "it":
+		if n == 1 {
+			return "one"
+		}
+		if n != 0 && n%1_000_000 == 0 {
+			return "many"
+		}
+		return "other"
 	case "en", "es", "de":
 		if n == 1 {
 			return "one"
@@ -109,8 +103,9 @@ func TranslatePlural(lang, group string, count int, args map[string]string) stri
 // every plural group, per AI.md PART 30. Unknown languages default to the
 // English set.
 func requiredPluralCategories(lang string) []string {
-	if cats, ok := pluralCategoriesFor[lang]; ok {
-		return cats
+	if registration, ok := registeredLanguage(lang); ok {
+		return registration.pluralCategories
 	}
-	return pluralCategoriesFor[DefaultLanguage]
+	registration, _ := registeredLanguage(DefaultLanguage)
+	return registration.pluralCategories
 }

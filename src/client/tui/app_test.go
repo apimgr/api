@@ -218,7 +218,7 @@ func TestHandleKey_CommandsEnterSelectsCommand(t *testing.T) {
 }
 
 // TestHandleKey_ArgsEnterRunsCommandAndTransitionsToOutput drives the full
-// pipeline: select "system health" (a no-arg GET command), type nothing,
+// pipeline: select "text uuid", type nothing,
 // press enter, and verify the model lands on stateOutput with the real
 // server's response rendered into the viewport.
 func TestHandleKey_ArgsEnterRunsCommandAndTransitionsToOutput(t *testing.T) {
@@ -230,8 +230,8 @@ func TestHandleKey_ArgsEnterRunsCommandAndTransitionsToOutput(t *testing.T) {
 
 	m.width, m.height = 80, 24
 	m.applyLayout()
-	m.selectedCategory = "system"
-	m.selectedCommand, _ = cmd.FindCommand("system", "health")
+	m.selectedCategory = "text"
+	m.selectedCommand, _ = cmd.FindCommand("text", "uuid")
 	m.state = stateArgs
 	m.argsInput.SetValue("")
 	m.argsInput.Focus()
@@ -244,7 +244,7 @@ func TestHandleKey_ArgsEnterRunsCommandAndTransitionsToOutput(t *testing.T) {
 	// the real HTTP round trip happened and the resulting error was
 	// captured into both m.err and the output viewport.
 	assert.Error(t, nm.err)
-	assert.Contains(t, nm.outputView.View(), "Error:")
+	assert.Contains(t, nm.outputView.View(), "The command could not be completed.")
 }
 
 // TestRunSelectedCommand_Success verifies a successful command execution
@@ -255,8 +255,8 @@ func TestRunSelectedCommand_Success(t *testing.T) {
 	client := api.New(mux.URL, "")
 	cfg := config.Default()
 	m := newModel(cfg, client, cmd.BuildInfo{Version: "1.0.0"})
-	m.selectedCategory = "system"
-	m.selectedCommand, _ = cmd.FindCommand("system", "health")
+	m.selectedCategory = "text"
+	m.selectedCommand, _ = cmd.FindCommand("text", "uuid")
 
 	_, err := m.runSelectedCommand(nil)
 	// Bare handler 404s, so we still expect an error here, but the point
@@ -321,11 +321,11 @@ func TestView_AllStatesRenderWithoutPanicking(t *testing.T) {
 func TestView_ArgsStateShowsCommandChrome(t *testing.T) {
 	m, _ := testModel(t)
 	m.state = stateArgs
-	m.selectedCategory = "system"
-	m.selectedCommand = cmd.Command{Name: "health", Usage: "system health", Desc: "check health"}
+	m.selectedCategory = "text"
+	m.selectedCommand = cmd.Command{Name: "uuid", Usage: "text uuid", Desc: "generate UUIDs"}
 
 	view := m.View()
-	assert.Contains(t, view, "system health")
+	assert.Contains(t, view, "text uuid")
 }
 
 // TestView_HelpStateShowsHelpText verifies the help screen renders

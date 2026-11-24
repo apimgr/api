@@ -67,19 +67,52 @@
   text-decoration: none;
 }
 
+.header-preferences {
+  position: relative;
+}
+
+.header-preferences > summary {
+  list-style: none;
+}
+
+.header-preferences > summary::-webkit-details-marker {
+  display: none;
+}
+
+.header-preferences-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-xs));
+  inset-inline-end: 0;
+  z-index: 10;
+  display: grid;
+  min-width: 12rem;
+  padding: var(--spacing-xs);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--surface-color);
+  box-shadow: var(--shadow-md);
+}
+
+.header-preferences-menu a {
+  display: block;
+  min-height: 44px;
+  padding: var(--spacing-sm);
+  color: var(--text-color);
+}
+
+.header-preferences-menu a:hover,
+.header-preferences-menu a:focus-visible {
+  background: var(--light-color);
+}
+
 .theme-toggle-form {
   display: flex;
   margin: 0;
 }
 
-.offline-indicator {
-  color: var(--warning-color);
-  font-size: 0.875rem;
-}
-
 /* Links cluster centers in the space left between brand and actions */
 .nav-links {
-  display: flex;
+  display: none;
   gap: var(--spacing-lg);
   align-items: center;
   flex: 1;
@@ -106,7 +139,7 @@
    2.1.1 keyboard failure. Clipped, it still focuses and toggles on Space. */
 
 .nav-toggle {
-  display: none;
+  display: inline-flex;
   font-size: 1.5rem;
   cursor: pointer;
   padding: var(--spacing-sm);
@@ -117,86 +150,87 @@
 
 /* The clipped checkbox cannot show its own ring, so the visible focus
    indicator is drawn on the hamburger label it controls. */
-.nav-checkbox:focus-visible ~ .nav-toggle {
+.nav-checkbox:focus-visible ~ .header .nav-toggle {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
   border-radius: var(--border-radius);
 }
 
 .nav-panel {
-  display: none;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  inset-inline-end: -280px;
+  width: 280px;
+  height: 100dvh;
+  background-color: var(--bg-color);
+  box-shadow: var(--shadow-lg);
+  visibility: hidden;
+  transition: inset-inline-end var(--transition-base), visibility var(--transition-base);
+  z-index: 1001;
+  padding: var(--spacing-lg);
 }
 
+.nav-close {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  border: none;
+  background: none;
+}
+
+.nav-panel a {
+  padding: var(--spacing-md);
+  color: var(--text-color);
+  text-decoration: none;
+  border-bottom: var(--border-width) solid var(--border-color);
+}
+
+/* visibility:hidden while closed keeps the off-screen drawer out of the
+   tab order and out of the accessibility tree - without it, keyboard and
+   screen-reader users land on invisible links parked at right: -280px.
+   It is animatable, so the slide-in transition is preserved. */
 .nav-overlay {
   display: none;
+  position: fixed;
+  inset: 0;
+  background-color: var(--overlay-color);
+  z-index: 1000;
+  cursor: pointer;
 }
 
-/* Mobile responsive per PART 17 */
-@media (max-width: 720px) {
+.nav-checkbox:checked ~ .nav-panel {
+  inset-inline-end: 0;
+  visibility: visible;
+}
+
+.nav-checkbox:checked ~ .nav-overlay {
+  display: block;
+}
+
+@media (min-width: 768px) {
   .nav-toggle {
-    display: inline-flex;
+    display: none;
   }
 
   .nav-links {
-    display: none;
-  }
-
-  /* visibility:hidden while closed keeps the off-screen drawer out of the
-     tab order and out of the accessibility tree - without it, keyboard and
-     screen-reader users land on invisible links parked at right: -280px.
-     It is animatable, so the slide-in transition is preserved. */
-  .nav-panel {
     display: flex;
-    flex-direction: column;
-    position: fixed;
-    top: 0;
-    right: -280px;
-    width: 280px;
-    height: 100vh;
-    background-color: var(--bg-color);
-    box-shadow: var(--shadow-lg);
-    visibility: hidden;
-    transition: right var(--transition-base), visibility var(--transition-base);
-    z-index: 1001;
-    padding: var(--spacing-lg);
   }
 
-  .nav-close {
-    align-self: flex-end;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
-    border: none;
-    background: none;
-  }
-  
-  .nav-panel a {
-    padding: var(--spacing-md);
-    color: var(--text-color);
-    text-decoration: none;
-    border-bottom: var(--border-width) solid var(--border-color);
-  }
-  
+  .nav-panel,
   .nav-overlay {
     display: none;
-    position: fixed;
-    inset: 0;
-    background-color: var(--overlay-color);
-    z-index: 1000;
-    cursor: pointer;
   }
-  
-  .nav-checkbox:checked ~ .nav-panel {
-    right: 0;
-    visibility: visible;
-  }
-  
+
+  .nav-checkbox:checked ~ .nav-panel,
   .nav-checkbox:checked ~ .nav-overlay {
-    display: block;
+    display: none;
   }
 }
 
@@ -240,7 +274,7 @@ footer .container {
 }
 
 .hero-title {
-  font-size: 3rem;
+  font-size: 2rem;
   margin-bottom: var(--spacing-md);
 }
 
@@ -255,6 +289,7 @@ footer .container {
 
 .hero-actions {
   display: flex;
+  flex-direction: column;
   gap: var(--spacing-md);
   justify-content: center;
   margin-bottom: var(--spacing-lg);
@@ -263,7 +298,7 @@ footer .container {
 /* Category Grid */
 .category-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-xl);
 }
@@ -347,6 +382,16 @@ footer .container {
   margin-bottom: var(--spacing-md);
 }
 
+.tool-server-result {
+  margin-block: var(--spacing-md);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tool-server-result-error {
+  color: var(--danger-color);
+}
+
 .tool-result {
   padding: var(--spacing-md);
   background-color: var(--light-color);
@@ -364,18 +409,29 @@ footer .container {
   border-radius: var(--border-radius);
 }
 
-/* Mobile adjustments */
-@media (max-width: 720px) {
+@media (min-width: 768px) {
   .hero-title {
-    font-size: 2rem;
+    font-size: 3rem;
   }
   
   .hero-actions {
-    flex-direction: column;
+    flex-direction: row;
   }
   
   .category-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .category-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -392,7 +448,7 @@ footer .container {
 }
 
 .error-code {
-  font-size: 8rem;
+  font-size: 5rem;
   font-weight: 800;
   line-height: 1;
   background: linear-gradient(135deg, var(--primary), var(--primary-light));
@@ -403,7 +459,7 @@ footer .container {
 }
 
 .error-title {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 700;
   margin-bottom: var(--space-3);
 }
@@ -419,20 +475,21 @@ footer .container {
 
 .error-actions {
   display: flex;
+  flex-direction: column;
   gap: var(--space-3);
   justify-content: center;
 }
 
-@media (max-width: 480px) {
+@media (min-width: 768px) {
   .error-code {
-    font-size: 5rem;
+    font-size: 8rem;
   }
 
   .error-title {
-    font-size: 1.5rem;
+    font-size: 2rem;
   }
 
   .error-actions {
-    flex-direction: column;
+    flex-direction: row;
   }
 }

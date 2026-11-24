@@ -27,7 +27,7 @@ func GenericHandler(service, endpoint string) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-		fmt.Fprintln(w)
+		_ = json.NewEncoder(w).Encode(resp)
+		_, _ = fmt.Fprintln(w)
 	}
 }

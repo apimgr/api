@@ -5,6 +5,7 @@
 package metrics
 
 import (
+	"log"
 	"net/http"
 	"runtime"
 	"sync"
@@ -51,6 +52,8 @@ type Options struct {
 	DataDir string
 	// CollectInterval is how often system/runtime gauges are sampled.
 	CollectInterval time.Duration
+	// OwnerTokenCounts returns active primary and linked owner-token counts.
+	OwnerTokenCounts func() (primary, linked float64, err error)
 }
 
 // Metrics holds all Prometheus collectors exposed at /server/metrics.
@@ -72,9 +75,12 @@ type Metrics struct {
 	dbConnectionsOpen  prometheus.Gauge
 	dbConnectionsInUse prometheus.Gauge
 	dbErrorsTotal      *prometheus.CounterVec
+	dbBusyTotal        prometheus.Counter
+	dbWriteWait        prometheus.Histogram
 
 	authAttemptsTotal  *prometheus.CounterVec
 	authSessionsActive prometheus.Gauge
+	ownerTokensActive  *prometheus.GaugeVec
 
 	cacheHitsTotal      *prometheus.CounterVec
 	cacheMissesTotal    *prometheus.CounterVec
@@ -253,6 +259,17 @@ func newMetricsWithOptions(opts Options) *Metrics {
 			Help:      "Total number of database errors",
 		}, []string{"operation", "error_type"}),
 
+		dbBusyTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace, Subsystem: "db", Name: "busy_total",
+			Help: "Number of SQLite busy or locked write attempts",
+		}),
+
+		dbWriteWait: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: namespace, Subsystem: "db", Name: "write_wait_seconds",
+			Help:    "Database write transaction latency",
+			Buckets: dbDurationBuckets,
+		}),
+
 		authAttemptsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: "auth",
@@ -266,6 +283,13 @@ func newMetricsWithOptions(opts Options) *Metrics {
 			Name:      "sessions_active",
 			Help:      "Number of active sessions",
 		}),
+
+		ownerTokensActive: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "owner_tokens",
+			Name:      "active",
+			Help:      "Number of active owner tokens",
+		}, []string{"kind"}),
 
 		cacheHitsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
@@ -387,8 +411,11 @@ func newMetricsWithOptions(opts Options) *Metrics {
 		m.dbConnectionsOpen,
 		m.dbConnectionsInUse,
 		m.dbErrorsTotal,
+		m.dbBusyTotal,
+		m.dbWriteWait,
 		m.authAttemptsTotal,
 		m.authSessionsActive,
+		m.ownerTokensActive,
 		m.cacheHitsTotal,
 		m.cacheMissesTotal,
 		m.cacheEvictionsTotal,
@@ -424,6 +451,8 @@ func newMetricsWithOptions(opts Options) *Metrics {
 	}
 
 	m.appStartTimestamp.Set(float64(m.startTime.Unix()))
+	m.ownerTokensActive.WithLabelValues("primary").Set(0)
+	m.ownerTokensActive.WithLabelValues("linked").Set(0)
 
 	return m
 }
@@ -459,11 +488,10 @@ func (m *Metrics) ServePrometheus(w http.ResponseWriter, r *http.Request) {
 	promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 }
 
-// StartCollectors starts the periodic system/runtime metric sampler, if
-// either metric family was included at construction. Safe to call once at
-// server startup; a no-op if neither family is enabled.
+// StartCollectors starts the periodic system/runtime and owner-token metric
+// samplers included at construction. Safe to call once at server startup.
 func (m *Metrics) StartCollectors() {
-	if m.system == nil && m.rt == nil {
+	if m.system == nil && m.rt == nil && m.opts.OwnerTokenCounts == nil {
 		return
 	}
 	go m.collectLoop()
@@ -494,6 +522,15 @@ func (m *Metrics) collectLoop() {
 }
 
 func (m *Metrics) sample() {
+	if m.opts.OwnerTokenCounts != nil {
+		primary, linked, err := m.opts.OwnerTokenCounts()
+		if err != nil {
+			log.Printf("Metrics: unable to count active owner tokens: %v", err)
+		} else {
+			m.ownerTokensActive.WithLabelValues("primary").Set(primary)
+			m.ownerTokensActive.WithLabelValues("linked").Set(linked)
+		}
+	}
 	if m.system != nil {
 		m.system.collect()
 	}

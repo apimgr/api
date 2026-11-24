@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🔐 Cryptography</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.cryptography.016e714a64"}}</h1>
     <p class="hero-subtitle">
-      hashing, encryption, JWT, TOTP, and password generation
+      {{t .Lang "page_text.text.hashing.encryption.jwt.totp.and.password.gen.56694b010c"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/crypto/password" class="category-card">
+      <a href="{{path .BaseURL "/crypto/password"}}" class="category-card">
         <div class="category-icon">🔑</div>
-        <h3 class="category-title">Password Generator</h3>
-        <p class="category-description">Generate secure passwords</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.password.generator.7bec027afa"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.secure.passwords.3d3d329df3"}}</p>
       </a>
       
-      <a href="/crypto/hash" class="category-card">
+      <a href="{{path .BaseURL "/crypto/hash"}}" class="category-card">
         <div class="category-icon">🔐</div>
-        <h3 class="category-title">Hash Generator</h3>
-        <p class="category-description">bcrypt, Argon2id, scrypt hashing</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.hash.generator.ef470f43f2"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.bcrypt.argon2id.scrypt.hashing.a8f21629a7"}}</p>
       </a>
       
-      <a href="/crypto/jwt" class="category-card">
+      <a href="{{path .BaseURL "/crypto/jwt"}}" class="category-card">
         <div class="category-icon">🎫</div>
-        <h3 class="category-title">JWT Tools</h3>
-        <p class="category-description">Create, decode, verify JWTs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.jwt.tools.19ffadce7f"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.create.decode.verify.jwts.cc1e11f4c8"}}</p>
       </a>
       
-      <a href="/crypto/totp" class="category-card">
+      <a href="{{path .BaseURL "/crypto/totp"}}" class="category-card">
         <div class="category-icon">⏱️</div>
-        <h3 class="category-title">TOTP Generator</h3>
-        <p class="category-description">Time-based one-time passwords</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.totp.generator.8ae848fe42"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.time.based.one.time.passwords.feb89d67b6"}}</p>
       </a>
       
-      <a href="/crypto/encrypt" class="category-card">
+      <a href="{{path .BaseURL "/crypto/encrypt"}}" class="category-card">
         <div class="category-icon">🔒</div>
-        <h3 class="category-title">Encrypt Text</h3>
-        <p class="category-description">AES-256-GCM encryption</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.encrypt.text.f4f2f02ca8"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.aes.256.gcm.encryption.ece88704dc"}}</p>
       </a>
       
-      <a href="/crypto/decrypt" class="category-card">
+      <a href="{{path .BaseURL "/crypto/decrypt"}}" class="category-card">
         <div class="category-icon">🔓</div>
-        <h3 class="category-title">Decrypt Text</h3>
-        <p class="category-description">Decrypt AES-256-GCM data</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.decrypt.text.41fa250ece"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.decrypt.aes.256.gcm.data.329d6dbc16"}}</p>
       </a>
       
-      <a href="/crypto/random" class="category-card">
+      <a href="{{path .BaseURL "/crypto/random"}}" class="category-card">
         <div class="category-icon">🎲</div>
-        <h3 class="category-title">Random Bytes</h3>
-        <p class="category-description">Cryptographically secure random data</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.random.bytes.19f629447e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.cryptographically.secure.random.data.4e8e2cfd7e"}}</p>
       </a>
       
-      <a href="/crypto/hmac" class="category-card">
+      <a href="{{path .BaseURL "/crypto/hmac"}}" class="category-card">
         <div class="category-icon">✏️</div>
-        <h3 class="category-title">HMAC Generator</h3>
-        <p class="category-description">Generate HMAC signatures</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.hmac.generator.a0066c34f0"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.hmac.signatures.f86ef14363"}}</p>
       </a>
       
-      <a href="/crypto/rsa" class="category-card">
+      <a href="{{path .BaseURL "/crypto/rsa"}}" class="category-card">
         <div class="category-icon">🔐</div>
-        <h3 class="category-title">RSA Tools</h3>
-        <p class="category-description">RSA key generation and encryption</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.rsa.tools.2386b220e4"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.rsa.key.generation.and.encryption.5b08645633"}}</p>
       </a>
       
-      <a href="/crypto/ed25519" class="category-card">
+      <a href="{{path .BaseURL "/crypto/ed25519"}}" class="category-card">
         <div class="category-icon">✍️</div>
-        <h3 class="category-title">Ed25519 Tools</h3>
-        <p class="category-description">Ed25519 signatures</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ed25519.tools.f84369caf0"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.ed25519.signatures.4e31e76e01"}}</p>
       </a>
       
-      <a href="/crypto/pgp" class="category-card">
+      <a href="{{path .BaseURL "/crypto/pgp"}}" class="category-card">
         <div class="category-icon">🔏</div>
-        <h3 class="category-title">PGP Tools</h3>
-        <p class="category-description">PGP encryption and signing</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.pgp.tools.435813431c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.pgp.encryption.and.signing.082eba0b86"}}</p>
       </a>
       
-      <a href="/crypto/certificate" class="category-card">
+      <a href="{{path .BaseURL "/crypto/certificate"}}" class="category-card">
         <div class="category-icon">📜</div>
-        <h3 class="category-title">Certificate Tools</h3>
-        <p class="category-description">X.509 certificate parsing</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.certificate.tools.2e01f0f89e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.x.509.certificate.parsing.d9506d24dd"}}</p>
       </a>
     </div>
   </div>

@@ -4,61 +4,69 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/convert">Unit Conversion</a> / Length Converter
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/convert"}}">{{t .Lang "categories.convert.name"}}</a> {{t .Lang "tool_pages.text.length.converter.16879d67fe"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Length Converter</h1>
-        <button class="btn btn-icon" data-favorite="convert-length" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.length.converter.13e888b1e1"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="convert-length" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Convert a length value between feet/meters, inches/centimeters, and
-        miles/kilometers.
+        {{t .Lang "tool_pages.text.convert.a.length.value.between.feet.meters.i.47eb7fb40e"}}
       </p>
 
-      <form id="length-form" class="tool-form" data-template="{{.APIBasePath}}/convert/length/{value}/{from}/{to}">
+      <form id="length-form" class="tool-form" data-template="{{.APIBasePath}}/convert/length/{value}/{from}/{to}" method="post" action="{{path .BaseURL "/convert/length"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Value</label>
-          <input type="number" name="value" class="form-input" step="any" required value="1">
+          <label class="form-label" for="length-form-value">{{t .Lang "tool_pages.text.value.8e37953d23"}}</label>
+          <input type="number" name="value" class="form-input" step="any" required value="1" id="length-form-value">
         </div>
 
         <div class="form-group">
-          <label class="form-label">From unit</label>
-          <select name="from" class="form-input">
-            <option value="ft">Feet (ft)</option>
-            <option value="m">Meters (m)</option>
-            <option value="in">Inches (in)</option>
-            <option value="cm">Centimeters (cm)</option>
-            <option value="mi">Miles (mi)</option>
-            <option value="km">Kilometers (km)</option>
+          <label class="form-label" for="length-form-from">{{t .Lang "tool_pages.text.from.unit.21e7287c87"}}</label>
+          <select name="from" class="form-input" id="length-form-from">
+            <option value="ft">{{t .Lang "tool_pages.text.feet.ft.edfdb5a87b"}}</option>
+            <option value="m">{{t .Lang "tool_pages.text.meters.m.1f0a9ec207"}}</option>
+            <option value="in">{{t .Lang "tool_pages.text.inches.in.f831c59e09"}}</option>
+            <option value="cm">{{t .Lang "tool_pages.text.centimeters.cm.9c5bdd30d9"}}</option>
+            <option value="mi">{{t .Lang "tool_pages.text.miles.mi.bb4e926d0d"}}</option>
+            <option value="km">{{t .Lang "tool_pages.text.kilometers.km.0869542433"}}</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label">To unit</label>
-          <select name="to" class="form-input">
-            <option value="m">Meters (m)</option>
-            <option value="ft">Feet (ft)</option>
-            <option value="cm">Centimeters (cm)</option>
-            <option value="in">Inches (in)</option>
-            <option value="km">Kilometers (km)</option>
-            <option value="mi">Miles (mi)</option>
+          <label class="form-label" for="length-form-to">{{t .Lang "tool_pages.text.to.unit.bb3aef52c0"}}</label>
+          <select name="to" class="form-input" id="length-form-to">
+            <option value="m">{{t .Lang "tool_pages.text.meters.m.1f0a9ec207"}}</option>
+            <option value="ft">{{t .Lang "tool_pages.text.feet.ft.edfdb5a87b"}}</option>
+            <option value="cm">{{t .Lang "tool_pages.text.centimeters.cm.9c5bdd30d9"}}</option>
+            <option value="in">{{t .Lang "tool_pages.text.inches.in.f831c59e09"}}</option>
+            <option value="km">{{t .Lang "tool_pages.text.kilometers.km.0869542433"}}</option>
+            <option value="mi">{{t .Lang "tool_pages.text.miles.mi.bb4e926d0d"}}</option>
           </select>
         </div>
 
-        <button type="submit" class="btn btn-primary">Convert</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.convert.5cd425f518"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="length-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/convert/length/1/ft/m</pre>

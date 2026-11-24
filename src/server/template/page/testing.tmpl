@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🧪 Testing Tools</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.testing.tools.13ef7cf77e"}}</h1>
     <p class="hero-subtitle">
-      mocks, fixtures, assertions, and API testing
+      {{t .Lang "page_text.text.mocks.fixtures.assertions.and.api.testing.01e6c24c66"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,70 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/testing/mock-server" class="category-card">
+      <a href="{{path .BaseURL "/testing/http"}}" class="category-card">
         <div class="category-icon">🖥️</div>
-        <h3 class="category-title">HTTP Mock Server</h3>
-        <p class="category-description">Mock HTTP responses</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.http.mock.server.b807baba3e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.mock.http.responses.f9264f1d8b"}}</p>
       </a>
       
-      <a href="/testing/webhook" class="category-card">
+      <a href="{{path .BaseURL "/testing/webhook"}}" class="category-card">
         <div class="category-icon">🔔</div>
-        <h3 class="category-title">Webhook Receiver</h3>
-        <p class="category-description">Receive and inspect webhooks</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.webhook.receiver.68fa92fa1b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.receive.and.inspect.webhooks.238d59ef89"}}</p>
       </a>
       
-      <a href="/testing/request-inspector" class="category-card">
+      <a href="{{path .BaseURL "/testing/request-inspector"}}" class="category-card">
         <div class="category-icon">🔍</div>
-        <h3 class="category-title">Request Inspector</h3>
-        <p class="category-description">Inspect HTTP requests</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.request.inspector.c0afdc97ad"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.inspect.http.requests.91ee9887d9"}}</p>
       </a>
       
-      <a href="/testing/response-generator" class="category-card">
+      <a href="{{path .BaseURL "/testing/response-generator"}}" class="category-card">
         <div class="category-icon">📤</div>
-        <h3 class="category-title">Response Generator</h3>
-        <p class="category-description">Generate mock responses</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.response.generator.532b9da7cc"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.mock.responses.d82e85444f"}}</p>
       </a>
       
-      <a href="/testing/fake-data" class="category-card">
+      <a href="{{path .BaseURL "/testing/fake-data"}}" class="category-card">
         <div class="category-icon">🎲</div>
-        <h3 class="category-title">Fake Data Generator</h3>
-        <p class="category-description">Generate test data</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.fake.data.generator.42ee985ce6"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.test.data.25a6550a21"}}</p>
       </a>
       
-      <a href="/testing/fixtures" class="category-card">
+      <a href="{{path .BaseURL "/testing/fixtures"}}" class="category-card">
         <div class="category-icon">📦</div>
-        <h3 class="category-title">Test Fixtures</h3>
-        <p class="category-description">Generate test fixtures</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.test.fixtures.569dee8259"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.test.fixtures.804810cfc2"}}</p>
       </a>
       
-      <a href="/testing/api-client" class="category-card">
+      <a href="{{path .BaseURL "/testing/api-client"}}" class="category-card">
         <div class="category-icon">🔌</div>
-        <h3 class="category-title">API Client Generator</h3>
-        <p class="category-description">Generate API client code</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.api.client.generator.d1f71da16b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.api.client.code.1ea8682e47"}}</p>
       </a>
       
-      <a href="/testing/load-test" class="category-card">
-        <div class="category-icon">⚡</div>
-        <h3 class="category-title">Load Testing</h3>
-        <p class="category-description">Simple load testing</p>
-      </a>
-      
-      <a href="/testing/assertions" class="category-card">
+      <a href="{{path .BaseURL "/testing/assertions"}}" class="category-card">
         <div class="category-icon">✅</div>
-        <h3 class="category-title">Assertion Helper</h3>
-        <p class="category-description">Generate test assertions</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.assertion.helper.1d270e0b8c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.test.assertions.f51af91bd0"}}</p>
       </a>
       
-      <a href="/testing/status-codes" class="category-card">
+      <a href="{{path .BaseURL "/testing/status-codes"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">HTTP Status Codes</h3>
-        <p class="category-description">HTTP status reference</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.http.status.codes.d763972422"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.http.status.reference.b87105bd9c"}}</p>
       </a>
       
-      <a href="/testing/curl-generator" class="category-card">
+      <a href="{{path .BaseURL "/testing/curl-generator"}}" class="category-card">
         <div class="category-icon">🔧</div>
-        <h3 class="category-title">cURL Generator</h3>
-        <p class="category-description">Generate cURL commands</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.curl.generator.f6945541fb"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.curl.commands.14e5f9864f"}}</p>
       </a>
       
-      <a href="/testing/postman" class="category-card">
+      <a href="{{path .BaseURL "/testing/postman"}}" class="category-card">
         <div class="category-icon">📮</div>
-        <h3 class="category-title">Postman Collection</h3>
-        <p class="category-description">Generate Postman collections</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.postman.collection.ebf91d2dd7"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.postman.collections.db02554ceb"}}</p>
       </a>
     </div>
   </div>

@@ -288,7 +288,7 @@ func (g *GeoIPDB) CheckCountry(ipStr string, geo config.GeoIPConfig, allowlist [
 		return CountryDecision{Reason: ReasonNoRules}
 	}
 
-	if !geo.Databases.Country || !g.HasCountryDB() {
+	if !g.HasCountryDB() {
 		countryDBWarnOnce.Do(func() {
 			log.Println("GeoIP: country blocking is configured but the country database is unavailable, blocking is skipped")
 		})

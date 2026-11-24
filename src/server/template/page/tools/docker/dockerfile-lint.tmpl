@@ -4,36 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/docker">Docker</a> / Dockerfile Linter
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/docker"}}">{{t .Lang "tool_pages.text.docker.e6169e958b"}}</a> {{t .Lang "tool_pages.text.dockerfile.linter.9df2f4e5cc"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Dockerfile Linter</h1>
-        <button class="btn btn-icon" data-favorite="docker-dockerfile-lint" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.dockerfile.linter.33c5ab3f8b"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="docker-dockerfile-lint" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Lint and validate Dockerfiles for common anti-patterns.
+        {{t .Lang "tool_pages.text.lint.and.validate.dockerfiles.for.common.ant.27893bc135"}}
       </p>
 
-      <form id="dockerfile-lint-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/dockerfile-lint">
+      <form id="dockerfile-lint-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/docker/dockerfile-lint" method="post" action="{{path .BaseURL "/docker/dockerfile-lint"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Dockerfile</label>
-          <textarea name="body" class="form-input" rows="10" required placeholder="FROM ubuntu&#10;RUN apt-get update"></textarea>
+          <label class="form-label" for="dockerfile-lint-form-body">{{t .Lang "tool_pages.text.dockerfile.dd2c0eb6ea"}}</label>
+          <textarea name="body" class="form-input" rows="10" required placeholder="{{t .Lang "tool_pages.text.from.ubuntu.run.apt.get.update.9c6b92161a"}}" id="dockerfile-lint-form-body"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Lint</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.lint.93d8a5e2f0"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="dockerfile-lint-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/docker/dockerfile-lint -d 'FROM ubuntu'</pre>

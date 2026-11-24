@@ -9,48 +9,12 @@ import (
 	"golang.org/x/text/number"
 )
 
-// languageTags maps each supported language to its BCP 47 language.Tag for
-// use with golang.org/x/text formatters.
-var languageTags = map[string]language.Tag{
-	"en": language.AmericanEnglish,
-	"es": language.Spanish,
-	"zh": language.SimplifiedChinese,
-	"fr": language.French,
-	"ar": language.Arabic,
-	"de": language.German,
-	"ja": language.Japanese,
-}
-
-// dateLayouts gives each supported language its conventional numeric date
-// layout (Go reference-time format).
-var dateLayouts = map[string]string{
-	"en": "01/02/2006",
-	"es": "02/01/2006",
-	"zh": "2006/01/02",
-	"fr": "02/01/2006",
-	"ar": "02/01/2006",
-	"de": "02.01.2006",
-	"ja": "2006/01/02",
-}
-
-// timeLayouts gives each supported language its conventional clock layout.
-// English uses a 12-hour clock with AM/PM; every other supported language
-// uses a 24-hour clock.
-var timeLayouts = map[string]string{
-	"en": "3:04 PM",
-	"es": "15:04",
-	"zh": "15:04",
-	"fr": "15:04",
-	"ar": "15:04",
-	"de": "15:04",
-	"ja": "15:04",
-}
-
 func languageTag(lang string) language.Tag {
-	if tag, ok := languageTags[resolveLocale(lang).meta.Language]; ok {
-		return tag
+	if registration, ok := registeredLanguage(resolveLocale(lang).meta.Language); ok {
+		return registration.tag
 	}
-	return languageTags[DefaultLanguage]
+	registration, _ := registeredLanguage(DefaultLanguage)
+	return registration.tag
 }
 
 // emptyCatalog supplies message.NewPrinter with a translation catalog that
@@ -69,20 +33,20 @@ func FormatNumber(lang string, n float64) string {
 // FormatDate renders t's date portion using lang's conventional numeric
 // date layout.
 func FormatDate(lang string, t time.Time) string {
-	layout, ok := dateLayouts[resolveLocale(lang).meta.Language]
+	registration, ok := registeredLanguage(resolveLocale(lang).meta.Language)
 	if !ok {
-		layout = dateLayouts[DefaultLanguage]
+		registration, _ = registeredLanguage(DefaultLanguage)
 	}
-	return t.Format(layout)
+	return t.Format(registration.dateLayout)
 }
 
 // FormatTime renders t's time-of-day portion using lang's conventional
 // clock layout (12-hour for English, 24-hour for every other supported
 // language).
 func FormatTime(lang string, t time.Time) string {
-	layout, ok := timeLayouts[resolveLocale(lang).meta.Language]
+	registration, ok := registeredLanguage(resolveLocale(lang).meta.Language)
 	if !ok {
-		layout = timeLayouts[DefaultLanguage]
+		registration, _ = registeredLanguage(DefaultLanguage)
 	}
-	return t.Format(layout)
+	return t.Format(registration.timeLayout)
 }

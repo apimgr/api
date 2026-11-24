@@ -52,6 +52,10 @@
   /* Typography */
   --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  /* Stable aliases for vendored widgets that define their own --font-family
+     and --font-family-mono tokens on :root or their mount element. */
+  --app-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --app-font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
   --font-size-base: 1rem;
   --font-size-sm: 0.875rem;
   --font-size-lg: 1.125rem;
@@ -166,7 +170,7 @@ body {
   /* Footer at bottom per PART 17 */
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 main {
@@ -289,17 +293,25 @@ pre code {
 .container {
   width: 98%;
   margin: 0 auto;
-  max-width: var(--container-max-width);
+  max-width: 56rem;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .container {
     width: 90%;
   }
 }
 
 .container-sm {
-  max-width: 900px;
+  max-width: 40rem;
+}
+
+.container-md {
+  max-width: 56rem;
+}
+
+.container-lg {
+  max-width: 72rem;
 }
 
 /* ============================================================================

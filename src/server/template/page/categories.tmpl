@@ -1,10 +1,8 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">Browse All Categories</h1>
-    <p class="hero-subtitle">
-      1,418 utility tools organized into 21 categories
-    </p>
+    <h1 class="hero-title">{{.PageTitle}}</h1>
+    <p class="hero-subtitle">{{tf .Lang "categories.summary" (dict "tools" (printf "%d" .TotalTools) "categories" (printf "%d" .TotalCategories))}}</p>
   </div>
 </section>
 
@@ -14,9 +12,9 @@
       {{range .Categories}}
       <a href="{{.Path}}" class="category-card">
         <div class="category-icon">{{.Icon}}</div>
-        <h3 class="category-title">{{.Name}}</h3>
-        <p class="category-description">{{.Description}}</p>
-        <span class="category-count">{{.Count}} tools</span>
+        <h3 class="category-title">{{t $.Lang .NameKey}}</h3>
+        <p class="category-description">{{t $.Lang .DescriptionKey}}</p>
+        <span class="category-count">{{tp $.Lang "tools" .Count nil}}</span>
       </a>
       {{end}}
     </div>

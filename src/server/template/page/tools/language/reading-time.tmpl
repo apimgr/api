@@ -4,36 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/language">Language</a> / Reading Time
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/language"}}">{{t .Lang "tool_pages.text.language.a4fe65264e"}}</a> {{t .Lang "tool_pages.text.reading.time.de09c2ea93"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Reading Time</h1>
-        <button class="btn btn-icon" data-favorite="language-reading-time" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.reading.time.b9d66bf9a2"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="language-reading-time" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Estimate reading time for text at a given words-per-minute rate (default 200 wpm).
+        {{t .Lang "tool_pages.text.estimate.reading.time.for.text.at.a.given.wo.5a958e956f"}}
       </p>
 
-      <form id="reading-time-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/language/reading-time">
+      <form id="reading-time-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/language/reading-time" method="post" action="{{path .BaseURL "/language/reading-time"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Text</label>
-          <textarea name="body" class="form-input" rows="8" required placeholder="Paste or type text here."></textarea>
+          <label class="form-label" for="reading-time-form-body">{{t .Lang "tool_pages.text.text.71988c4d8e"}}</label>
+          <textarea name="body" class="form-input" rows="8" required placeholder="{{t .Lang "tool_pages.text.paste.or.type.text.here.52307667f6"}}" id="reading-time-form-body"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Estimate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.estimate.558ecb0fd2"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="reading-time-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/language/reading-time -d 'Some text to estimate reading time for.'</pre>

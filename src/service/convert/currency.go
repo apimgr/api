@@ -63,7 +63,7 @@ func (s *Service) ConvertCurrency(amount float64, from, to string) (CurrencyResu
 	if err != nil {
 		return CurrencyResult{}, fmt.Errorf("currency provider request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return CurrencyResult{}, fmt.Errorf("currency provider returned status %d (check currency codes)", resp.StatusCode)

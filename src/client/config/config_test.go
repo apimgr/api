@@ -30,7 +30,7 @@ func setHome(t *testing.T) string {
 // defaults (PART 32 CLI Auto-Update / Modes / Defaults sections).
 func TestDefault(t *testing.T) {
 	cfg := Default()
-	assert.Equal(t, "no", cfg.Update.Auto)
+	assert.False(t, cfg.Update.Auto)
 	assert.Equal(t, "per_invocation", cfg.Update.CheckInterval)
 	assert.Equal(t, "stable", cfg.Update.Channel)
 	assert.Equal(t, "auto", cfg.Display.Mode)
@@ -132,7 +132,7 @@ func TestSavePartialYAMLPreservesDefaults(t *testing.T) {
 	cfg, err := Load("cli")
 	require.NoError(t, err)
 	assert.Equal(t, "https://api.example.com", cfg.Server.Primary)
-	assert.Equal(t, "no", cfg.Update.Auto)
+	assert.False(t, cfg.Update.Auto)
 	assert.Equal(t, "table", cfg.Defaults.Output)
 }
 

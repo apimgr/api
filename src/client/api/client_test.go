@@ -54,7 +54,7 @@ func TestGetSuccess(t *testing.T) {
 		gotUA = r.Header.Get("User-Agent")
 		gotAccept = r.Header.Get("Accept")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
 
@@ -84,6 +84,21 @@ func TestConfiguredAPIVersion(t *testing.T) {
 	assert.Equal(t, "/api/v2/text/uuid", gotPath)
 }
 
+func TestAcceptLanguageHeader(t *testing.T) {
+	var gotLanguage string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotLanguage = r.Header.Get("Accept-Language")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "")
+	c.Lang = "es"
+	_, err := c.Get("/api/v1/things", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "es", gotLanguage)
+}
+
 // TestGetNoToken verifies no Authorization header is sent when the
 // client has no token, matching the CLI's "open API, tokens only for
 // ownership" model from PART 32.
@@ -93,7 +108,7 @@ func TestGetNoToken(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth, sawHeader = r.Header.Get("Authorization"), r.Header.Get("Authorization") != ""
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
@@ -112,9 +127,11 @@ func TestPostJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotContentType = r.Header.Get("Content-Type")
-		json.NewDecoder(r.Body).Decode(&gotBody)
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"id":"123"}`))
+		_, _ = w.Write([]byte(`{"id":"123"}`))
 	}))
 	defer srv.Close()
 
@@ -145,7 +162,7 @@ func TestErrorStatusCodes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tc.status)
-				w.Write([]byte(`{"error":"boom"}`))
+				_, _ = w.Write([]byte(`{"error":"boom"}`))
 			}))
 			defer srv.Close()
 
@@ -214,7 +231,7 @@ func TestRetry_RetriesServerErrors(t *testing.T) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
 

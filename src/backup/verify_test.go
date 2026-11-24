@@ -32,13 +32,24 @@ func newTestArchive(t *testing.T, password string) string {
 	return path
 }
 
+func TestVerifyWithLimitsRejectsOversizedExpansion(t *testing.T) {
+	path := newTestArchive(t, "")
+	limits := DefaultRestoreLimits()
+	limits.MaxExpandedSize = 16
+	_, err := VerifyWithLimits(path, "", limits)
+	require.Error(t, err)
+	var verificationError *VerificationError
+	require.ErrorAs(t, err, &verificationError)
+	assert.Equal(t, CheckExtraction, verificationError.Check)
+}
+
 // writeTestDatabase creates a small, valid SQLite database on disk.
 func writeTestDatabase(t *testing.T, path string) {
 	t.Helper()
 
 	db, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err = db.Exec("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)")
 	require.NoError(t, err)

@@ -1,0 +1,345 @@
+stages:
+  - lint
+  - security
+  - build
+  - test
+  - package
+  - release
+  - docker
+
+variables:
+  CGO_ENABLED: "0"
+  GOFLAGS: "-buildvcs=false"
+  GOTOOLCHAIN: auto
+  GOTELEMETRY: off
+  GIT_DEPTH: "0"
+  PROJECT_NAME: api
+  PROJECT_ORG: apimgr
+  INTERNAL_NAME: api
+
+default:
+  image: casjaysdev/go:latest
+
+.go-build-template: &go-build
+  image: casjaysdev/go:latest
+
+lint:
+  stage: lint
+  script:
+    - go vet ./...
+    - staticcheck ./...
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+
+build:
+  stage: build
+  script:
+    - |
+      set -eu
+      COMMIT_ID="$(git rev-parse --short=7 HEAD)"
+      BUILD_EPOCH="$(date -u +%s)"
+      OFFICIAL_SITE="${OFFICIAL_SITE:-}"
+      if [ -f site.txt ]; then OFFICIAL_SITE="$(cat site.txt)"; fi
+      LDFLAGS="-s -w -X main.Version=${COMMIT_ID} -X main.CommitID=${COMMIT_ID} -X main.BuildEpoch=${BUILD_EPOCH} -X main.OfficialSite=${OFFICIAL_SITE}"
+      mkdir -p "/tmp/${PROJECT_ORG}"
+      BUILD_DIR="$(mktemp -d "/tmp/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")"
+      for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64; do
+        goos="${target%/*}"
+        goarch="${target#*/}"
+        ext=""
+        [ "$goos" != windows ] || ext=".exe"
+        GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$LDFLAGS" -o "$BUILD_DIR/api-${goos}-${goarch}${ext}" ./src
+        if [ -d src/client ]; then
+          GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$LDFLAGS" -o "$BUILD_DIR/api-cli-${goos}-${goarch}${ext}" ./src/client
+        fi
+      done
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+
+test:
+  stage: test
+  script:
+    - mkdir -p "/tmp/${PROJECT_ORG}"
+    - COVDIR="$(mktemp -d "/tmp/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")"
+    - go test -cover -coverprofile="$COVDIR/coverage.out" ./...
+    - |
+      THRESHOLD=60
+      PCT="$(go tool cover -func="$COVDIR/coverage.out" | awk '/^total:/ {gsub("%","",$3); print int($3)}')"
+      if [ "$PCT" -lt "$THRESHOLD" ]; then echo "coverage ${PCT}% is below ${THRESHOLD}%" >&2; exit 1; fi
+  coverage: '/^total:.*\s([0-9.]+)%$/'
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+
+secret-scan:
+  stage: security
+  image:
+    name: trufflesecurity/trufflehog:3.95.9
+    entrypoint: [""]
+  script:
+    - |
+      set -eu
+      if [ "$CI_PIPELINE_SOURCE" = "schedule" ] || [ "$CI_COMMIT_BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+        trufflehog git file://. --results=verified --exclude-paths=.github/trufflehog-exclude.txt --fail
+      else
+        trufflehog git file://. --since-commit "$CI_COMMIT_BEFORE_SHA" --results=verified,unknown --exclude-paths=.github/trufflehog-exclude.txt --fail
+      fi
+  rules:
+    - when: always
+
+workflow-policy:
+  stage: security
+  script:
+    - |
+      set -eu
+      for directory in .github/workflows .gitea/workflows .forgejo/workflows; do
+        [ -d "$directory" ] || continue
+        for file in "$directory"/*.yml "$directory"/*.yaml; do
+          [ -f "$file" ] || continue
+          if grep -Eq '^\s*pull_request_target\s*:' "$file"; then
+            echo "Workflow policy failure: $file uses forbidden pull_request_target" >&2
+            exit 1
+          fi
+          while IFS= read -r action; do
+            ref="$(printf '%s' "$action" | sed -E 's/.*uses:[[:space:]]*[^@]+@([^[:space:]#]+).*/\1/')"
+            if ! printf '%s' "$ref" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "Workflow policy failure: action is not pinned to a full commit SHA in $file: $action" >&2
+              exit 1
+            fi
+          done <<EOF
+      $(grep -E '^[[:space:]]*-?[[:space:]]*uses:' "$file" || true)
+      EOF
+        done
+      done
+  rules:
+    - when: always
+
+vuln-scan:
+  stage: security
+  script:
+    - govulncheck ./...
+  rules:
+    - exists:
+        - go.sum
+      when: always
+    - when: never
+
+image-scan:
+  stage: security
+  image: docker:cli
+  services:
+    - name: docker:dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - mkdir -p "/tmp/${PROJECT_ORG}"
+    - SCAN_DIR="$(mktemp -d "/tmp/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")"
+    - docker build -f docker/Dockerfile -t api:ci-scan .
+    - ./tests/check_image.sh api:ci-scan
+    - docker save api:ci-scan -o "$SCAN_DIR/image.tar"
+    - docker run --rm -v /tmp:/tmp aquasec/trivy:0.70.0 image --input "$SCAN_DIR/image.tar" --exit-code 1 --severity CRITICAL,HIGH
+  rules:
+    - exists:
+        - docker/Dockerfile
+      when: always
+    - when: never
+
+docker:build:
+  stage: docker
+  image: docker:cli
+  services:
+    - name: docker:dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: "1"
+  script:
+    - |
+      set -eu
+      printf '%s' "$CI_REGISTRY_PASSWORD" | docker login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+      docker buildx create --name multiarch-builder --use 2>/dev/null || docker buildx use multiarch-builder
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        VERSION="${CI_COMMIT_TAG#v}"
+        YYMM="$(date -u +%y%m)"
+        TAGS="-t $CI_REGISTRY_IMAGE:$VERSION -t $CI_REGISTRY_IMAGE:latest -t $CI_REGISTRY_IMAGE:$YYMM -t $CI_REGISTRY_IMAGE:${CI_COMMIT_SHA:0:7}"
+      elif [ "${CI_COMMIT_BRANCH:-}" = beta ]; then
+        VERSION="$(date -u +%Y%m%d%H%M%S)-beta"
+        TAGS="-t $CI_REGISTRY_IMAGE:beta -t $CI_REGISTRY_IMAGE:${CI_COMMIT_SHA:0:7}"
+      else
+        VERSION="${CI_COMMIT_SHA:0:7}"
+        TAGS="-t $CI_REGISTRY_IMAGE:${CI_COMMIT_SHA:0:7}"
+      fi
+      BUILD_EPOCH="$(date -u +%s)"
+      if [ -f site.txt ]; then OFFICIAL_SITE="$(cat site.txt)"; else OFFICIAL_SITE="${OFFICIAL_SITE:-}"; fi
+      BUILD_DATE="$(date -u -d "@${BUILD_EPOCH}" +'%Y-%m-%dT%H:%M:%SZ')"
+      docker buildx build \
+        -f docker/Dockerfile \
+        --platform linux/amd64,linux/arm64 \
+        --build-arg VERSION="$VERSION" \
+        --build-arg COMMIT_ID="${CI_COMMIT_SHA:0:7}" \
+        --build-arg OFFICIAL_SITE="$OFFICIAL_SITE" \
+        --build-arg BUILD_DATE="$BUILD_DATE" \
+        --build-arg BUILD_EPOCH="$BUILD_EPOCH" \
+        --label "org.opencontainers.image.vendor=$PROJECT_ORG" \
+        --label "org.opencontainers.image.authors=$PROJECT_ORG" \
+        --label "org.opencontainers.image.title=$PROJECT_NAME" \
+        --label "org.opencontainers.image.base.name=$PROJECT_NAME" \
+        --label "org.opencontainers.image.description=$PROJECT_NAME - standard image (alpine)" \
+        --label "org.opencontainers.image.licenses=MIT" \
+        --label "org.opencontainers.image.version=$VERSION" \
+        --label "org.opencontainers.image.created=$BUILD_DATE" \
+        --label "org.opencontainers.image.revision=${CI_COMMIT_SHA:0:7}" \
+        --label "org.opencontainers.image.schema-version=$VERSION" \
+        --label "org.opencontainers.image.url=$CI_PROJECT_URL" \
+        --label "org.opencontainers.image.source=$CI_PROJECT_URL" \
+        --label "org.opencontainers.image.documentation=$CI_PROJECT_URL" \
+        --label "org.opencontainers.image.vcs-type=Git" \
+        --label "com.github.containers.toolbox=false" \
+        --annotation "manifest:org.opencontainers.image.vendor=$PROJECT_ORG" \
+        --annotation "manifest:org.opencontainers.image.authors=$PROJECT_ORG" \
+        --annotation "manifest:org.opencontainers.image.title=$PROJECT_NAME" \
+        --annotation "manifest:org.opencontainers.image.base.name=$PROJECT_NAME" \
+        --annotation "manifest:org.opencontainers.image.description=$PROJECT_NAME - standard image (alpine)" \
+        --annotation "manifest:org.opencontainers.image.licenses=MIT" \
+        --annotation "manifest:org.opencontainers.image.version=$VERSION" \
+        --annotation "manifest:org.opencontainers.image.created=$BUILD_DATE" \
+        --annotation "manifest:org.opencontainers.image.revision=${CI_COMMIT_SHA:0:7}" \
+        --annotation "manifest:org.opencontainers.image.schema-version=$VERSION" \
+        --annotation "manifest:org.opencontainers.image.url=$CI_PROJECT_URL" \
+        --annotation "manifest:org.opencontainers.image.source=$CI_PROJECT_URL" \
+        --annotation "manifest:org.opencontainers.image.documentation=$CI_PROJECT_URL" \
+        --annotation "manifest:org.opencontainers.image.vcs-type=Git" \
+        --annotation "manifest:com.github.containers.toolbox=false" \
+        $TAGS --push .
+      IMAGE_TAG="$CI_REGISTRY_IMAGE:${CI_COMMIT_SHA:0:7}"
+      docker pull "$IMAGE_TAG"
+      ./tests/check_image.sh "$IMAGE_TAG"
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_COMMIT_BRANCH == "beta"'
+
+docker:devel:
+  stage: docker
+  image: docker:cli
+  services:
+    - name: docker:dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: "1"
+  script:
+    - |
+      set -eu
+      printf '%s' "$CI_REGISTRY_PASSWORD" | docker login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+      docker buildx create --name multiarch-builder --use 2>/dev/null || docker buildx use multiarch-builder
+      VERSION=devel
+      BUILD_EPOCH="$(date -u +%s)"
+      if [ -f site.txt ]; then OFFICIAL_SITE="$(cat site.txt)"; else OFFICIAL_SITE="${OFFICIAL_SITE:-}"; fi
+      BUILD_DATE="$(date -u -d "@${BUILD_EPOCH}" +'%Y-%m-%dT%H:%M:%SZ')"
+      docker buildx build \
+        -f docker/Dockerfile.dev \
+        --platform linux/amd64,linux/arm64 \
+        --build-arg VERSION="$VERSION" \
+        --build-arg COMMIT_ID="${CI_COMMIT_SHA:0:7}" \
+        --build-arg OFFICIAL_SITE="$OFFICIAL_SITE" \
+        --build-arg BUILD_DATE="$BUILD_DATE" \
+        --build-arg BUILD_EPOCH="$BUILD_EPOCH" \
+        --label "org.opencontainers.image.vendor=$PROJECT_ORG" \
+        --label "org.opencontainers.image.authors=$PROJECT_ORG" \
+        --label "org.opencontainers.image.title=$PROJECT_NAME" \
+        --label "org.opencontainers.image.base.name=$PROJECT_NAME" \
+        --label "org.opencontainers.image.description=$PROJECT_NAME - development image (alpine)" \
+        --label "org.opencontainers.image.licenses=MIT" \
+        --label "org.opencontainers.image.version=$VERSION" \
+        --label "org.opencontainers.image.created=$BUILD_DATE" \
+        --label "org.opencontainers.image.revision=${CI_COMMIT_SHA:0:7}" \
+        --label "org.opencontainers.image.schema-version=$VERSION" \
+        --label "org.opencontainers.image.url=$CI_PROJECT_URL" \
+        --label "org.opencontainers.image.source=$CI_PROJECT_URL" \
+        --label "org.opencontainers.image.documentation=$CI_PROJECT_URL" \
+        --label "org.opencontainers.image.vcs-type=Git" \
+        --label "com.github.containers.toolbox=false" \
+        --annotation "manifest:org.opencontainers.image.vendor=$PROJECT_ORG" \
+        --annotation "manifest:org.opencontainers.image.authors=$PROJECT_ORG" \
+        --annotation "manifest:org.opencontainers.image.title=$PROJECT_NAME" \
+        --annotation "manifest:org.opencontainers.image.base.name=$PROJECT_NAME" \
+        --annotation "manifest:org.opencontainers.image.description=$PROJECT_NAME - development image (alpine)" \
+        --annotation "manifest:org.opencontainers.image.licenses=MIT" \
+        --annotation "manifest:org.opencontainers.image.version=$VERSION" \
+        --annotation "manifest:org.opencontainers.image.created=$BUILD_DATE" \
+        --annotation "manifest:org.opencontainers.image.revision=${CI_COMMIT_SHA:0:7}" \
+        --annotation "manifest:org.opencontainers.image.schema-version=$VERSION" \
+        --annotation "manifest:org.opencontainers.image.url=$CI_PROJECT_URL" \
+        --annotation "manifest:org.opencontainers.image.source=$CI_PROJECT_URL" \
+        --annotation "manifest:org.opencontainers.image.documentation=$CI_PROJECT_URL" \
+        --annotation "manifest:org.opencontainers.image.vcs-type=Git" \
+        --annotation "manifest:com.github.containers.toolbox=false" \
+        -t "$CI_REGISTRY_IMAGE:devel" --push .
+      docker pull "$CI_REGISTRY_IMAGE:devel"
+      ./tests/check_image.sh "$CI_REGISTRY_IMAGE:devel"
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"'
+
+release-build:
+  stage: release
+  script:
+    - |
+      set -eu
+      VERSION="${CI_COMMIT_TAG#v}"
+      COMMIT_ID="$(git rev-parse --short=7 HEAD)"
+      BUILD_EPOCH="$(date -u +%s)"
+      OFFICIAL_SITE="${OFFICIAL_SITE:-}"
+      if [ -f site.txt ]; then OFFICIAL_SITE="$(cat site.txt)"; fi
+      LDFLAGS="-s -w -X main.Version=${VERSION} -X main.CommitID=${COMMIT_ID} -X main.BuildEpoch=${BUILD_EPOCH} -X main.OfficialSite=${OFFICIAL_SITE}"
+      mkdir -p binaries
+      for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64; do
+        goos="${target%/*}"
+        goarch="${target#*/}"
+        ext=""
+        [ "$goos" != windows ] || ext=".exe"
+        GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$LDFLAGS" -o "binaries/api-${goos}-${goarch}${ext}" ./src
+        if [ -d src/client ]; then
+          GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$LDFLAGS" -o "binaries/api-cli-${goos}-${goarch}${ext}" ./src/client
+        fi
+      done
+      printf '%s\n' "$VERSION" > binaries/version.txt
+      tar --exclude='.git' --exclude='.github' --exclude='.gitea' --exclude='.forgejo' --exclude='binaries' --exclude='releases' --exclude='*.tar.gz' -czf "binaries/api-${VERSION}-source.tar.gz" .
+      cyclonedx-gomod mod -json -output "binaries/api-${VERSION}-sbom.cdx.json"
+      (cd binaries && sha256sum * > sha256.txt && sha512sum * > sha512.txt)
+      git log -n 50 --pretty=format:'- %s (%h)' "${CI_COMMIT_TAG}^..${CI_COMMIT_TAG}" > binaries/RELEASE_NOTES.md || true
+      if [ ! -s binaries/RELEASE_NOTES.md ]; then printf 'Release %s\n' "$VERSION" > binaries/RELEASE_NOTES.md; fi
+      if grep -nE '\$\{|\{\{|\{(project_name|project_org|version)\}' binaries/RELEASE_NOTES.md; then echo "Release notes contain an unexpanded variable or placeholder" >&2; exit 1; fi
+  artifacts:
+    paths:
+      - binaries/
+    expire_in: 30 days
+  rules:
+    - if: '$CI_COMMIT_TAG'
+
+release:
+  stage: release
+  image: curlimages/curl:8.12.1
+  needs:
+    - job: release-build
+      artifacts: true
+  script:
+    - |
+      set -eu
+      if [ -z "${GITLAB_TOKEN:-}" ]; then echo "Set the GITLAB_TOKEN CI variable with release API access" >&2; exit 1; fi
+      VERSION="${CI_COMMIT_TAG#v}"
+      curl --fail-with-body --silent --show-error --request POST --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" --data-urlencode "name=api ${VERSION}" --data-urlencode "tag_name=${CI_COMMIT_TAG}" --data-urlencode "description@binaries/RELEASE_NOTES.md" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+      for file in binaries/*; do
+        case "$file" in */RELEASE_NOTES.md) continue ;; esac
+        filename="${file##*/}"
+        package_url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/api/${VERSION}/${filename}"
+        curl --fail-with-body --silent --show-error --upload-file "$file" --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "$package_url"
+        curl --fail-with-body --silent --show-error --request POST --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" --data-urlencode "name=${filename}" --data-urlencode "url=${package_url}" --data-urlencode "link_type=package" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links"
+      done
+  rules:
+    - if: '$CI_COMMIT_TAG'

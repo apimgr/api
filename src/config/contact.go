@@ -9,6 +9,8 @@ type ContactConfig struct {
 	// Security receives vulnerability reports and is surfaced publicly in
 	// security.txt. Defaults to security@{fqdn} per RFC 2142.
 	Security ContactRoleConfig `yaml:"security"`
+	// DPO receives privacy requests before falling back to General and Admin.
+	DPO ContactRoleConfig `yaml:"dpo"`
 	// Abuse receives abuse reports. Defaults empty — the server never
 	// auto-advertises an unprovisioned abuse@ mailbox.
 	Abuse ContactRoleConfig `yaml:"abuse"`
@@ -22,28 +24,35 @@ type ContactRoleConfig struct {
 	Webhooks ContactWebhooksConfig `yaml:"webhooks"`
 }
 
-// ContactWebhooksConfig holds the built-in webhook transports. Generic
-// receives the raw JSON payload for anything without a dedicated adapter.
-type ContactWebhooksConfig struct {
-	Telegram string `yaml:"telegram"`
-	Discord  string `yaml:"discord"`
-	Slack    string `yaml:"slack"`
-	Generic  string `yaml:"generic"`
-}
+// ContactWebhooksConfig is an open transport-name to URL/secret map. A
+// transport's signing key is stored in the sibling <name>_secret entry.
+type ContactWebhooksConfig map[string]string
 
 // IsEmpty reports whether the role has neither an email address nor any
 // webhook transport configured, meaning dispatch must fall back.
 func (r ContactRoleConfig) IsEmpty() bool {
-	return r.Email == "" && r.Webhooks == ContactWebhooksConfig{}
+	return r.Email == "" && len(r.Webhooks) == 0
 }
 
 // defaultContactConfig returns the PART 12 defaults for the given FQDN.
 func defaultContactConfig(fqdn string) ContactConfig {
 	return ContactConfig{
-		Admin:    ContactRoleConfig{Email: "admin@" + fqdn},
-		Security: ContactRoleConfig{Email: "security@" + fqdn},
-		Abuse:    ContactRoleConfig{},
-		General:  ContactRoleConfig{},
+		Admin:    ContactRoleConfig{Email: "admin@" + fqdn, Webhooks: defaultWebhookConfig()},
+		Security: ContactRoleConfig{Email: "security@" + fqdn, Webhooks: defaultWebhookConfig()},
+		Abuse:    ContactRoleConfig{Webhooks: defaultWebhookConfig()},
+		General:  ContactRoleConfig{Webhooks: defaultWebhookConfig()},
+	}
+}
+
+func defaultWebhookConfig() ContactWebhooksConfig {
+	return ContactWebhooksConfig{
+		"telegram": "", "telegram_secret": "",
+		"discord": "", "discord_secret": "",
+		"slack": "", "slack_secret": "",
+		"mattermost": "", "mattermost_secret": "",
+		"pushover": "", "pushover_secret": "",
+		"gotify": "", "gotify_secret": "",
+		"generic": "", "generic_secret": "",
 	}
 }
 
@@ -75,6 +84,14 @@ func (c ContactConfig) ResolveGeneral() ContactRoleConfig {
 func (c ContactConfig) ResolveAbuse() ContactRoleConfig {
 	if !c.Abuse.IsEmpty() {
 		return c.Abuse
+	}
+	return c.ResolveGeneral()
+}
+
+// ResolveDPO applies the privacy contact fallback: DPO, General, then Admin.
+func (c ContactConfig) ResolveDPO() ContactRoleConfig {
+	if !c.DPO.IsEmpty() {
+		return c.DPO
 	}
 	return c.ResolveGeneral()
 }

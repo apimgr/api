@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - beta
+  workflow_dispatch:
 
 concurrency:
   group: beta-${{ github.ref }}
@@ -18,7 +19,7 @@ env:
 jobs:
   # Compute VERSION once — matrix legs must never each compute their own timestamp
   version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.set.outputs.version }}
     steps:
@@ -26,16 +27,13 @@ jobs:
       - name: Compute version
         id: set
         run: |
-          if [ -f release.txt ]; then
-            echo "version=$(cat release.txt)" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=$(date -u +%Y%m%d%H%M%S)-beta" >> "$GITHUB_OUTPUT"
-          fi
+          echo "version=$(date -u +%Y%m%d%H%M%S)-beta" >> "$GITHUB_OUTPUT"
 
   build:
     needs: [version]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
+      options: "--user 0:0"
       image: casjaysdev/go:latest
     strategy:
       matrix:
@@ -113,7 +111,7 @@ jobs:
 
   release:
     needs: [version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
       # GitHub artifact attestations (SBOM, provenance)

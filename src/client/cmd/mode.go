@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"os"
 	"strings"
 
-	"golang.org/x/term"
+	"github.com/apimgr/api/src/common/display"
 )
 
 // Mode is the CLI's auto-detected display mode.
@@ -32,8 +31,12 @@ func detectMode(argv []string) Mode {
 		}
 	}
 
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
+	env := display.DetectDisplayEnv()
+	if !env.IsTerminal {
 		return ModePlain
+	}
+	if env.IsDumbTerminal() {
+		return ModeCLI
 	}
 
 	for i := 0; i < len(argv); i++ {

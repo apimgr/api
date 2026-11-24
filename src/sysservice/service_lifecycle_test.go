@@ -16,14 +16,26 @@ import (
 // container where /etc, /var, /usr/local/bin, and /Library are
 // container-local paths, not bind mounts from the host - the container is
 // destroyed after the test run, so writing to these hardcoded paths never
-// touches real host state. The shelled-out service-manager commands
-// (systemctl, sv, launchctl, sc.exe, service) are expected to be absent in
-// this toolchain image and are allowed to fail; only the file/directory
-// side effects are asserted.
+// touches real host state. Service manager commands are replaced with
+// successful temporary executables so tests cover the complete lifecycle.
+
+func installFakeServiceCommand(t *testing.T, name string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix service manager lifecycle tests are not run on Windows")
+	}
+	dir := t.TempDir()
+	command := filepath.Join(dir, name)
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+		t.Fatalf("write fake %s: %v", name, err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
 
 // TestInstallUninstallSystemd verifies the unit file and required
 // directories are written, then fully removed.
 func TestInstallUninstallSystemd(t *testing.T) {
+	installFakeServiceCommand(t, "systemctl")
 	// installSystemd writes directly into /etc/systemd/system without
 	// creating it first - on a real target OS this directory always
 	// exists (owned by the systemd package); this minimal toolchain
@@ -68,6 +80,7 @@ func TestInstallUninstallSystemd(t *testing.T) {
 // TestUninstallSystemdMissingFile verifies uninstalling an already-absent
 // unit file is not an error (idempotent uninstall).
 func TestUninstallSystemdMissingFile(t *testing.T) {
+	installFakeServiceCommand(t, "systemctl")
 	// Ensure a clean slate regardless of test ordering.
 	_ = os.Remove("/etc/systemd/system/api.service")
 
@@ -123,6 +136,7 @@ func TestInstallUninstallRunit(t *testing.T) {
 // are written and removed. On non-macOS this still exercises the file I/O
 // paths, since installLaunchd hardcodes /Library/... regardless of GOOS.
 func TestInstallUninstallLaunchd(t *testing.T) {
+	installFakeServiceCommand(t, "launchctl")
 	// installLaunchd writes directly into /Library/LaunchDaemons without
 	// creating it first - on real macOS this directory always exists;
 	// this Linux toolchain image does not ship it, so it is created here
@@ -152,6 +166,7 @@ func TestInstallUninstallLaunchd(t *testing.T) {
 // TestUninstallLaunchdMissingFile verifies uninstalling an already-absent
 // plist is not an error.
 func TestUninstallLaunchdMissingFile(t *testing.T) {
+	installFakeServiceCommand(t, "launchctl")
 	_ = os.Remove("/Library/LaunchDaemons/io.github.apimgr.api.plist")
 
 	if err := uninstallLaunchd(); err != nil {
@@ -354,30 +369,35 @@ func TestInstallUninstallOpenRC(t *testing.T) {
 		t.Fatalf("expected OpenRC script at %s: %v", scriptPath, readErr)
 	}
 
-	// AI.md PART 24's OpenRC template requires the service to run as the
-	// dedicated api:api account, with an explicit pidfile, split
-	// output/error logs, the full depend() block, and a start_pre() that
-	// pre-creates the pid and log directories owned by that account.
+	// AI.md PART 24's OpenRC template requires a root-started process that
+	// drops privileges in-process, separate supervisor/server PID files,
+	// split logs, and the full dependency and directory setup.
 	script := string(data)
 	for _, want := range []string{
 		"#!/sbin/openrc-run",
 		`name="api"`,
 		`command_args=""`,
-		`command_user="api:api"`,
+		`pidfile="/var/run/apimgr-api.pid"`,
 		"command_background=true",
-		"pidfile=\"" + paths.DefaultPIDPath() + "\"",
+		`retry="TERM/60/KILL/5"`,
 		`output_log="` + paths.LogDir() + `/server.log"`,
 		`error_log="` + paths.LogDir() + `/error.log"`,
 		"need net",
 		"after firewall",
 		"use dns logger",
 		"start_pre() {",
+		"checkpath -d -m 0755 /var/run/apimgr",
+		"checkpath -d -m 0755 /var/log/apimgr",
 		"checkpath -d -m 0755 -o api:api " + filepath.Dir(paths.DefaultPIDPath()),
 		"checkpath -d -m 0755 -o api:api " + paths.LogDir(),
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("OpenRC script is missing %q", want)
 		}
+	}
+
+	if strings.Contains(script, "command_user=") {
+		t.Error("OpenRC service must start as root and let the server drop privileges")
 	}
 
 	if err := uninstallOpenRC(); err != nil {
@@ -498,13 +518,18 @@ func TestSystemdUnitHardening(t *testing.T) {
 		"RestartSec=5\n",
 		"StandardOutput=journal",
 		"StandardError=journal",
-		"ProtectSystem=strict",
+		"ProtectSystem=true",
 		"ProtectHome=yes",
 		"PrivateTmp=yes",
-		"ReadWritePaths=" + paths.ConfigDir(),
-		"ReadWritePaths=" + paths.DataDir(),
-		"ReadWritePaths=" + paths.CacheDir(),
-		"ReadWritePaths=" + paths.LogDir(),
+		"ExecStartPre=+/usr/bin/install -d -m 0755",
+		"ReadWritePaths=-" + paths.ConfigDir(),
+		"ReadWritePaths=-" + paths.DataDir(),
+		"ReadWritePaths=-" + paths.GetDatabaseDir(paths.DataDir()),
+		"ReadWritePaths=-" + paths.CacheDir(),
+		"ReadWritePaths=-" + paths.LogDir(),
+		"ReadWritePaths=-" + filepath.Dir(paths.DefaultPIDPath()),
+		"ReadWritePaths=-" + paths.BackupDir(),
+		"ReadWritePaths=-/usr/local/bin",
 		"WantedBy=multi-user.target",
 	} {
 		if !strings.Contains(unit, want) {
@@ -516,8 +541,8 @@ func TestSystemdUnitHardening(t *testing.T) {
 			t.Errorf("systemd unit must not set %q; the binary drops privileges itself", strings.TrimSpace(unwanted))
 		}
 	}
-	if strings.Contains(unit, "ProtectHome=read-only") {
-		t.Error("systemd unit sets ProtectHome=read-only; PART 24 requires ProtectHome=yes")
+	if strings.Contains(unit, "ProtectSystem=strict") {
+		t.Error("systemd unit sets ProtectSystem=strict; PART 24 requires ProtectSystem=true")
 	}
 }
 
@@ -686,11 +711,15 @@ func TestConfirmDestructiveRejectsNonYes(t *testing.T) {
 		if _, err := w.WriteString(input); err != nil {
 			t.Fatalf("writing stdin failed: %v", err)
 		}
-		w.Close()
+		if err := w.Close(); err != nil {
+			t.Fatalf("closing stdin writer: %v", err)
+		}
 
 		os.Stdin = r
 		got, confirmErr := confirmDestructive("continue? [y/N]: ")
-		r.Close()
+		if err := r.Close(); err != nil {
+			t.Errorf("closing stdin reader: %v", err)
+		}
 
 		if confirmErr != nil {
 			t.Errorf("confirmDestructive(%q) returned error %v", input, confirmErr)

@@ -1,11 +1,14 @@
 package backup
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/disk"
@@ -54,10 +57,22 @@ type Options struct {
 	Dir string
 	// Sources are the files and directories every archive contains.
 	Sources []string
+	// SupplementalSources are explicitly referenced files with stable archive
+	// paths outside the ordinary source roots.
+	SupplementalSources []SupplementalSource
+	// SQLiteSourcePath identifies the live SQLite database included in Sources.
+	SQLiteSourcePath string
+	// SnapshotSQLite writes a consistent database snapshot to the given path.
+	SnapshotSQLite func(context.Context, string) error
+	// RestoreRoots are the exact config/data destinations this manager may
+	// overwrite during restore.
+	RestoreRoots []string
 	// Password enables encryption when non-empty.
 	Password string
 	// Retention is the configured policy; it is normalized once here.
 	Retention config.BackupRetentionConfig
+	// RestoreLimits bounds archive reads and extraction for this manager.
+	RestoreLimits RestoreLimits
 	// ComplianceEnabled mirrors server.compliance.enabled and forces
 	// encryption when true.
 	ComplianceEnabled bool
@@ -79,15 +94,20 @@ type Options struct {
 // Manager owns the PART 21 backup lifecycle: creation, verification,
 // retention and restore, all against a backup directory cached at startup.
 type Manager struct {
-	dir               string
-	sources           []string
-	password          string
-	retention         config.BackupRetentionConfig
-	complianceEnabled bool
-	diskThreshold     float64
-	appVersion        string
-	audit             AuditFunc
-	suppressFailure   bool
+	dir                 string
+	sources             []string
+	supplementalSources []SupplementalSource
+	sqliteSourcePath    string
+	snapshotSQLite      func(context.Context, string) error
+	restoreRoots        []string
+	password            string
+	retention           config.BackupRetentionConfig
+	restoreLimits       RestoreLimits
+	complianceEnabled   bool
+	diskThreshold       float64
+	appVersion          string
+	audit               AuditFunc
+	suppressFailure     bool
 }
 
 // NewManager caches the backup directory and normalizes the retention policy,
@@ -102,17 +122,23 @@ func NewManager(opts Options) *Manager {
 	if threshold <= 0 {
 		threshold = DefaultDiskThreshold
 	}
+	restoreLimits := NormalizeRestoreLimits(opts.RestoreLimits)
 
 	return &Manager{
-		dir:               opts.Dir,
-		sources:           opts.Sources,
-		password:          opts.Password,
-		retention:         retention,
-		complianceEnabled: opts.ComplianceEnabled,
-		diskThreshold:     threshold,
-		appVersion:        opts.AppVersion,
-		audit:             opts.Audit,
-		suppressFailure:   opts.SuppressFailureNotify,
+		dir:                 opts.Dir,
+		sources:             opts.Sources,
+		supplementalSources: append([]SupplementalSource(nil), opts.SupplementalSources...),
+		sqliteSourcePath:    opts.SQLiteSourcePath,
+		snapshotSQLite:      opts.SnapshotSQLite,
+		restoreRoots:        opts.RestoreRoots,
+		password:            opts.Password,
+		retention:           retention,
+		restoreLimits:       restoreLimits,
+		complianceEnabled:   opts.ComplianceEnabled,
+		diskThreshold:       threshold,
+		appVersion:          opts.AppVersion,
+		audit:               opts.Audit,
+		suppressFailure:     opts.SuppressFailureNotify,
 	}
 }
 
@@ -147,6 +173,10 @@ func (m *Manager) checkEncryptionPolicy() error {
 // check, full backup, verification, daily incremental, verification, and
 // finally retention — applied only when every verification passed.
 func (m *Manager) RunDaily(now time.Time) error {
+	snapshotAt := now.UTC()
+	if now.IsZero() {
+		snapshotAt = time.Now().UTC()
+	}
 	if err := m.checkEncryptionPolicy(); err != nil {
 		m.emit(EventFailed, map[string]interface{}{"error": err.Error()})
 		return err
@@ -161,40 +191,95 @@ func (m *Manager) RunDaily(now time.Time) error {
 	if err := m.checkDiskSpace(); err != nil {
 		return err
 	}
+	snapshotOptions, snapshotDir, err := m.snapshotSourcesAtRunStart()
+	if err != nil {
+		return err
+	}
+	if snapshotDir != "" {
+		defer func() {
+			if err := os.RemoveAll(snapshotDir); err != nil {
+				log.Printf("Backup: failed to remove run snapshot workspace")
+			}
+		}()
+	}
 
-	// Step 3 and 4: full backup, then verification.
-	fullPath := filepath.Join(m.dir, FullBackupName(now, m.Encrypted()))
+	// One source snapshot feeds both archives so their manifests describe the
+	// same filesystem and SQLite state at the run's T0.
+	// Steps 3 and 4 create the cumulative incremental against the prior full
+	// first; staging protects the previous daily incremental if creation fails.
+	baseName, baseAt := m.latestFull()
+	var stagedIncremental, finalIncremental string
+	var incrementalManifest *Manifest
+	if baseName != "" {
+		basePath := filepath.Join(m.dir, baseName)
+		baseManifest, err := VerifyWithLimits(basePath, m.password, m.restoreLimits)
+		if err != nil {
+			return fmt.Errorf("verify incremental base: %w", err)
+		}
+		baseSHA256, err := fileSHA256(basePath)
+		if err != nil {
+			return fmt.Errorf("hash incremental base: %w", err)
+		}
+		changedFiles, deletedFiles, err := diffSnapshotFiles(snapshotOptions.SnapshotFiles, baseManifest.Files)
+		if err != nil {
+			return fmt.Errorf("compare incremental source snapshot: %w", err)
+		}
+		stagedIncremental, err = newIncrementalStagePath(m.dir, m.Encrypted())
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := os.Remove(stagedIncremental); err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.Printf("Backup: failed to remove staged incremental")
+			}
+		}()
+		finalIncremental = filepath.Join(m.dir, DailyIncrementalName(m.Encrypted()))
+		incrementalManifest, err = m.createVerified(stagedIncremental, CreateOptions{
+			SnapshotAt:         snapshotAt,
+			Sources:            m.sources,
+			Password:           m.password,
+			Kind:               KindDailyIncremental,
+			BaseBackup:         baseName,
+			BaseSHA256:         baseSHA256,
+			Deleted:            deletedFiles,
+			ModifiedSince:      baseAt,
+			AppVersion:         m.appVersion,
+			SQLiteSourcePath:   snapshotOptions.SQLiteSourcePath,
+			SQLiteSnapshotPath: snapshotOptions.SQLiteSnapshotPath,
+			SnapshotFiles:      changedFiles,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Steps 5 and 6 write the new full from the same T0 snapshot and verify it
+	// before retention may remove any existing backup.
+	fullPath := filepath.Join(m.dir, FullBackupName(snapshotAt, m.Encrypted()))
 	fullManifest, err := m.createVerified(fullPath, CreateOptions{
-		Sources:    m.sources,
-		Password:   m.password,
-		Kind:       KindFull,
-		AppVersion: m.appVersion,
+		SnapshotAt:         snapshotAt,
+		Sources:            m.sources,
+		Password:           m.password,
+		Kind:               KindFull,
+		AppVersion:         m.appVersion,
+		SQLiteSourcePath:   snapshotOptions.SQLiteSourcePath,
+		SQLiteSnapshotPath: snapshotOptions.SQLiteSnapshotPath,
+		SnapshotFiles:      snapshotOptions.SnapshotFiles,
 	})
 	if err != nil {
 		return err
 	}
-
 	m.emit(EventCreated, m.createdDetails(fullPath, fullManifest))
 
-	// Steps 5 and 6: the incremental carries everything changed since the
-	// full backup was taken, and is verified the same way.
-	incrementalPath := filepath.Join(m.dir, DailyIncrementalName(m.Encrypted()))
-	incrementalManifest, err := m.createVerified(incrementalPath, CreateOptions{
-		Sources:       m.sources,
-		Password:      m.password,
-		Kind:          KindDailyIncremental,
-		BaseBackup:    filepath.Base(fullPath),
-		ModifiedSince: fullManifest.CreatedAt,
-		AppVersion:    m.appVersion,
-	})
-	if err != nil {
-		return err
+	if stagedIncremental != "" {
+		if err := replaceBackupFile(stagedIncremental, finalIncremental); err != nil {
+			return fmt.Errorf("finalize daily incremental: %w", err)
+		}
+		details := m.createdDetails(finalIncremental, incrementalManifest)
+		details["base_backup"] = baseName
+		details["changes_since"] = baseAt.UTC().Format(time.RFC3339)
+		m.emit(EventDailyUpdated, details)
 	}
-
-	details := m.createdDetails(incrementalPath, incrementalManifest)
-	details["base_backup"] = filepath.Base(fullPath)
-	details["changes_since"] = fullManifest.CreatedAt.UTC().Format(time.RFC3339)
-	m.emit(EventDailyUpdated, details)
 
 	// Step 7: both archives verified, so old backups may now be pruned.
 	if _, err := m.Cleanup(); err != nil {
@@ -208,20 +293,56 @@ func (m *Manager) RunDaily(now time.Time) error {
 // RunHourly refreshes the hourly incremental archive against the newest full
 // backup. It is driven by the optional backup_hourly scheduler task.
 func (m *Manager) RunHourly(now time.Time) error {
+	snapshotAt := now.UTC()
+	if now.IsZero() {
+		snapshotAt = time.Now().UTC()
+	}
 	if err := m.checkEncryptionPolicy(); err != nil {
 		m.emit(EventFailed, map[string]interface{}{"error": err.Error()})
 		return err
 	}
 
 	base, cutoff := m.latestFull()
+	if base == "" {
+		log.Printf("Backup: hourly incremental skipped because no verified full backup exists")
+		return nil
+	}
+	basePath := filepath.Join(m.dir, base)
+	baseManifest, err := VerifyWithLimits(basePath, m.password, m.restoreLimits)
+	if err != nil {
+		return fmt.Errorf("verify hourly incremental base: %w", err)
+	}
+	baseSHA256, err := fileSHA256(basePath)
+	if err != nil {
+		return fmt.Errorf("hash hourly incremental base: %w", err)
+	}
+	snapshotOptions, snapshotDir, err := m.snapshotSourcesAtRunStart()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := os.RemoveAll(snapshotDir); err != nil {
+			log.Printf("Backup: failed to remove hourly snapshot workspace")
+		}
+	}()
+	changedFiles, deletedFiles, err := diffSnapshotFiles(snapshotOptions.SnapshotFiles, baseManifest.Files)
+	if err != nil {
+		return fmt.Errorf("compare hourly incremental source snapshot: %w", err)
+	}
 	path := filepath.Join(m.dir, HourlyIncrementalName(m.Encrypted()))
 	manifest, err := m.createVerified(path, CreateOptions{
-		Sources:       m.sources,
-		Password:      m.password,
-		Kind:          KindHourlyIncremental,
-		BaseBackup:    base,
-		ModifiedSince: cutoff,
-		AppVersion:    m.appVersion,
+		SnapshotAt:         snapshotAt,
+		Sources:            m.sources,
+		Password:           m.password,
+		Kind:               KindHourlyIncremental,
+		BaseBackup:         base,
+		BaseSHA256:         baseSHA256,
+		Deleted:            deletedFiles,
+		ModifiedSince:      cutoff,
+		AppVersion:         m.appVersion,
+		SQLiteSourcePath:   snapshotOptions.SQLiteSourcePath,
+		SQLiteSnapshotPath: snapshotOptions.SQLiteSnapshotPath,
+		SnapshotFiles:      changedFiles,
 	})
 	if err != nil {
 		return err
@@ -237,6 +358,22 @@ func (m *Manager) RunHourly(now time.Time) error {
 	return nil
 }
 
+func newIncrementalStagePath(dir string, encrypted bool) (string, error) {
+	suffix := ".tar.gz"
+	if encrypted {
+		suffix += ".enc"
+	}
+	file, err := os.CreateTemp(dir, ".backup-incremental-*"+suffix)
+	if err != nil {
+		return "", fmt.Errorf("create incremental staging archive: %w", err)
+	}
+	path := file.Name()
+	if err := errors.Join(file.Close(), os.Remove(path)); err != nil {
+		return "", fmt.Errorf("prepare incremental staging archive: %w", err)
+	}
+	return path, nil
+}
+
 // CreateManual writes a manual/timestamped full backup and verifies it. The
 // caller may pass an explicit filename; an empty name uses the PART 21
 // manual naming pattern.
@@ -249,10 +386,10 @@ func (m *Manager) CreateManual(name string, now time.Time) (string, error) {
 	if name == "" {
 		name = ManualBackupName(now, m.Encrypted())
 	}
-	path := name
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(m.dir, name)
+	if name == "." || name == ".." || filepath.Base(name) != name || strings.ContainsAny(name, `/\\`) {
+		return "", fmt.Errorf("backup filename must be a single filename")
 	}
+	path := filepath.Join(m.dir, name)
 
 	manifest, err := m.createVerified(path, CreateOptions{
 		Sources:    m.sources,
@@ -274,6 +411,22 @@ func (m *Manager) CreateManual(name string, now time.Time) (string, error) {
 // deletes only that archive: PART 21 keeps every existing valid backup and
 // retries on the next scheduled run.
 func (m *Manager) createVerified(path string, opts CreateOptions) (*Manifest, error) {
+	if opts.SnapshotFiles == nil {
+		snapshotOptions, snapshotDir, err := m.snapshotSourcesAtRunStart()
+		if err != nil {
+			return nil, err
+		}
+		if snapshotDir != "" {
+			defer func() {
+				if err := os.RemoveAll(snapshotDir); err != nil {
+					log.Printf("Backup: failed to remove source snapshot workspace")
+				}
+			}()
+		}
+		opts.SnapshotFiles = snapshotOptions.SnapshotFiles
+		opts.SQLiteSourcePath = snapshotOptions.SQLiteSourcePath
+		opts.SQLiteSnapshotPath = snapshotOptions.SQLiteSnapshotPath
+	}
 	if _, err := CreateWithOptions(path, opts); err != nil {
 		m.emit(EventFailed, map[string]interface{}{
 			"filename": filepath.Base(path),
@@ -283,7 +436,7 @@ func (m *Manager) createVerified(path string, opts CreateOptions) (*Manifest, er
 		return nil, err
 	}
 
-	manifest, err := Verify(path, opts.Password)
+	manifest, err := VerifyWithLimits(path, opts.Password, m.restoreLimits)
 	if err != nil {
 		details := map[string]interface{}{
 			"filename": filepath.Base(path),
@@ -303,6 +456,36 @@ func (m *Manager) createVerified(path string, opts CreateOptions) (*Manifest, er
 	}
 
 	return manifest, nil
+}
+
+func (m *Manager) snapshotSourcesAtRunStart() (CreateOptions, string, error) {
+	dir, err := os.MkdirTemp(m.dir, ".backup-snapshot-")
+	if err != nil {
+		return CreateOptions{}, "", fmt.Errorf("create backup snapshot workspace: %w", err)
+	}
+	options := CreateOptions{Sources: m.sources}
+	if m.sqliteSourcePath != "" && m.snapshotSQLite != nil {
+		path := filepath.Join(dir, "server.db")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err = m.snapshotSQLite(ctx, path)
+		cancel()
+		if err != nil {
+			removeErr := os.RemoveAll(dir)
+			return CreateOptions{}, "", errors.Join(fmt.Errorf("snapshot SQLite database: %w", err), removeErr)
+		}
+		options.SQLiteSourcePath = m.sqliteSourcePath
+		options.SQLiteSnapshotPath = path
+	}
+	files, err := captureSources(m.sources, dir, options.SQLiteSourcePath, options.SQLiteSnapshotPath)
+	if err != nil {
+		return CreateOptions{}, "", errors.Join(fmt.Errorf("capture backup source snapshot: %w", err), os.RemoveAll(dir))
+	}
+	files, err = captureSupplementalSources(files, m.supplementalSources, dir)
+	if err != nil {
+		return CreateOptions{}, "", errors.Join(fmt.Errorf("capture supplemental backup sources: %w", err), os.RemoveAll(dir))
+	}
+	options.SnapshotFiles = files
+	return options, dir, nil
 }
 
 // notifyBackupComplete logs the mandatory structured INFO line for a finished
@@ -386,7 +569,8 @@ func (m *Manager) createdDetails(path string, manifest *Manifest) map[string]int
 // emits the retention audit events. It runs at startup and after every
 // successful backup.
 func (m *Manager) Cleanup() (RetentionResult, error) {
-	result, err := ApplyRetention(m.dir, m.retention)
+	dependencies := m.retainedIncrementalBases()
+	result, err := ApplyRetentionWithDependencies(m.dir, m.retention, dependencies)
 	if err != nil {
 		return result, err
 	}
@@ -419,6 +603,27 @@ func (m *Manager) Cleanup() (RetentionResult, error) {
 	return result, nil
 }
 
+func (m *Manager) retainedIncrementalBases() map[string][]string {
+	files, err := ListBackups(m.dir)
+	if err != nil {
+		return nil
+	}
+	protected := make(map[string][]string)
+	for _, file := range files {
+		if !file.Incremental() {
+			continue
+		}
+		manifest, err := VerifyWithLimits(file.Path, m.password, m.restoreLimits)
+		if err == nil && manifest.BaseBackup != "" {
+			protected[manifest.BaseBackup] = append(protected[manifest.BaseBackup], file.Name)
+		}
+	}
+	for name := range protected {
+		sort.Strings(protected[name])
+	}
+	return protected
+}
+
 // Restore authorizes the caller against PART 21's restore authorization
 // matrix, verifies the archive against every PART 21 restore check, and then
 // unpacks it. A version mismatch warns rather than blocking.
@@ -437,7 +642,7 @@ func (m *Manager) Restore(caller Caller, path, password string) error {
 		return ErrRestorePasswordRequired
 	}
 
-	manifest, err := Verify(path, password)
+	manifest, err := VerifyWithLimits(path, password, m.restoreLimits)
 	if err != nil {
 		details := map[string]interface{}{
 			"filename": filepath.Base(path),
@@ -456,7 +661,11 @@ func (m *Manager) Restore(caller Caller, path, password string) error {
 			manifest.AppVersion, m.appVersion)
 	}
 
-	if err := Restore(path, password); err != nil {
+	roots := m.restoreRoots
+	if len(roots) == 0 {
+		roots = m.sources
+	}
+	if err := RestoreWithLimits(path, password, m.restoreLimits, roots...); err != nil {
 		m.emit(EventFailed, map[string]interface{}{
 			"filename": filepath.Base(path),
 			"error":    err.Error(),
@@ -492,14 +701,8 @@ func (m *Manager) checkDiskSpace() error {
 			"required_free": required,
 		}
 		m.emit(EventSkippedDiskFull, details)
-		log.Printf("Backup: [WARN] disk_space_low disk_usage=%.1f%% threshold=%.1f%% free=%s required=%s",
+		log.Printf("Backup: [ERROR] backup.skipped_disk_full disk_usage=%.1f%% threshold=%.1f%% free=%s required=%s",
 			usage.UsedPercent, m.diskThreshold, formatSize(int64(usage.Free)), formatSize(required))
-
-		// AI.md PART 17 routes "Disk space low" through the security_alert
-		// template: WARN in the log, emailed to the operator.
-		email.OperatorSecurityAlert("Disk space low", "",
-			fmt.Sprintf("Backup skipped for %s: disk usage %.1f%% (threshold %.1f%%), free %s, required %s",
-				m.dir, usage.UsedPercent, m.diskThreshold, formatSize(int64(usage.Free)), formatSize(required)))
 		return fmt.Errorf("%w: disk usage %.1f%%, free %d bytes", ErrDiskFull, usage.UsedPercent, usage.Free)
 	}
 
@@ -528,10 +731,11 @@ func (m *Manager) latestFull() (string, time.Time) {
 	for i := len(files) - 1; i >= 0; i-- {
 		file := files[i]
 		if file.Kind == KindFull || file.Kind == KindManual {
-			if info, err := os.Stat(file.Path); err == nil {
-				return file.Name, info.ModTime()
+			manifest, err := VerifyWithLimits(file.Path, m.password, m.restoreLimits)
+			if err == nil {
+				return file.Name, manifest.CreatedAt
 			}
-			return file.Name, file.Date
+			log.Printf("Backup: ignoring invalid full backup %s as an incremental base: %v", file.Name, err)
 		}
 	}
 	return "", time.Time{}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"image/png"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -11,10 +12,37 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/apimgr/api/src/service/weather"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type weatherTestTransport struct{}
+
+func (weatherTestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	body := `{"current":{"time":"2024-01-01T12:00","temperature_2m":15,"apparent_temperature":14,"relative_humidity_2m":60,"pressure_msl":1013,"wind_speed_10m":5,"wind_direction_10m":180,"cloud_cover":10,"weather_code":0},"daily":{"time":["2024-01-01"],"sunrise":["2024-01-01T06:00"],"sunset":["2024-01-01T18:00"],"daylight_duration":[43200],"sunshine_duration":[40000],"uv_index_max":[2],"weather_code":[0],"temperature_2m_max":[16],"temperature_2m_min":[8],"rain_sum":[0],"snowfall_sum":[0],"precipitation_sum":[0],"windspeed_10m_max":[5]},"hourly":{"time":["2024-01-01T12:00"],"temperature_2m":[15],"precipitation_probability":[0],"weather_code":[0],"wind_speed_10m":[5]}}`
+	if strings.Contains(req.URL.Path, "/search") {
+		body = `{"results":[{"name":"London","latitude":51.5,"longitude":-0.12,"country":"Japan","country_code":"JP","timezone":"Asia/Tokyo"}]}`
+	} else if strings.Contains(req.URL.Path, "air-quality") {
+		body = `{"current":{"time":"2024-01-01T12:00","european_aqi":10,"us_aqi":20,"uv_index":1,"uv_index_clear_sky":1}}`
+	}
+	header := make(http.Header)
+	header.Set("Content-Type", "application/json")
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}, nil
+}
+
+func withWeatherTestService(t *testing.T) {
+	t.Helper()
+	previous := weatherService
+	weatherService = weather.NewWithHTTPClient(&http.Client{Transport: weatherTestTransport{}})
+	t.Cleanup(func() { weatherService = previous })
+}
 
 // testPNG renders a small placeholder PNG (via the already-verified
 // placeholder handler) for use as fixture input to the resize/crop/metadata/
@@ -79,6 +107,7 @@ func TestAPIDockerVersionHandler(t *testing.T) {
 // apiWeatherCurrentHandler must return 200 with an ok:true envelope for a
 // location lookup.
 func TestAPIWeatherCurrentHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherCurrentHandler)
 
@@ -92,6 +121,7 @@ func TestAPIWeatherCurrentHandler(t *testing.T) {
 }
 
 func TestAPIWeatherForecastHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherForecastHandler)
 
@@ -2187,6 +2217,7 @@ func TestAPIWeatherPermanentGapHandlers(t *testing.T) {
 // apiWeatherAirQualityHandler must return 200 with an ok:true envelope for a
 // location lookup.
 func TestAPIWeatherAirQualityHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherAirQualityHandler)
 
@@ -2201,6 +2232,7 @@ func TestAPIWeatherAirQualityHandler(t *testing.T) {
 
 // apiWeatherAlertsHandler must return 200 with a location/alerts envelope.
 func TestAPIWeatherAlertsHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherAlertsHandler)
 
@@ -2220,6 +2252,7 @@ func TestAPIWeatherAlertsHandler(t *testing.T) {
 // apiWeatherAstronomyHandler must return 200 with an ok:true envelope for a
 // location lookup.
 func TestAPIWeatherAstronomyHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherAstronomyHandler)
 
@@ -2235,6 +2268,7 @@ func TestAPIWeatherAstronomyHandler(t *testing.T) {
 // apiWeatherHistoricalHandler must 400 MISSING_DATE_RANGE with no ?start=/
 // ?end= and 200 with a days breakdown when both are supplied.
 func TestAPIWeatherHistoricalHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherHistoricalHandler)
 
@@ -2266,6 +2300,7 @@ func TestAPIWeatherHistoricalHandler(t *testing.T) {
 // apiWeatherHourlyHandler must default to 24 hours, 400 INVALID_HOURS for a
 // non-integer ?hours=, and 200 with an hours breakdown otherwise.
 func TestAPIWeatherHourlyHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherHourlyHandler)
 
@@ -2296,6 +2331,7 @@ func TestAPIWeatherHourlyHandler(t *testing.T) {
 // apiWeatherMarineHandler must return 200 with an ok:true envelope for a
 // location lookup.
 func TestAPIWeatherMarineHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherMarineHandler)
 
@@ -2311,6 +2347,7 @@ func TestAPIWeatherMarineHandler(t *testing.T) {
 // apiWeatherPollenHandler must return 200 with an ok:true envelope for a
 // location lookup.
 func TestAPIWeatherPollenHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherPollenHandler)
 
@@ -2326,6 +2363,7 @@ func TestAPIWeatherPollenHandler(t *testing.T) {
 // apiWeatherUVHandler must return 200 with an ok:true envelope for a
 // location lookup.
 func TestAPIWeatherUVHandler(t *testing.T) {
+	withWeatherTestService(t)
 	r := chi.NewRouter()
 	r.Get("/weather/{location}", apiWeatherUVHandler)
 
@@ -2488,12 +2526,9 @@ func TestAPIResearchExtractHandler(t *testing.T) {
 	assert.Equal(t, "NOT_SUPPORTED", env["error"])
 }
 
-// The remaining research sub-tools (bibtex, footnotes, metadata, outline,
-// pdf-extract, readability, scraper, summarize) are permanent gaps per
-// TODO.AI.md's "Known permanent API gaps" section: none are named in
-// IDEA.md's declared Research scope, and several would add a new
-// outbound-call family or third-party dependency beyond that scope. Each
-// must 501 NOT_SUPPORTED.
+// The research sub-tools listed here must retain their explicit
+// NOT_SUPPORTED response until each tool has a complete implementation
+// specified by the project requirements.
 func TestAPIResearchGapHandlers(t *testing.T) {
 	handlers := map[string]http.HandlerFunc{
 		"bibtex":      apiResearchBibtexHandler,

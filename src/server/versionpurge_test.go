@@ -107,7 +107,7 @@ func TestVersionPurgeMiddleware_HTMLOnly(t *testing.T) {
 			h := versionPurgeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", tc.contentType)
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("body"))
+				_, _ = w.Write([]byte("body"))
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -119,9 +119,53 @@ func TestVersionPurgeMiddleware_HTMLOnly(t *testing.T) {
 			if tc.wantPurge {
 				assert.Equal(t, `"cache", "storage"`, res.Header.Get("Clear-Site-Data"))
 				assert.NotNil(t, findCookie(res, buildCookieName))
+				assert.Equal(t, "no-store", res.Header.Get("Cache-Control"))
+				assert.Equal(t, buildETag(), res.Header.Get("ETag"))
 			} else {
 				assert.Empty(t, res.Header.Get("Clear-Site-Data"))
 				assert.Nil(t, findCookie(res, buildCookieName))
+			}
+		})
+	}
+}
+
+func TestVersionPurgeMiddlewareHTMLCacheHeadersAndPurgeEligibility(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		method      string
+		status      int
+		destination string
+		mode        string
+		wantPurge   bool
+	}{
+		{"top-level document", http.MethodGet, http.StatusOK, "document", "navigate", true},
+		{"legacy browser", http.MethodGet, http.StatusOK, "", "", true},
+		{"subresource", http.MethodGet, http.StatusOK, "iframe", "nested-navigate", false},
+		{"head", http.MethodHead, http.StatusOK, "document", "navigate", false},
+		{"redirect", http.MethodGet, http.StatusFound, "document", "navigate", false},
+		{"client error", http.MethodGet, http.StatusNotFound, "document", "navigate", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			h := versionPurgeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(test.status)
+				if _, err := w.Write([]byte("<p>page</p>")); err != nil {
+					t.Errorf("write test response: %v", err)
+				}
+			}))
+			req := httptest.NewRequest(test.method, "/", nil)
+			req.Header.Set("Sec-Fetch-Dest", test.destination)
+			req.Header.Set("Sec-Fetch-Mode", test.mode)
+			req.AddCookie(&http.Cookie{Name: buildCookieName, Value: "old-stamp"})
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			res := rec.Result()
+			assert.Equal(t, "no-store", res.Header.Get("Cache-Control"))
+			assert.Equal(t, buildETag(), res.Header.Get("ETag"))
+			if test.wantPurge {
+				assert.Equal(t, `"cache", "storage"`, res.Header.Get("Clear-Site-Data"))
+			} else {
+				assert.Empty(t, res.Header.Get("Clear-Site-Data"))
 			}
 		})
 	}

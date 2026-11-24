@@ -75,10 +75,12 @@ type serverPage struct {
 var serverPages = []serverPage{
 	{path: "/server/about", content: "About"},
 	{path: "/server/help", content: "Help"},
+	{path: "/server/help/mcp", content: "Connect an AI assistant"},
 	{path: "/server/privacy", content: "Privacy Policy"},
 	{path: "/server/contact", content: "Contact"},
-	{path: "/categories", content: "Browse All Categories"},
-	{path: "/api", content: "tool-card"},
+	{path: "/categories", content: "category-grid"},
+	{path: "/server/docs/swagger", content: `id="swagger-ui"`},
+	{path: "/server/docs/graphql", content: `id="graphiql"`},
 }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -93,7 +95,7 @@ func TestTier1HomePageSSR(t *testing.T) {
 	requireContains(t, body, "CasTools", "/ brand")
 	requireContains(t, body, "Browse Categories", "/ hero call to action")
 	requireContains(t, body, `href="/categories"`, "/ categories link")
-	requireContains(t, body, `href="/api"`, "/ api docs link")
+	requireContains(t, body, `href="/server/docs/swagger"`, "/ api docs link")
 	requireContains(t, body, "category-card", "/ category grid")
 
 	if strings.Contains(body, `<div id="app"></div>`) {
@@ -104,7 +106,7 @@ func TestTier1HomePageSSR(t *testing.T) {
 // TestTier1DocumentMetadata asserts the document-level metadata required by
 // PART 28 SSR correctness on every representative page.
 func TestTier1DocumentMetadata(t *testing.T) {
-	paths := []string{"/", "/categories", "/text", "/text/uuid", "/server/about", "/api"}
+	paths := []string{"/", "/categories", "/text", "/text/uuid", "/server/about", "/server/docs/swagger"}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
 			resp, body := getHTML(t, path)
@@ -126,7 +128,7 @@ func TestTier1CategoryPagesSSR(t *testing.T) {
 			resp, body := getHTML(t, c.path)
 			requireStatus(t, resp, c.path, http.StatusOK)
 			requireContains(t, body, c.heading, c.path+" heading")
-			if !strings.Contains(body, `href="`+c.path+`/`) {
+			if !strings.Contains(body, `class="category-card"`) && !strings.Contains(body, `class="tool-card-link"`) {
 				t.Errorf("%s: category page lists no tool links", c.path)
 			}
 		})
@@ -163,7 +165,7 @@ func TestTier1ServerPagesSSR(t *testing.T) {
 func TestTier1HealthEndpoints(t *testing.T) {
 	resp, body := getHTML(t, "/server/healthz")
 	requireStatus(t, resp, "/server/healthz", http.StatusOK)
-	requireContains(t, body, "System Health", "/server/healthz page")
+	requireContains(t, body, `class="status-banner`, "/server/healthz page")
 
 	for _, path := range []string{"/api/v1/server/healthz", "/api/healthz", "/healthz"} {
 		t.Run(path, func(t *testing.T) {
@@ -189,20 +191,26 @@ func TestTier1HealthEndpoints(t *testing.T) {
 // default on API routes, plain text via the .txt suffix and Accept header,
 // HTML on frontend routes.
 func TestTier1ContentNegotiation(t *testing.T) {
-	t.Run("api json default", func(t *testing.T) {
-		resp, body := fetch(t, "/api/v1/text/uuid", nil, nil)
+	t.Run("api json when requested", func(t *testing.T) {
+		resp, body := fetch(t, "/api/v1/text/uuid", map[string]string{"Accept": "application/json"}, nil)
 		requireStatus(t, resp, "/api/v1/text/uuid", http.StatusOK)
 		if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
 			t.Errorf("/api/v1/text/uuid: Content-Type %q is not JSON", ct)
 		}
 		var payload struct {
-			UUID string `json:"uuid"`
+			OK   bool `json:"ok"`
+			Data struct {
+				UUID string `json:"uuid"`
+			} `json:"data"`
 		}
 		if err := json.Unmarshal([]byte(body), &payload); err != nil {
 			t.Fatalf("/api/v1/text/uuid: invalid JSON: %v", err)
 		}
-		if !uuidPattern.MatchString(payload.UUID) {
-			t.Errorf("/api/v1/text/uuid: %q is not a UUID", payload.UUID)
+		if !payload.OK {
+			t.Errorf("/api/v1/text/uuid: response is not a success envelope")
+		}
+		if !uuidPattern.MatchString(payload.Data.UUID) {
+			t.Errorf("/api/v1/text/uuid: %q is not a UUID", payload.Data.UUID)
 		}
 	})
 
@@ -212,8 +220,14 @@ func TestTier1ContentNegotiation(t *testing.T) {
 		if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/plain") {
 			t.Errorf("/api/v1/text/uuid.txt: Content-Type %q is not text/plain", ct)
 		}
-		if !uuidPattern.MatchString(strings.TrimSpace(body)) {
-			t.Errorf("/api/v1/text/uuid.txt: %q is not a UUID", strings.TrimSpace(body))
+		var uuid string
+		for _, line := range strings.Split(strings.TrimSpace(body), "\n") {
+			if value, ok := strings.CutPrefix(line, "uuid: "); ok {
+				uuid = value
+			}
+		}
+		if !uuidPattern.MatchString(uuid) {
+			t.Errorf("/api/v1/text/uuid.txt: uuid field %q is malformed", uuid)
 		}
 		if !strings.HasSuffix(body, "\n") {
 			t.Error("/api/v1/text/uuid.txt: text response must end with a single newline")
@@ -248,12 +262,12 @@ func TestTier1APIFeatureCoverage(t *testing.T) {
 				t.Errorf("sha256 hash %q is not 64 hex characters", v)
 			}
 		}},
-		{path: "/api/v1/text/encode/base64/castools", field: "encoded", verify: func(t *testing.T, v string) {
+		{path: "/api/v1/text/encode/base64/castools", field: "output", verify: func(t *testing.T, v string) {
 			if v != "Y2FzdG9vbHM=" {
 				t.Errorf("base64 of castools is %q, want Y2FzdG9vbHM=", v)
 			}
 		}},
-		{path: "/api/v1/text/rot13/castools", field: "result", verify: func(t *testing.T, v string) {
+		{path: "/api/v1/text/rot13/castools", field: "output", verify: func(t *testing.T, v string) {
 			if v != "pnfgbbyf" {
 				t.Errorf("rot13 of castools is %q, want pnfgbbyf", v)
 			}
@@ -262,13 +276,20 @@ func TestTier1APIFeatureCoverage(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
-			resp, body := fetch(t, tc.path, nil, nil)
+			resp, body := fetch(t, tc.path, map[string]string{"Accept": "application/json"}, nil)
 			requireStatus(t, resp, tc.path, http.StatusOK)
 			var payload map[string]any
 			if err := json.Unmarshal([]byte(body), &payload); err != nil {
 				t.Fatalf("%s: invalid JSON: %v", tc.path, err)
 			}
-			raw, ok := payload[tc.field]
+			if payload["ok"] != true {
+				t.Fatalf("%s: response is not a success envelope", tc.path)
+			}
+			data, ok := payload["data"].(map[string]any)
+			if !ok {
+				t.Fatalf("%s: envelope data is not an object", tc.path)
+			}
+			raw, ok := data[tc.field]
 			if !ok {
 				t.Fatalf("%s: response has no %q field: %s", tc.path, tc.field, body)
 			}
@@ -306,20 +327,23 @@ func TestTier1ThemeCookieRendering(t *testing.T) {
 func TestTier1SpecialFiles(t *testing.T) {
 	cases := []struct {
 		path        string
+		status      int
 		contentType string
 		content     string
 	}{
-		{path: "/robots.txt", contentType: "text/plain", content: "User-agent"},
-		{path: "/security.txt", contentType: "text/plain", content: "Contact:"},
-		{path: "/.well-known/security.txt", contentType: "text/plain", content: "Contact:"},
-		{path: "/manifest.json", contentType: "application/", content: "start_url"},
-		{path: "/sw.js", contentType: "javascript", content: "addEventListener"},
-		{path: "/offline.html", contentType: "text/html", content: "offline"},
+		{path: "/robots.txt", status: http.StatusOK, contentType: "text/plain", content: "User-agent"},
+		{path: "/security.txt", status: http.StatusNotFound},
+		{path: "/.well-known/security.txt", status: http.StatusOK, contentType: "text/plain", content: "Contact:"},
+		{path: "/manifest.json", status: http.StatusOK, contentType: "application/", content: "start_url"},
+		{path: "/sw.js", status: http.StatusOK, contentType: "javascript", content: "addEventListener"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
 			resp, body := fetch(t, tc.path, nil, nil)
-			requireStatus(t, resp, tc.path, http.StatusOK)
+			requireStatus(t, resp, tc.path, tc.status)
+			if tc.status != http.StatusOK {
+				return
+			}
 			if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, tc.contentType) {
 				t.Errorf("%s: Content-Type %q does not contain %q", tc.path, ct, tc.contentType)
 			}
@@ -327,6 +351,14 @@ func TestTier1SpecialFiles(t *testing.T) {
 				t.Errorf("%s: response is missing %q", tc.path, tc.content)
 			}
 		})
+	}
+	resp, body := getHTML(t, "/offline.html")
+	requireStatus(t, resp, "/offline.html", http.StatusOK)
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("/offline.html: Content-Type %q is not HTML", ct)
+	}
+	if !strings.Contains(strings.ToLower(body), "offline") {
+		t.Error("/offline.html: response is missing offline content")
 	}
 }
 
@@ -367,7 +399,7 @@ func TestTier1APIDocsPages(t *testing.T) {
 		}
 	})
 	t.Run("/api/swagger", func(t *testing.T) {
-		resp, body := fetch(t, "/api/swagger", nil, nil)
+		resp, body := fetch(t, "/api/swagger", map[string]string{"Accept": "application/json"}, nil)
 		requireStatus(t, resp, "/api/swagger", http.StatusOK)
 		var spec map[string]any
 		if err := json.Unmarshal([]byte(body), &spec); err != nil {

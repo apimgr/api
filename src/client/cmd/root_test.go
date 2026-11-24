@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -74,6 +75,19 @@ func TestExecute_Help(t *testing.T) {
 	assert.Contains(t, stdout, "Usage:")
 }
 
+func TestResolveLanguagePriorityAndFallback(t *testing.T) {
+	t.Setenv("LC_ALL", "fr_FR.UTF-8")
+	t.Setenv("LANG", "de_DE.UTF-8")
+	cfg := config.Default()
+	cfg.Defaults.Lang = "es"
+
+	assert.Equal(t, "it", resolveLanguage("it-IT", cfg))
+	assert.Equal(t, "es", resolveLanguage("", cfg))
+	cfg.Defaults.Lang = "auto"
+	assert.Equal(t, "fr", resolveLanguage("", cfg))
+	assert.Equal(t, "en", resolveLanguage("unsupported", cfg))
+}
+
 // TestExecute_Version verifies -v/--version prints and exits ExitSuccess.
 func TestExecute_Version(t *testing.T) {
 	isolatedHome(t)
@@ -81,7 +95,9 @@ func TestExecute_Version(t *testing.T) {
 		return Execute([]string{"api-cli", "--version"}, BuildInfo{Version: "1.2.3", Commit: "abc123", BuildDate: "2026-01-01"})
 	})
 	assert.Equal(t, ExitSuccess, code)
-	assert.Contains(t, stdout, "api-cli 1.2.3 (abc123) built 2026-01-01")
+	assert.Contains(t, stdout, "api-cli 1.2.3 (abc123)")
+	assert.Contains(t, stdout, "Built: 2026-01-01")
+	assert.NotContains(t, stdout, "\x1b[")
 }
 
 // TestExecute_ShellCompletions verifies --shell dispatch happens before
@@ -111,7 +127,7 @@ func TestExecute_ShellUnsupportedShell(t *testing.T) {
 func TestExecute_InvalidServerFlag(t *testing.T) {
 	isolatedHome(t)
 	_, stderr, code := captureOutput(t, func() int {
-		return Execute([]string{"api-cli", "--server", "not-a-url", "--output", "json", "system", "health"}, BuildInfo{Version: "1.0.0"})
+		return Execute([]string{"api-cli", "--server", "not-a-url", "--output", "json", "text", "uuid"}, BuildInfo{Version: "1.0.0"})
 	})
 	assert.Equal(t, ExitUsageBad, code)
 	assert.Contains(t, stderr, "invalid server URL")
@@ -123,7 +139,14 @@ func TestExecute_InvalidServerFlag(t *testing.T) {
 // fake server.
 func TestExecute_SuccessfulDispatch(t *testing.T) {
 	home := isolatedHome(t)
-	srv := httptest.NewServer(nil)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/text/uuid" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ok":true,"data":{"uuid":"c7e1a564-7d3e-4c71-927c-b83d4a124367","version":4}}`)
+	}))
 	t.Cleanup(srv.Close)
 
 	stdout, stderr, code := captureOutput(t, func() int {
@@ -132,17 +155,13 @@ func TestExecute_SuccessfulDispatch(t *testing.T) {
 			"--server", srv.URL,
 			"--token", "secret-token",
 			"--output", "json",
-			"system", "health",
+			"text", "uuid",
 		}, BuildInfo{Version: "1.0.0"})
 	})
 
-	// The bare httptest.NewServer(nil) handler 404s every request, which
-	// the client surfaces as a *api.Error mapped to ExitNotFound - this
-	// still proves the request reached the fake server and the exit-code
-	// mapping in exitCodeForError is wired up end-to-end.
-	assert.Equal(t, ExitNotFound, code)
-	assert.Contains(t, stderr, "Error:")
-	assert.Empty(t, stdout)
+	assert.Equal(t, ExitSuccess, code)
+	assert.Empty(t, stderr)
+	assert.Contains(t, stdout, "c7e1a564-7d3e-4c71-927c-b83d4a124367")
 
 	cfgPath := filepath.Join(home, ".config", "apimgr", "api", "cli.yml")
 	_, err := os.Stat(cfgPath)
@@ -171,11 +190,11 @@ func TestExecute_CategoryOnlyListsSubcommands(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	stdout, _, code := captureOutput(t, func() int {
-		return Execute([]string{"api-cli", "--server", srv.URL, "system"}, BuildInfo{Version: "1.0.0"})
+		return Execute([]string{"api-cli", "--server", srv.URL, "text"}, BuildInfo{Version: "1.0.0"})
 	})
 	assert.Equal(t, ExitSuccess, code)
-	assert.Contains(t, stdout, "Usage: system <subcommand> [args]")
-	assert.Contains(t, stdout, "health")
+	assert.Contains(t, stdout, "Usage: text <subcommand> [args]")
+	assert.Contains(t, stdout, "uuid")
 }
 
 // TestExecute_UnknownCommandInKnownCategory verifies a known category with
@@ -186,10 +205,10 @@ func TestExecute_UnknownCommandInKnownCategory(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	_, stderr, code := captureOutput(t, func() int {
-		return Execute([]string{"api-cli", "--server", srv.URL, "system", "does-not-exist"}, BuildInfo{Version: "1.0.0"})
+		return Execute([]string{"api-cli", "--server", srv.URL, "text", "does-not-exist"}, BuildInfo{Version: "1.0.0"})
 	})
 	assert.Equal(t, ExitUsageBad, code)
-	assert.Contains(t, stderr, "unknown command: system does-not-exist")
+	assert.Contains(t, stderr, "unknown command: text does-not-exist")
 }
 
 // TestExecute_NoCommandGiven verifies plain mode with zero positional args
@@ -233,10 +252,10 @@ func TestRunCLI_DefaultOutputFormat(t *testing.T) {
 	client := api.New(srv.URL, "")
 
 	_, _, code := captureOutput(t, func() int {
-		return runCLI(parsedFlags{Rest: []string{"system", "health"}}, config.Default(), client)
+		return runCLI(parsedFlags{Rest: []string{"text", "uuid"}}, config.Default(), client)
 	})
 	assert.Equal(t, ExitSuccess, code)
-	assert.Equal(t, "/api/v1/system/health", rec.Path)
+	assert.Equal(t, "/api/v1/text/uuid", rec.Path)
 }
 
 // TestExitCodeForError table-drives the PART 32 exit-code mapping.
@@ -366,10 +385,10 @@ func TestBinaryName(t *testing.T) {
 // TestPrintVersion verifies the exact version output format.
 func TestPrintVersion(t *testing.T) {
 	stdout, _, _ := captureOutput(t, func() int {
-		printVersion("api-cli", BuildInfo{Version: "9.9.9", Commit: "deadbeef", BuildDate: "2026-07-20"})
+		printVersion("api-cli", BuildInfo{Version: "9.9.9", Commit: "deadbee", BuildDate: "2026-07-20"})
 		return 0
 	})
-	assert.Equal(t, "api-cli 9.9.9 (deadbeef) built 2026-07-20\n", stdout)
+	assert.Equal(t, "api-cli 9.9.9 (deadbee)\nBuilt: 2026-07-20\nGo: "+runtime.Version()+"\nOS/Arch: "+runtime.GOOS+"/"+runtime.GOARCH+"\n", stdout)
 }
 
 // TestPrintHelp smoke-tests help output includes usage chrome and every
@@ -383,7 +402,7 @@ func TestPrintHelp(t *testing.T) {
 	assert.Contains(t, stdout, "Usage:")
 	assert.Contains(t, stdout, "--shell completions [SHELL]")
 	assert.Contains(t, stdout, "Commands:")
-	assert.Contains(t, stdout, "system")
+	assert.Contains(t, stdout, "text")
 	assert.Contains(t, stdout, "Run without arguments for interactive TUI mode.")
 	for _, cat := range categories() {
 		assert.Contains(t, stdout, cat)

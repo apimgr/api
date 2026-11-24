@@ -40,6 +40,20 @@ func TestSetBuildInfo(t *testing.T) {
 	assert.Equal(t, float64(1), value)
 }
 
+func TestOwnerTokenMetricsAreAlwaysPresentAndUpdated(t *testing.T) {
+	m := newMetrics()
+
+	primary := m.ownerTokensActive.WithLabelValues("primary")
+	linked := m.ownerTokensActive.WithLabelValues("linked")
+	assert.Equal(t, float64(0), testutil.ToFloat64(primary))
+	assert.Equal(t, float64(0), testutil.ToFloat64(linked))
+
+	m.opts.OwnerTokenCounts = func() (float64, float64, error) { return 3, 2, nil }
+	m.sample()
+	assert.Equal(t, float64(3), testutil.ToFloat64(primary))
+	assert.Equal(t, float64(2), testutil.ToFloat64(linked))
+}
+
 func TestRecordRequest(t *testing.T) {
 	m := newMetrics()
 

@@ -671,20 +671,20 @@ func (s *Service) GenerateNetworkConfig(config NetworkHelperConfig) (*NetworkHel
 
 	var compose strings.Builder
 	compose.WriteString("networks:\n")
-	compose.WriteString(fmt.Sprintf("  %s:\n", config.Name))
-	compose.WriteString(fmt.Sprintf("    driver: %s\n", driver))
+	_, _ = fmt.Fprintf(&compose, "  %s:\n", config.Name)
+	_, _ = fmt.Fprintf(&compose, "    driver: %s\n", driver)
 	if config.Internal {
 		compose.WriteString("    internal: true\n")
 	}
 	if config.Subnet != "" || config.Gateway != "" {
 		compose.WriteString("    ipam:\n      config:\n")
 		if config.Subnet != "" {
-			compose.WriteString(fmt.Sprintf("        - subnet: %s\n", config.Subnet))
+			_, _ = fmt.Fprintf(&compose, "        - subnet: %s\n", config.Subnet)
 			if config.Gateway != "" {
-				compose.WriteString(fmt.Sprintf("          gateway: %s\n", config.Gateway))
+				_, _ = fmt.Fprintf(&compose, "          gateway: %s\n", config.Gateway)
 			}
 		} else if config.Gateway != "" {
-			compose.WriteString(fmt.Sprintf("        - gateway: %s\n", config.Gateway))
+			_, _ = fmt.Fprintf(&compose, "        - gateway: %s\n", config.Gateway)
 		}
 	}
 

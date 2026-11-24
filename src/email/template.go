@@ -2,6 +2,7 @@ package email
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,8 +10,40 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/common/i18n"
 	emailtemplates "github.com/apimgr/api/src/server/template/email"
 )
+
+var templateSubjectKeys = map[string]string{
+	"security_alert":     "email.subjects.security_alert",
+	"backup_complete":    "email.subjects.backup_completed",
+	"backup_failed":      "email.subjects.backup_failed",
+	"ssl_expiring":       "email.subjects.ssl_expiring",
+	"ssl_renewed":        "email.subjects.ssl_renewed",
+	"ssl_renewal_failed": "email.subjects.ssl_renewal_failed",
+	"scheduler_error":    "email.subjects.scheduler_error",
+	"startup":            "email.subjects.startup",
+	"shutdown":           "email.subjects.shutdown",
+	"disk_low":           "email.subjects.disk_low",
+	"database_error":     "email.subjects.database_error",
+	"update_available":   "email.subjects.update_available",
+	"update_installed":   "email.subjects.update_installed",
+	"update_failed":      "email.subjects.update_failed",
+	"update_staged":      "email.subjects.update_staged",
+	"test":               "email.subjects.test_email",
+}
+
+// localizeTemplate translates all built-in subject and body text before the
+// plain {variable} rendering pass required by AI.md PART 17 and PART 30.
+func localizeTemplate(tmpl *Template, language string, vars map[string]string) {
+	if tmpl == nil {
+		return
+	}
+	if key, ok := templateSubjectKeys[tmpl.Name]; ok {
+		tmpl.Subject = i18n.TranslateFormat(language, key, vars)
+		tmpl.Body = i18n.TranslateFormat(language, "email.templates."+tmpl.Name+".body", vars)
+	}
+}
 
 // Template represents a parsed email notification template (AI.md PART 17
 // "Template Format"): a subject line followed by a "---" separator and a
@@ -21,7 +54,7 @@ type Template struct {
 	Body    string
 }
 
-// TemplateNames lists the 10 built-in notification templates (AI.md
+// TemplateNames lists the 16 built-in notification templates (AI.md
 // PART 17 "Default Templates"), in the order they appear there.
 var TemplateNames = []string{
 	"security_alert",
@@ -31,8 +64,14 @@ var TemplateNames = []string{
 	"ssl_renewed",
 	"ssl_renewal_failed",
 	"scheduler_error",
+	"startup",
+	"shutdown",
+	"disk_low",
+	"database_error",
 	"update_available",
 	"update_installed",
+	"update_failed",
+	"update_staged",
 	"test",
 }
 
@@ -61,8 +100,14 @@ var templateVariables = map[string][]string{
 	"ssl_renewed":        {"expires_in", "expiry_date", "valid_until"},
 	"ssl_renewal_failed": {"error", "expires_in", "expiry_date", "next_retry"},
 	"scheduler_error":    {"task_name", "error", "next_run"},
+	"startup":            {"hostname", "version", "mode"},
+	"shutdown":           {"hostname", "version", "mode", "reason"},
+	"disk_low":           {"path", "used_percent", "free", "threshold_percent"},
+	"database_error":     {"error", "since"},
 	"update_available":   {"current_version", "new_version", "channel"},
 	"update_installed":   {"previous_version", "new_version"},
+	"update_failed":      {"version", "error"},
+	"update_staged":      {"version"},
 	"test":               {},
 }
 
@@ -293,22 +338,31 @@ func recommendedSectionWarnings(name string, tmpl *Template) []string {
 func SampleVars(name string, vars GlobalVars) map[string]string {
 	out := vars.toMap()
 	sample := map[string]string{
-		"event":            "Repeated failed authentication attempts",
-		"ip":               "192.168.1.100",
-		"details":          "5 failed attempts in 60 seconds",
-		"filename":         "api_backup_2025-01-15_030000.tar.gz",
-		"size":             "24.7 MB",
-		"error":            "connection refused",
-		"expires_in":       "14 days",
-		"expiry_date":      "2025-02-01 00:00:00 UTC",
-		"valid_until":      "2025-04-15 00:00:00 UTC",
-		"next_retry":       "2025-01-16 03:00:00 UTC",
-		"task_name":        "backup_daily",
-		"next_run":         "2025-01-16 02:00:00 UTC",
-		"current_version":  "1.0.0",
-		"new_version":      "1.1.0",
-		"previous_version": "1.0.0",
-		"channel":          "stable",
+		"event":             "Repeated failed authentication attempts",
+		"ip":                "192.168.1.100",
+		"details":           "5 failed attempts in 60 seconds",
+		"filename":          "api_backup_2025-01-15_030000.tar.gz",
+		"size":              "24.7 MB",
+		"error":             "connection refused",
+		"expires_in":        "14 days",
+		"expiry_date":       "2025-02-01 00:00:00 UTC",
+		"valid_until":       "2025-04-15 00:00:00 UTC",
+		"next_retry":        "2025-01-16 03:00:00 UTC",
+		"task_name":         "backup_daily",
+		"next_run":          "2025-01-16 02:00:00 UTC",
+		"current_version":   "1.0.0",
+		"new_version":       "1.1.0",
+		"version":           "1.1.0",
+		"previous_version":  "1.0.0",
+		"channel":           "stable",
+		"hostname":          "api.example.com",
+		"mode":              "production",
+		"reason":            "signal",
+		"path":              "/var/lib/api",
+		"used_percent":      "92%",
+		"free":              "1.2 GB",
+		"threshold_percent": "85%",
+		"since":             "2031-01-15 02:00:00 UTC",
 	}
 	for _, v := range templateVariables[name] {
 		if val, ok := sample[v]; ok {
@@ -364,7 +418,7 @@ func HasCustomTemplate(name, configDir string) bool {
 	return err == nil
 }
 
-// isBuiltinTemplate reports whether name is one of the 10 built-in
+// isBuiltinTemplate reports whether name is one of the built-in
 // notification templates.
 func isBuiltinTemplate(name string) bool {
 	for _, n := range TemplateNames {
@@ -404,11 +458,18 @@ func customTemplatePath(configDir, name string) string {
 // binary default is used. Deliberately uncached so edits/deletes of the
 // custom file take effect on the very next send with no restart.
 func LoadTemplate(name, configDir string) (*Template, error) {
+	if !isBuiltinTemplate(name) {
+		return nil, fmt.Errorf("unknown template %q", name)
+	}
 	custom := customTemplatePath(configDir, name)
 	if raw, err := os.ReadFile(custom); err == nil {
-		return ParseTemplate(name, raw)
+		_, validateErr := ValidateTemplate(name, raw)
+		if validateErr == nil {
+			return ParseTemplate(name, raw)
+		}
+		log.Printf("Email: invalid custom template %s; using embedded default: %v", name, validateErr)
 	} else if !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to read custom template %s: %w", custom, err)
+		log.Printf("Email: unable to read custom template %s; using embedded default", name)
 	}
 
 	raw, err := emailtemplates.Defaults.ReadFile(name + ".txt")

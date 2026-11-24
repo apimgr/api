@@ -19,7 +19,7 @@ services:
     logging: *default-logging
     environment:
       PORT: 80
-      TZ: America/New_York
+      TZ: ${TZ:-America/New_York}
       CACHE_URL: valkey://api-cache:6379
       # For remote libsql/Turso: set DATABASE_DRIVER and DATABASE_URL
       # DATABASE_DRIVER: libsql
@@ -28,7 +28,7 @@ services:
       - ./volumes/config:/config:z
       - ./volumes/data:/data:z
     ports:
-      - "172.17.0.1:64580:80"
+      - "172.17.0.1:${HOST_PORT:-64580}:80"
     healthcheck:
       test: ["CMD", "/usr/local/bin/api", "--status"]
       interval: 10s

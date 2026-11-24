@@ -8,8 +8,10 @@ import (
 
 // Route is a method and path collected from the running server router.
 type Route struct {
-	Method string
-	Path   string
+	Method      string
+	Path        string
+	Primary     string
+	TextMessage string
 }
 
 // Spec represents the OpenAPI specification structure
@@ -64,6 +66,8 @@ type Operation struct {
 	Summary     string              `json:"summary,omitempty"`
 	Description string              `json:"description,omitempty"`
 	OperationID string              `json:"operationId,omitempty"`
+	Primary     string              `json:"x-primary,omitempty"`
+	TextMessage string              `json:"x-text-message,omitempty"`
 	Tags        []string            `json:"tags,omitempty"`
 	Parameters  []Parameter         `json:"parameters,omitempty"`
 	RequestBody *RequestBody        `json:"requestBody,omitempty"`
@@ -407,40 +411,55 @@ func ServeSpecWithRoutes(version, baseURL, apiVersion string, routes []Route) ht
 			operation := &Operation{
 				Summary:     strings.TrimSpace(strings.ReplaceAll(strings.TrimPrefix(path, "/api/"), "/", " ")),
 				OperationID: strings.ToLower(route.Method + strings.NewReplacer("/", "_", "{", "", "}", "", "-", "_").Replace(path)),
+				Primary:     route.Primary,
+				TextMessage: route.TextMessage,
 				Tags:        []string{"API"},
 				Responses:   map[string]Response{"200": {Description: "Operation completed"}},
 			}
+			var registered *Operation
 			switch strings.ToUpper(route.Method) {
 			case http.MethodGet:
 				if item.Get == nil {
 					item.Get = operation
 				}
+				registered = item.Get
 			case http.MethodPost:
 				if item.Post == nil {
 					item.Post = operation
 				}
+				registered = item.Post
 			case http.MethodPut:
 				if item.Put == nil {
 					item.Put = operation
 				}
+				registered = item.Put
 			case http.MethodPatch:
 				if item.Patch == nil {
 					item.Patch = operation
 				}
+				registered = item.Patch
 			case http.MethodDelete:
 				if item.Delete == nil {
 					item.Delete = operation
 				}
+				registered = item.Delete
 			case http.MethodOptions:
 				if item.Options == nil {
 					item.Options = operation
 				}
+				registered = item.Options
 			default:
 				continue
+			}
+			if registered != nil {
+				registered.Primary = route.Primary
+				registered.TextMessage = route.TextMessage
 			}
 			spec.Paths[path] = item
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(spec)
+		if err := json.NewEncoder(w).Encode(spec); err != nil {
+			return
+		}
 	}
 }

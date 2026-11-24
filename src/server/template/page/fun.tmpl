@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🎉 Fun & Content</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.fun.content.ef13b8fb3e"}}</h1>
     <p class="hero-subtitle">
-      jokes, quotes, facts, and random entertainment
+      {{t .Lang "page_text.text.jokes.quotes.facts.and.random.entertainment.ff456d09cc"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/fun/joke" class="category-card">
+      <a href="{{path .BaseURL "/fun/joke"}}" class="category-card">
         <div class="category-icon">😂</div>
-        <h3 class="category-title">Random Joke</h3>
-        <p class="category-description">Get random jokes</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.random.joke.12cba5939a"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.random.jokes.de664fde62"}}</p>
       </a>
       
-      <a href="/fun/dad-joke" class="category-card">
+      <a href="{{path .BaseURL "/fun/dad-joke"}}" class="category-card">
         <div class="category-icon">👨</div>
-        <h3 class="category-title">Dad Jokes</h3>
-        <p class="category-description">Classic dad jokes</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.dad.jokes.bf6f2f542a"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.classic.dad.jokes.e139040a93"}}</p>
       </a>
       
-      <a href="/fun/programming-joke" class="category-card">
+      <a href="{{path .BaseURL "/fun/programming-joke"}}" class="category-card">
         <div class="category-icon">💻</div>
-        <h3 class="category-title">Programming Jokes</h3>
-        <p class="category-description">Jokes for developers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.programming.jokes.0f9142c55c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.jokes.for.developers.b377816792"}}</p>
       </a>
       
-      <a href="/fun/quote" class="category-card">
+      <a href="{{path .BaseURL "/fun/quote"}}" class="category-card">
         <div class="category-icon">💭</div>
-        <h3 class="category-title">Random Quote</h3>
-        <p class="category-description">Inspirational quotes</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.random.quote.5f901ef99f"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.inspirational.quotes.2118017dec"}}</p>
       </a>
       
-      <a href="/fun/fact" class="category-card">
+      <a href="{{path .BaseURL "/fun/fact"}}" class="category-card">
         <div class="category-icon">💡</div>
-        <h3 class="category-title">Random Fact</h3>
-        <p class="category-description">Interesting facts</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.random.fact.b92d4678e7"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.interesting.facts.6c5f822c86"}}</p>
       </a>
       
-      <a href="/fun/fortune" class="category-card">
+      <a href="{{path .BaseURL "/fun/fortune"}}" class="category-card">
         <div class="category-icon">🔮</div>
-        <h3 class="category-title">Fortune Cookie</h3>
-        <p class="category-description">Fortune cookie messages</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.fortune.cookie.f8300ce216"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.fortune.cookie.messages.2580f04b33"}}</p>
       </a>
       
-      <a href="/fun/riddle" class="category-card">
+      <a href="{{path .BaseURL "/fun/riddle"}}" class="category-card">
         <div class="category-icon">🤔</div>
-        <h3 class="category-title">Riddles</h3>
-        <p class="category-description">Brain teasers and riddles</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.riddles.df9fd66cf0"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.brain.teasers.and.riddles.60324880c5"}}</p>
       </a>
       
-      <a href="/fun/trivia" class="category-card">
+      <a href="{{path .BaseURL "/fun/trivia"}}" class="category-card">
         <div class="category-icon">❓</div>
-        <h3 class="category-title">Trivia Questions</h3>
-        <p class="category-description">Random trivia</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.trivia.questions.986f31792b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.random.trivia.267d2771b5"}}</p>
       </a>
       
-      <a href="/fun/motivational" class="category-card">
+      <a href="{{path .BaseURL "/fun/motivational"}}" class="category-card">
         <div class="category-icon">💪</div>
-        <h3 class="category-title">Motivational Quote</h3>
-        <p class="category-description">Get motivated</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.motivational.quote.e103a8973d"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.motivated.1d8c0b9de9"}}</p>
       </a>
       
-      <a href="/fun/insult" class="category-card">
+      <a href="{{path .BaseURL "/fun/insult"}}" class="category-card">
         <div class="category-icon">🗣️</div>
-        <h3 class="category-title">Insult Generator</h3>
-        <p class="category-description">Playful, harmless roasts and mock insults</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.insult.generator.61a4bdadca"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.playful.harmless.roasts.and.mock.insults.fd67e6ac6a"}}</p>
       </a>
       
-      <a href="/fun/compliment" class="category-card">
+      <a href="{{path .BaseURL "/fun/compliment"}}" class="category-card">
         <div class="category-icon">😊</div>
-        <h3 class="category-title">Compliment Generator</h3>
-        <p class="category-description">Random compliments</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.compliment.generator.c64607eb76"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.random.compliments.d5c11679ec"}}</p>
       </a>
       
-      <a href="/fun/meme" class="category-card">
+      <a href="{{path .BaseURL "/fun/meme"}}" class="category-card">
         <div class="category-icon">🎭</div>
-        <h3 class="category-title">Meme Generator</h3>
-        <p class="category-description">Classic meme caption text</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.meme.generator.02438a9615"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.classic.meme.caption.text.d8a588d3dc"}}</p>
       </a>
     </div>
   </div>

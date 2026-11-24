@@ -2,6 +2,10 @@ package geoip
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/apimgr/api/src/config"
 	"github.com/stretchr/testify/assert"
@@ -236,53 +241,33 @@ func TestIsCountryBlocked(t *testing.T) {
 	}
 }
 
-func TestDownloadFile_Success(t *testing.T) {
-	body := []byte("fake-mmdb-content")
+func TestDownloadVerifiedFileChecksChecksumBeforeReplacing(t *testing.T) {
+	data := []byte("verified-mmdb")
+	digest := sha256.Sum256(data)
+	checksum := hex.EncodeToString(digest[:]) + "  sample.mmdb\n"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write(body)
+		if r.URL.Path == "/checksum" {
+			_, _ = w.Write([]byte(checksum))
+			return
+		}
+		_, _ = w.Write(data)
 	}))
 	defer srv.Close()
 
-	dir := t.TempDir()
-	target := filepath.Join(dir, "out.mmdb")
-
-	err := downloadFile(srv.URL, target)
+	target := filepath.Join(t.TempDir(), "sample.mmdb")
+	require.NoError(t, os.WriteFile(target, []byte("old-database"), 0600))
+	err := downloadVerifiedFile(srv.URL+"/database", srv.URL+"/checksum", target)
 	require.NoError(t, err)
-
 	got, err := os.ReadFile(target)
 	require.NoError(t, err)
-	assert.Equal(t, body, got)
+	assert.Equal(t, data, got)
 
-	// The .tmp staging file must not be left behind.
-	_, statErr := os.Stat(target + ".tmp")
-	assert.True(t, os.IsNotExist(statErr))
-}
-
-func TestDownloadFile_NonOKStatus(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer srv.Close()
-
-	dir := t.TempDir()
-	target := filepath.Join(dir, "out.mmdb")
-
-	err := downloadFile(srv.URL, target)
+	checksum = fmt.Sprintf("%064x  sample.mmdb\n", 0)
+	err = downloadVerifiedFile(srv.URL+"/database", srv.URL+"/checksum", target)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "status: 404")
-
-	_, statErr := os.Stat(target)
-	assert.True(t, os.IsNotExist(statErr))
-}
-
-func TestDownloadFile_UnreachableHost(t *testing.T) {
-	dir := t.TempDir()
-	target := filepath.Join(dir, "out.mmdb")
-
-	err := downloadFile("http://127.0.0.1:1/no-such-server", target)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "download failed")
+	got, err = os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, data, got)
 }
 
 // Download's MkdirAll failure path is exercised by pointing dataDir at a
@@ -298,13 +283,48 @@ func TestDownload_MkdirAllFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to create geoip directory")
 }
 
-// Download's real network path (fetching from the live ip-location-db CDN)
-// is not exercised here - it requires outbound internet access, which is
-// unavailable/unreliable inside the sandboxed test container per project
-// testing rules (mock/skip cleanly rather than depending on a real
-// network fetch or a real MMDB file).
-func TestDownload_NetworkPath(t *testing.T) {
-	t.Skip("requires outbound network access to the real ip-location-db CDN; not available in sandboxed test container")
+type geoipTestTransport struct {
+	database []byte
+}
+
+func (transport geoipTestTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	body := transport.database
+	if strings.Contains(request.URL.Path, "/checksum/") {
+		digest := sha256.Sum256(transport.database)
+		body = []byte(hex.EncodeToString(digest[:]) + "  database.mmdb\n")
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(bytes.NewReader(body)),
+		Request:    request,
+	}, nil
+}
+
+func TestDownloadWritesFreshnessMarkerAfterAllDatasets(t *testing.T) {
+	oldClient := geoipHTTPClient
+	geoipHTTPClient = &http.Client{Transport: geoipTestTransport{database: buildMinimalMMDB(t, 4)}}
+	t.Cleanup(func() {
+		geoipHTTPClient = oldClient
+		Get().mu.Lock()
+		Get().closeLocked()
+		Get().loaded = false
+		Get().mu.Unlock()
+	})
+
+	dataDir := t.TempDir()
+	require.NoError(t, Download(dataDir))
+	dir := geoipDir(dataDir)
+	marker, err := os.ReadFile(filepath.Join(dir, lastUpdated))
+	require.NoError(t, err)
+	updated, err := time.Parse(time.RFC3339, strings.TrimSpace(string(marker)))
+	require.NoError(t, err)
+	assert.WithinDuration(t, time.Now().UTC(), updated, time.Minute)
+	for _, name := range []string{fileASN, fileCountry, fileCityIPv4, fileCityIPv6} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	}
 }
 
 // Load and Lookup both exercise their "database present and opened"
@@ -374,11 +394,6 @@ func enabledGeoIP(deny, allow []string) config.GeoIPConfig {
 		DenyCountries:  deny,
 		AllowCountries: allow,
 		Presets:        map[string][]string{},
-		Databases: config.GeoIPDatabasesConfig{
-			ASN:     true,
-			Country: true,
-			City:    true,
-		},
 	}
 }
 
@@ -556,19 +571,6 @@ func TestCheckCountry_MissingDatabaseFailsOpen(t *testing.T) {
 	assert.Equal(t, ReasonNoCountryDatabase, allowDecision.Reason)
 }
 
-// Disabling the country database in config has the same fail-open effect as
-// the file being absent.
-func TestCheckCountry_CountryDatabaseDisabledFailsOpen(t *testing.T) {
-	g := loadedCountryDB(t)
-
-	geo := enabledGeoIP([]string{"US"}, nil)
-	geo.Databases.Country = false
-
-	decision := g.CheckCountry("8.8.8.8", geo, nil)
-	assert.False(t, decision.Blocked)
-	assert.Equal(t, ReasonNoCountryDatabase, decision.Reason)
-}
-
 // A loaded database with no entry for the address yields an unknown country,
 // which is never grounds for blocking.
 func TestCheckCountry_UnknownCountryFailsOpen(t *testing.T) {
@@ -619,8 +621,21 @@ func TestResolveDir(t *testing.T) {
 	geo := enabledGeoIP(nil, nil)
 	assert.Equal(t, filepath.Join("/data", "security", "geoip"), ResolveDir(geo, "/data"))
 
-	geo.Dir = "  /custom/geoip  "
-	assert.Equal(t, "/custom/geoip", ResolveDir(geo, "/data"))
+}
+
+func TestGeoIPDatabaseFreshness(t *testing.T) {
+	dataDir := t.TempDir()
+	dir := geoipDir(dataDir)
+	require.True(t, NeedsInitialDownload(dataDir))
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	for _, name := range []string{fileASN, fileCountry, fileCityIPv4, fileCityIPv6} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("db"), 0600))
+	}
+	now := time.Now().UTC()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, lastUpdated), []byte(now.Format(time.RFC3339)), 0600))
+	require.False(t, NeedsInitialDownload(dataDir))
+	assert.Equal(t, "ok", databaseStatus(dir, []string{fileCityIPv4, fileCityIPv6}, now))
+	assert.Equal(t, "degraded", databaseStatus(dir, []string{fileASN}, now.Add(maxDatabaseAge+time.Second)))
 }
 
 func TestLoadFromConfig_DisabledClosesEverything(t *testing.T) {
@@ -635,8 +650,8 @@ func TestLoadFromConfig_DisabledClosesEverything(t *testing.T) {
 	assert.False(t, g.HasCountryDB())
 }
 
-// Only the databases selected in server.geoip.databases are opened.
-func TestLoadFromConfig_HonorsDatabaseSelection(t *testing.T) {
+// All four fixed PART 19 databases are opened when present.
+func TestLoadFromConfigLoadsEveryDatabase(t *testing.T) {
 	dir := t.TempDir()
 	geoDir := geoipDir(dir)
 	require.NoError(t, os.MkdirAll(geoDir, 0755))
@@ -649,28 +664,25 @@ func TestLoadFromConfig_HonorsDatabaseSelection(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(geoDir, fileCityIPv6), ipv6, 0644))
 
 	geo := enabledGeoIP(nil, nil)
-	geo.Databases.ASN = false
-	geo.Databases.City = false
+	g := &GeoIPDB{}
+	require.NoError(t, g.LoadFromConfig(geo, dir))
+	assert.NotNil(t, g.asnDB)
+	assert.NotNil(t, g.countryDB)
+	assert.NotNil(t, g.cityIPv4DB)
+	assert.NotNil(t, g.cityIPv6DB)
+}
+
+// The fixed database directory is {data_dir}/security/geoip.
+func TestLoadFromConfigUsesFixedDir(t *testing.T) {
+	dir := t.TempDir()
+	geoDir := geoipDir(dir)
+	require.NoError(t, os.MkdirAll(geoDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(geoDir, fileCountry), buildMinimalMMDB(t, 4), 0644))
+
+	geo := enabledGeoIP(nil, nil)
 
 	g := &GeoIPDB{}
 	require.NoError(t, g.LoadFromConfig(geo, dir))
-	assert.Nil(t, g.asnDB)
-	assert.NotNil(t, g.countryDB)
-	assert.Nil(t, g.cityIPv4DB)
-	assert.Nil(t, g.cityIPv6DB)
-}
-
-// A custom server.geoip.dir is used verbatim, without the security/geoip
-// suffix the default path adds.
-func TestLoadFromConfig_UsesConfiguredDir(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, fileCountry), buildMinimalMMDB(t, 4), 0644))
-
-	geo := enabledGeoIP(nil, nil)
-	geo.Dir = dir
-
-	g := &GeoIPDB{}
-	require.NoError(t, g.LoadFromConfig(geo, "/nonexistent"))
 	assert.True(t, g.HasCountryDB())
 }
 
@@ -686,22 +698,12 @@ func TestDownloadFromConfig_DisabledIsNoOp(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
-func TestCategoryEnabled(t *testing.T) {
-	dbs := config.GeoIPDatabasesConfig{ASN: true, Country: false, City: true}
-
-	assert.True(t, categoryEnabled(dbs, categoryASN))
-	assert.False(t, categoryEnabled(dbs, categoryCountry))
-	assert.True(t, categoryEnabled(dbs, categoryCity))
-	assert.False(t, categoryEnabled(dbs, "unknown"))
-}
-
-// Every configured MMDB file must map to a known category so the database
-// selection config can gate it.
-func TestGeoipFilesHaveKnownCategories(t *testing.T) {
-	all := allDatabases()
+func TestGeoipFilesContainsFixedRequiredDatabases(t *testing.T) {
+	got := make([]string, 0, len(geoipFiles))
 	for _, f := range geoipFiles {
-		assert.True(t, categoryEnabled(all, f.category), "file %s has unknown category %q", f.name, f.category)
+		got = append(got, f.name)
 	}
+	assert.Equal(t, []string{fileASN, fileCountry, fileCityIPv4, fileCityIPv6}, got)
 }
 
 func TestCountryCodeOf_NilAndUnknown(t *testing.T) {
@@ -712,14 +714,13 @@ func TestCountryCodeOf_NilAndUnknown(t *testing.T) {
 }
 
 // The MMDB file names and download URLs are fixed by AI.md PART 19: exactly
-// four files, the country file carrying its upstream
-// geo-whois-asn-country.mmdb name, and no MaxMind GeoLite2 source anywhere.
+// four GitHub release assets, with no legacy jsDelivr or MaxMind source.
 func TestGeoipFilesMatchSpec(t *testing.T) {
 	want := map[string]string{
-		"asn.mmdb":                   "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb",
-		"geo-whois-asn-country.mmdb": "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb",
-		"dbip-city-ipv4.mmdb":        "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv4.mmdb",
-		"dbip-city-ipv6.mmdb":        "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv6.mmdb",
+		"iptoasn-asn.mmdb":     "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-asn.mmdb",
+		"iptoasn-country.mmdb": "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-country.mmdb",
+		"dbip-city-ipv4.mmdb":  "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv4.mmdb",
+		"dbip-city-ipv6.mmdb":  "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv6.mmdb",
 	}
 
 	require.Len(t, geoipFiles, len(want))

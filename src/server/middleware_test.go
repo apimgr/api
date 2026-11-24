@@ -78,6 +78,7 @@ func TestRequestIDMiddleware_UniquePerRequest(t *testing.T) {
 func newSecurityHeadersConfig(sslEnabled bool) *config.Config {
 	cfg := config.DefaultConfig()
 	cfg.Server.SSL.Enabled = sslEnabled
+	cfg.Server.Port = ""
 	return cfg
 }
 
@@ -102,7 +103,15 @@ func TestSecurityHeadersMiddleware_StaticHeaders(t *testing.T) {
 	assert.Equal(t, "strict-origin-when-cross-origin", rec.Header().Get("Referrer-Policy"))
 	assert.Equal(t, "none", rec.Header().Get("X-Permitted-Cross-Domain-Policies"))
 	assert.Equal(t, "?1", rec.Header().Get("Origin-Agent-Cluster"))
-	assert.NotEmpty(t, rec.Header().Get("Permissions-Policy"))
+	permissionsPolicy := rec.Header().Get("Permissions-Policy")
+	assert.NotEmpty(t, permissionsPolicy)
+	assert.Contains(t, permissionsPolicy, "camera=()")
+	assert.Contains(t, permissionsPolicy, "autoplay=(self)")
+	assert.Contains(t, permissionsPolicy, "attribution-reporting=()")
+	assert.NotContains(t, permissionsPolicy, "ambient-light-sensor")
+	assert.NotContains(t, permissionsPolicy, "battery=")
+	assert.NotContains(t, permissionsPolicy, "interest-cohort")
+	assert.NotContains(t, permissionsPolicy, "web-share")
 	assert.NotEmpty(t, rec.Header().Get("Reporting-Endpoints"))
 	assert.NotEmpty(t, rec.Header().Get("Report-To"))
 	assert.NotEmpty(t, rec.Header().Get("NEL"))
@@ -143,10 +152,8 @@ func TestSecurityHeadersMiddleware_SSLEnabled(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Content-Security-Policy"), "upgrade-insecure-requests")
 }
 
-// TestSecurityHeadersMiddleware_SchemeDetection covers the http-vs-https
-// branch used to build the reports/CSP report-uri: TLS connection state
-// and the X-Forwarded-Proto header (reverse-proxy case) must both select
-// "https", while an absent/other value defaults to "http".
+// TestSecurityHeadersMiddleware_SchemeDetection verifies TLS and trusted
+// proxy headers select HTTPS while untrusted forwarded headers are ignored.
 func TestSecurityHeadersMiddleware_SchemeDetection(t *testing.T) {
 	cfg := newSecurityHeadersConfig(false)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
@@ -167,6 +174,7 @@ func TestSecurityHeadersMiddleware_SchemeDetection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.Host = "example.com"
+			req.RemoteAddr = "127.0.0.1:1234"
 			if tt.forwardedProto != "" {
 				req.Header.Set("X-Forwarded-Proto", tt.forwardedProto)
 			}
@@ -188,7 +196,7 @@ func TestSecurityHeadersMiddleware_CallsNext(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusTeapot)
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	})
 	handler := securityHeadersMiddleware(cfg)(next)
 

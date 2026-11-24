@@ -36,6 +36,7 @@ func TestProjectAPIRouteContract(t *testing.T) {
 	require.Equal(t, want, gotRouter, "IDEA.md API routes must match the registered project routes")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/swagger", nil)
+	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -59,6 +60,37 @@ func TestProjectAPIRouteContract(t *testing.T) {
 	require.Equal(t, want, gotSpec, "OpenAPI operations must match IDEA.md project routes")
 }
 
+func TestOwnerTokenWebRoutesAreMounted(t *testing.T) {
+	srv := newTestServer(t, newTestConfig(t))
+	router, ok := srv.Handler.(*chi.Mux)
+	require.True(t, ok, "server handler should be a chi router")
+
+	want := map[string]struct{}{
+		routeKey(http.MethodGet, "/server/preferences/tokens"):              {},
+		routeKey(http.MethodPost, "/server/preferences/token/reveal"):       {},
+		routeKey(http.MethodPost, "/server/preferences/token/rotate"):       {},
+		routeKey(http.MethodPost, "/server/preferences/token/revoke"):       {},
+		routeKey(http.MethodPost, "/server/preferences/token/restore"):      {},
+		routeKey(http.MethodPost, "/server/preferences/token/create"):       {},
+		routeKey(http.MethodPost, "/server/preferences/token/forget"):       {},
+		routeKey(http.MethodPost, "/server/preferences/tokens"):             {},
+		routeKey(http.MethodPost, "/server/preferences/tokens/{id}/reveal"): {},
+		routeKey(http.MethodPost, "/server/preferences/tokens/{id}/rotate"): {},
+		routeKey(http.MethodPost, "/server/preferences/tokens/{id}/update"): {},
+		routeKey(http.MethodPost, "/server/preferences/tokens/{id}/revoke"): {},
+	}
+	got := make(map[string]struct{})
+	err := chi.Walk(router, func(method, path string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		key := routeKey(method, path)
+		if _, ok := want[key]; ok {
+			got[key] = struct{}{}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
 func readIDEAProjectRoutes(t *testing.T) map[string]struct{} {
 	t.Helper()
 	contents, err := os.ReadFile("../../IDEA.md")
@@ -79,6 +111,9 @@ func readIDEAProjectRoutes(t *testing.T) map[string]struct{} {
 		}
 		match := projectRoutePattern.FindStringSubmatch(line)
 		if match != nil {
+			if !strings.HasPrefix(match[2], "/api/") {
+				continue
+			}
 			routes[routeKey(match[1], match[2])] = struct{}{}
 		}
 	}
@@ -91,7 +126,7 @@ func routeKey(method, path string) string {
 }
 
 func isProjectRoute(path, apiBase string) bool {
-	return strings.HasPrefix(path, apiBase+"/") &&
+	return path == "/api/autodiscover" || strings.HasPrefix(path, apiBase+"/") &&
 		!strings.HasPrefix(path, apiBase+"/server/") && path != apiBase+"/version"
 }
 

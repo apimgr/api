@@ -14,8 +14,12 @@ type EmailEventsConfig struct {
 	SSLRenewalFailed bool `yaml:"ssl_renewal_failed"`
 	SecurityAlert    bool `yaml:"security_alert"`
 	SchedulerError   bool `yaml:"scheduler_error"`
+	DiskLow          bool `yaml:"disk_low"`
+	DatabaseError    bool `yaml:"database_error"`
 	UpdateAvailable  bool `yaml:"update_available"`
 	UpdateInstalled  bool `yaml:"update_installed"`
+	UpdateFailed     bool `yaml:"update_failed"`
+	UpdateStaged     bool `yaml:"update_staged"`
 }
 
 // DefaultEmailEventsConfig returns the AI.md PART 17 "Configuration"
@@ -31,8 +35,12 @@ func DefaultEmailEventsConfig() EmailEventsConfig {
 		SSLRenewalFailed: true,
 		SecurityAlert:    true,
 		SchedulerError:   true,
+		DiskLow:          true,
+		DatabaseError:    true,
 		UpdateAvailable:  false,
 		UpdateInstalled:  true,
+		UpdateFailed:     true,
+		UpdateStaged:     true,
 	}
 }
 
@@ -42,6 +50,31 @@ func DefaultEmailEventsConfig() EmailEventsConfig {
 type WebUINotificationsConfig struct {
 	Position string `yaml:"position"`
 	Duration int    `yaml:"duration"`
+}
+
+// DiskLowConfig controls the disk space notification trigger in AI.md PART 17.
+type DiskLowConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	ThresholdPercent int    `yaml:"threshold_percent"`
+	CheckInterval    string `yaml:"check_interval"`
+	Repeat           string `yaml:"repeat"`
+}
+
+// DatabaseErrorConfig controls the built-in database connectivity probe and
+// its operator notification state (AI.md PART 17).
+type DatabaseErrorConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Failures      int    `yaml:"failures"`
+	CheckInterval string `yaml:"check_interval"`
+	Repeat        string `yaml:"repeat"`
+}
+
+func DefaultDiskLowConfig() DiskLowConfig {
+	return DiskLowConfig{Enabled: true, ThresholdPercent: 85, CheckInterval: "5m", Repeat: "24h"}
+}
+
+func DefaultDatabaseErrorConfig() DatabaseErrorConfig {
+	return DatabaseErrorConfig{Enabled: true, Failures: 3, CheckInterval: "1m", Repeat: "24h"}
 }
 
 // DefaultWebUINotificationsConfig returns the AI.md PART 17 defaults.

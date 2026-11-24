@@ -1,7 +1,9 @@
 package scheduler
 
 import (
+	"bytes"
 	"errors"
+	"log"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -57,6 +59,20 @@ func TestNewScheduler(t *testing.T) {
 	s := New()
 	require.NotNil(t, s)
 	assert.Empty(t, s.GetTasks())
+}
+
+func TestLogRegisteredTasksListsTaskNamesInStableOrder(t *testing.T) {
+	s := New()
+	s.tasks["zeta"] = &Task{Name: "zeta"}
+	s.tasks["alpha"] = &Task{Name: "alpha"}
+
+	var output bytes.Buffer
+	previousWriter := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previousWriter) })
+	s.logRegisteredTasks()
+
+	assert.Contains(t, output.String(), "Scheduler: Registered tasks: alpha, zeta")
 }
 
 // TestAddTaskAndGetTasks covers registration, persistence, and the
@@ -216,6 +232,32 @@ func TestRunNow(t *testing.T) {
 			return false
 		}, 2*time.Second, 10*time.Millisecond)
 	})
+}
+
+func TestPanickingTaskIsRecordedFailedAndDoesNotBlockOtherTasks(t *testing.T) {
+	initTestDB(t)
+	s := New()
+	s.AddTask("panicking", "@daily", func() error { panic("test panic") }, true)
+
+	s.mu.RLock()
+	panicking := s.tasks["panicking"]
+	s.mu.RUnlock()
+	err := s.execute(panicking)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "task panicked: test panic")
+	assert.Equal(t, "failed", panicking.LastStatus)
+	assert.Contains(t, panicking.LastError, "test panic")
+
+	var ran atomic.Bool
+	s.AddTask("healthy", "@daily", func() error {
+		ran.Store(true)
+		return nil
+	}, true)
+	s.mu.RLock()
+	healthy := s.tasks["healthy"]
+	s.mu.RUnlock()
+	require.NoError(t, s.execute(healthy))
+	assert.True(t, ran.Load())
 }
 
 // TestStartStopIdempotent verifies Start/Stop can each be called multiple

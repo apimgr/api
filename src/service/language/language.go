@@ -29,8 +29,8 @@ var httpClient = &http.Client{
 const (
 	dictionaryEndpoint = "https://api.dictionaryapi.dev/api/v2/entries/en"
 	// datamuseEndpoint's synonym/antonym relations (rel_syn/rel_ant) are
-	// free and keyless today; Datamuse has announced a mandatory API key
-	// starting 2027-01-01 — see TODO.AI.md for the tracked follow-up.
+	// free and keyless today; Datamuse's API page says an API key becomes
+	// mandatory on 2027-02-01 — see TODO.AI.md for the tracked follow-up.
 	datamuseEndpoint = "https://api.datamuse.com/words"
 )
 
@@ -104,7 +104,7 @@ func (s *Service) Dictionary(ctx context.Context, word string) (*DictionaryResul
 	if err != nil {
 		return nil, fmt.Errorf("dictionary provider request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("no definitions found for %q", word)
@@ -158,8 +158,8 @@ type datamuseWord struct {
 }
 
 // Thesaurus looks up a word's synonyms and antonyms using the free, keyless
-// Datamuse API. Datamuse has announced that a free API key will become
-// mandatory starting 2027-01-01; tracked in TODO.AI.md.
+// Datamuse API. Datamuse says an API key will become mandatory on
+// 2027-02-01; the tracked configuration work is in TODO.AI.md.
 func (s *Service) Thesaurus(ctx context.Context, word string) (*ThesaurusResult, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
@@ -196,7 +196,7 @@ func datamuseWords(ctx context.Context, relation, word string) ([]string, error)
 	if err != nil {
 		return nil, fmt.Errorf("thesaurus provider request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("thesaurus provider returned status %d", resp.StatusCode)
@@ -353,7 +353,7 @@ func (s *Service) Metaphone(word string) string {
 				out.WriteByte(c)
 			}
 		case 'B':
-			if !(i == len(letters)-1 && prev == 'M') {
+			if i != len(letters)-1 || prev != 'M' {
 				out.WriteByte('B')
 			}
 		case 'C':
@@ -626,7 +626,7 @@ func (s *Service) Readability(text string) ReadabilityStats {
 	complexWords := 0
 	for _, word := range words {
 		trimmed := strings.TrimFunc(word, func(r rune) bool {
-			return !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z'))
+			return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z')
 		})
 		if trimmed == "" {
 			continue

@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"sort"
@@ -53,7 +54,7 @@ func assertClean(t *testing.T, ctx context.Context, path string, rec *pageRecord
 // TestTier3PagesLoadCleanly asserts every representative page loads with zero
 // console errors and zero failed assets or XHRs.
 func TestTier3PagesLoadCleanly(t *testing.T) {
-	paths := []string{"/", "/categories", "/api"}
+	paths := []string{"/", "/categories"}
 	for _, c := range categories {
 		paths = append(paths, c.path)
 	}
@@ -84,7 +85,7 @@ func TestTier3PagesLoadCleanly(t *testing.T) {
 // TestTier3InternalLinkCrawl starts at the home page, follows every internal
 // link it can reach and fails on dead links and server errors.
 func TestTier3InternalLinkCrawl(t *testing.T) {
-	seeds := []string{"/", "/categories", "/api"}
+	seeds := []string{"/", "/categories"}
 	for _, c := range categories {
 		seeds = append(seeds, c.path)
 	}
@@ -321,14 +322,24 @@ func TestTier3UUIDToolInteraction(t *testing.T) {
 		t.Fatalf("/text/uuid: generate a UUID in the browser: %v", err)
 	}
 
-	fields := strings.Fields(result)
-	if len(fields) == 0 {
+	var payload struct {
+		Data struct {
+			UUID string `json:"uuid"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result), &payload); err != nil {
+		fields := strings.Fields(result)
+		if len(fields) > 0 {
+			payload.Data.UUID = fields[0]
+		}
+	}
+	if payload.Data.UUID == "" {
 		saveArtifacts(t, ctx, "tier3-uuid")
 		t.Fatal("/text/uuid: the result panel is empty after submitting the form")
 	}
-	if !uuidPattern.MatchString(fields[0]) {
+	if !uuidPattern.MatchString(payload.Data.UUID) {
 		saveArtifacts(t, ctx, "tier3-uuid")
-		t.Errorf("/text/uuid: result %q does not start with a UUID", result)
+		t.Errorf("/text/uuid: result %q does not contain a UUID", result)
 	}
 	assertClean(t, ctx, "/text/uuid", rec)
 }

@@ -1,8 +1,8 @@
 // Package tor implements the dedicated Tor hidden-service integration
 // described in AI.md PART 31. The server never uses system Tor or a shared
 // Tor port - it starts and owns its own Tor child process, generates a
-// persistent v3 (ed25519) onion address via the control protocol's
-// ADD_ONION command, and optionally exposes outbound-via-Tor networking.
+// persistent v3 (ed25519) onion address declared in torrc, and optionally
+// exposes outbound-via-Tor networking.
 //
 // Tor support is always optional: a missing Tor binary or any Tor failure
 // must never prevent the server from starting or keep it from running.
@@ -28,6 +28,9 @@ type Config struct {
 
 	// CircuitTimeout is the circuit build timeout, in seconds.
 	CircuitTimeout int
+
+	// StartupTimeout bounds how long Tor may take to open its control port.
+	StartupTimeout int
 
 	// BootstrapTimeout is the maximum time, in seconds, to wait for Tor to
 	// finish bootstrapping before giving up and disabling Tor for this run.
@@ -70,6 +73,7 @@ func DefaultConfig() Config {
 		UseNetwork:                false,
 		MaxCircuits:               32,
 		CircuitTimeout:            60,
+		StartupTimeout:            60,
 		BootstrapTimeout:          180,
 		SafeLogging:               true,
 		MaxStreamsPerCircuit:      100,

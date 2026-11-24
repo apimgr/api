@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -133,13 +134,19 @@ func TestGetClientIP(t *testing.T) {
 
 // shouldSkipRateLimit must match exact skip paths and prefix-based skip
 // paths, and must not match unrelated paths.
+func TestGetClientIPUsesSharedI2PBucket(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.RemoteAddr = "127.0.0.1:45678"
+	request = request.WithContext(context.WithValue(request.Context(), i2pBackendContextKey{}, true))
+	require.Equal(t, "i2p", getClientIP(request))
+}
+
 func TestShouldSkipRateLimit(t *testing.T) {
 	tests := []struct {
 		path string
 		want bool
 	}{
 		{"/robots.txt", true},
-		{"/security.txt", true},
 		{"/favicon.ico", true},
 		{"/.well-known/acme-challenge/token", true},
 		{"/static/css/app.css", true},
@@ -164,7 +171,8 @@ func TestWriteRateLimitExceeded(t *testing.T) {
 	w := httptest.NewRecorder()
 	resetTime := time.Now().Add(5 * time.Second)
 
-	writeRateLimitExceeded(w, 10, resetTime)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/example", nil)
+	writeRateLimitExceeded(w, r, 10, resetTime)
 
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
@@ -184,10 +192,9 @@ func TestWriteRateLimitExceeded(t *testing.T) {
 // testRateLimitConfig builds a config.Config with small, deterministic
 // rate limit classes suitable for exercising the middleware without long
 // test sleeps.
-func testRateLimitConfig(enabled bool, readLimit, writeLimit, healthLimit, globalBurst int) *config.Config {
+func testRateLimitConfig(_ bool, readLimit, writeLimit, healthLimit, globalBurst int) *config.Config {
 	cfg := &config.Config{}
 	cfg.Server.RateLimit = config.RateLimitConfig{
-		Enabled:     enabled,
 		Read:        config.RateLimitClassConfig{Requests: readLimit, Window: 60},
 		Write:       config.RateLimitClassConfig{Requests: writeLimit, Window: 60},
 		Health:      config.RateLimitClassConfig{Requests: healthLimit, Window: 60},
@@ -196,8 +203,8 @@ func testRateLimitConfig(enabled bool, readLimit, writeLimit, healthLimit, globa
 	return cfg
 }
 
-// RateLimitMiddleware must pass every request through when disabled,
-// must skip rate limiting entirely for well-known/static paths, must
+// RateLimitMiddleware is always active, skips rate limiting for
+// well-known/static paths, and must
 // classify GET/HEAD as "read" and other methods as "write", must
 // classify health-check paths separately, must set X-RateLimit-* headers
 // on allowed requests, and must return 429 once a class's limit is
@@ -207,7 +214,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	t.Run("disabled: never limits", func(t *testing.T) {
+	t.Run("rate limiting is always active", func(t *testing.T) {
 		cfg := testRateLimitConfig(false, 1, 1, 1, 100)
 		mw := RateLimitMiddleware(cfg)(okHandler)
 
@@ -216,7 +223,11 @@ func TestRateLimitMiddleware(t *testing.T) {
 			req.RemoteAddr = "9.9.9.9:1"
 			w := httptest.NewRecorder()
 			mw.ServeHTTP(w, req)
-			assert.Equal(t, http.StatusOK, w.Code)
+			if i == 0 {
+				assert.Equal(t, http.StatusOK, w.Code)
+			} else {
+				assert.Equal(t, http.StatusTooManyRequests, w.Code)
+			}
 		}
 	})
 

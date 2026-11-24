@@ -65,7 +65,7 @@ type CacheConfig struct {
 
 // UpdateConfig holds CLI self-update settings.
 type UpdateConfig struct {
-	Auto          string `yaml:"auto"`
+	Auto          bool   `yaml:"auto"`
 	CheckInterval string `yaml:"check_interval"`
 	Channel       string `yaml:"channel"`
 }
@@ -123,7 +123,6 @@ func Default() *CLIConfig {
 			Pager:  "auto",
 		},
 		Update: UpdateConfig{
-			Auto:          "no",
 			CheckInterval: "per_invocation",
 			Channel:       "stable",
 		},

@@ -29,17 +29,23 @@ func CheckPIDFile(pidPath string) (bool, int, error) {
 
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
-		os.Remove(pidPath)
+		if removeErr := os.Remove(pidPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return false, 0, fmt.Errorf("removing invalid pid file: %w", removeErr)
+		}
 		return false, 0, nil
 	}
 
 	if !isProcessRunning(pid) {
-		os.Remove(pidPath)
+		if removeErr := os.Remove(pidPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return false, 0, fmt.Errorf("removing stale pid file: %w", removeErr)
+		}
 		return false, 0, nil
 	}
 
 	if !isOurProcess(pid) {
-		os.Remove(pidPath)
+		if removeErr := os.Remove(pidPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return false, 0, fmt.Errorf("removing foreign pid file: %w", removeErr)
+		}
 		return false, 0, nil
 	}
 

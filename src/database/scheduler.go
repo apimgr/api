@@ -168,7 +168,7 @@ func SchedulerHistory(taskID string, limit int) ([]SchedulerHistoryEntry, error)
 	if err != nil {
 		return nil, fmt.Errorf("query scheduler history: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	entries := make([]SchedulerHistoryEntry, 0, limit)
 	for rows.Next() {
@@ -230,7 +230,7 @@ func DueSchedulerTasks(now time.Time) ([]SchedulerTaskState, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var states []SchedulerTaskState
 	for rows.Next() {

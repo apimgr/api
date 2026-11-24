@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">📝 Text Utilities</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.text.utilities.a2465ea45b"}}</h1>
     <p class="hero-subtitle">
-      text manipulation, encoding, hashing, and more
+      {{t .Lang "page_text.text.text.manipulation.encoding.hashing.and.more.0e8b5923eb"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/text/uuid" class="category-card">
+      <a href="{{path .BaseURL "/text/uuid"}}" class="category-card">
         <div class="category-icon">🆔</div>
-        <h3 class="category-title">UUID Generator</h3>
-        <p class="category-description">Generate UUIDs (v1, v4, v5, v6, v7)</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.uuid.generator.1b8736f8be"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.uuids.v1.v4.v5.v6.v7.8ffd993783"}}</p>
       </a>
       
-      <a href="/text/ulid" class="category-card">
+      <a href="{{path .BaseURL "/text/ulid"}}" class="category-card">
         <div class="category-icon">🆔</div>
-        <h3 class="category-title">ULID Generator</h3>
-        <p class="category-description">Generate ULIDs (sortable unique IDs)</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ulid.generator.ed7989bd2c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.ulids.sortable.unique.ids.712d96a89c"}}</p>
       </a>
       
-      <a href="/text/nanoid" class="category-card">
+      <a href="{{path .BaseURL "/text/nanoid"}}" class="category-card">
         <div class="category-icon">🆔</div>
-        <h3 class="category-title">NanoID Generator</h3>
-        <p class="category-description">Generate NanoIDs (compact unique IDs)</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.nanoid.generator.b86f0dc203"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.nanoids.compact.unique.ids.69ae8872c2"}}</p>
       </a>
       
-      <a href="/text/hash" class="category-card">
+      <a href="{{path .BaseURL "/text/hash"}}" class="category-card">
         <div class="category-icon">🔐</div>
-        <h3 class="category-title">Hash Generator</h3>
-        <p class="category-description">MD5, SHA1, SHA256, SHA512, BLAKE3</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.hash.generator.ef470f43f2"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.md5.sha1.sha256.sha512.blake3.f3f5ddabd3"}}</p>
       </a>
       
-      <a href="/text/encode" class="category-card">
+      <a href="{{path .BaseURL "/text/encode"}}" class="category-card">
         <div class="category-icon">🔄</div>
-        <h3 class="category-title">Encode Text</h3>
-        <p class="category-description">Base64, Base32, Hex, URL encoding</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.encode.text.fb4cc4bfa0"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.base64.base32.hex.url.encoding.4df4687adb"}}</p>
       </a>
       
-      <a href="/text/decode" class="category-card">
+      <a href="{{path .BaseURL "/text/decode"}}" class="category-card">
         <div class="category-icon">🔄</div>
-        <h3 class="category-title">Decode Text</h3>
-        <p class="category-description">Decode from various formats</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.decode.text.718ee07555"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.decode.from.various.formats.eaa2182d7f"}}</p>
       </a>
       
-      <a href="/text/case" class="category-card">
+      <a href="{{path .BaseURL "/text/case"}}" class="category-card">
         <div class="category-icon">🔤</div>
-        <h3 class="category-title">Case Converter</h3>
-        <p class="category-description">camelCase, snake_case, kebab-case, etc.</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.case.converter.24820a0e02"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.camelcase.snake.case.kebab.case.etc.dff45fc8e3"}}</p>
       </a>
       
-      <a href="/text/lorem" class="category-card">
+      <a href="{{path .BaseURL "/text/lorem"}}" class="category-card">
         <div class="category-icon">📝</div>
-        <h3 class="category-title">Lorem Ipsum</h3>
-        <p class="category-description">Generate lorem ipsum text</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.lorem.ipsum.030dc1f936"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.lorem.ipsum.text.3714529ecd"}}</p>
       </a>
       
-      <a href="/text/diff" class="category-card">
+      <a href="{{path .BaseURL "/text/diff"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">Text Diff</h3>
-        <p class="category-description">Compare two texts</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.text.diff.50b3411407"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.compare.two.texts.7fc81a932e"}}</p>
       </a>
       
-      <a href="/text/regex" class="category-card">
+      <a href="{{path .BaseURL "/text/regex"}}" class="category-card">
         <div class="category-icon">🔍</div>
-        <h3 class="category-title">Regex Tester</h3>
-        <p class="category-description">Test regular expressions</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.regex.tester.8fa7f614d4"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.test.regular.expressions.9590959473"}}</p>
       </a>
       
-      <a href="/text/extract" class="category-card">
+      <a href="{{path .BaseURL "/text/extract"}}" class="category-card">
         <div class="category-icon">🔎</div>
-        <h3 class="category-title">Extract Data</h3>
-        <p class="category-description">Extract emails, URLs, phones, IPs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.extract.data.a3fb7188ee"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.extract.emails.urls.phones.ips.54b0838d25"}}</p>
       </a>
       
-      <a href="/text/compress" class="category-card">
+      <a href="{{path .BaseURL "/text/compress"}}" class="category-card">
         <div class="category-icon">📦</div>
-        <h3 class="category-title">Compress Text</h3>
-        <p class="category-description">Gzip, Brotli, Zstd compression</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.compress.text.75ee25c9e5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.gzip.brotli.zstd.compression.ab3b6cad46"}}</p>
       </a>
     </div>
   </div>

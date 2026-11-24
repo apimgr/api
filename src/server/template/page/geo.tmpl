@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🌍 Geolocation</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.geolocation.bc6177afc5"}}</h1>
     <p class="hero-subtitle">
-      IP lookup, geocoding, distance calculations, and geo encoding
+      {{t .Lang "categories.geo.description"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/geo/ip" class="category-card">
+      <a href="{{path .BaseURL "/geo/ip"}}" class="category-card">
         <div class="category-icon">📍</div>
-        <h3 class="category-title">IP Geolocation</h3>
-        <p class="category-description">Find location from IP address</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ip.geolocation.345cebdfdc"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.find.location.from.ip.address.092611fa1e"}}</p>
       </a>
       
-      <a href="/geo/geocode" class="category-card">
+      <a href="{{path .BaseURL "/geo/geocode"}}" class="category-card">
         <div class="category-icon">🗺️</div>
-        <h3 class="category-title">Geocode Address</h3>
-        <p class="category-description">Convert address to coordinates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.geocode.address.da4dc4a112"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.convert.address.to.coordinates.16e5b664a1"}}</p>
       </a>
       
-      <a href="/geo/reverse" class="category-card">
+      <a href="{{path .BaseURL "/geo/reverse"}}" class="category-card">
         <div class="category-icon">📌</div>
-        <h3 class="category-title">Reverse Geocode</h3>
-        <p class="category-description">Get address from coordinates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.reverse.geocode.6591e7cfab"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.address.from.coordinates.fe2e43ab68"}}</p>
       </a>
       
-      <a href="/geo/distance" class="category-card">
+      <a href="{{path .BaseURL "/geo/distance"}}" class="category-card">
         <div class="category-icon">📏</div>
-        <h3 class="category-title">Distance Calculator</h3>
-        <p class="category-description">Calculate distance between coordinates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.distance.calculator.fd1c14909b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.distance.between.coordinates.bc7cbf78ee"}}</p>
       </a>
       
-      <a href="/geo/timezone" class="category-card">
+      <a href="{{path .BaseURL "/geo/timezone"}}" class="category-card">
         <div class="category-icon">🕐</div>
-        <h3 class="category-title">Timezone Lookup</h3>
-        <p class="category-description">Get timezone from coordinates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.timezone.lookup.e98d119bb1"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.timezone.from.coordinates.a8247541ce"}}</p>
       </a>
       
-      <a href="/geo/country" class="category-card">
+      <a href="{{path .BaseURL "/geo/country"}}" class="category-card">
         <div class="category-icon">🏳️</div>
-        <h3 class="category-title">Country Info</h3>
-        <p class="category-description">Get country information and codes</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.country.info.62a7a79d36"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.country.information.and.codes.8e0d384630"}}</p>
       </a>
       
-      <a href="/geo/geohash" class="category-card">
+      <a href="{{path .BaseURL "/geo/geohash"}}" class="category-card">
         <div class="category-icon">🔑</div>
-        <h3 class="category-title">Geohash Encoder</h3>
-        <p class="category-description">Encode coordinates to geohash</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.geohash.encoder.f33af95d13"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.encode.coordinates.to.geohash.3b994f06e5"}}</p>
       </a>
       
-      <a href="/geo/h3" class="category-card">
+      <a href="{{path .BaseURL "/geo/h3"}}" class="category-card">
         <div class="category-icon">⬡</div>
-        <h3 class="category-title">H3 Encoder</h3>
-        <p class="category-description">Uber H3 hexagonal indexing</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.h3.encoder.6044f8656c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.uber.h3.hexagonal.indexing.3368e9a28c"}}</p>
       </a>
       
-      <a href="/geo/pluscode" class="category-card">
+      <a href="{{path .BaseURL "/geo/pluscode"}}" class="category-card">
         <div class="category-icon">➕</div>
-        <h3 class="category-title">Plus Codes</h3>
-        <p class="category-description">Google Plus Codes encoding</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.plus.codes.8ed584af36"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.google.plus.codes.encoding.d8f7aef3a0"}}</p>
       </a>
       
-      <a href="/geo/bbox" class="category-card">
+      <a href="{{path .BaseURL "/geo/bbox"}}" class="category-card">
         <div class="category-icon">◻️</div>
-        <h3 class="category-title">Bounding Box</h3>
-        <p class="category-description">Calculate bounding boxes</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.bounding.box.28b8bcd6ec"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.bounding.boxes.a9bbe2097b"}}</p>
       </a>
       
-      <a href="/geo/bearing" class="category-card">
+      <a href="{{path .BaseURL "/geo/bearing"}}" class="category-card">
         <div class="category-icon">🧭</div>
-        <h3 class="category-title">Bearing Calculator</h3>
-        <p class="category-description">Calculate bearing between points</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.bearing.calculator.1c2b3274fb"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.bearing.between.points.4fa2536845"}}</p>
       </a>
       
-      <a href="/geo/midpoint" class="category-card">
+      <a href="{{path .BaseURL "/geo/midpoint"}}" class="category-card">
         <div class="category-icon">⊙</div>
-        <h3 class="category-title">Midpoint</h3>
-        <p class="category-description">Find midpoint between coordinates</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.midpoint.10f69a3669"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.find.midpoint.between.coordinates.8893996b05"}}</p>
       </a>
     </div>
 

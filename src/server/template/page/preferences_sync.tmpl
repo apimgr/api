@@ -1,0 +1,31 @@
+{{define "content"}}
+<article class="container container-sm">
+  <header class="page-header">
+    <nav class="breadcrumb" aria-label="{{t .Lang "page_text.text.breadcrumb.2bd873d6c7"}}"><a href="{{path .BaseURL "/server/preferences"}}">← {{t .Lang "common.preferences"}}</a></nav>
+    <h1 class="page-title">{{t .Lang "page_text.text.sync.preferences.fc79211080"}}</h1>
+    <p class="page-lead">{{t .Lang "page_text.text.transfer.your.theme.and.language.settings.be.b75518dbbc"}}</p>
+  </header>
+
+  <section class="section-card" aria-labelledby="preferences-sync-export">
+    <h2 id="preferences-sync-export">{{t .Lang "page_text.text.export.preferences.cd257166f0"}}</h2>
+    <p>{{t .Lang "page_text.text.open.this.link.in.the.destination.browser.to.b071d2fecb"}}</p>
+    <div class="form-group"><label class="form-label" for="pref-export-url">{{t .Lang "page_text.text.preference.link.d9762e440f"}}</label><input id="pref-export-url" class="form-input copy-value break-all" type="url" value="{{.PrefExportURL}}" readonly><button class="copy-btn" type="button" data-copy="{{.PrefExportURL}}" aria-live="polite" aria-label="{{t .Lang "page_text.text.copy.preference.link.98ffcc4d40"}}">{{t .Lang "common.copy"}}</button></div>
+    <p>{{t .Lang "page_text.text.or.enter.this.short.code.on.the.destination.dccf899534"}}</p>
+    <div class="form-group"><label class="form-label" for="pref-export-code">{{t .Lang "page_text.text.preference.code.b98115e593"}}</label><input id="pref-export-code" class="form-input copy-value break-all" type="text" value="{{.PrefExportCode}}" readonly><button class="copy-btn" type="button" data-copy="{{.PrefExportCode}}" aria-live="polite" aria-label="{{t .Lang "page_text.text.copy.preference.code.30ba485e4b"}}">{{t .Lang "common.copy"}}</button></div>
+  </section>
+
+  <section class="section-card" aria-labelledby="preferences-sync-import">
+    <h2 id="preferences-sync-import">{{t .Lang "page_text.text.import.preferences.9481bf9dc9"}}</h2>
+    <form action="{{path .BaseURL "/server/preferences/sync"}}" method="POST" class="form">
+      {{csrfField .CSRFToken}}
+      <div class="form-group">
+        <label class="form-label" for="pref-code">{{t .Lang "page_text.text.paste.a.full.link.query.string.or.short.code.e406bec8ac"}}</label>
+        <input id="pref-code" name="code" type="text" class="form-input" autocomplete="off" aria-describedby="pref-code-help">
+        <p id="pref-code-help" class="form-help">{{t .Lang "page_text.text.only.exportable.preferences.are.transferred.7c63671d48"}}</p>
+      </div>
+      <button type="submit" class="btn btn-primary">{{t .Lang "page_text.text.import.2cff9baabf"}}</button>
+    </form>
+  </section>
+
+</article>
+{{end}}

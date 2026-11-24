@@ -14,6 +14,7 @@ import (
 	"github.com/apimgr/api/src/client/cmd"
 	"github.com/apimgr/api/src/client/config"
 	"github.com/apimgr/api/src/client/output"
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/common/terminal"
 )
 
@@ -29,20 +30,33 @@ const (
 )
 
 // categoryItem adapts a category name to list.Item.
-type categoryItem struct{ name string }
+type categoryItem struct {
+	name string
+	lang string
+}
 
 func (i categoryItem) Title() string { return i.name }
 func (i categoryItem) Description() string {
-	return fmt.Sprintf("%d commands", len(cmd.CategoryCommands(i.name)))
+	return i18n.TranslateFormat(i.lang, "cli.tui.commands_count", map[string]string{"count": fmt.Sprint(len(cmd.CategoryCommands(i.name)))})
 }
 func (i categoryItem) FilterValue() string { return i.name }
 
 // commandItem adapts a cmd.Command to list.Item.
-type commandItem struct{ c cmd.Command }
+type commandItem struct {
+	c    cmd.Command
+	lang string
+}
 
-func (i commandItem) Title() string       { return i.c.Name }
-func (i commandItem) Description() string { return i.c.Desc }
-func (i commandItem) FilterValue() string { return i.c.Name + " " + i.c.Desc }
+func (i commandItem) Title() string { return i.c.Name }
+func (i commandItem) Description() string {
+	key := "cli.commands." + i.c.Category + "." + i.c.Name + ".description"
+	value := i18n.Translate(i.lang, key)
+	if value == key {
+		return i.c.Desc
+	}
+	return value
+}
+func (i commandItem) FilterValue() string { return i.c.Name + " " + i.Description() }
 
 // Model is the bubbletea application model for api-cli's TUI.
 type Model struct {
@@ -52,6 +66,7 @@ type Model struct {
 	cfg    *config.CLIConfig
 	client *api.Client
 	build  cmd.BuildInfo
+	lang   string
 
 	categories list.Model
 	commands   list.Model
@@ -75,7 +90,7 @@ func Run(cfg *config.CLIConfig, client *api.Client, build cmd.BuildInfo) int {
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Println(i18n.Translate(client.Lang, "cli.tui.launch_failed"))
 		return cmd.ExitGeneral
 	}
 	if fm, ok := finalModel.(Model); ok && fm.err != nil {
@@ -89,7 +104,7 @@ func newModel(cfg *config.CLIConfig, client *api.Client, build cmd.BuildInfo) Mo
 
 	var catItems []list.Item
 	for _, c := range cmd.Categories() {
-		catItems = append(catItems, categoryItem{name: c})
+		catItems = append(catItems, categoryItem{name: c, lang: client.Lang})
 	}
 
 	categories := list.New(catItems, list.NewDefaultDelegate(), 0, 0)
@@ -102,7 +117,7 @@ func newModel(cfg *config.CLIConfig, client *api.Client, build cmd.BuildInfo) Mo
 	commands := list.New(nil, list.NewDefaultDelegate(), 0, 0)
 
 	ti := textinput.New()
-	ti.Placeholder = "arguments (space separated)"
+	ti.Placeholder = i18n.Translate(client.Lang, "cli.tui.arguments_placeholder")
 	ti.CharLimit = 512
 
 	return Model{
@@ -111,6 +126,7 @@ func newModel(cfg *config.CLIConfig, client *api.Client, build cmd.BuildInfo) Mo
 		cfg:        cfg,
 		client:     client,
 		build:      build,
+		lang:       client.Lang,
 		categories: categories,
 		commands:   commands,
 		argsInput:  ti,
@@ -231,7 +247,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.selectedCategory = it.name
 				var items []list.Item
 				for _, c := range cmd.CategoryCommands(it.name) {
-					items = append(items, commandItem{c: c})
+					items = append(items, commandItem{c: c, lang: m.lang})
 				}
 				m.commands.SetItems(items)
 				m.commands.Title = it.name
@@ -293,7 +309,7 @@ func (m Model) runSelectedCommand(args []string) (string, error) {
 		return c.Run(m.client, &cmd.OutputOptions{Format: "table"}, args)
 	})
 	if err != nil {
-		return fmt.Sprintf("Error: %s", err), err
+		return i18n.Translate(m.lang, "cli.tui.command_failed"), err
 	}
 	return captured, nil
 }
@@ -316,7 +332,7 @@ func (m Model) View() string {
 	case stateOutput:
 		body = m.outputView.View()
 	case stateHelp:
-		body = helpText()
+		body = helpText(m.lang)
 	}
 
 	if m.layout.ShowBorders {
@@ -345,9 +361,9 @@ func (m Model) View() string {
 	}
 	parts = append(parts, body)
 	if m.layout.ShowFooter {
-		hint := "q quit  ?  help  esc back  / search  enter select"
+		hint := i18n.Translate(m.lang, "cli.tui.footer_full")
 		if m.layout.UseAbbrev {
-			hint = "q quit  ? help"
+			hint = i18n.Translate(m.lang, "cli.tui.footer_short")
 		}
 		parts = append(parts, lipgloss.NewStyle().
 			Foreground(m.theme.Muted).
@@ -357,15 +373,19 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
-func helpText() string {
+func helpText(language ...string) string {
+	lang := i18n.DefaultLanguage
+	if len(language) > 0 && language[0] != "" {
+		lang = language[0]
+	}
 	return strings.Join([]string{
-		"api-cli TUI help",
+		i18n.Translate(lang, "cli.tui.help_title"),
 		"",
-		"j/down, k/up      move selection",
-		"/                 search/filter list",
-		"enter             select category/command, run command",
-		"esc               go back",
-		"?                 toggle this help",
-		"q, ctrl+c         quit",
+		"j/down, k/up      " + i18n.Translate(lang, "cli.tui.move_selection"),
+		"/                 " + i18n.Translate(lang, "cli.tui.search_filter"),
+		"enter             " + i18n.Translate(lang, "cli.tui.select_run"),
+		"esc               " + i18n.Translate(lang, "cli.tui.go_back"),
+		"?                 " + i18n.Translate(lang, "cli.tui.toggle_help"),
+		"q, ctrl+c         " + i18n.Translate(lang, "cli.tui.quit"),
 	}, "\n")
 }

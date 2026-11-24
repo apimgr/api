@@ -47,3 +47,42 @@ func TestParseDuration(t *testing.T) {
 	assert.Equal(t, 5*time.Second, parseDuration("not-a-duration", 5*time.Second))
 	assert.Equal(t, 30*time.Second, parseDuration("30s", 5*time.Second))
 }
+
+func TestHealthStatusAggregatesIndependentComponents(t *testing.T) {
+	cacheHealth.RLock()
+	original := make(map[string]string, len(cacheHealth.components))
+	for key, status := range cacheHealth.components {
+		original[key] = status
+	}
+	cacheHealth.RUnlock()
+	cacheHealth.Lock()
+	cacheHealth.components = make(map[string]string)
+	cacheHealth.Unlock()
+	t.Cleanup(func() {
+		cacheHealth.Lock()
+		cacheHealth.components = original
+		cacheHealth.Unlock()
+	})
+
+	SetHealthStatus("test-backend", "ok")
+	t.Cleanup(func() {
+		SetHealthStatus("test-backend", "ok")
+		SetHealthStatus("test-ratelimit", "ok")
+	})
+	SetHealthStatus("test-ratelimit", "degraded")
+	assert.Equal(t, "degraded", HealthStatus())
+	SetHealthStatus("test-backend", "error")
+	assert.Equal(t, "error", HealthStatus())
+	SetHealthStatus("test-backend", "ok")
+	assert.Equal(t, "degraded", HealthStatus())
+	SetHealthStatus("test-ratelimit", "ok")
+	assert.Equal(t, "ok", HealthStatus())
+}
+
+func TestInitialExternalCacheFailureMarksHealthDegraded(t *testing.T) {
+	SetHealthStatus("backend", "ok")
+	t.Cleanup(func() { SetHealthStatus("backend", "ok") })
+	store := New(config.CacheConfig{Type: "redis", Host: "127.0.0.1", Port: 1, Timeout: "100ms"})
+	assert.NotNil(t, store)
+	assert.Equal(t, "degraded", HealthStatus())
+}

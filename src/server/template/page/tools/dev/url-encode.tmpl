@@ -4,44 +4,53 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/dev">Developer Tools</a> / URL Encode/Decode
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/dev"}}">{{t .Lang "categories.dev.name"}}</a> {{t .Lang "tool_pages.text.url.encode.decode.32cdce25e1"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">URL Encode/Decode</h1>
-        <button class="btn btn-icon" data-favorite="dev-url-encode" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.url.encode.decode.0d3e70376b"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="dev-url-encode" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Encode or decode text for safe use in URLs.
+        {{t .Lang "tool_pages.text.encode.or.decode.text.for.safe.use.in.urls.3f66f68693"}}
       </p>
 
-      <form id="url-encode-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/url-encode">
+      <form id="url-encode-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/dev/url-encode" method="post" action="{{path .BaseURL "/dev/url-encode"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Action</label>
-          <select name="action" class="form-input">
-            <option value="encode">Encode</option>
-            <option value="decode">Decode</option>
+          <label class="form-label" for="url-encode-form-action">{{t .Lang "tool_pages.text.action.64cff1319d"}}</label>
+          <select name="action" class="form-input" id="url-encode-form-action">
+            <option value="encode">{{t .Lang "tool_pages.text.encode.23389a1f54"}}</option>
+            <option value="decode">{{t .Lang "tool_pages.text.decode.1ae3fcff1a"}}</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Text</label>
-          <textarea name="body" class="form-input" rows="6" required placeholder="Hello, world!"></textarea>
+          <label class="form-label" for="url-encode-form-body">{{t .Lang "tool_pages.text.text.71988c4d8e"}}</label>
+          <textarea name="body" class="form-input" rows="6" required placeholder="{{t .Lang "tool_pages.text.hello.world.315f5bdb76"}}" id="url-encode-form-body"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Run</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.run.00d60e31a4"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="url-encode-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/dev/url-encode?action=encode" -d 'Hello, world!'</pre>

@@ -3,11 +3,12 @@ package i18n
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 func TestIsSupported(t *testing.T) {
-	for _, lang := range []string{"en", "es", "zh", "fr", "ar", "de", "ja"} {
+	for _, lang := range []string{"en", "es", "zh", "fr", "ar", "de", "it", "ja"} {
 		if !IsSupported(lang) {
 			t.Errorf("IsSupported(%q) = false, want true", lang)
 		}
@@ -20,9 +21,45 @@ func TestIsSupported(t *testing.T) {
 	}
 }
 
+func TestLocaleJSONUsesOnlyEmbeddedSupportedLocales(t *testing.T) {
+	for _, lang := range []string{"en", "fr", "ar"} {
+		data, err := LocaleJSON(lang)
+		if err != nil {
+			t.Fatalf("LocaleJSON(%q): %v", lang, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("LocaleJSON(%q) returned empty data", lang)
+		}
+	}
+	if _, err := LocaleJSON("../../etc/passwd"); err == nil {
+		t.Fatal("unsupported locale path accepted")
+	}
+}
+
 func TestValidate(t *testing.T) {
 	if err := Validate(); err != nil {
 		t.Fatalf("Validate() returned an error for the shipped locale files: %v", err)
+	}
+}
+
+func TestValidatePluralCategoriesRejectsOrphansAndAllowsZero(t *testing.T) {
+	zh := &locale{flat: map[string]string{
+		"plurals.items.other": "{count} items",
+		"plurals.items.zero":  "No items",
+	}}
+	if got := validatePluralCategories("zh", zh); len(got) != 0 {
+		t.Fatalf("validatePluralCategories(zh) = %v, want optional zero accepted", got)
+	}
+	zh.flat["plurals.items.one"] = "{count} item"
+	if got := validatePluralCategories("zh", zh); len(got) != 1 || !strings.Contains(got[0], "orphaned category \"one\"") {
+		t.Fatalf("validatePluralCategories(zh) = %v, want orphaned one category", got)
+	}
+}
+
+func TestInterpolationVarsIgnoreStructuredExamples(t *testing.T) {
+	got := interpolationVars(`Hello, {name}: {"mode":"generate"}; CSS { color: red; }`)
+	if len(got) != 1 || !got["name"] {
+		t.Fatalf("interpolationVars() = %v, want only the named placeholder name", got)
 	}
 }
 
@@ -30,7 +67,7 @@ func TestDirRTL(t *testing.T) {
 	if got := Dir("ar"); got != "rtl" {
 		t.Errorf("Dir(\"ar\") = %q, want \"rtl\"", got)
 	}
-	for _, lang := range []string{"en", "es", "zh", "fr", "de", "ja"} {
+	for _, lang := range []string{"en", "es", "zh", "fr", "de", "it", "ja"} {
 		if got := Dir(lang); got != "ltr" {
 			t.Errorf("Dir(%q) = %q, want \"ltr\"", lang, got)
 		}
@@ -42,8 +79,8 @@ func TestDirRTL(t *testing.T) {
 
 func TestAvailableLanguages(t *testing.T) {
 	langs := AvailableLanguages()
-	if len(langs) != 7 {
-		t.Fatalf("AvailableLanguages() returned %d languages, want 7", len(langs))
+	if len(langs) != 8 {
+		t.Fatalf("AvailableLanguages() returned %d languages, want 8", len(langs))
 	}
 	for i := 1; i < len(langs); i++ {
 		if langs[i-1].Code >= langs[i].Code {
@@ -61,6 +98,18 @@ func TestAvailableLanguages(t *testing.T) {
 	}
 	if !sawArabic {
 		t.Error("AvailableLanguages() missing \"ar\"")
+	}
+}
+
+func TestAvailableLanguagesForFiltersOptionalLocales(t *testing.T) {
+	langs := AvailableLanguagesFor([]string{"en", "es", "fr", "de", "it", "ar"})
+	if len(langs) != 6 {
+		t.Fatalf("AvailableLanguagesFor returned %d languages, want 6", len(langs))
+	}
+	for _, lang := range langs {
+		if lang.Code == "zh" || lang.Code == "ja" {
+			t.Errorf("optional locale %q was not filtered", lang.Code)
+		}
 	}
 }
 
@@ -92,6 +141,15 @@ func TestPluralCategoryEnglish(t *testing.T) {
 	for n, want := range cases {
 		if got := PluralCategory("en", n); got != want {
 			t.Errorf("PluralCategory(\"en\", %d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+func TestPluralCategoryItalian(t *testing.T) {
+	cases := map[int]string{0: "other", 1: "one", 2: "other", 1_000_000: "many", 2_000_000: "many"}
+	for n, want := range cases {
+		if got := PluralCategory("it", n); got != want {
+			t.Errorf("PluralCategory(\"it\", %d) = %q, want %q", n, got, want)
 		}
 	}
 }
@@ -166,6 +224,18 @@ func TestLangFromRequestCookieBeatsHeader(t *testing.T) {
 	}
 }
 
+func TestLangFromEmailRequestUsesCookieThenHeaderAndIgnoresQuery(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/?lang=fr", nil)
+	r.Header.Set("Accept-Language", "de")
+	if got := LangFromEmailRequest(r); got != "de" {
+		t.Fatalf("LangFromEmailRequest without cookie = %q, want de", got)
+	}
+	r.AddCookie(&http.Cookie{Name: CookieName, Value: "es"})
+	if got := LangFromEmailRequest(r); got != "es" {
+		t.Fatalf("LangFromEmailRequest with cookie = %q, want es", got)
+	}
+}
+
 func TestLangFromRequestAcceptLanguageHeader(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Accept-Language", "fr;q=0.5, de;q=0.9, en;q=0.1")
@@ -211,6 +281,35 @@ func TestLanguageMiddlewareSetsContextAndCookie(t *testing.T) {
 	}
 	if !cookieSet {
 		t.Error("LanguageMiddleware did not set the lang cookie for an explicit ?lang= request")
+	}
+}
+
+func TestLanguageMiddlewareForUsesConfiguredLanguages(t *testing.T) {
+	var got string
+	handler := LanguageMiddlewareFor([]string{"en", "es", "fr", "de", "it", "ar"})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = LangFromContext(r.Context())
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/?lang=it", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if got != "it" {
+		t.Fatalf("configured Italian request language = %q, want it", got)
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Value != "it" {
+		t.Fatalf("language cookies = %v, want one cookie with it", cookies)
+	}
+
+	got = ""
+	req = httptest.NewRequest(http.MethodGet, "/?lang=ja", nil)
+	req.Header.Set("Accept-Language", "ja, en;q=0.8")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if got != "en" {
+		t.Fatalf("disabled language fallback = %q, want en", got)
+	}
+	if len(rec.Result().Cookies()) != 0 {
+		t.Fatal("disabled query language must not be persisted")
 	}
 }
 

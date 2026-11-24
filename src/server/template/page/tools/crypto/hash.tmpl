@@ -4,28 +4,29 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/crypto">Crypto</a> / Hash Generator
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/crypto"}}">{{t .Lang "tool_pages.text.crypto.df12b8f89b"}}</a> {{t .Lang "tool_pages.text.hash.generator.045149d3b5"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Hash Generator</h1>
-        <button class="btn btn-icon" data-favorite="crypto-hash" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.hash.generator.ef470f43f2"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="crypto-hash" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Generate cryptographic hashes using various algorithms (MD5, SHA-1, SHA-256, SHA-512, BLAKE3).
+        {{t .Lang "tool_pages.text.generate.cryptographic.hashes.using.various.65b3a4372d"}}
       </p>
 
-      <form id="hash-form" class="tool-form" data-template="{{.APIBasePath}}/crypto/hash/{algorithm}/{input}">
+      <form id="hash-form" class="tool-form" data-template="{{.APIBasePath}}/crypto/hash/{algorithm}/{input}" method="post" action="{{path .BaseURL "/crypto/hash"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Input Text</label>
-          <input type="text" name="input" class="form-input" required placeholder="Hello World">
+          <label class="form-label" for="hash-form-input">{{t .Lang "tool_pages.text.input.text.28f88397a7"}}</label>
+          <input type="text" name="input" class="form-input" required placeholder="{{t .Lang "tool_pages.text.hello.world.a591a6d40b"}}" id="hash-form-input">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Algorithm</label>
-          <select name="algorithm" class="form-input">
+          <label class="form-label" for="hash-form-algorithm">{{t .Lang "tool_pages.text.algorithm.d704d8af25"}}</label>
+          <select name="algorithm" class="form-input" id="hash-form-algorithm">
             <option value="md5">MD5</option>
             <option value="sha1">SHA-1</option>
             <option value="sha256" selected>SHA-256</option>
@@ -34,17 +35,25 @@
           </select>
         </div>
 
-        <button type="submit" class="btn btn-primary">Generate Hash</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.generate.hash.2011743a57"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="hash-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/crypto/hash/sha256/Hello%20World</pre>

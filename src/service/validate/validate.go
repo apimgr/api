@@ -172,7 +172,7 @@ func (s *Service) IsIBAN(iban string) bool {
 		case r >= '0' && r <= '9':
 			numeric.WriteRune(r)
 		case r >= 'A' && r <= 'Z':
-			numeric.WriteString(fmt.Sprintf("%d", int(r-'A')+10))
+			_, _ = fmt.Fprintf(&numeric, "%d", int(r-'A')+10)
 		default:
 			return false
 		}

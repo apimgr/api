@@ -1,13 +1,309 @@
 package server
 
 import (
+	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/i2p"
+	"github.com/apimgr/api/src/tor"
 )
+
+// GetURLVars resolves the public origin for a request. Forwarded values are
+// considered only when the original TCP peer is a configured trusted proxy.
+func GetURLVars(r *http.Request) (proto, fqdn, port string) {
+	if r == nil {
+		return "http", GetFQDN(""), ""
+	}
+	cfg, _ := r.Context().Value(serverConfigKey).(*config.Config)
+	peer := originalPeerAddr(r)
+	trusted := cfg != nil && isTrustedPeer(cfg, peer)
+	if manager := tor.Get(); manager != nil {
+		if onion := manager.OnionAddress(); onion != "" && strings.EqualFold(r.Host, onion) {
+			return "http", onion, ""
+		}
+	}
+	if isI2PBackendRequest(r) {
+		if manager := i2p.Get(); manager != nil {
+			if address := manager.Address(); address != "" {
+				return "http", address, ""
+			}
+		}
+	}
+
+	proto = "http"
+	if r.TLS != nil {
+		proto = "https"
+	}
+	if trusted {
+		forwardedProto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto"))
+		if strings.EqualFold(forwardedProto, "https") || strings.EqualFold(forwardedProto, "http") {
+			proto = strings.ToLower(forwardedProto)
+		} else if strings.EqualFold(firstForwardedValue(r.Header.Get("X-Forwarded-Ssl")), "on") {
+			proto = "https"
+		} else if scheme := firstForwardedValue(r.Header.Get("X-Url-Scheme")); strings.EqualFold(scheme, "https") || strings.EqualFold(scheme, "http") {
+			proto = strings.ToLower(scheme)
+		}
+	}
+
+	if trusted {
+		for _, header := range []string{"X-Forwarded-Host", "X-Real-Host", "X-Original-Host"} {
+			if candidate := firstForwardedValue(r.Header.Get(header)); validURLHost(candidate) {
+				fqdn, port = splitURLHost(candidate)
+				break
+			}
+		}
+	}
+	domains := strings.Split(os.Getenv("DOMAIN"), ",")
+	primaryDomain := ""
+	for _, domain := range domains {
+		domain = strings.TrimSpace(domain)
+		if domain != "" {
+			primaryDomain = domain
+			break
+		}
+	}
+	if fqdn == "" && primaryDomain != "" {
+		fqdn, port = splitURLHost(primaryDomain)
+	} else if fqdn == "" && validURLHost(r.Host) {
+		host, hostPort := splitURLHost(r.Host)
+		if primaryDomain == "" || domainAllowsHost(domains, host) {
+			fqdn, port = host, hostPort
+		}
+	}
+	if fqdn == "" {
+		fqdn = fallbackHostname()
+	}
+	if port == "" && validURLHost(r.Host) {
+		host, hostPort := splitURLHost(r.Host)
+		if (primaryDomain == "" || domainAllowsHost(domains, host)) && hostPort != "" {
+			port = hostPort
+		}
+	}
+	if trusted {
+		if forwardedPort := firstForwardedValue(r.Header.Get("X-Forwarded-Port")); validPort(forwardedPort) {
+			port = forwardedPort
+		}
+	}
+	if port == "" && cfg != nil && validPort(cfg.Server.Port) {
+		port = cfg.Server.Port
+	}
+	if port == "80" && proto == "http" || port == "443" && proto == "https" {
+		port = ""
+	}
+	return proto, fqdn, port
+}
+
+// BuildURL returns an absolute URL using the request's resolved public origin.
+func BuildURL(r *http.Request, path string) string {
+	proto, host, port := GetURLVars(r)
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") && net.ParseIP(host) != nil {
+		host = "[" + host + "]"
+	}
+	if path != "" && !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	if r != nil {
+		if cfg, ok := r.Context().Value(serverConfigKey).(*config.Config); ok && cfg != nil && isTrustedPeer(cfg, originalPeerAddr(r)) {
+			prefix := firstForwardedValue(r.Header.Get("X-Forwarded-Prefix"))
+			if prefix == "" {
+				prefix = firstForwardedValue(r.Header.Get("X-Forwarded-Path"))
+			}
+			if prefix == "" {
+				prefix = firstForwardedValue(r.Header.Get("X-Script-Name"))
+			}
+			prefix = validURLPrefix(prefix)
+			if prefix != "" {
+				return applyURLPrefix(path, prefix, proto, host)
+			}
+		}
+		if cfg, ok := r.Context().Value(serverConfigKey).(*config.Config); ok && cfg != nil {
+			if prefix := validURLPrefix(cfg.Server.BaseURL); prefix != "" {
+				return applyURLPrefix(path, prefix, proto, host)
+			}
+		}
+	}
+	return fmt.Sprintf("%s://%s%s", proto, host, path)
+}
+
+// GetFQDN resolves the static hostname used when no request context is
+// available. DOMAIN is the explicit override; server.fqdn is informational
+// configuration and is not an origin source.
+func GetFQDN(_ string) string {
+	for _, domain := range strings.Split(os.Getenv("DOMAIN"), ",") {
+		host, _ := splitURLHost(strings.TrimSpace(domain))
+		if validURLHost(host) {
+			return host
+		}
+	}
+	if hostname, err := os.Hostname(); err == nil && validURLHost(hostname) && !isLoopbackHost(hostname) {
+		return hostname
+	}
+	if hostname := strings.TrimSpace(os.Getenv("HOSTNAME")); validURLHost(hostname) && !isLoopbackHost(hostname) {
+		return hostname
+	}
+	if ip := globalIP(true); ip != "" {
+		return ip
+	}
+	if ip := globalIP(false); ip != "" {
+		return ip
+	}
+	return "localhost"
+}
+
+// GetDisplayURL chooses an externally useful startup URL, replacing local or
+// development-only names with a public interface address when one exists.
+func GetDisplayURL(projectName string, port int, isHTTPS bool) string {
+	host := GetFQDN(projectName)
+	if isDevTLD(host, projectName) || strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil {
+		if ip := globalIP(true); ip != "" {
+			host = ip
+		} else if ip := globalIP(false); ip != "" {
+			host = ip
+		}
+	}
+
+	proto := "http"
+	if isHTTPS {
+		proto = "https"
+	}
+	urlHost := host
+	if port > 0 && (port != 80 || proto != "http") && (port != 443 || proto != "https") {
+		urlHost = net.JoinHostPort(host, strconv.Itoa(port))
+	} else if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+		urlHost = "[" + host + "]"
+	}
+	return proto + "://" + urlHost
+}
+
+func isDevTLD(host, projectName string) bool {
+	lowerHost := strings.ToLower(strings.TrimSuffix(host, "."))
+	lowerProject := strings.ToLower(strings.TrimSpace(projectName))
+	if lowerProject != "" && (lowerHost == lowerProject || strings.HasSuffix(lowerHost, "."+lowerProject)) {
+		return true
+	}
+	if lowerHost == "localhost" {
+		return true
+	}
+	for _, tld := range []string{"local", "test", "example", "invalid", "localhost", "lan", "internal", "home", "localdomain", "home.arpa", "intranet", "corp", "private"} {
+		if lowerHost == tld || strings.HasSuffix(lowerHost, "."+tld) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(strings.TrimSuffix(host, "."), "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func applyURLPrefix(path, prefix, proto, host string) string {
+	path = prefix + "/" + strings.TrimPrefix(path, "/")
+	path = strings.TrimSuffix(path, "/")
+	return fmt.Sprintf("%s://%s%s", proto, host, path)
+}
+
+func validURLPrefix(prefix string) string {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" || prefix == "/" || strings.ContainsAny(prefix, "?#\\") {
+		return ""
+	}
+	for _, segment := range strings.Split(prefix, "/") {
+		if segment == ".." || segment == "." {
+			return ""
+		}
+	}
+	return "/" + strings.Trim(prefix, "/")
+}
+
+func validURLHost(value string) bool {
+	host, port := splitURLHost(value)
+	if host == "" || strings.ContainsAny(host, " \t\r\n/\\?#@") || port != "" && !validPort(port) {
+		return false
+	}
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	if len(host) > 253 || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, char := range label {
+			if char == '-' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
+				continue
+			}
+			return false
+		}
+	}
+	return true
+}
+
+func splitURLHost(value string) (string, string) {
+	if host, port, err := net.SplitHostPort(value); err == nil {
+		return strings.Trim(host, "[]"), port
+	}
+	return strings.Trim(value, "[]"), ""
+}
+
+func validPort(value string) bool {
+	if value == "" || len(value) > 5 {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	port, err := strconv.Atoi(value)
+	return err == nil && port > 0 && port <= 65535
+}
+
+func domainAllowsHost(domains []string, host string) bool {
+	for _, domain := range domains {
+		base, _ := splitURLHost(strings.TrimSpace(domain))
+		if base == host || strings.HasSuffix(host, "."+base) {
+			return true
+		}
+	}
+	return false
+}
+
+func fallbackHostname() string {
+	return GetFQDN("")
+}
+
+func globalIP(wantIPv6 bool) string {
+	if addresses, err := net.InterfaceAddrs(); err == nil {
+		for _, address := range addresses {
+			var ip net.IP
+			switch value := address.(type) {
+			case *net.IPNet:
+				ip = value.IP
+			case *net.IPAddr:
+				ip = value.IP
+			}
+			if ip == nil || (ip.To4() == nil) != wantIPv6 || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			return ip.String()
+		}
+	}
+	return ""
+}
 
 // originSet is a thread-safe, order-preserving, deduplicated collection of
 // reverse-proxy-learned origins (step 3 of the CORS Allow-list Resolution

@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/metrics"
+	"github.com/apimgr/api/src/mode"
 )
 
 // connStatsInterval is how often the pool gauges are refreshed from
@@ -151,7 +154,16 @@ func classifyDBError(err error) string {
 func observeQuery(query string, start time.Time, err error) {
 	operation, table := queryLabels(query)
 	m := metrics.Get()
-	m.RecordDBQuery(operation, table, time.Since(start))
+	duration := time.Since(start)
+	m.RecordDBQuery(operation, table, duration)
+	cfg := config.Get()
+	if mode.IsDebugEnabled() && cfg != nil && cfg.Server.Debug.LogQueries {
+		attributes := []any{"query", mode.Sanitize(query), "duration_ms", duration.Milliseconds()}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			attributes = append(attributes, "error", mode.Sanitize(classifyDBError(err)))
+		}
+		slog.Debug("database query", attributes...)
+	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		m.RecordDBError(operation, classifyDBError(err))
 	}
@@ -169,35 +181,171 @@ func recordQueryError(query string, err error) {
 }
 
 // execContext runs an INSERT/UPDATE/DELETE/DDL statement with metrics.
-func execContext(ctx context.Context, db *sql.DB, query string, args ...any) (sql.Result, error) {
+func execContext(ctx context.Context, db interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, query string, args ...any) (sql.Result, error) {
+	query = rewriteSQLTables(query)
 	start := time.Now()
-	result, err := db.ExecContext(ctx, query, args...)
+	defer recordRequestDatabaseTiming(ctx, start)
+	var result sql.Result
+	var err error
+	if handle, ok := db.(*sql.DB); ok && isServerDatabaseHandle(handle) && GetStore() != nil {
+		err = GetStore().Write(ctx, func(tx *sql.Tx) error {
+			var execErr error
+			result, execErr = tx.Exec(query, args...)
+			return execErr
+		})
+	} else {
+		result, err = db.ExecContext(ctx, query, args...)
+	}
 	observeQuery(query, start, err)
+	if err == nil {
+		refreshServerCacheAfterWrite(ctx, db)
+	}
 	return result, err
 }
 
 // queryContext runs a multi-row SELECT with metrics. Callers must still pass
 // any rows.Err() to recordQueryError once iteration finishes.
-func queryContext(ctx context.Context, db *sql.DB, query string, args ...any) (*sql.Rows, error) {
+type timedRows struct {
+	*sql.Rows
+	cancel  context.CancelFunc
+	ctx     context.Context
+	started time.Time
+	finish  sync.Once
+}
+
+func (rows *timedRows) Close() error {
+	defer rows.cancel()
+	rows.recordTiming()
+	return rows.Rows.Close()
+}
+
+func (rows *timedRows) Next() bool {
+	if rows.Rows.Next() {
+		return true
+	}
+	rows.cancel()
+	rows.recordTiming()
+	return false
+}
+
+func (rows *timedRows) recordTiming() {
+	rows.finish.Do(func() {
+		recordRequestDatabaseTiming(rows.ctx, rows.started)
+	})
+}
+
+func queryContext(ctx context.Context, db interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, query string, args ...any) (*timedRows, error) {
+	query = rewriteSQLTables(query)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	start := time.Now()
+	if handle, ok := db.(*sql.DB); ok && isServerDatabaseHandle(handle) {
+		cache := getServerCache()
+		if cache != nil && cache.fresh(time.Now().UTC()) {
+			rows, err := cache.store.readDB.QueryContext(ctx, sqliteCacheSQL(query), args...)
+			if err == nil {
+				observeQuery(query, start, nil)
+				return &timedRows{Rows: rows, cancel: cancel, ctx: ctx, started: start}, nil
+			}
+		}
+		if store := GetStore(); store != nil {
+			db = store.readDB
+		}
+	}
 	rows, err := db.QueryContext(ctx, query, args...)
 	observeQuery(query, start, err)
-	return rows, err
+	if err != nil {
+		if handle, ok := db.(*sql.DB); ok && isServerDatabaseHandle(handle) {
+			cache := getServerCache()
+			if cache != nil && cache.offlineMode && cache.fresh(time.Now().UTC()) {
+				rows, cacheErr := cache.store.readDB.QueryContext(ctx, sqliteCacheSQL(query), args...)
+				if cacheErr == nil {
+					return &timedRows{Rows: rows, cancel: cancel, ctx: ctx, started: start}, nil
+				}
+			}
+		}
+		recordRequestDatabaseTiming(ctx, start)
+		cancel()
+		return nil, err
+	}
+	return &timedRows{Rows: rows, cancel: cancel, ctx: ctx, started: start}, nil
 }
 
 // queryRowContext runs a single-row SELECT with metrics. A *sql.Row defers
 // its error to Scan, so callers must pass that error to recordQueryError.
-func queryRowContext(ctx context.Context, db *sql.DB, query string, args ...any) *sql.Row {
+// Row is the scan-only result of a bounded single-row query.
+type Row interface {
+	Scan(...any) error
+}
+
+type timedRow struct {
+	row      *sql.Row
+	fallback *sql.DB
+	query    string
+	args     []any
+	ctx      context.Context
+	cancel   context.CancelFunc
+	started  time.Time
+}
+
+func (row timedRow) Scan(dest ...any) error {
+	defer row.cancel()
+	defer recordRequestDatabaseTiming(row.ctx, row.started)
+	err := row.row.Scan(dest...)
+	if err == nil || row.fallback == nil || errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if fallbackErr := row.fallback.QueryRowContext(row.ctx, row.query, row.args...).Scan(dest...); fallbackErr == nil {
+		return nil
+	}
+	return err
+}
+
+func queryRowContext(ctx context.Context, db interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, query string, args ...any) Row {
+	query = rewriteSQLTables(query)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	start := time.Now()
+	var fallback *sql.DB
+	if handle, ok := db.(*sql.DB); ok && isServerDatabaseHandle(handle) {
+		cache := getServerCache()
+		if cache != nil && cache.fresh(time.Now().UTC()) {
+			row := cache.store.readDB.QueryRowContext(ctx, sqliteCacheSQL(query), args...)
+			observeQuery(query, start, nil)
+			return timedRow{row: row, fallback: handle, query: query, args: append([]any(nil), args...), ctx: ctx, cancel: cancel, started: start}
+		}
+		if store := GetStore(); store != nil {
+			db = store.readDB
+		}
+		fallback = handle
+	}
 	row := db.QueryRowContext(ctx, query, args...)
 	observeQuery(query, start, nil)
-	return row
+	return timedRow{row: row, fallback: fallback, query: query, args: append([]any(nil), args...), ctx: ctx, cancel: cancel, started: start}
 }
 
 // startConnStatsSampler begins refreshing the connection-pool gauges from
 // sql.DB.Stats() on a ticker. Calling it while a sampler is already running
 // is a no-op, so repeated Init calls never leak a goroutine.
 func startConnStatsSampler(db *sql.DB) {
+	startConnStatsSamplerWithSample(func() {
+		sampleConnStats(db)
+	})
+}
+
+func startStoreConnStatsSampler(store *Store) {
+	startConnStatsSamplerWithSample(func() {
+		write := store.writeDB.Stats()
+		read := store.readDB.Stats()
+		metrics.Get().SetDBConnections(write.OpenConnections+read.OpenConnections, write.InUse+read.InUse)
+	})
+}
+
+func startConnStatsSamplerWithSample(sample func()) {
 	connStats.mu.Lock()
 	defer connStats.mu.Unlock()
 
@@ -215,13 +363,13 @@ func startConnStatsSampler(db *sql.DB) {
 		ticker := time.NewTicker(connStatsInterval)
 		defer ticker.Stop()
 
-		sampleConnStats(db)
+		sample()
 		for {
 			select {
 			case <-stop:
 				return
 			case <-ticker.C:
-				sampleConnStats(db)
+				sample()
 			}
 		}
 	}()

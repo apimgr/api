@@ -152,6 +152,22 @@ func defaultSchedulerConfig() SchedulerConfig {
 				Schedule: "@every 15m",
 				Enabled:  NewOptionalBool(true),
 			},
+			"security_cleanup": {
+				Schedule: "30 3 * * *",
+				Enabled:  NewOptionalBool(true),
+			},
+			"keyserver_retry": {
+				Schedule: "@every 15m",
+				Enabled:  NewOptionalBool(true),
+			},
+			"disk_check": {
+				Schedule: "@every 5m",
+				Enabled:  NewOptionalBool(true),
+			},
+			"database_check": {
+				Schedule: "@every 1m",
+				Enabled:  NewOptionalBool(true),
+			},
 			"log_rotation": {
 				Schedule: "0 0 * * *",
 				Enabled:  NewOptionalBool(true),
@@ -172,6 +188,10 @@ func defaultSchedulerConfig() SchedulerConfig {
 				Schedule:      "@every 10m",
 				Enabled:       NewOptionalBool(true),
 				RestartOnFail: NewOptionalBool(true),
+			},
+			"i2p_health": {
+				Schedule: "@every 10m",
+				Enabled:  NewOptionalBool(true),
 			},
 		},
 	}

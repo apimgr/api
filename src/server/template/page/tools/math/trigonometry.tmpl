@@ -4,45 +4,54 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/math">Math &amp; Numbers</a> / Trigonometry Calculator
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/math"}}">{{t .Lang "categories.math.name"}}</a> {{t .Lang "tool_pages.text.trigonometry.calculator.e4cb0e14a9"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Trigonometry Calculator</h1>
-        <button class="btn btn-icon" data-favorite="math-trigonometry" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.trigonometry.calculator.318cc398d4"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="math-trigonometry" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Calculate the sine, cosine, or tangent of an angle given in radians.
+        {{t .Lang "tool_pages.text.calculate.the.sine.cosine.or.tangent.of.an.a.17ecf4bf84"}}
       </p>
 
-      <form id="trigonometry-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="get" action="{{.APIBasePath}}/math/calculate">
+      <form id="trigonometry-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="post" action="{{path .BaseURL "/math/trigonometry"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Operation</label>
-          <select name="operation" class="form-input">
-            <option value="sin">Sine</option>
-            <option value="cos">Cosine</option>
-            <option value="tan">Tangent</option>
+          <label class="form-label" for="trigonometry-form-operation">{{t .Lang "tool_pages.text.operation.0f044feb6c"}}</label>
+          <select name="operation" class="form-input" id="trigonometry-form-operation">
+            <option value="sin">{{t .Lang "tool_pages.text.sine.37573a14aa"}}</option>
+            <option value="cos">{{t .Lang "tool_pages.text.cosine.452caef78d"}}</option>
+            <option value="tan">{{t .Lang "tool_pages.text.tangent.9390d6186e"}}</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label">n (radians)</label>
-          <input type="number" name="n" class="form-input" step="any" required value="0">
+          <label class="form-label" for="trigonometry-form-n">{{t .Lang "tool_pages.text.n.radians.038ea6c912"}}</label>
+          <input type="number" name="n" class="form-input" step="any" required value="0" id="trigonometry-form-n">
         </div>
 
-        <button type="submit" class="btn btn-primary">Calculate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.calculate.2121cc15af"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="trigonometry-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/calculate?operation=sin&n=0"</pre>

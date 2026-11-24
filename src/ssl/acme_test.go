@@ -25,14 +25,6 @@ func TestAutoRenewInterval(t *testing.T) {
 	assert.Equal(t, 24*time.Hour, AutoRenewInterval())
 }
 
-// The manual ACME challenge functions are explicitly unimplemented and
-// must return a descriptive error rather than silently succeeding.
-func TestManualChallengeFunctionsReturnErrors(t *testing.T) {
-	assert.Error(t, PerformHTTP01Challenge("example.com", "token", "keyauth"))
-	assert.Error(t, PerformTLSALPN01Challenge("example.com", "keyauth"))
-	assert.Error(t, PerformDNS01Challenge("example.com", "keyauth", "cloudflare", map[string]string{"api_key": "x"}))
-}
-
 // CheckCertificateExpiry must report the correct number of whole days
 // remaining for a freshly generated (10-year) self-signed certificate,
 // and must error on missing or malformed files.
@@ -79,23 +71,6 @@ func TestGetCertificateInfoMissingFile(t *testing.T) {
 	tmp := t.TempDir()
 	_, err := GetCertificateInfo(filepath.Join(tmp, "nope.pem"))
 	assert.Error(t, err)
-}
-
-// RenewalTask must succeed with no renewal attempted when the certificate
-// is nowhere near expiry.
-func TestRenewalTaskNotDue(t *testing.T) {
-	tmp := t.TempDir()
-	certPath, _, err := GenerateSelfSigned(tmp, "renewal.test")
-	require.NoError(t, err)
-
-	assert.NoError(t, RenewalTask(certPath))
-}
-
-// RenewalTask must error out when the certificate file cannot be read at
-// all (the expiry check fails first).
-func TestRenewalTaskMissingCert(t *testing.T) {
-	tmp := t.TempDir()
-	assert.Error(t, RenewalTask(filepath.Join(tmp, "missing.pem")))
 }
 
 // TestShouldWarnExpiry covers AI.md PART 17: an expiry warning starts at 30

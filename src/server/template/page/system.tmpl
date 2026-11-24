@@ -1,28 +1,28 @@
 {{define "content"}}
 <section>
   <div class="container">
-    <h1>Health & System</h1>
-    <p class="lead">Server health checks, system information, version details, and service status monitoring.</p>
+    <h1>{{t .Lang "categories.system.name"}}</h1>
+    <p class="lead">{{t .Lang "page_text.text.server.health.checks.system.information.vers.6617160f4c"}}</p>
     
     <div class="tool-grid">
-      <a href="{{.APIBasePath}}/system/info" class="tool-card-link">
+      <a href="{{path .BaseURL "/server/about"}}" class="tool-card-link">
         <div class="tool-card">
-          <h3>System Info</h3>
-          <p>Get server system information</p>
+          <h3>{{t .Lang "page_text.text.system.info.c47bb18fad"}}</h3>
+          <p>{{t .Lang "page_text.text.get.server.system.information.c1f97bcddb"}}</p>
         </div>
       </a>
       
-      <a href="/healthz" class="tool-card-link">
+      <a href="{{path .BaseURL "/server/healthz"}}" class="tool-card-link">
         <div class="tool-card">
-          <h3>Health Check</h3>
-          <p>Check service health status</p>
+          <h3>{{t .Lang "page_text.text.health.check.388d2fd1db"}}</h3>
+          <p>{{t .Lang "page_text.text.check.service.health.status.6ab168076c"}}</p>
         </div>
       </a>
       
-      <a href="/version" class="tool-card-link">
+      <a href="{{path .BaseURL (printf "%s/version" .APIBasePath)}}" class="tool-card-link">
         <div class="tool-card">
-          <h3>Version Info</h3>
-          <p>Get version and build information</p>
+          <h3>{{t .Lang "page_text.text.version.info.de7333bcd7"}}</h3>
+          <p>{{t .Lang "page_text.text.get.version.and.build.information.a079d2dd05"}}</p>
         </div>
       </a>
     </div>

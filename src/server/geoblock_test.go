@@ -22,7 +22,6 @@ func geoTestConfig(enabled bool, deny []string) *config.Config {
 	cfg := &config.Config{}
 	cfg.Server.GeoIP.Enabled = enabled
 	cfg.Server.GeoIP.DenyCountries = deny
-	cfg.Server.GeoIP.Databases.Country = true
 	return cfg
 }
 

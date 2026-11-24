@@ -1,10 +1,39 @@
 // app.js - Minimal JavaScript per PART 17 (ONE file, no frameworks)
 
+const appBaseURL = document.documentElement.dataset.baseUrl || window.location.origin;
+const appBasePath = new URL(appBaseURL, window.location.href).pathname.replace(/\/+$/, '');
+
+function appPath(path) {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//')) return path;
+  return `${appBasePath}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+// Dynamic UI text comes from the same embedded locale files as server templates.
+const appLocale = {};
+const appLocaleReady = fetch(appPath(`/locales/${encodeURIComponent(document.documentElement.lang || 'en')}.json`), {
+  headers: { Accept: 'application/json' },
+})
+  .then(response => {
+    if (!response.ok) throw new Error('Locale request failed');
+    return response.json();
+  })
+  .catch(() => fetch(appPath('/locales/en.json'), { headers: { Accept: 'application/json' } })
+    .then(response => response.ok ? response.json() : {}))
+  .then(messages => Object.assign(appLocale, messages))
+  .catch(() => {});
+
+function appText(key, values = {}) {
+  const message = key.split('.').reduce((value, part) => value && value[part], appLocale);
+  if (typeof message !== 'string') return key;
+  return message.replace(/\{([a-zA-Z0-9_]+)\}/g, (placeholder, name) =>
+    Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : placeholder);
+}
+
 // ============================================================================
 // CSRF double-submit token per PART 16
 // ============================================================================
 // The csrf_token cookie is deliberately not HttpOnly so this file can read it
-// and echo the value back in the X-CSRF-Token header on every mutating fetch.
+// and echo the value back in the X-CSRF-Token header on frontend mutations.
 function csrfToken() {
   const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : '';
@@ -23,22 +52,29 @@ function csrfHeaders(headers) {
 // ============================================================================
 // Clipboard with feedback per PART 17
 // ============================================================================
-function copyToClipboard(text, btn) {
-  navigator.clipboard.writeText(text).then(() => {
+async function copyToClipboard(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    await appLocaleReady;
     const original = btn.textContent;
-    btn.textContent = 'Copied!';
+    btn.textContent = appText('javascript.copied');
     btn.classList.add('copied');
     setTimeout(() => {
       btn.textContent = original;
       btn.classList.remove('copied');
     }, 2000);
-  }).catch(err => {
-    showToast('Failed to copy', 'danger');
-  });
+  } catch (err) {
+    await appLocaleReady;
+    showToast(appText('javascript.copy_failed'), 'danger');
+  }
 }
 
 // Helper for copying from code blocks
 function copyCode(btn) {
+  if (btn.dataset.copy) {
+    copyToClipboard(btn.dataset.copy, btn);
+    return;
+  }
   const codeBlock = btn.closest('.code-block');
   const code = codeBlock.querySelector('pre').textContent;
   copyToClipboard(code, btn);
@@ -108,78 +144,98 @@ function validateForm(formId) {
 // ============================================================================
 // Tool page helpers (CasTools specific)
 // ============================================================================
-function executeTool(toolId, endpoint) {
+function toolFormData(form) {
+  const formData = new FormData(form);
+  formData.delete('csrf_token');
+  formData.delete('_csrf');
+  return formData;
+}
+
+async function executeTool(toolId, endpoint) {
+  await appLocaleReady;
   const form = document.getElementById(toolId);
   const resultDiv = document.getElementById(`${toolId}-result`);
   const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
   
   // Get form data
-  const formData = new FormData(form);
+  const formData = toolFormData(form);
   const params = new URLSearchParams(formData);
   
   // Show loading state
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Processing...';
+  submitBtn.textContent = appText('javascript.processing');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
   // Make API request
-  fetch(`${endpoint}?${params}`)
+  fetch(`${appPath(endpoint)}?${params}`)
     .then(response => response.text())
     .then(result => {
       resultDiv.textContent = result;
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
+      submitBtn.textContent = originalLabel;
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
 // executeToolTemplate builds a GET URL by substituting {field} placeholders
 // in a path template with the matching form field's value, for tools backed
 // by path-param API routes (e.g. /api/v1/text/hash/{algorithm}/{input}).
-function executeToolTemplate(toolId, urlTemplate) {
+async function executeToolTemplate(toolId, urlTemplate) {
+  await appLocaleReady;
   const form = document.getElementById(toolId);
-  const resultDiv = document.getElementById(`${toolId}-result`);
+  const resultDiv = document.getElementById(form.dataset.resultId || `${toolId}-result`);
   const submitBtn = form.querySelector('button[type="submit"]');
-  const formData = new FormData(form);
+  const originalLabel = submitBtn.textContent;
+  const formData = toolFormData(form);
+  let selectedTemplate = urlTemplate;
+  if (form.dataset.emptyTemplate && !formData.get('ip')) {
+    selectedTemplate = form.dataset.emptyTemplate;
+  }
+  if (form.dataset.batchTemplate && Number.parseInt(formData.get('count') || '1', 10) > 1) {
+    selectedTemplate = form.dataset.batchTemplate;
+  }
 
-  const url = urlTemplate.replace(/\{(\w+)\}/g, function(match, field) {
+  const url = selectedTemplate.replace(/\{(\w+)\}/g, function(match, field) {
     const value = formData.get(field);
     return value !== null ? encodeURIComponent(value) : match;
   });
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Processing...';
+  submitBtn.textContent = appText('javascript.processing');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
-  fetch(url)
+  fetch(appPath(url))
     .then(response => response.text())
     .then(result => {
       resultDiv.textContent = result;
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
+      submitBtn.textContent = originalLabel;
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
 // executeToolBody POSTs the value of a form's single textarea as the raw
 // request body, for tools backed by raw-body POST API routes
 // (e.g. /api/v1/parse/json).
-function executeToolBody(toolId, endpoint) {
+async function executeToolBody(toolId, endpoint) {
+  await appLocaleReady;
   const form = document.getElementById(toolId);
   const resultDiv = document.getElementById(`${toolId}-result`);
   const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
   const bodyField = form.querySelector('textarea');
   const body = bodyField.value;
 
@@ -188,7 +244,7 @@ function executeToolBody(toolId, endpoint) {
   // for tools like /api/v1/dev/base64 that take ?action=&urlsafe= alongside
   // a raw request body.
   const query = new URLSearchParams();
-  new FormData(form).forEach(function(value, key) {
+  toolFormData(form).forEach(function(value, key) {
     if (key !== bodyField.name && value !== '') {
       query.append(key, value);
     }
@@ -197,22 +253,22 @@ function executeToolBody(toolId, endpoint) {
   const url = queryString ? `${endpoint}?${queryString}` : endpoint;
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Processing...';
+  submitBtn.textContent = appText('javascript.processing');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
-  fetch(url, { method: 'POST', body: body, headers: csrfHeaders() })
+  fetch(appPath(url), { method: 'POST', body: body })
     .then(response => response.text())
     .then(result => {
       resultDiv.textContent = result;
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
+      submitBtn.textContent = originalLabel;
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
@@ -221,11 +277,13 @@ function executeToolBody(toolId, endpoint) {
 // fields as query-string params, and renders the response as an <img> rather
 // than text, for tools backed by binary-image API routes
 // (e.g. /api/v1/image/placeholder/{width}/{height}?format=&bg=).
-function executeToolImage(toolId, urlTemplate) {
+async function executeToolImage(toolId, urlTemplate) {
+  await appLocaleReady;
   const form = document.getElementById(toolId);
   const resultDiv = document.getElementById(`${toolId}-result`);
   const submitBtn = form.querySelector('button[type="submit"]');
-  const formData = new FormData(form);
+  const originalLabel = submitBtn.textContent;
+  const formData = toolFormData(form);
   const consumed = new Set();
 
   const path = urlTemplate.replace(/\{(\w+)\}/g, function(match, field) {
@@ -244,40 +302,46 @@ function executeToolImage(toolId, urlTemplate) {
   const url = queryString ? `${path}?${queryString}` : path;
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Processing...';
+  submitBtn.textContent = appText('javascript.processing');
   resultDiv.hidden = false;
-  resultDiv.innerHTML = `<img src="${url}" alt="Generated image" class="tool-result-image">`;
+  const image = document.createElement('img');
+  image.src = url;
+  image.alt = appText('javascript.generated_image');
+  image.className = 'tool-result-image';
+  resultDiv.replaceChildren(image);
   submitBtn.disabled = false;
-  submitBtn.textContent = 'Execute';
+  submitBtn.textContent = originalLabel;
 }
 
 // executeToolQueryPost POSTs a form's fields as a query string (rather than a
 // JSON body), for tools backed by POST-only API routes that read their
 // parameters via query string (e.g. /api/v1/validate/email?email=...).
-function executeToolQueryPost(toolId, endpoint) {
+async function executeToolQueryPost(toolId, endpoint) {
+  await appLocaleReady;
   const form = document.getElementById(toolId);
   const resultDiv = document.getElementById(`${toolId}-result`);
   const submitBtn = form.querySelector('button[type="submit"]');
-  const formData = new FormData(form);
+  const originalLabel = submitBtn.textContent;
+  const formData = toolFormData(form);
   const params = new URLSearchParams(formData);
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Processing...';
+  submitBtn.textContent = appText('javascript.processing');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
-  fetch(`${endpoint}?${params}`, { method: 'POST', headers: csrfHeaders() })
+  fetch(`${appPath(endpoint)}?${params}`, { method: 'POST' })
     .then(response => response.text())
     .then(result => {
       resultDiv.textContent = result;
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
+      submitBtn.textContent = originalLabel;
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Execute';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
@@ -285,102 +349,114 @@ function executeToolQueryPost(toolId, endpoint) {
 // Legacy per-page tool handlers (migrated from inline onsubmit/<script>
 // blocks so pages carry zero inline JS; the API call shape is unchanged)
 // ============================================================================
-function executeDateTimeTool() {
+async function executeDateTimeTool() {
+  await appLocaleReady;
   const form = document.getElementById('datetime-form');
   const timezone = form.timezone.value;
   const resultDiv = document.getElementById('datetime-result');
   const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Loading...';
+  submitBtn.textContent = appText('javascript.loading');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
   // The handler reads the query key `timezone`, matching its path parameter;
   // the older `tz` key was never read, so the field silently did nothing.
-  const url = timezone ? `/api/v1/datetime/now?timezone=${encodeURIComponent(timezone)}` : '/api/v1/datetime/now';
+  const url = appPath(timezone ? `/api/v1/datetime/now?timezone=${encodeURIComponent(timezone)}` : '/api/v1/datetime/now');
 
   fetch(url)
     .then(response => response.json())
     .then(data => {
-      resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+      const output = document.createElement('pre');
+      output.textContent = JSON.stringify(data, null, 2);
+      resultDiv.replaceChildren(output);
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Get Current Time';
+      submitBtn.textContent = originalLabel;
       addToHistory('datetime-now');
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Get Current Time';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
-function executeIPTool() {
+async function executeIPTool() {
+  await appLocaleReady;
   const form = document.getElementById('network-ip-form');
   const ip = form.ip.value || '';
   const resultDiv = document.getElementById('network-ip-result');
   const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Looking up...';
+  submitBtn.textContent = appText('javascript.looking_up');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
-  const url = ip ? `/api/v1/network/ip/${ip}` : '/api/v1/network/ip';
+  const url = appPath(ip ? `/api/v1/network/ip/${encodeURIComponent(ip)}` : '/api/v1/network/ip');
 
   fetch(url)
     .then(response => response.json())
     .then(data => {
-      resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+      const output = document.createElement('pre');
+      output.textContent = JSON.stringify(data, null, 2);
+      resultDiv.replaceChildren(output);
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Lookup IP';
+      submitBtn.textContent = originalLabel;
       addToHistory('network-ip');
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Lookup IP';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
-function executePasswordTool() {
+async function executePasswordTool() {
+  await appLocaleReady;
   const form = document.getElementById('password-form');
   const length = form.length.value;
   const resultDiv = document.getElementById('password-result');
   const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Generating...';
+  submitBtn.textContent = appText('javascript.generating');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
-  fetch(`/api/v1/crypto/password/${length}.txt`)
+  fetch(appPath(`/api/v1/crypto/password/${length}.txt`))
     .then(response => response.text())
     .then(result => {
       resultDiv.textContent = result;
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Generate Password';
+      submitBtn.textContent = originalLabel;
       addToHistory('crypto-password');
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Generate Password';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
-function executeUUIDTool() {
+async function executeUUIDTool() {
+  await appLocaleReady;
   const form = document.getElementById('uuid-form');
   const version = form.version.value;
   const count = form.count.value;
   const resultDiv = document.getElementById('uuid-result');
   const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Generating...';
+  submitBtn.textContent = appText('javascript.generating');
   resultDiv.hidden = false;
   resultDiv.innerHTML = '<div class="spinner"></div>';
 
@@ -388,19 +464,19 @@ function executeUUIDTool() {
     ? `/api/v1/text/uuid/${version}/${count}`
     : `/api/v1/text/uuid/${version}`;
 
-  fetch(endpoint)
+  fetch(appPath(endpoint))
     .then(response => response.text())
     .then(result => {
       resultDiv.textContent = result;
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Generate UUID';
+      submitBtn.textContent = originalLabel;
       addToHistory('text-uuid');
     })
     .catch(error => {
-      resultDiv.textContent = `Error: ${error.message}`;
+      resultDiv.textContent = appText('javascript.error', { message: error.message });
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Generate UUID';
-      showToast('Request failed', 'danger');
+      submitBtn.textContent = originalLabel;
+      showToast(appText('javascript.request_failed'), 'danger');
     });
 }
 
@@ -426,20 +502,22 @@ function filterTools(searchTerm) {
 // ============================================================================
 // localStorage helpers (for favorites/history)
 // ============================================================================
-function addToFavorites(toolId) {
+async function addToFavorites(toolId) {
+  await appLocaleReady;
   const favorites = JSON.parse(localStorage.getItem('castools-favorites') || '[]');
   if (!favorites.includes(toolId)){
     favorites.push(toolId);
     localStorage.setItem('castools-favorites', JSON.stringify(favorites));
-    showToast('Added to favorites', 'success');
+    showToast(appText('javascript.favorite_added'), 'success');
   }
 }
 
-function removeFromFavorites(toolId) {
+async function removeFromFavorites(toolId) {
+  await appLocaleReady;
   let favorites = JSON.parse(localStorage.getItem('castools-favorites') || '[]');
   favorites = favorites.filter(id => id !== toolId);
   localStorage.setItem('castools-favorites', JSON.stringify(favorites));
-  showToast('Removed from favorites', 'info');
+  showToast(appText('javascript.favorite_removed'), 'info');
 }
 
 function addToHistory(toolId) {
@@ -543,7 +621,7 @@ document.addEventListener('DOMContentLoaded', function() {
   };
   Object.keys(legacyToolForms).forEach(function(formId) {
     const form = document.getElementById(formId);
-    if (form) {
+    if (form && !form.matches('[data-endpoint], [data-template], [data-body-endpoint], [data-query-post-endpoint], [data-image-template], [data-api-endpoint]')) {
       form.addEventListener('submit', function(e) {
         e.preventDefault();
         legacyToolForms[formId]();
@@ -575,7 +653,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (isIOSSafari() && !isInstalledPWA()) {
       installBtn.hidden = false;
       installBtn.addEventListener('click', function() {
-        showToast('Tap Share, then "Add to Home Screen" to install.', 'info', 5000);
+        appLocaleReady.then(() => showToast(appText('javascript.ios_install'), 'info', 5000));
       });
     }
   }
@@ -590,7 +668,7 @@ document.addEventListener('DOMContentLoaded', function() {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async function() {
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      const registration = await navigator.serviceWorker.register(appPath('/sw.js'), { scope: appPath('/') });
 
       registration.addEventListener('updatefound', function() {
         const newWorker = registration.installing;
@@ -613,35 +691,53 @@ if ('serviceWorker' in navigator) {
 }
 
 // Show a dismissible banner prompting the user to activate a waiting SW
-function showUpdateNotification() {
+async function showUpdateNotification() {
+  await appLocaleReady;
   if (document.querySelector('.update-banner')) return;
   const banner = document.createElement('div');
   banner.className = 'update-banner';
   const label = document.createElement('span');
-  label.textContent = 'A new version is available';
+  label.textContent = appText('javascript.update_available');
   const updateBtn = document.createElement('button');
   updateBtn.className = 'btn btn-sm btn-primary';
-  updateBtn.textContent = 'Update Now';
+  updateBtn.textContent = appText('javascript.update_now');
   updateBtn.addEventListener('click', updateApp);
   const laterBtn = document.createElement('button');
   laterBtn.className = 'btn btn-sm';
-  laterBtn.textContent = 'Later';
+  laterBtn.textContent = appText('javascript.later');
   laterBtn.addEventListener('click', function() { banner.remove(); });
   banner.append(label, updateBtn, laterBtn);
   document.body.appendChild(banner);
 }
 
-// Tell the waiting service worker to activate, then reload once it takes
-// over
+// The controller listener is registered once; an update reloads only after
+// the visitor accepts it and never more than once.
+let updateAccepted = false;
+let updateReloading = false;
+
+function reloadAfterUpdate() {
+  if (updateReloading) return;
+  updateReloading = true;
+  window.location.reload();
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', function() {
+    if (updateAccepted) reloadAfterUpdate();
+  });
+}
+
+// Tell the waiting service worker to activate, then guarantee a reload.
 function updateApp() {
+  updateAccepted = true;
+  setTimeout(reloadAfterUpdate, 5000);
   navigator.serviceWorker.ready.then(function(reg) {
     if (reg.waiting) {
       reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    } else {
+      reloadAfterUpdate();
     }
-  });
-  navigator.serviceWorker.addEventListener('controllerchange', function() {
-    window.location.reload();
-  });
+  }).catch(reloadAfterUpdate);
 }
 
 // App install prompt (Android/desktop) - captured and replayed from the
@@ -686,4 +782,3 @@ function isIOSSafari() {
   const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
   return isIOS && isSafari;
 }
-});

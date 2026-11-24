@@ -3,6 +3,7 @@ package metrics
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -150,6 +151,11 @@ func TestGrafanaHandlerServesDashboard(t *testing.T) {
 	}
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
 		t.Fatalf("Content-Type = %q", ct)
+	}
+	for _, category := range []string{"scheduler_tasks_running", "system_memory_usage_percent", "owner_tokens_active"} {
+		if !strings.Contains(rec.Body.String(), category) {
+			t.Errorf("dashboard is missing %s category", category)
+		}
 	}
 }
 

@@ -4,36 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/language">Language</a> / Phonetic Encoding
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/language"}}">{{t .Lang "tool_pages.text.language.a4fe65264e"}}</a> {{t .Lang "tool_pages.text.phonetic.encoding.2826af6336"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Phonetic Encoding</h1>
-        <button class="btn btn-icon" data-favorite="language-phonetic" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.phonetic.encoding.4aaf196d79"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="language-phonetic" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Generate the Soundex and Metaphone phonetic codes for a word.
+        {{t .Lang "tool_pages.text.generate.the.soundex.and.metaphone.phonetic.e93a8ec2b5"}}
       </p>
 
-      <form id="phonetic-form" class="tool-form" data-endpoint="{{.APIBasePath}}/language/phonetic" method="get" action="{{.APIBasePath}}/language/phonetic">
+      <form id="phonetic-form" class="tool-form" data-endpoint="{{.APIBasePath}}/language/phonetic" method="post" action="{{path .BaseURL "/language/phonetic"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Word</label>
-          <input type="text" name="word" class="form-input" required value="Robert">
+          <label class="form-label" for="phonetic-form-word">{{t .Lang "tool_pages.text.word.3a2860ece5"}}</label>
+          <input type="text" name="word" class="form-input" required value="Robert" id="phonetic-form-word">
         </div>
 
-        <button type="submit" class="btn btn-primary">Encode</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.encode.23389a1f54"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="phonetic-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl "{{.BaseURL}}{{.APIBasePath}}/language/phonetic?word=Robert"</pre>

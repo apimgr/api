@@ -1,0 +1,59 @@
+.swagger-ui,
+.graphiql-container {
+  color: var(--text-color);
+  background-color: var(--bg-color);
+}
+
+#graphiql,
+#graphiql .graphiql-container,
+#graphiql .CodeMirror-info,
+#graphiql .CodeMirror-lint-tooltip,
+#graphiql .graphiql-dialog,
+#graphiql .graphiql-dialog-overlay,
+#graphiql .graphiql-tooltip,
+body [data-radix-popper-content-wrapper] {
+  --font-family: var(--app-font-family);
+  --font-family-mono: var(--app-font-family-mono);
+  font-family: var(--app-font-family);
+}
+
+#graphiql .CodeMirror,
+#graphiql .graphiql-history-item {
+  font-family: var(--app-font-family-mono);
+}
+
+.swagger-ui .wrapper,
+.graphiql-container {
+  max-width: 100%;
+}
+
+.swagger-ui .opblock,
+.swagger-ui .scheme-container,
+.graphiql-container .graphiql-session-header {
+  color: var(--text-color);
+  background-color: var(--surface-alt-color);
+  border-color: var(--border-color);
+}
+
+.swagger-ui input,
+.swagger-ui select,
+.swagger-ui textarea,
+.graphiql-container input,
+.graphiql-container textarea {
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  border-color: var(--border-color);
+}
+
+.swagger-ui .info .title,
+.swagger-ui .opblock-tag,
+.swagger-ui label,
+.graphiql-container {
+  color: var(--text-color);
+}
+
+#swagger-ui,
+#graphiql {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

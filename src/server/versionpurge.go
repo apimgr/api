@@ -44,8 +44,12 @@ func assetStamp() string {
 // Callers: the HTML response middleware only — never static assets, never
 // API responses, never /sw.js or /manifest.json.
 func versionPurge(w http.ResponseWriter, r *http.Request) {
+	versionPurgeResponse(w, r, true)
+}
+
+func versionPurgeResponse(w http.ResponseWriter, r *http.Request, canPurge bool) {
 	stamp := assetStamp()
-	if c, err := r.Cookie(buildCookieName); err == nil && c.Value != stamp {
+	if c, err := r.Cookie(buildCookieName); canPurge && err == nil && c.Value != stamp {
 		w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
 	}
 	// Essential cookie (no consent required) — the stamp is public build
@@ -72,26 +76,48 @@ type versionPurgeWriter struct {
 	http.ResponseWriter
 	request *http.Request
 	applied bool
+	status  int
 }
 
 // applyOnce runs versionPurge exactly once, and only for HTML documents.
-func (w *versionPurgeWriter) applyOnce() {
+func (w *versionPurgeWriter) applyOnce(status int) {
 	if w.applied {
 		return
 	}
 	w.applied = true
 	if strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
-		versionPurge(w.ResponseWriter, w.request)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("ETag", buildETag())
+		versionPurgeResponse(w.ResponseWriter, w.request, canVersionPurge(w.request, status))
 	}
 }
 
+func canVersionPurge(r *http.Request, status int) bool {
+	if r.Method == http.MethodHead || status < http.StatusOK || status >= http.StatusMultipleChoices {
+		return false
+	}
+	destination := r.Header.Get("Sec-Fetch-Dest")
+	mode := r.Header.Get("Sec-Fetch-Mode")
+	if destination == "" && mode == "" {
+		return true
+	}
+	return destination == "document" && mode == "navigate"
+}
+
 func (w *versionPurgeWriter) WriteHeader(status int) {
-	w.applyOnce()
+	if w.status == 0 {
+		w.status = status
+	}
+	w.applyOnce(status)
 	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *versionPurgeWriter) Write(b []byte) (int, error) {
-	w.applyOnce()
+	status := http.StatusOK
+	if w.status != 0 {
+		status = w.status
+	}
+	w.applyOnce(status)
 	return w.ResponseWriter.Write(b)
 }
 

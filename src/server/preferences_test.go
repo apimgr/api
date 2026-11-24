@@ -2,12 +2,14 @@ package server
 
 import (
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/apimgr/api/src/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +53,7 @@ func TestParsePreferenceInputForms(t *testing.T) {
 		lang  string
 	}{
 		{"query string", "theme=dark&lang=ja", "dark", "ja"},
-		{"full url", "https://example.com/server/preferences/import?theme=light&lang=es", "light", "es"},
+		{"full url", "https://example.com/server/preferences/sync/import?theme=light&lang=es", "light", "es"},
 		{"short code", base64.RawURLEncoding.EncodeToString([]byte("theme=auto&lang=ar")), "auto", "ar"},
 		{"garbage", "!!!!", "", ""},
 		{"empty", "", "", ""},
@@ -64,6 +66,19 @@ func TestParsePreferenceInputForms(t *testing.T) {
 			assert.Equal(t, tt.lang, values.Get("lang"))
 		})
 	}
+
+	query := "theme=light&lang=fr"
+	code := base64.RawURLEncoding.EncodeToString([]byte(query))
+	assert.Equal(t, "fr", parsePreferenceInput(code+"==").Get("lang"))
+	assert.Empty(t, parsePreferenceInput(strings.Repeat("a", 2049)))
+}
+
+func TestMergedPreferenceInputDirectValuesWin(t *testing.T) {
+	code := base64.RawURLEncoding.EncodeToString([]byte("theme=dark&lang=fr"))
+	values := mergedPreferenceInput(code, url.Values{"theme": {"light"}, "x": {"y"}})
+	assert.Equal(t, "light", values.Get("theme"))
+	assert.Equal(t, "fr", values.Get("lang"))
+	assert.Equal(t, "y", values.Get("x"))
 }
 
 // applyPreferences must set cookies only for values that pass their own
@@ -71,7 +86,8 @@ func TestParsePreferenceInputForms(t *testing.T) {
 func TestApplyPreferencesValidation(t *testing.T) {
 	t.Run("valid values are applied", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		applied := applyPreferences(w, url.Values{"theme": {"light"}, "lang": {"fr"}})
+		r := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
+		applied := applyPreferences(w, r, url.Values{"theme": {"light"}, "lang": {"fr"}})
 		assert.ElementsMatch(t, []string{"theme", "lang"}, applied)
 		assert.Equal(t, "light", cookieValue(w, "theme"))
 		assert.Equal(t, "fr", cookieValue(w, "lang"))
@@ -79,14 +95,28 @@ func TestApplyPreferencesValidation(t *testing.T) {
 
 	t.Run("invalid values are dropped", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		applied := applyPreferences(w, url.Values{"theme": {"purple"}, "lang": {"zz"}})
+		r := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
+		applied := applyPreferences(w, r, url.Values{"theme": {"purple"}, "lang": {"zz"}})
 		assert.Empty(t, applied)
 		assert.Empty(t, w.Result().Cookies())
 	})
 
+	t.Run("automatic language clears the explicit cookie", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
+		r.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
+		applied := applyPreferences(w, r, url.Values{"lang": {""}})
+		assert.Equal(t, []string{"lang"}, applied)
+		cookies := w.Result().Cookies()
+		require.Len(t, cookies, 1)
+		assert.Equal(t, "lang", cookies[0].Name)
+		assert.Equal(t, -1, cookies[0].MaxAge)
+	})
+
 	t.Run("non-exportable keys are ignored", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		applied := applyPreferences(w, url.Values{
+		r := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
+		applied := applyPreferences(w, r, url.Values{
 			"cookie_consent": {"all"},
 			"ccpa_opt_out":   {"true"},
 			"api_build":      {"1.0.0-abcdef1"},
@@ -94,6 +124,38 @@ func TestApplyPreferencesValidation(t *testing.T) {
 		assert.Empty(t, applied)
 		assert.Empty(t, w.Result().Cookies())
 	})
+}
+
+func TestApplyPreferenceValuesReportsIgnoredAndHonorsLimits(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/server/preferences/sync/import", nil)
+	applied, ignored := applyPreferenceValues(w, r, url.Values{
+		"theme":               {"bogus"},
+		"lang":                {"not-a-language"},
+		"cookie_consent":      {"all"},
+		"consent_form":        {"1"},
+		"consent_preferences": {"on"},
+		"consent_analytics":   {"on"},
+		"ccpa_opt_out":        {"true"},
+		"code":                {"ignored"},
+		"redirect":            {"/server/help"},
+		"action":              {"reset"},
+		"csrf_token":          {"token"},
+		"api_build":           {"1.0.0-deadbee"},
+		"unknown":             {strings.Repeat("x", 65)},
+	}, false)
+	assert.Empty(t, applied)
+	assert.Equal(t, []string{"api_build", "cookie_consent", "lang", "theme", "unknown"}, ignored)
+}
+
+func TestApplyPreferenceValuesReportsKeysBeyondLimit(t *testing.T) {
+	values := make(url.Values, 33)
+	for i := 0; i < 33; i++ {
+		values.Set(fmt.Sprintf("unknown_%02d", i), "value")
+	}
+	_, ignored := applyPreferenceValues(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/server/preferences/sync/import", nil), values, false)
+	assert.Len(t, ignored, 33)
+	assert.Contains(t, ignored, "unknown_32")
 }
 
 // preferenceRedirectTarget must never turn an attacker-supplied Referer into
@@ -108,7 +170,7 @@ func TestPreferenceRedirectTarget(t *testing.T) {
 		{"same host path", "http://example.com/server/help", "/server/help"},
 		{"foreign host", "https://evil.example.net/pwn", "/"},
 		{"protocol relative", "//evil.example.net/pwn", "/"},
-		{"import loop", "http://example.com/server/preferences/import?theme=dark", "/"},
+		{"import loop", "http://example.com/server/preferences/sync/import?theme=dark", "/"},
 	}
 
 	for _, tt := range tests {
@@ -123,15 +185,68 @@ func TestPreferenceRedirectTarget(t *testing.T) {
 	}
 }
 
+func TestValidPreferenceRedirectRejectsOpenRedirects(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
+	for _, target := range []string{"//evil.example", "/\\evil", "https://evil.example", "/\r\nLocation: https://evil.example", "/server/preferences", "/server/preferences/sync/import"} {
+		if validPreferenceRedirect(r, target) {
+			t.Errorf("validPreferenceRedirect(%q) = true, want false", target)
+		}
+	}
+	for _, target := range []string{"/server/help", "/?from=prefs"} {
+		if !validPreferenceRedirect(r, target) {
+			t.Errorf("validPreferenceRedirect(%q) = false, want true", target)
+		}
+	}
+}
+
+func TestResetGuestPreferencesClearsNonCredentialCookies(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
+	req.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
+	req.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
+	req.AddCookie(&http.Cookie{Name: "cookie_consent", Value: "{}"})
+	req.AddCookie(&http.Cookie{Name: "api_build", Value: "1.0.0-deadbee"})
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "keep"})
+	req.AddCookie(&http.Cookie{Name: "owner_token", Value: "keep"})
+	w := httptest.NewRecorder()
+	resetGuestPreferences(w, req)
+	assert.Equal(t, `"storage"`, w.Header().Get("Clear-Site-Data"))
+	deleted := map[string]bool{}
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.MaxAge < 0 {
+			deleted[cookie.Name] = true
+		}
+	}
+	assert.True(t, deleted["theme"])
+	assert.True(t, deleted["lang"])
+	assert.True(t, deleted["cookie_consent"])
+	assert.True(t, deleted["api_build"])
+	assert.False(t, deleted["csrf_token"])
+	assert.False(t, deleted["owner_token"])
+}
+
+func TestPreferencesSyncPostAlwaysRedirectsWithoutBody(t *testing.T) {
+	for _, body := range []string{"", "code=invalid", "theme=invalid"} {
+		req := httptest.NewRequest(http.MethodPost, "/server/preferences/sync", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		preferencesSyncPostHandler(w, req)
+		assert.Equal(t, http.StatusSeeOther, w.Code)
+		assert.Equal(t, "/server/preferences/sync", w.Header().Get("Location"))
+		assert.Empty(t, w.Body.String())
+		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+	}
+}
+
 // The no-JS save form must answer 303 See Other so a refresh never resubmits.
 func TestPreferencesSaveHandlerRedirects(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader("theme=light&lang=de"))
 	req.Host = "example.com"
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", "http://example.com/server/help")
+	req.AddCookie(&http.Cookie{Name: "cookie_consent", Value: url.QueryEscape(`{"essential":true,"preferences":true}`)})
 	w := httptest.NewRecorder()
 
-	preferencesSaveHandler(w, req)
+	preferencesSaveHandler(config.DefaultConfig())(w, req)
 
 	assert.Equal(t, http.StatusSeeOther, w.Code)
 	assert.Equal(t, "/server/help", w.Header().Get("Location"))
@@ -139,10 +254,22 @@ func TestPreferencesSaveHandlerRedirects(t *testing.T) {
 	assert.Equal(t, "de", cookieValue(w, "lang"))
 }
 
+func TestPreferencesSaveRequiresPreferenceConsent(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader("theme=light&lang=de"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	preferencesSaveHandler(config.DefaultConfig())(w, req)
+
+	assert.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Empty(t, cookieValue(w, "theme"))
+	assert.Empty(t, cookieValue(w, "lang"))
+}
+
 // Import must set cookies then redirect so the code never lingers in history.
 func TestPreferencesImportHandler(t *testing.T) {
 	t.Run("query parameters", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=auto&lang=ja", nil)
+		req := httptest.NewRequest(http.MethodGet, "/server/preferences/sync/import?theme=auto&lang=ja", nil)
 		req.Host = "example.com"
 		w := httptest.NewRecorder()
 
@@ -156,7 +283,7 @@ func TestPreferencesImportHandler(t *testing.T) {
 
 	t.Run("pasted short code", func(t *testing.T) {
 		code := base64.RawURLEncoding.EncodeToString([]byte("theme=light&lang=es"))
-		req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?code="+url.QueryEscape(code), nil)
+		req := httptest.NewRequest(http.MethodGet, "/server/preferences/sync/import?code="+url.QueryEscape(code), nil)
 		req.Host = "example.com"
 		w := httptest.NewRecorder()
 
@@ -166,20 +293,62 @@ func TestPreferencesImportHandler(t *testing.T) {
 		assert.Equal(t, "light", cookieValue(w, "theme"))
 		assert.Equal(t, "es", cookieValue(w, "lang"))
 	})
+
+	t.Run("import is additive and round trips exported values", func(t *testing.T) {
+		query := preferenceQuery("light", "fr")
+		req := httptest.NewRequest(http.MethodGet, "/server/preferences/sync/import?"+query, nil)
+		req.Host = "example.com"
+		req.AddCookie(&http.Cookie{Name: "api_pref_sort", Value: "name"})
+		w := httptest.NewRecorder()
+
+		preferencesImportHandler(w, req)
+
+		assert.Equal(t, http.StatusSeeOther, w.Code)
+		assert.Equal(t, "light", cookieValue(w, "theme"))
+		assert.Equal(t, "fr", cookieValue(w, "lang"))
+		assert.Empty(t, cookieValue(w, "api_pref_sort"))
+	})
 }
 
 // The API export mirror must return both transfer forms.
-func TestAPIPreferencesExportHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences/export", nil)
+func TestAPIPreferencesSyncHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences/sync", nil)
 	req.Host = "example.com"
 	req.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
 	req.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
 	w := httptest.NewRecorder()
 
-	apiPreferencesExportHandler(w, req)
+	preferencesSyncAPIHandler(config.DefaultConfig())(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
-	assert.Contains(t, body, "http://example.com/server/preferences/import?")
+	assert.Contains(t, body, "/server/preferences/sync/import?")
 	assert.Contains(t, body, preferenceCode(preferenceQuery("light", "fr")))
+}
+
+func TestPreferencesSyncPageContentNegotiation(t *testing.T) {
+	tests := []struct {
+		accept      string
+		contentType string
+		contains    string
+	}{
+		{"text/html", "text/html", "Sync preferences"},
+		{"text/plain", "text/plain", "/server/preferences/sync/import?"},
+		{"application/json", "application/json", `"code"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.accept, func(t *testing.T) {
+			require.NoError(t, initTemplates())
+			req := httptest.NewRequest(http.MethodGet, "/server/preferences/sync", nil)
+			req.Host = "example.com"
+			req.Header.Set("Accept", tt.accept)
+			w := httptest.NewRecorder()
+			preferencesSyncPageHandler(config.DefaultConfig())(w, req)
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Contains(t, w.Header().Get("Content-Type"), tt.contentType)
+			assert.Contains(t, w.Header().Get("Vary"), "Accept")
+			assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+			assert.Contains(t, w.Body.String(), tt.contains)
+		})
+	}
 }

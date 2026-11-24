@@ -1,111 +1,137 @@
-// sw.js - Service Worker per AI.md PART 16 "PWA Support"
-// Lifecycle: install (pre-cache) -> activate (purge old caches) -> fetch
-// (serve per resource-type strategy). Cache name embeds the app version so
-// activate can delete every cache from a prior version.
-// __SERVER_VERSION__ is a substitution placeholder: serviceWorkerHandler in
-// src/server/server.go must replace it with the running build's semver
-// (server.Version, format {major}.{minor}.{patch}) before writing the
-// response, so the cache name tracks the real build per AI.md PART 16
-// (`api-cache-v{major}.{minor}.{patch}`) instead of a hardcoded literal.
-const CACHE_VERSION = 'v__SERVER_VERSION__';
-const CACHE_NAME = `api-cache-${CACHE_VERSION}`;
+// The server renders the full build stamp into this value.
+const APP_NAME = '__APP_NAME__';
+const CACHE_VERSION = '__ASSET_STAMP__';
+const CACHE_NAME = `${APP_NAME}-cache-${CACHE_VERSION}`;
+const NAV_TIMEOUT_MS = 8000;
+const APP_BASE_PATH = new URL(self.registration.scope).pathname.replace(/\/+$/, '');
 
-// Assets to pre-cache on install
+function appPath(path) {
+  return `${APP_BASE_PATH}${path}`;
+}
+
+// Versioned URLs match the asset helper used by rendered pages. HTML is never
+// precached; navigations always check the network first.
 const PRECACHE_ASSETS = [
-  '/',
-  '/static/css/common.css',
-  '/static/css/components.css',
-  '/static/css/public.css',
-  '/static/js/app.js',
-  '/static/images/icons/icon-192.png',
-  '/static/images/icons/icon-512.png',
+  '/static/css/common.css?v=__ASSET_STAMP__',
+  '/static/css/components.css?v=__ASSET_STAMP__',
+  '/static/css/public.css?v=__ASSET_STAMP__',
+  '/static/js/theme.js?v=__ASSET_STAMP__',
+  '/static/js/app.js?v=__ASSET_STAMP__',
+  '/static/images/icons/icon-192.png?v=__ASSET_STAMP__',
+  '/static/images/icons/icon-512.png?v=__ASSET_STAMP__',
+  '/static/images/icons/icon-192-maskable.png?v=__ASSET_STAMP__',
+  '/static/images/icons/icon-512-maskable.png?v=__ASSET_STAMP__',
+  '/static/images/apple-touch-icon.png?v=__ASSET_STAMP__',
   '/offline.html',
-];
+].map(appPath);
 
-// INSTALL - pre-cache static assets, then activate without waiting for old
-// tabs to close (App Update Notification flow controls the user-visible
-// prompt instead)
-self.addEventListener('install', function(event) {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(function(cache) { return cache.addAll(PRECACHE_ASSETS); })
-      .then(function() { return self.skipWaiting(); })
-  );
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_ASSETS)));
 });
 
-// ACTIVATE - delete every cache from a previous version
-self.addEventListener('activate', function(event) {
+self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(function(keys) {
-        return Promise.all(
-          keys
-            .filter(function(key) { return key.startsWith('api-cache-') && key !== CACHE_NAME; })
-            .map(function(key) { return caches.delete(key); })
-        );
-      })
-      .then(function() { return self.clients.claim(); })
+      .then(keys => Promise.all(keys
+        .filter(key => key.startsWith(`${APP_NAME}-cache-`) && key !== CACHE_NAME)
+        .map(key => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
 });
 
-// FETCH - cache-first for static assets, network-first w/ cache fallback
-// for HTML pages, network-only (no caching) for API calls
-self.addEventListener('fetch', function(event) {
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('navigation timeout')), ms);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
+function offlineResponse(status, message) {
+  return new Response(message, {
+    status,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith(appPath('/api/'))) return;
 
-  // Only GET requests are cacheable; everything else goes straight to network
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  // API calls: network-only, never cached, never served stale
-  if (url.pathname.startsWith('/api/')) {
-    return;
-  }
-
-  // Static assets: cache-first
-  if (url.pathname.startsWith('/static/')) {
+  if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match(request).then(function(cached) {
-        return cached || fetch(request).then(function(response) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(function(cache) { cache.put(request, clone); });
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // HTML pages: network-first, cache fallback, offline page as last resort
-  if ((request.headers.get('accept') || '').includes('text/html')) {
-    event.respondWith(
-      fetch(request)
-        .then(function(response) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(function(cache) { cache.put(request, clone); });
+      withTimeout(fetch(request), NAV_TIMEOUT_MS)
+        .then(async response => {
+          const cache = await caches.open(CACHE_NAME);
+          if (response.redirected) {
+            try { await cache.delete(request); } catch (_) { /* Cache is optional. */ }
+            throw new Error('redirected navigation');
+          }
+          if (response.ok && response.headers.get('X-Offline-Cache') === 'public') {
+            try { await cache.put(request, response.clone()); } catch (_) { /* Cache is optional. */ }
+          } else {
+            try { await cache.delete(request); } catch (_) { /* Cache is optional. */ }
+          }
           return response;
         })
-        .catch(function() {
-          return caches.match(request).then(function(cached) {
-            return cached || caches.match('/offline.html');
-          });
+        .catch(async () => {
+          try {
+            const cached = await caches.match(request);
+            if (cached) return cached;
+            const offline = await caches.match(appPath('/offline.html'));
+            if (offline) return offline;
+          } catch (_) { /* Use the synthesized response below. */ }
+          return new Response(
+            '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+            '<title>Offline</title></head><body><main><h1>You are offline</h1>' +
+            '<p>This page could not be loaded and no cached copy is available. ' +
+            'Check your connection and try again.</p></main></body></html>',
+            { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } }
+          );
         })
     );
     return;
   }
 
-  // Default: network-first, cache fallback
-  event.respondWith(
-    fetch(request).catch(function() { return caches.match(request); })
-  );
+  if (url.pathname.startsWith(appPath('/static/'))) {
+    event.respondWith((async () => {
+      try {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        const response = await fetch(request);
+        if (response.ok && !response.redirected) {
+          try { await (await caches.open(CACHE_NAME)).put(request, response.clone()); } catch (_) { /* Cache is optional. */ }
+        }
+        return response.redirected ? offlineResponse(504, 'Resource unavailable.') : response;
+      } catch (_) {
+        return offlineResponse(504, 'Resource unavailable offline.');
+      }
+    })());
+    return;
+  }
+
+  event.respondWith((async () => {
+    try {
+      const response = await fetch(request);
+      if (response.ok && !response.redirected) {
+        try { await (await caches.open(CACHE_NAME)).put(request, response.clone()); } catch (_) { /* Cache is optional. */ }
+      }
+      return response.redirected ? offlineResponse(504, 'Resource unavailable.') : response;
+    } catch (_) {
+      try {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+      } catch (_) { /* Return a real terminal response. */ }
+      return offlineResponse(504, 'Resource unavailable offline.');
+    }
+  })());
 });
 
-// Allow the page to force this worker to activate immediately, used by the
-// "Update Now" banner in app.js
-self.addEventListener('message', function(event) {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });

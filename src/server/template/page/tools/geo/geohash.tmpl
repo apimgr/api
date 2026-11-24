@@ -4,53 +4,60 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/geo">Geolocation</a> / Geohash Encoder
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/geo"}}">{{t .Lang "categories.geo.name"}}</a> {{t .Lang "tool_pages.text.geohash.encoder.5a60e4c676"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Geohash Encoder</h1>
-        <button class="btn btn-icon" data-favorite="geo-geohash" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.geohash.encoder.f33af95d13"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="geo-geohash" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Encode a pair of coordinates into a geohash, or decode a geohash
-        back into coordinates. Fill in coordinates to encode, or a geohash
-        to decode.
+        {{t .Lang "tool_pages.text.encode.a.pair.of.coordinates.into.a.geohash.0328419cf9"}}
       </p>
 
-      <form id="geohash-form" class="tool-form" data-endpoint="{{.APIBasePath}}/geo/geohash" method="get" action="{{.APIBasePath}}/geo/geohash">
+      <form id="geohash-form" class="tool-form" data-endpoint="{{.APIBasePath}}/geo/geohash" method="post" action="{{path .BaseURL "/geo/geohash"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Latitude</label>
-          <input type="text" name="lat" class="form-input" value="40.7128">
+          <label class="form-label" for="geohash-form-lat">{{t .Lang "tool_pages.text.latitude.238a676da4"}}</label>
+          <input type="text" name="lat" class="form-input" value="40.7128" id="geohash-form-lat">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Longitude</label>
-          <input type="text" name="lon" class="form-input" value="-74.0060">
+          <label class="form-label" for="geohash-form-lon">{{t .Lang "tool_pages.text.longitude.6d80458fd1"}}</label>
+          <input type="text" name="lon" class="form-input" value="-74.0060" id="geohash-form-lon">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Precision (1-20)</label>
-          <input type="number" name="precision" class="form-input" min="1" max="20" value="9">
+          <label class="form-label" for="geohash-form-precision">{{t .Lang "tool_pages.text.precision.1.20.5ad34e487a"}}</label>
+          <input type="number" name="precision" class="form-input" min="1" max="20" value="9" id="geohash-form-precision">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Geohash (to decode instead)</label>
-          <input type="text" name="hash" class="form-input" placeholder="dr5regw3p">
+          <label class="form-label" for="geohash-form-hash">{{t .Lang "tool_pages.text.geohash.to.decode.instead.e78dca6262"}}</label>
+          <input type="text" name="hash" class="form-input" placeholder="{{t .Lang "tool_pages.text.dr5regw3p.1d39d2f3f6"}}" id="geohash-form-hash">
         </div>
 
-        <button type="submit" class="btn btn-primary">Run</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.run.00d60e31a4"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="geohash-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl "{{.BaseURL}}{{.APIBasePath}}/geo/geohash?lat=40.7128&lon=-74.0060&precision=9"

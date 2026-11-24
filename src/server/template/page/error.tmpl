@@ -3,11 +3,11 @@
     <div class="container container-sm">
         <div class="error-content">
             <div class="error-code">{{.ErrorCode}}</div>
-            <h1 class="error-title">{{.ErrorTitle}}</h1>
+            <h1 class="error-title page-title">{{.ErrorTitle}}</h1>
             <p class="error-message">{{.ErrorMessage}}</p>
             <div class="error-actions">
-                <a href="/" class="btn btn-primary">Go Home</a>
-                <button class="btn btn-secondary" data-back>Go Back</button>
+                <a href="{{path .BaseURL "/"}}" class="btn btn-primary">{{t .Lang "common.go_home"}}</a>
+                <button type="button" class="btn btn-secondary" data-back>{{t .Lang "common.go_back"}}</button>
             </div>
         </div>
     </div>

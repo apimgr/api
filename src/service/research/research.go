@@ -85,7 +85,7 @@ func (s *Service) ArxivLookup(ctx context.Context, id string) (*ArxivResult, err
 	if err != nil {
 		return nil, fmt.Errorf("arxiv provider request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("arxiv provider returned status %d", resp.StatusCode)
@@ -172,7 +172,7 @@ func (s *Service) ISBNLookup(ctx context.Context, isbn string) (*ISBNResult, err
 	if err != nil {
 		return nil, fmt.Errorf("open library request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("open library returned status %d", resp.StatusCode)

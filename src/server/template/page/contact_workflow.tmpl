@@ -1,0 +1,77 @@
+{{define "content"}}
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{if or .TrackingID .Completed}}{{t .Lang "contact.success"}}{{else if .TitleKey}}{{t .Lang .TitleKey}}{{else}}{{t .Lang "contact.title"}}{{end}}</h1>
+    <p class="page-lead">{{t .Lang "contact.purpose"}}</p>
+  </header>
+  {{if .ErrorKey}}<p class="alert alert-error" role="alert">{{t .Lang .ErrorKey}}</p>{{end}}
+  {{if or .TrackingID .Completed}}
+  <section class="section-card" aria-labelledby="contact-received">
+    <h2 id="contact-received">{{t .Lang "contact.received"}}</h2>
+    {{if .TrackingID}}<p>{{tf .Lang "contact.tracking_message" (dict "tracking_id" .TrackingID)}}</p>{{else}}<p>{{t .Lang "contact.success"}}</p>{{end}}
+    {{if .EmailSent}}<p>{{t .Lang "contact.acknowledgment_sent"}}</p>{{end}}
+  </section>
+  {{else if .IsReview}}
+  <section class="contact-review" aria-labelledby="contact-review-title">
+    <div class="contact-review-card">
+      <h2 id="contact-review-title">{{t .Lang "contact.review_title"}}</h2>
+      <dl><dt>{{t .Lang "contact.email"}}</dt><dd>{{range .Fields}}{{if eq .Name "email"}}{{.Value}}{{end}}{{end}}</dd><dt>{{t .Lang "contact.type"}}</dt><dd>{{t .Lang .TitleKey}}</dd><dt>{{t .Lang "contact.summary"}}</dt><dd>{{range .Fields}}{{if or (eq .Name "summary") (eq .Name "subject")}}{{.Value}}{{end}}{{end}}</dd></dl>
+      <form method="post" action="{{path .BaseURL "/server/contact"}}">
+      {{csrfField .CSRFToken}}
+      {{range .Fields}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
+      <input type="hidden" name="form_token" value="{{.FormToken}}">
+      <input type="hidden" name="type" value="security"><input type="hidden" name="security_id" value="{{.SecurityID}}">
+      <input type="hidden" name="step" value="confirm"><input type="hidden" name="review_token" value="{{.ReviewToken}}">
+      <label><input type="checkbox" name="confirmed" required> {{t .Lang "contact.confirmed"}}</label>
+      <button class="btn btn-primary" type="submit">{{t .Lang "contact.confirm"}}</button>
+      </form>
+      <form method="post" action="{{path .BaseURL "/server/contact"}}">
+      {{csrfField .CSRFToken}}
+      {{range .Fields}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
+      <input type="hidden" name="form_token" value="{{.FormToken}}">
+      <input type="hidden" name="type" value="security"><input type="hidden" name="security_id" value="{{.SecurityID}}"><input type="hidden" name="step" value="edit">
+      <button class="btn" type="submit">{{t .Lang "contact.edit"}}</button>
+      </form>
+    </div>
+  </section>
+  {{else if .Type}}
+  <section class="section-card">
+    <form method="post" action="{{path .BaseURL "/server/contact"}}">
+      {{csrfField .CSRFToken}}
+      <input type="hidden" name="type" value="{{.Type}}"><input type="hidden" name="security_id" value="{{.SecurityID}}">
+      <input type="hidden" name="form_token" value="{{.FormToken}}"><input type="hidden" name="step" value="submit">
+      {{if .Honeypot}}<div class="contact-honeypot" aria-hidden="true"><label for="contact-website">{{t .Lang "contact.honeypot"}}</label><input id="contact-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>{{end}}
+      {{range .Fields}}
+      <div class="form-group">
+        <label for="contact-{{.Name}}">{{t $.Lang .Label}}{{if .Required}} <span>{{t $.Lang "contact.required"}}</span>{{else}} <span>{{t $.Lang "contact.optional"}}</span>{{end}}</label>
+        {{if eq .Type "textarea"}}<textarea id="contact-{{.Name}}" name="{{.Name}}" maxlength="{{.Max}}" {{if .Required}}required{{end}}>{{.Value}}</textarea>
+        {{else if eq .Type "select"}}<select id="contact-{{.Name}}" name="{{.Name}}" {{if .Required}}required{{end}}><option value="">{{t $.Lang "contact.choose"}}</option>{{range .Options}}<option value="{{.}}" {{if eq . $.Value}}selected{{end}}>{{t $.Lang (printf "contact.option.%s" .)}}</option>{{end}}</select>
+        {{else if eq .Type "checkbox"}}<input id="contact-{{.Name}}" name="{{.Name}}" type="checkbox" value="on" {{if eq .Value "on"}}checked{{end}} {{if .Required}}required{{end}}>
+        {{else}}<input id="contact-{{.Name}}" name="{{.Name}}" type="{{.Type}}" value="{{.Value}}" {{if .Max}}maxlength="{{.Max}}"{{end}} {{if .Required}}required{{end}}>{{end}}
+      </div>
+      {{end}}
+      <div class="form-group"><label for="captcha-answer">{{t .Lang "contact.captcha_question"}}</label><p>{{.CaptchaText}}</p><input id="captcha-answer" name="captcha_answer" inputmode="numeric" required><input type="hidden" name="captcha_id" value="{{.CaptchaID}}"></div>
+      <button class="btn btn-primary" type="submit">{{t .Lang "contact.review"}}</button>
+    </form>
+    <p>{{t .Lang "contact.security_pointer"}} <a href="{{path .BaseURL "/server/security"}}">{{t .Lang "security.title"}}</a>.</p>
+  </section>
+  {{else}}
+  <section class="section-card" aria-labelledby="contact-chooser">
+    <h2>{{t .Lang "contact.choose_type"}}</h2>
+    <ul>
+      <li><a href="{{path .BaseURL "/server/contact?type=abuse"}}">{{t .Lang "contact.type.abuse"}}</a></li>
+      <li><a href="{{path .BaseURL "/server/contact?type=dmca"}}">{{t .Lang "contact.type.dmca"}}</a></li>
+      <li><a href="{{path .BaseURL "/server/contact?type=privacy"}}">{{t .Lang "contact.type.privacy"}}</a></li>
+    </ul>
+  </section>
+  <section class="section-card" aria-labelledby="contact-security-pointer">
+    <h2 id="contact-security-pointer">{{t .Lang "contact.security_issues"}}</h2>
+    <p><a href="{{path .BaseURL "/server/security"}}">{{t .Lang "contact.security_pointer"}}</a></p>
+  </section>
+  <section class="section-card" aria-labelledby="contact-abuse-pointer">
+    <h2 id="contact-abuse-pointer">{{t .Lang "contact.abuse_reports"}}</h2>
+    <p>{{t .Lang "contact.abuse_pointer"}}{{if .AbuseEmail}} {{tf .Lang "contact.abuse_email_clause" (dict "email" .AbuseEmail)}}{{end}}</p>
+  </section>
+  {{end}}
+</article>
+{{end}}

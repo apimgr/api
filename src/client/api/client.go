@@ -32,6 +32,7 @@ type Client struct {
 	BaseURL    string
 	APIVersion string
 	Token      string
+	Lang       string
 	HTTP       *http.Client
 	Debug      bool
 	// Retry is the total number of attempts per request; values below 1
@@ -165,6 +166,9 @@ func (c *Client) attempt(method, rawURL string, body []byte) ([]byte, error) {
 
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept", "application/json")
+	if c.Lang != "" {
+		req.Header.Set("Accept-Language", c.Lang)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -176,7 +180,7 @@ func (c *Client) attempt(method, rawURL string, body []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to server at %s: %w", c.BaseURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

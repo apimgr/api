@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">⛅ Weather</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.weather.fb376a87fc"}}</h1>
     <p class="hero-subtitle">
-      current weather, forecasts, and air quality data
+      {{t .Lang "page_text.text.current.weather.forecasts.and.air.quality.da.11442ec104"}}
     </p>
   </div>
 </section>
@@ -11,64 +11,64 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/weather/current" class="category-card">
+      <a href="{{path .BaseURL "/weather/current"}}" class="category-card">
         <div class="category-icon">🌤️</div>
-        <h3 class="category-title">Current Weather</h3>
-        <p class="category-description">Get current weather for a location</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.current.weather.2c23151233"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.current.weather.for.a.location.a767194600"}}</p>
       </a>
       
-      <a href="/weather/forecast" class="category-card">
+      <a href="{{path .BaseURL "/weather/forecast"}}" class="category-card">
         <div class="category-icon">📅</div>
-        <h3 class="category-title">Weather Forecast</h3>
-        <p class="category-description">7-day weather forecast</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.weather.forecast.71a92379ec"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.7.day.weather.forecast.6be341cb54"}}</p>
       </a>
       
-      <a href="/weather/hourly" class="category-card">
+      <a href="{{path .BaseURL "/weather/hourly"}}" class="category-card">
         <div class="category-icon">⏰</div>
-        <h3 class="category-title">Hourly Forecast</h3>
-        <p class="category-description">Hourly weather forecast</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.hourly.forecast.2832fde21a"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.hourly.weather.forecast.01425b84b2"}}</p>
       </a>
       
-      <a href="/weather/historical" class="category-card">
+      <a href="{{path .BaseURL "/weather/historical"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">Historical Weather</h3>
-        <p class="category-description">Past weather data</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.historical.weather.beadd945d9"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.past.weather.data.60b06492f6"}}</p>
       </a>
       
-      <a href="/weather/air-quality" class="category-card">
+      <a href="{{path .BaseURL "/weather/air-quality"}}" class="category-card">
         <div class="category-icon">🌫️</div>
-        <h3 class="category-title">Air Quality</h3>
-        <p class="category-description">Air quality index and pollutants</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.air.quality.1555052b8d"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.air.quality.index.and.pollutants.72749e432c"}}</p>
       </a>
       
-      <a href="/weather/uv" class="category-card">
+      <a href="{{path .BaseURL "/weather/uv"}}" class="category-card">
         <div class="category-icon">☀️</div>
-        <h3 class="category-title">UV Index</h3>
-        <p class="category-description">UV radiation forecast</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.uv.index.a25c25db50"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.uv.radiation.forecast.60ce4fad27"}}</p>
       </a>
       
-      <a href="/weather/alerts" class="category-card">
+      <a href="{{path .BaseURL "/weather/alerts"}}" class="category-card">
         <div class="category-icon">⚠️</div>
-        <h3 class="category-title">Weather Alerts</h3>
-        <p class="category-description">Active weather warnings</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.weather.alerts.5a9dc01dcf"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.active.weather.warnings.79738d888b"}}</p>
       </a>
       
-      <a href="/weather/marine" class="category-card">
+      <a href="{{path .BaseURL "/weather/marine"}}" class="category-card">
         <div class="category-icon">🌊</div>
-        <h3 class="category-title">Marine Weather</h3>
-        <p class="category-description">Ocean and coastal forecasts</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.marine.weather.8073fc8f14"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.ocean.and.coastal.forecasts.35e2f9e492"}}</p>
       </a>
       
-      <a href="/weather/astronomy" class="category-card">
+      <a href="{{path .BaseURL "/weather/astronomy"}}" class="category-card">
         <div class="category-icon">🌙</div>
-        <h3 class="category-title">Astronomy</h3>
-        <p class="category-description">Moon phase, sunrise, sunset</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.astronomy.4eeb933557"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.moon.phase.sunrise.sunset.29eb63e6e8"}}</p>
       </a>
       
-      <a href="/weather/pollen" class="category-card">
+      <a href="{{path .BaseURL "/weather/pollen"}}" class="category-card">
         <div class="category-icon">🌸</div>
-        <h3 class="category-title">Pollen Forecast</h3>
-        <p class="category-description">Allergy and pollen data</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.pollen.forecast.b1dca20d57"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.allergy.and.pollen.data.2fc4716fee"}}</p>
       </a>
     </div>
   </div>

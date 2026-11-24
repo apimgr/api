@@ -7,6 +7,7 @@ on:
     branches: [main, master]
   schedule:
     - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,22 +18,34 @@ concurrency:
 
 jobs:
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0
+      - name: Determine scan range
+        id: range
+        run: |
+          BASE=""; HEAD=""
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            BASE="${{ github.event.before }}"; HEAD="${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"; HEAD="${{ github.event.pull_request.head.sha }}"
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD" >> "$GITHUB_OUTPUT"
       - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@27b0417c16317ca9a472a9a8092acce143b49c55  # v3.95.9
         with:
-          base: ${{ github.event_name == 'schedule' && '' || github.event.before }}
-          head: ${{ github.event_name == 'schedule' && '' || github.event.after }}
-          extra_args: --only-verified
+          base: ${{ steps.range.outputs.base }}
+          head: ${{ steps.range.outputs.head }}
+          extra_args: --results=${{ steps.range.outputs.base == '' && 'verified' || 'verified,unknown' }} --exclude-paths=.github/trufflehog-exclude.txt
 
   lint:
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
+      options: "--user 0:0"
       image: casjaysdev/go:latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -41,8 +54,9 @@ jobs:
 
   test:
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
+      options: "--user 0:0"
       image: casjaysdev/go:latest
     env:
       CGO_ENABLED: "0"
@@ -66,8 +80,9 @@ jobs:
   build:
     if: github.event_name != 'schedule'
     needs: [lint, test]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
+      options: "--user 0:0"
       image: casjaysdev/go:latest
     env:
       CGO_ENABLED: "0"
@@ -76,47 +91,45 @@ jobs:
       - run: go build -buildvcs=false ./...
 
   vuln-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
+      options: "--user 0:0"
       image: casjaysdev/go:latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: govulncheck ./...
 
   workflow-policy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - name: Verify action pinning and trigger policy
         run: |
           set -eo pipefail
           FAIL=0
-          for f in .github/workflows/*.yml; do
-            if grep -qE '^\s*pull_request_target\s*:' "$f"; then
-              echo "::error file=$f::pull_request_target trigger is not allowed"
-              FAIL=1
-            fi
-            while IFS= read -r line; do
-              ref=$(echo "$line" | sed -E 's/.*uses:[[:space:]]*[^@]+@([^[:space:]]+).*/\1/')
-              if ! echo "$ref" | grep -qE '^[0-9a-f]{40}$'; then
-                echo "::error file=$f::unpinned action reference: $line"
-                FAIL=1
-              fi
-            done < <(grep -E '^\s*-?\s*uses:' "$f")
-          done
+          bad=$(grep -RnE '^[[:space:]]*uses:' .github/ .gitea/ .forgejo/ 2>/dev/null | grep -vE '@[0-9a-f]{40}([[:space:]]|$)' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::unpinned actions found:"
+            echo "$bad"
+            FAIL=1
+          fi
+          if grep -RnE '^[[:space:]]*pull_request_target[[:space:]]*:' .github/ .gitea/ .forgejo/ 2>/dev/null; then
+            echo "::error::pull_request_target trigger is not allowed"
+            FAIL=1
+          fi
           exit "$FAIL"
 
   image-scan:
-    if: github.event_name != 'schedule'
-    needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - name: Build image
         run: docker build -f docker/Dockerfile -t api:ci-scan .
-      - name: Scan image
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.70.0 image \
-            --exit-code 1 --severity CRITICAL,HIGH api:ci-scan
+      - name: Check image runtime contract
+        run: ./tests/check_image.sh api:ci-scan
+      - name: Scan image (Trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: api:ci-scan
+          exit-code: '1'
+          severity: CRITICAL,HIGH

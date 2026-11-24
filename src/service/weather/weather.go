@@ -11,11 +11,20 @@ import (
 )
 
 // Service provides weather utilities
-type Service struct{}
+type Service struct {
+	client *http.Client
+}
 
 // New creates a new Weather service
 func New() *Service {
 	return &Service{}
+}
+
+// NewWithHTTPClient creates a service using client for provider requests.
+// It allows callers to set transport, proxy, and timeout behavior without
+// changing the provider URLs or response handling.
+func NewWithHTTPClient(client *http.Client) *Service {
+	return &Service{client: client}
 }
 
 // Weather data structures
@@ -113,6 +122,18 @@ type dailyForecastResult struct {
 // fetchJSON performs a GET request against a trusted, keyless provider
 // endpoint and decodes the JSON response into out
 func fetchJSON(ctx context.Context, endpoint string, out interface{}) error {
+	return fetchJSONWithClient(ctx, endpoint, out, httpClient)
+}
+
+func (s *Service) fetchJSON(ctx context.Context, endpoint string, out interface{}) error {
+	client := s.client
+	if client == nil {
+		client = httpClient
+	}
+	return fetchJSONWithClient(ctx, endpoint, out, client)
+}
+
+func fetchJSONWithClient(ctx context.Context, endpoint string, out interface{}, client *http.Client) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to build request: %w", err)
@@ -120,11 +141,11 @@ func fetchJSON(ctx context.Context, endpoint string, out interface{}) error {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("weather provider request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("weather provider returned status %d", resp.StatusCode)
@@ -153,7 +174,7 @@ func (s *Service) SearchLocation(query string) ([]*Location, error) {
 	params.Set("format", "json")
 
 	var result geocodeResult
-	if err := fetchJSON(ctx, geocodeEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, geocodeEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 
@@ -188,7 +209,7 @@ func (s *Service) GetWeatherByCoordinates(lat, lon float64) (*CurrentWeather, er
 	params.Set("timezone", "auto")
 
 	var result currentForecastResult
-	if err := fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 
@@ -245,7 +266,7 @@ func (s *Service) GetForecast(city string, days int) ([]*Forecast, error) {
 	params.Set("timezone", "auto")
 
 	var result dailyForecastResult
-	if err := fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 
@@ -374,7 +395,7 @@ func (s *Service) fetchAirQuality(city string) (*Location, *airQualityCurrentRes
 	params.Set("timezone", "auto")
 
 	var result airQualityCurrentResult
-	if err := fetchJSON(ctx, airQualityEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, airQualityEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, nil, err
 	}
 	return loc, &result, nil
@@ -498,7 +519,7 @@ func (s *Service) GetAstronomy(city string) (*Astronomy, error) {
 	params.Set("timezone", "auto")
 
 	var result astronomyResult
-	if err := fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 	if len(result.Daily.Time) == 0 {
@@ -577,7 +598,7 @@ func (s *Service) GetHistorical(city, startDate, endDate string) ([]*HistoricalD
 	params.Set("timezone", "auto")
 
 	var result historicalResult
-	if err := fetchJSON(ctx, archiveEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, archiveEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 
@@ -645,7 +666,7 @@ func (s *Service) GetHourly(city string, hours int) ([]*HourlyEntry, error) {
 	params.Set("timezone", "auto")
 
 	var result hourlyResult
-	if err := fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, forecastEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 
@@ -727,7 +748,7 @@ func (s *Service) GetMarine(city string) (*MarineConditions, error) {
 	params.Set("timezone", "auto")
 
 	var result marineCurrentResult
-	if err := fetchJSON(ctx, marineEndpoint+"?"+params.Encode(), &result); err != nil {
+	if err := s.fetchJSON(ctx, marineEndpoint+"?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 

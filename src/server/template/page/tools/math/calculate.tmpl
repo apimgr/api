@@ -4,78 +4,86 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/math">Math &amp; Numbers</a> / Calculator
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/math"}}">{{t .Lang "categories.math.name"}}</a> {{t .Lang "tool_pages.text.calculator.5ac8213d02"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Calculator</h1>
-        <button class="btn btn-icon" data-favorite="math-calculate" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.calculator.668b80455f"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="math-calculate" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Run a math operation. Operations using two operands need
-        <strong>a</strong> and <strong>b</strong>; single-operand operations
-        (including factorial) need only <strong>n</strong>.
+        {{t .Lang "tool_pages.text.run.a.math.operation.operations.using.two.op.a7fbce8504"}}
+        <strong>a</strong> {{t .Lang "tool_pages.text.and.6201111b83"}} <strong>b</strong>{{t .Lang "tool_pages.text.single.operand.operations.including.factoria.983434d344"}} <strong>n</strong>.
       </p>
 
-      <form id="calculate-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="get" action="{{.APIBasePath}}/math/calculate">
+      <form id="calculate-form" class="tool-form" data-endpoint="{{.APIBasePath}}/math/calculate" method="post" action="{{path .BaseURL "/math/calculate"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Operation</label>
-          <select name="operation" class="form-input">
-            <option value="add">Add (a + b)</option>
-            <option value="subtract">Subtract (a - b)</option>
-            <option value="multiply">Multiply (a * b)</option>
-            <option value="divide">Divide (a / b)</option>
-            <option value="power">Power (a ^ b)</option>
-            <option value="percentage_of">Percentage of (a% of b)</option>
-            <option value="percentage_change">Percentage change (a to b)</option>
-            <option value="modulo">Modulo (a % b)</option>
-            <option value="gcd">GCD (a, b)</option>
-            <option value="lcm">LCM (a, b)</option>
-            <option value="sqrt">Square root (n)</option>
-            <option value="cbrt">Cube root (n)</option>
-            <option value="abs">Absolute value (n)</option>
-            <option value="round">Round (n)</option>
-            <option value="floor">Floor (n)</option>
-            <option value="ceil">Ceiling (n)</option>
-            <option value="log">Natural log (n)</option>
-            <option value="log10">Log base 10 (n)</option>
-            <option value="log2">Log base 2 (n)</option>
-            <option value="exp">Exponential (n)</option>
-            <option value="sin">Sine (n)</option>
-            <option value="cos">Cosine (n)</option>
-            <option value="tan">Tangent (n)</option>
-            <option value="factorial">Factorial (n)</option>
+          <label class="form-label" for="calculate-form-operation">{{t .Lang "tool_pages.text.operation.0f044feb6c"}}</label>
+          <select name="operation" class="form-input" id="calculate-form-operation">
+            <option value="add">{{t .Lang "tool_pages.text.add.a.b.8fe72ef4f6"}}</option>
+            <option value="subtract">{{t .Lang "tool_pages.text.subtract.a.b.fd085dd1a4"}}</option>
+            <option value="multiply">{{t .Lang "tool_pages.text.multiply.a.b.7cc2298078"}}</option>
+            <option value="divide">{{t .Lang "tool_pages.text.divide.a.b.3b52fdae96"}}</option>
+            <option value="power">{{t .Lang "tool_pages.text.power.a.b.27723c1a9a"}}</option>
+            <option value="percentage_of">{{t .Lang "tool_pages.text.percentage.of.a.of.b.8ac2c63c74"}}</option>
+            <option value="percentage_change">{{t .Lang "tool_pages.text.percentage.change.a.to.b.a9fc83d238"}}</option>
+            <option value="modulo">{{t .Lang "tool_pages.text.modulo.a.b.9f0674eabe"}}</option>
+            <option value="gcd">{{t .Lang "tool_pages.text.gcd.a.b.135f64e56a"}}</option>
+            <option value="lcm">{{t .Lang "tool_pages.text.lcm.a.b.31ae6d8c2b"}}</option>
+            <option value="sqrt">{{t .Lang "tool_pages.text.square.root.n.21762b989b"}}</option>
+            <option value="cbrt">{{t .Lang "tool_pages.text.cube.root.n.0649731c9f"}}</option>
+            <option value="abs">{{t .Lang "tool_pages.text.absolute.value.n.8c5434bb77"}}</option>
+            <option value="round">{{t .Lang "tool_pages.text.round.n.edc7bbe336"}}</option>
+            <option value="floor">{{t .Lang "tool_pages.text.floor.n.6b307d8e04"}}</option>
+            <option value="ceil">{{t .Lang "tool_pages.text.ceiling.n.0ce83e0f28"}}</option>
+            <option value="log">{{t .Lang "tool_pages.text.natural.log.n.2efea52658"}}</option>
+            <option value="log10">{{t .Lang "tool_pages.text.log.base.10.n.17693e3f46"}}</option>
+            <option value="log2">{{t .Lang "tool_pages.text.log.base.2.n.17b4e6fe98"}}</option>
+            <option value="exp">{{t .Lang "tool_pages.text.exponential.n.e162f88da8"}}</option>
+            <option value="sin">{{t .Lang "tool_pages.text.sine.n.d6b299cea1"}}</option>
+            <option value="cos">{{t .Lang "tool_pages.text.cosine.n.a2dca85ee3"}}</option>
+            <option value="tan">{{t .Lang "tool_pages.text.tangent.n.4104f85836"}}</option>
+            <option value="factorial">{{t .Lang "tool_pages.text.factorial.n.bb8b0f288c"}}</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label">a (two-operand ops)</label>
-          <input type="number" name="a" class="form-input" step="any">
+          <label class="form-label" for="calculate-form-a">{{t .Lang "tool_pages.text.a.two.operand.ops.e23a03d1cb"}}</label>
+          <input type="number" name="a" class="form-input" step="any" id="calculate-form-a">
         </div>
 
         <div class="form-group">
-          <label class="form-label">b (two-operand ops)</label>
-          <input type="number" name="b" class="form-input" step="any">
+          <label class="form-label" for="calculate-form-b">{{t .Lang "tool_pages.text.b.two.operand.ops.a0fe4a56f6"}}</label>
+          <input type="number" name="b" class="form-input" step="any" id="calculate-form-b">
         </div>
 
         <div class="form-group">
-          <label class="form-label">n (single-operand ops)</label>
-          <input type="number" name="n" class="form-input" step="any">
+          <label class="form-label" for="calculate-form-n">{{t .Lang "tool_pages.text.n.single.operand.ops.2ad0d8ff9c"}}</label>
+          <input type="number" name="n" class="form-input" step="any" id="calculate-form-n">
         </div>
 
-        <button type="submit" class="btn btn-primary">Calculate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.calculate.2121cc15af"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="calculate-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl "{{.BaseURL}}{{.APIBasePath}}/math/calculate?operation=add&a=2&b=3"</pre>

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/apimgr/api/src/backup"
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/paths"
 )
 
@@ -25,6 +27,34 @@ func initTestPaths(t *testing.T) {
 	paths.Init(configDir, dataDir, logDir)
 	paths.InitBackup(t.TempDir())
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "db"), 0755))
+	require.NoError(t, database.Init(config.DatabaseConfig{Driver: "sqlite"}, dataDir))
+	t.Cleanup(func() { _ = database.Close() })
+}
+
+func TestFormatDiskBytes(t *testing.T) {
+	tests := []struct {
+		bytes uint64
+		want  string
+	}{
+		{bytes: 0, want: "0 B"},
+		{bytes: 1023, want: "1023 B"},
+		{bytes: 1024, want: "1.0 KiB"},
+		{bytes: 1024 * 1024, want: "1.0 MiB"},
+	}
+	for _, test := range tests {
+		assert.Equal(t, test.want, formatDiskBytes(test.bytes))
+	}
+}
+
+func TestSanitizeDatabaseErrorRemovesCredentials(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Server.Database.URL = "https://db.example.test/?authToken=url-secret"
+	cfg.Server.Database.Token = "separate-secret"
+	message := sanitizeDatabaseError("connect https://db.example.test/?authToken=url-secret failed: token=driver-secret password=other-secret", cfg)
+	assert.NotContains(t, message, "url-secret")
+	assert.NotContains(t, message, "separate-secret")
+	assert.NotContains(t, message, "driver-secret")
+	assert.NotContains(t, message, "other-secret")
 }
 
 // TestBackupTask_CompliancePasswordRequired covers AI.md PART 21's
@@ -39,7 +69,7 @@ func TestBackupTask_CompliancePasswordRequired(t *testing.T) {
 	cfg.Server.Backup.EncryptionPassword = ""
 	require.NoError(t, config.Save(cfg))
 
-	os.Unsetenv("API_BACKUP_PASSWORD")
+	require.NoError(t, os.Unsetenv("API_BACKUP_PASSWORD"))
 
 	err = New().dailyBackupTask()
 	require.Error(t, err)
@@ -51,22 +81,19 @@ func TestBackupTask_CompliancePasswordRequired(t *testing.T) {
 	}
 }
 
-// TestBackupTask_ConfigLoadError covers the config-load-failure branch: an
-// unparsable server.yml must surface the error rather than proceeding with
-// defaults.
-func TestBackupTask_ConfigLoadError(t *testing.T) {
+// TestBackupTask_InvalidConfigUsesDefaults verifies the scheduler uses the
+// built-in defaults when an unparsable config file is ignored by the loader.
+func TestBackupTask_InvalidConfigUsesDefaults(t *testing.T) {
 	initTestPaths(t)
 	configFile := filepath.Join(paths.ConfigDir(), "server.yml")
 	require.NoError(t, os.WriteFile(configFile, []byte("not: valid: yaml: content: [["), 0644))
 
-	err := New().dailyBackupTask()
-	require.Error(t, err)
+	require.NoError(t, New().dailyBackupTask())
 }
 
-// TestBackupTask_EnvPasswordOverridesConfig covers PART 21's unattended-run
-// override: API_BACKUP_PASSWORD takes precedence over
-// server.backup.encryption_password for this scheduled run only.
-func TestBackupTask_EnvPasswordOverridesConfig(t *testing.T) {
+// TestBackupTask_IgnoresUndocumentedEnvPassword ensures only the configured
+// secrets.yml value controls unattended backup encryption.
+func TestBackupTask_IgnoresUndocumentedEnvPassword(t *testing.T) {
 	initTestPaths(t)
 	cfg, err := config.Load()
 	require.NoError(t, err)
@@ -80,7 +107,13 @@ func TestBackupTask_EnvPasswordOverridesConfig(t *testing.T) {
 
 	entries, err := os.ReadDir(paths.BackupDir())
 	require.NoError(t, err)
-	assert.NotEmpty(t, entries, "backup archive should be created")
+	require.NotEmpty(t, entries, "backup archive should be created")
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == ".enc" {
+			return
+		}
+	}
+	assert.Fail(t, "configured backup password must encrypt the scheduled archive")
 }
 
 // TestBackupTask_UsesConfigPassword covers the non-compliance path where no
@@ -94,7 +127,7 @@ func TestBackupTask_UsesConfigPassword(t *testing.T) {
 	cfg.Server.Backup.EncryptionPassword = "config-only-password"
 	require.NoError(t, config.Save(cfg))
 
-	os.Unsetenv("API_BACKUP_PASSWORD")
+	require.NoError(t, os.Unsetenv("API_BACKUP_PASSWORD"))
 
 	require.NoError(t, New().dailyBackupTask())
 
@@ -114,16 +147,18 @@ func TestHourlyBackupTask_UsesRollingName(t *testing.T) {
 	cfg.Server.Backup.EncryptionPassword = ""
 	require.NoError(t, config.Save(cfg))
 
-	os.Unsetenv("API_BACKUP_PASSWORD")
+	require.NoError(t, os.Unsetenv("API_BACKUP_PASSWORD"))
 
 	s := New()
+	require.NoError(t, s.dailyBackupTask())
 	require.NoError(t, s.hourlyBackupTask())
 	require.NoError(t, s.hourlyBackupTask())
 
 	entries, err := os.ReadDir(paths.BackupDir())
 	require.NoError(t, err)
-	require.Len(t, entries, 1, "hourly incremental must be a single rolling file")
+	require.Len(t, entries, 2, "hourly incremental should add one rolling file alongside its required full base")
 	assert.Equal(t, "api-hourly.tar.gz", entries[0].Name())
+	assert.True(t, strings.HasPrefix(entries[1].Name(), "api_backup_"))
 }
 
 // TestRegisterDefaultTasks_MatchesSpec locks the AI.md PART 18 built-in task
@@ -131,6 +166,11 @@ func TestHourlyBackupTask_UsesRollingName(t *testing.T) {
 // enabled state, and skippability.
 func TestRegisterDefaultTasks_MatchesSpec(t *testing.T) {
 	initTestDB(t)
+	originalConfig := config.Get()
+	configForTest := *originalConfig
+	configForTest.Server.I2P.Enabled = false
+	config.Set(&configForTest)
+	t.Cleanup(func() { config.Set(originalConfig) })
 
 	s := New()
 	s.RegisterDefaultTasks()
@@ -146,13 +186,21 @@ func TestRegisterDefaultTasks_MatchesSpec(t *testing.T) {
 		"cve_update":       {"0 5 * * *", true, true},
 		"update_check":     {"0 6 * * *", true, true},
 		"token_cleanup":    {"@every 15m", true, false},
+		"security_cleanup": {"30 3 * * *", true, false},
+		"keyserver_retry":  {"@every 15m", true, false},
+		"disk_check":       {"@every 5m", true, true},
+		"database_check":   {"@every 1m", true, true},
 		"log_rotation":     {"0 0 * * *", true, false},
 		"backup_daily":     {"0 2 * * *", true, true},
 		"backup_hourly":    {"@hourly", false, true},
 		"healthcheck_self": {"@every 5m", true, false},
-		// tor_health is only mandatory when a Tor binary is present; without
-		// one it degrades to a skippable no-op.
-		"tor_health": {"@every 10m", true, !torInstalled()},
+	}
+	if torInstalled() {
+		expected["tor_health"] = struct {
+			schedule  string
+			enabled   bool
+			skippable bool
+		}{"@every 10m", true, false}
 	}
 
 	tasks := s.ListTasks()
@@ -161,8 +209,8 @@ func TestRegisterDefaultTasks_MatchesSpec(t *testing.T) {
 		byID[task.ID] = task
 	}
 
-	require.Len(t, tasks, 11, "AI.md PART 18 defines exactly 11 built-in tasks")
-	require.Len(t, expected, 11)
+	require.Len(t, tasks, len(expected))
+	require.Len(t, expected, len(expected))
 
 	for id, want := range expected {
 		got, ok := byID[id]
@@ -173,10 +221,33 @@ func TestRegisterDefaultTasks_MatchesSpec(t *testing.T) {
 		assert.NotEmpty(t, got.Name, "task %s must have a title", id)
 	}
 
-	// i2p_health appears in PART 18's table but not in its YAML task block,
-	// and this project ships no I2P subsystem, so it must not be registered.
+	// I2P is disabled for this baseline case; its task is mode-bound.
 	_, hasI2P := byID["i2p_health"]
-	assert.False(t, hasI2P, "i2p_health must not be registered while no I2P provider exists")
+	assert.False(t, hasI2P, "i2p_health must not be registered while I2P is disabled")
+}
+
+func TestRegisterDefaultTasks_RegistersI2PHealthOnlyWhenEnabled(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "disabled", true: "enabled"}[enabled], func(t *testing.T) {
+			initTestDB(t)
+			originalConfig := config.Get()
+			configForTest := *originalConfig
+			configForTest.Server.I2P.Enabled = enabled
+			config.Set(&configForTest)
+			t.Cleanup(func() { config.Set(originalConfig) })
+
+			s := New()
+			s.RegisterDefaultTasks()
+			found := false
+			for _, task := range s.ListTasks() {
+				if task.ID == "i2p_health" {
+					found = true
+					break
+				}
+			}
+			assert.Equal(t, enabled, found, "i2p_health registration must follow server.i2p.enabled")
+		})
+	}
 }
 
 // TestRegisterDefaultTasks_EveryTaskHasAnImplementation guards against a task

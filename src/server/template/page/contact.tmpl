@@ -1,38 +1,27 @@
 {{define "content"}}
-<section class="hero">
-  <div class="container">
-    <h1 class="hero-title">✉️ Contact</h1>
-    <p class="hero-subtitle">Get in touch with the {{.SiteTitle}} team</p>
-  </div>
-</section>
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{t .Lang "contact.title"}}</h1>
+    <p class="page-lead">{{.SiteTitle}}</p>
+  </header>
 
-<section>
-  <div class="container container-sm">
-    <div class="card">
-      <div class="card-header">Security &amp; Support</div>
-      <div class="card-body">
-        {{if .SecurityEmail}}
-        <p>
-          For security reports or general support, email
-          <a href="mailto:{{.SecurityEmail}}">{{.SecurityEmail}}</a>.
-        </p>
-        {{else}}
-        <p>
-          No contact address has been configured for this deployment yet.
-        </p>
-        {{end}}
-      </div>
-    </div>
+  <section class="section-card" aria-labelledby="contact-security">
+    <h2 id="contact-security">{{t .Lang "page_text.text.security.reports.f9525b7a78"}}</h2>
+    <p>{{t .Lang "page_text.text.read.the.bb55cf1a90"}} <a href="{{path .BaseURL "/server/security/policy"}}">{{t .Lang "page_text.text.security.disclosure.policy.ecf9118024"}}</a> {{t .Lang "page_text.text.or.use.the.private.reporting.instructions.in.aca5a64f3f"}} <a href="{{path .BaseURL "/.well-known/security.txt"}}">{{t .Lang "page_text.text.security.txt.ff6c314344"}}</a>.</p>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Issues &amp; Feature Requests</div>
-      <div class="card-body">
-        <p>
-          Bug reports and feature requests are welcome via the project's
-          issue tracker.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
+  <section class="section-card" aria-labelledby="contact-support">
+    <h2 id="contact-support">{{t .Lang "page_text.text.support.be91940b79"}}</h2>
+    {{if .SecurityEmail}}
+    <p>{{t .Lang "page_text.text.for.a.security.issue.email.6055ac7bf4"}} <a href="mailto:{{.SecurityEmail}}">{{.SecurityEmail}}</a>.</p>
+    {{else}}
+    <p>{{t .Lang "page_text.text.no.support.address.is.configured.for.this.de.c31af2b71f"}}</p>
+    {{end}}
+  </section>
+
+  <section class="section-card" aria-labelledby="contact-project">
+    <h2 id="contact-project">{{t .Lang "page_text.text.project.9859597853"}}</h2>
+    <p><a href="{{repoURL}}" rel="noopener">{{t .Lang "common.github"}}</a></p>
+  </section>
+</article>
 {{end}}

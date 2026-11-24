@@ -1,0 +1,20 @@
+{{define "content"}}
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{t .Lang "security.thanks_title"}}</h1>
+    <p class="page-lead">{{t .Lang "security.thanks_description"}}</p>
+  </header>
+  <section class="section-card" aria-labelledby="security-researchers">
+    <h2 id="security-researchers">{{t .Lang "security.researchers"}}</h2>
+    {{if .Researchers}}
+    <ul>
+      {{range .Researchers}}
+      <li>{{.Credit}} — {{t $.Lang (printf "security.severity.%s" .Severity)}}, {{.DisclosedOn}}</li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p>{{t .Lang "security.no_researchers"}}</p>
+    {{end}}
+  </section>
+</article>
+{{end}}

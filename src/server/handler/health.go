@@ -1,18 +1,21 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/apimgr/api/src/cache"
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/health"
+	"github.com/apimgr/api/src/i2p"
 	"github.com/apimgr/api/src/tor"
 )
 
@@ -128,18 +131,59 @@ type I2PInfo struct {
 	Enabled  bool   `json:"enabled"`
 	Running  bool   `json:"running"`
 	Status   string `json:"status"`
+	State    string `json:"state"`
 	Hostname string `json:"hostname"`
 	Provider string `json:"provider"`
 }
 
-// ChecksInfo reports component health as "ok"/"error" only, no details
+// ChecksInfo reports public-safe component statuses, without paths or error details.
 type ChecksInfo struct {
-	Database  string `json:"database"`
-	Cache     string `json:"cache"`
-	Disk      string `json:"disk"`
-	Scheduler string `json:"scheduler"`
-	Tor       string `json:"tor,omitempty"`
-	I2P       string `json:"i2p,omitempty"`
+	Database  string         `json:"database"`
+	Cache     string         `json:"cache"`
+	Disk      string         `json:"disk"`
+	Scheduler string         `json:"scheduler"`
+	Tor       string         `json:"tor,omitempty"`
+	I2P       string         `json:"i2p,omitempty"`
+	Datasets  []health.Check `json:"-"`
+}
+
+func (c ChecksInfo) MarshalJSON() ([]byte, error) {
+	var out bytes.Buffer
+	out.WriteByte('{')
+	fields := []struct {
+		key, value string
+		present    bool
+	}{
+		{"database", c.Database, true}, {"cache", c.Cache, true}, {"disk", c.Disk, true}, {"scheduler", c.Scheduler, true},
+		{"tor", c.Tor, c.Tor != ""}, {"i2p", c.I2P, c.I2P != ""},
+	}
+	first := true
+	for _, field := range fields {
+		if field.present {
+			if !first {
+				out.WriteByte(',')
+			}
+			first = false
+			key, _ := json.Marshal(field.key)
+			value, _ := json.Marshal(field.value)
+			out.Write(key)
+			out.WriteByte(':')
+			out.Write(value)
+		}
+	}
+	for _, check := range c.Datasets {
+		if !first {
+			out.WriteByte(',')
+		}
+		first = false
+		key, _ := json.Marshal(check.Key)
+		value, _ := json.Marshal(check.Status)
+		out.Write(key)
+		out.WriteByte(':')
+		out.Write(value)
+	}
+	out.WriteByte('}')
+	return out.Bytes(), nil
 }
 
 // StatsInfo reports public-safe aggregate statistics
@@ -256,6 +300,7 @@ func BuildHealthResponse(cfg *config.Config) HealthResponse {
 		Scheduler: checkScheduler(),
 		Tor:       overlayCheck(torInfo.Enabled, torInfo.Status),
 		I2P:       overlayCheck(i2pInfo.Enabled, i2pInfo.Status),
+		Datasets:  health.Snapshot(),
 	}
 
 	maintenance, shutdown, pending, reason := lifecycleState()
@@ -299,13 +344,21 @@ func BuildHealthResponse(cfg *config.Config) HealthResponse {
 // overallStatus derives the component-check portion of the top-level status:
 // any failing check is unhealthy, any warning degrades, otherwise healthy.
 func overallStatus(checks ChecksInfo) string {
-	values := []string{checks.Database, checks.Cache, checks.Disk, checks.Scheduler}
-	degraded := false
-	for _, v := range values {
-		if v == "error" {
+	if checks.Database == "error" || checks.Disk == "error" {
+		return StatusUnhealthy
+	}
+	degraded := checks.Cache == "error" || checks.Cache == "degraded" || checks.Scheduler == "error" || checks.Scheduler == "degraded" || checks.Tor == "degraded" || checks.I2P == "degraded"
+	if checks.Cache != "ok" && checks.Cache != "" {
+		degraded = true
+	}
+	if checks.Scheduler != "ok" && checks.Scheduler != "" {
+		degraded = true
+	}
+	for _, check := range checks.Datasets {
+		if check.Status == "error" && check.Critical {
 			return StatusUnhealthy
 		}
-		if v == "warning" {
+		if check.Status == "error" || check.Status == "degraded" {
 			degraded = true
 		}
 	}
@@ -353,7 +406,7 @@ func healthHTTPStatus(status string) int {
 // htmlDefault is true (frontend mount only). The JSON body is BARE on every
 // route in every state — no {ok, data} envelope (PART 13 envelope exception);
 // the HTTP status code and the top-level status field carry the health state.
-func ServerHealthz(cfg *config.Config, htmlDefault bool) http.HandlerFunc {
+func ServerHealthz(cfg *config.Config, htmlDefault bool, htmlRenderer ...func(http.ResponseWriter, *http.Request, int, HealthResponse)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		response := BuildHealthResponse(cfg)
 		code := healthHTTPStatus(response.Status)
@@ -362,7 +415,11 @@ func ServerHealthz(cfg *config.Config, htmlDefault bool) http.HandlerFunc {
 		case "text":
 			writeHealthText(w, code, response)
 		case "html":
-			writeHealthHTML(w, code, r, response)
+			if len(htmlRenderer) == 0 || htmlRenderer[0] == nil {
+				http.Error(w, i18n.Translate(i18n.LangFromRequest(r), "errors.server_error"), http.StatusInternalServerError)
+				return
+			}
+			htmlRenderer[0](w, r, code, response)
 		default:
 			writeHealthJSON(w, code, response)
 		}
@@ -374,13 +431,16 @@ func ServerHealthz(cfg *config.Config, htmlDefault bool) http.HandlerFunc {
 // (/server/healthz) priority order; false selects the API
 // (/api/{api_version}/server/healthz) order.
 func negotiateHealthFormat(r *http.Request, htmlDefault bool) string {
-	accept := r.Header.Get("Accept")
+	accept := strings.ToLower(r.Header.Get("Accept"))
 
 	if !htmlDefault {
-		// API priority: .txt extension, then Accept: text/plain, then
-		// non-interactive client, then default JSON.
+		// API priority: .txt extension, explicit Accept headers, then
+		// non-interactive clients, and finally default JSON.
 		if strings.HasSuffix(r.URL.Path, ".txt") {
 			return "text"
+		}
+		if strings.Contains(accept, "application/json") {
+			return "json"
 		}
 		if strings.Contains(accept, "text/plain") {
 			return "text"
@@ -391,9 +451,11 @@ func negotiateHealthFormat(r *http.Request, htmlDefault bool) string {
 		return "json"
 	}
 
-	// Frontend priority: Accept: text/html, then Accept: text/plain, then
-	// User-Agent browser detection, then CLI default text, then HTML.
+	// Frontend priority: explicit Accept headers, non-interactive clients,
+	// then browser HTML.
 	switch {
+	case strings.Contains(accept, "application/json"):
+		return "json"
 	case strings.Contains(accept, "text/html"):
 		return "html"
 	case strings.Contains(accept, "text/plain"):
@@ -424,296 +486,112 @@ func isNonInteractiveClient(r *http.Request) bool {
 func writeHealthJSON(w http.ResponseWriter, code int, response HealthResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func writeHealthText(w http.ResponseWriter, code int, r HealthResponse) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(code)
 
-	fmt.Fprint(w, "# 1. Project (PART 16: branding)\n")
-	fmt.Fprintf(w, "project.name: %s\n", r.Project.Name)
-	fmt.Fprintf(w, "project.tagline: %s\n", r.Project.Tagline)
-	fmt.Fprintf(w, "project.description: %s\n", r.Project.Description)
+	_, _ = fmt.Fprint(w, "# 1. Project (PART 16: branding)\n")
+	_, _ = fmt.Fprintf(w, "project.name: %s\n", r.Project.Name)
+	_, _ = fmt.Fprintf(w, "project.tagline: %s\n", r.Project.Tagline)
+	_, _ = fmt.Fprintf(w, "project.description: %s\n", r.Project.Description)
 
-	fmt.Fprint(w, "# 2. Status\n")
-	fmt.Fprintf(w, "status: %s\n", r.Status)
+	_, _ = fmt.Fprint(w, "# 2. Status\n")
+	_, _ = fmt.Fprintf(w, "status: %s\n", r.Status)
 	if r.PendingRestart {
-		fmt.Fprintf(w, "pending_restart: %t\n", r.PendingRestart)
+		_, _ = fmt.Fprintf(w, "pending_restart: %t\n", r.PendingRestart)
 		if len(r.RestartReason) > 0 {
-			fmt.Fprintf(w, "restart_reason: %s\n", strings.Join(r.RestartReason, ", "))
+			_, _ = fmt.Fprintf(w, "restart_reason: %s\n", strings.Join(r.RestartReason, ", "))
 		}
 	}
 
-	fmt.Fprint(w, "# 3. Version & build\n")
-	fmt.Fprintf(w, "version: %s\n", r.Version)
-	fmt.Fprintf(w, "go_version: %s\n", r.GoVersion)
-	fmt.Fprintf(w, "build.commit: %s\n", r.Build.Commit)
-	fmt.Fprintf(w, "build.date: %s\n", r.Build.Date)
+	_, _ = fmt.Fprint(w, "# 3. Version & build\n")
+	_, _ = fmt.Fprintf(w, "version: %s\n", r.Version)
+	_, _ = fmt.Fprintf(w, "go_version: %s\n", r.GoVersion)
+	_, _ = fmt.Fprintf(w, "build.commit: %s\n", r.Build.Commit)
+	_, _ = fmt.Fprintf(w, "build.date: %s\n", r.Build.Date)
 
-	fmt.Fprint(w, "# 4. Runtime\n")
-	fmt.Fprintf(w, "uptime: %s\n", r.Uptime)
-	fmt.Fprintf(w, "mode: %s\n", r.Mode)
-	fmt.Fprintf(w, "timestamp: %s\n", r.Timestamp.Format(time.RFC3339))
+	_, _ = fmt.Fprint(w, "# 4. Runtime\n")
+	_, _ = fmt.Fprintf(w, "uptime: %s\n", r.Uptime)
+	_, _ = fmt.Fprintf(w, "mode: %s\n", r.Mode)
+	_, _ = fmt.Fprintf(w, "timestamp: %s\n", r.Timestamp.Format(time.RFC3339))
 
-	fmt.Fprint(w, "# 5. Features\n")
-	fmt.Fprintf(w, "features.tor.enabled: %t\n", r.Features.Tor.Enabled)
-	fmt.Fprintf(w, "features.tor.running: %t\n", r.Features.Tor.Running)
-	fmt.Fprintf(w, "features.tor.status: %s\n", r.Features.Tor.Status)
-	fmt.Fprintf(w, "features.tor.hostname: %s\n", r.Features.Tor.Hostname)
-	fmt.Fprintf(w, "features.i2p.enabled: %t\n", r.Features.I2P.Enabled)
-	fmt.Fprintf(w, "features.i2p.running: %t\n", r.Features.I2P.Running)
-	fmt.Fprintf(w, "features.i2p.status: %s\n", r.Features.I2P.Status)
-	fmt.Fprintf(w, "features.i2p.hostname: %s\n", r.Features.I2P.Hostname)
-	fmt.Fprintf(w, "features.i2p.provider: %s\n", r.Features.I2P.Provider)
-	fmt.Fprintf(w, "features.geoip: %t\n", r.Features.GeoIP)
+	_, _ = fmt.Fprint(w, "# 5. Features\n")
+	_, _ = fmt.Fprintf(w, "features.tor.enabled: %t\n", r.Features.Tor.Enabled)
+	_, _ = fmt.Fprintf(w, "features.tor.running: %t\n", r.Features.Tor.Running)
+	_, _ = fmt.Fprintf(w, "features.tor.status: %s\n", r.Features.Tor.Status)
+	_, _ = fmt.Fprintf(w, "features.tor.hostname: %s\n", r.Features.Tor.Hostname)
+	_, _ = fmt.Fprintf(w, "features.i2p.enabled: %t\n", r.Features.I2P.Enabled)
+	_, _ = fmt.Fprintf(w, "features.i2p.running: %t\n", r.Features.I2P.Running)
+	_, _ = fmt.Fprintf(w, "features.i2p.status: %s\n", r.Features.I2P.Status)
+	_, _ = fmt.Fprintf(w, "features.i2p.state: %s\n", r.Features.I2P.State)
+	_, _ = fmt.Fprintf(w, "features.i2p.hostname: %s\n", r.Features.I2P.Hostname)
+	_, _ = fmt.Fprintf(w, "features.i2p.provider: %s\n", r.Features.I2P.Provider)
+	_, _ = fmt.Fprintf(w, "features.geoip: %t\n", r.Features.GeoIP)
 
-	fmt.Fprint(w, "# 6. Checks\n")
-	fmt.Fprintf(w, "checks.database: %s\n", r.Checks.Database)
-	fmt.Fprintf(w, "checks.cache: %s\n", r.Checks.Cache)
-	fmt.Fprintf(w, "checks.disk: %s\n", r.Checks.Disk)
-	fmt.Fprintf(w, "checks.scheduler: %s\n", r.Checks.Scheduler)
+	_, _ = fmt.Fprint(w, "# 6. Checks\n")
+	_, _ = fmt.Fprintf(w, "checks.database: %s\n", r.Checks.Database)
+	_, _ = fmt.Fprintf(w, "checks.cache: %s\n", r.Checks.Cache)
+	_, _ = fmt.Fprintf(w, "checks.disk: %s\n", r.Checks.Disk)
+	_, _ = fmt.Fprintf(w, "checks.scheduler: %s\n", r.Checks.Scheduler)
 	// Overlay checks mirror the JSON body's omitempty: a disabled overlay has
 	// no check to report, so the line is omitted rather than left blank.
 	if r.Checks.Tor != "" {
-		fmt.Fprintf(w, "checks.tor: %s\n", r.Checks.Tor)
+		_, _ = fmt.Fprintf(w, "checks.tor: %s\n", r.Checks.Tor)
 	}
 	if r.Checks.I2P != "" {
-		fmt.Fprintf(w, "checks.i2p: %s\n", r.Checks.I2P)
+		_, _ = fmt.Fprintf(w, "checks.i2p: %s\n", r.Checks.I2P)
+	}
+	for _, check := range r.Checks.Datasets {
+		_, _ = fmt.Fprintf(w, "checks.%s: %s\n", check.Key, check.Status)
 	}
 
-	fmt.Fprint(w, "# 7. Stats\n")
-	fmt.Fprintf(w, "stats.requests_total: %d\n", r.Stats.RequestsTotal)
-	fmt.Fprintf(w, "stats.requests_24h: %d\n", r.Stats.Requests24h)
-	fmt.Fprintf(w, "stats.active_connections: %d\n", r.Stats.ActiveConns)
+	_, _ = fmt.Fprint(w, "# 7. Stats\n")
+	_, _ = fmt.Fprintf(w, "stats.requests_total: %d\n", r.Stats.RequestsTotal)
+	_, _ = fmt.Fprintf(w, "stats.requests_24h: %d\n", r.Stats.Requests24h)
+	_, _ = fmt.Fprintf(w, "stats.active_connections: %d\n", r.Stats.ActiveConns)
 }
 
-// healthBanner maps a PART 13 status value onto its status-banner class, icon
-// and headline text.
-func healthBanner(status string) (class, icon, text string) {
+// healthBanner maps a PART 13 status value onto its banner class, icon, and translation key.
+func healthBanner(status string) (class, icon, translationKey string) {
 	switch status {
 	case StatusDegraded:
-		return "status-warning", "⚠️", "Degraded Performance"
+		return "status-warning", "⚠️", "health.status.degraded"
 	case StatusRestartRequired:
-		return "status-warning", "🔄", "Restart Required"
+		return "status-warning", "🔄", "health.status.restart_required"
 	case StatusUnhealthy:
-		return "status-error", "❌", "Systems Unhealthy"
+		return "status-error", "❌", "health.status.unhealthy"
 	case StatusMaintenance:
-		return "status-error", "🚧", "Maintenance in Progress"
+		return "status-error", "🚧", "health.status.maintenance"
 	case StatusShuttingDown:
-		return "status-error", "🛑", "Shutting Down"
+		return "status-error", "🛑", "health.status.shutting_down"
 	default:
-		return "status-ok", "✅", "All Systems Operational"
+		return "status-ok", "✅", "health.status.healthy"
 	}
+}
+
+// HealthStatusPresentation returns the CSS class, icon, and translation key for a health status.
+func HealthStatusPresentation(status string) (class, icon, translationKey string) {
+	return healthBanner(status)
 }
 
 // checkBadge renders a component check value as the PART 13 status badge.
-func checkBadge(value string) string {
-	switch value {
-	case "ok":
-		return `<span class="status status-ok">✅ OK</span>`
-	case "error":
-		return `<span class="status status-error">❌ Error</span>`
-	default:
-		return fmt.Sprintf(`<span class="status status-warning">⚠️ %s</span>`, html.EscapeString(value))
+func humanizeCheckKey(key string) string {
+	if key == "" {
+		return "Health Check"
 	}
+	parts := strings.SplitN(key, "_", 2)
+	if len(parts) == 1 {
+		return strings.ToUpper(parts[0][:1]) + parts[0][1:]
+	}
+	return strings.ToUpper(parts[0][:1]) + parts[0][1:] + ": " + strings.ReplaceAll(parts[1], "_", " ")
 }
 
-// healthThemeClass resolves the <html> theme class from the theme cookie so
-// the page renders in the visitor's theme with no init JavaScript and no
-// flash of the wrong theme. Dark is the default (PART 16).
-func healthThemeClass(r *http.Request) string {
-	cookie, err := r.Cookie("theme")
-	if err != nil {
-		return "theme-dark"
-	}
-	switch cookie.Value {
-	case "light":
-		return "theme-light"
-	case "auto":
-		return "theme-auto"
-	default:
-		return "theme-dark"
-	}
-}
-
-// healthLang resolves the page language from the lang cookie, defaulting to
-// English (PART 16 i18n fallback chain).
-func healthLang(r *http.Request) (lang, dir string) {
-	lang = "en"
-	if cookie, err := r.Cookie("lang"); err == nil && cookie.Value != "" {
-		lang = cookie.Value
-	}
-	dir = "ltr"
-	if strings.HasPrefix(strings.ToLower(lang), "ar") {
-		dir = "rtl"
-	}
-	return lang, dir
-}
-
-// formatThousands renders a count with comma separators, as PART 13 requires
-// for the statistics section.
-func formatThousands(n int64) string {
-	digits := strconv.FormatInt(n, 10)
-	sign := ""
-	if strings.HasPrefix(digits, "-") {
-		sign = "-"
-		digits = digits[1:]
-	}
-
-	var out strings.Builder
-	for i, r := range digits {
-		if i > 0 && (len(digits)-i)%3 == 0 {
-			out.WriteByte(',')
-		}
-		out.WriteRune(r)
-	}
-	return sign + out.String()
-}
-
-// overlayFeatureItem renders one overlay-network feature row: the status
-// badge plus, when an address exists, a copy-enabled code block matching the
-// PART 16 clipboard pattern (.code-block wrapping a <pre> the copy button
-// reads from).
-func overlayFeatureItem(icon, label, status, hostname string, enabled bool) string {
-	class := "feature-disabled"
-	badge := `<span class="status status-warning">disabled</span>`
-	if enabled {
-		class = "feature-enabled"
-		badge = checkOverlayBadge(status)
-	}
-
-	item := fmt.Sprintf(`<li class="%s">%s %s: %s`, class, icon, html.EscapeString(label), badge)
-	if hostname != "" {
-		escaped := html.EscapeString(hostname)
-		item += fmt.Sprintf(`<div class="code-block"><pre><code class="code-content">%s</code></pre>`+
-			`<button type="button" class="copy-btn" data-copy="%s">`+
-			`<span class="copy-icon">📋</span><span class="copy-text" aria-live="polite">Copy</span>`+
-			`</button></div>`, escaped, escaped)
-	}
-	return item + "</li>"
-}
-
-// checkOverlayBadge renders an overlay feature's status string as a badge.
-func checkOverlayBadge(status string) string {
-	switch status {
-	case "healthy":
-		return `<span class="status status-ok">✅ healthy</span>`
-	case "error":
-		return `<span class="status status-error">❌ error</span>`
-	default:
-		return fmt.Sprintf(`<span class="status status-warning">⏳ %s</span>`, html.EscapeString(status))
-	}
-}
-
-// writeHealthHTML renders the health page directly. The health handler lives
-// in the handler package, which the server package imports, so it cannot
-// reach the page-template set without an import cycle; the markup below uses
-// the same shared stylesheets and PART 16 class names the templates do, in
-// the PART 13 display order (project, status banner, version & build,
-// runtime, features, checks, stats). Everything works with JavaScript
-// disabled — app.js only enhances the copy buttons.
-func writeHealthHTML(w http.ResponseWriter, code int, req *http.Request, r HealthResponse) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(code)
-
-	lang, dir := healthLang(req)
-	bannerClass, bannerIcon, bannerText := healthBanner(r.Status)
-	name := html.EscapeString(r.Project.Name)
-
-	fmt.Fprintf(w, "<!DOCTYPE html>\n<html lang=\"%s\" dir=\"%s\" class=\"%s\">\n",
-		html.EscapeString(lang), dir, healthThemeClass(req))
-	fmt.Fprint(w, "<head>\n<meta charset=\"utf-8\">\n")
-	fmt.Fprint(w, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
-	fmt.Fprint(w, "<meta name=\"robots\" content=\"noindex\">\n")
-	fmt.Fprintf(w, "<title>%s - Health Status</title>\n", name)
-	fmt.Fprint(w, "<link rel=\"stylesheet\" href=\"/static/css/common.css\">\n")
-	fmt.Fprint(w, "<link rel=\"stylesheet\" href=\"/static/css/components.css\">\n")
-	fmt.Fprint(w, "<link rel=\"stylesheet\" href=\"/static/css/public.css\">\n")
-	fmt.Fprint(w, "</head>\n<body>\n<main class=\"container\">\n")
-
-	// 1. Project identification.
-	fmt.Fprint(w, "<header class=\"health-header\">\n")
-	fmt.Fprintf(w, "<h1>📦 %s</h1>\n", name)
-	if r.Project.Tagline != "" {
-		fmt.Fprintf(w, "<p class=\"tagline\">%s</p>\n", html.EscapeString(r.Project.Tagline))
-	}
-	if r.Project.Description != "" {
-		fmt.Fprintf(w, "<p>%s</p>\n", html.EscapeString(r.Project.Description))
-	}
-	fmt.Fprint(w, "</header>\n")
-
-	// 2. Status banner.
-	fmt.Fprintf(w, "<div class=\"status-banner %s\" role=\"status\">"+
-		"<span class=\"status-icon\" aria-hidden=\"true\">%s</span> "+
-		"<span class=\"status-text\">%s</span></div>\n", bannerClass, bannerIcon, bannerText)
-	if r.PendingRestart && len(r.RestartReason) > 0 {
-		fmt.Fprintf(w, "<p class=\"restart-reason\">Restart required for: %s</p>\n",
-			html.EscapeString(strings.Join(r.RestartReason, ", ")))
-	}
-
-	// 3. Version and build.
-	fmt.Fprint(w, "<section class=\"section-card\">\n<h2>ℹ️ Version</h2>\n<dl class=\"info-list\">\n")
-	fmt.Fprintf(w, "<dt>🏷️ Version</dt>\n<dd><code>%s</code></dd>\n", html.EscapeString(r.Version))
-	fmt.Fprintf(w, "<dt>🐹 Go Version</dt>\n<dd><code>%s</code></dd>\n", html.EscapeString(r.GoVersion))
-	fmt.Fprintf(w, "<dt>🔨 Build</dt>\n<dd><code>%s</code> (%s)</dd>\n",
-		html.EscapeString(r.Build.Commit), html.EscapeString(r.Build.Date))
-	fmt.Fprint(w, "</dl>\n</section>\n")
-
-	// 4. Runtime.
-	fmt.Fprint(w, "<section class=\"section-card\">\n<h2>⏱️ Runtime</h2>\n<dl class=\"info-list\">\n")
-	fmt.Fprintf(w, "<dt>⏱️ Uptime</dt>\n<dd>%s</dd>\n", html.EscapeString(r.Uptime))
-	fmt.Fprintf(w, "<dt>🚀 Mode</dt>\n<dd><span class=\"badge badge-%s\">%s</span></dd>\n",
-		html.EscapeString(r.Mode), html.EscapeString(r.Mode))
-	fmt.Fprintf(w, "<dt>🕒 Timestamp</dt>\n<dd><time datetime=\"%s\">%s</time></dd>\n",
-		r.Timestamp.Format(time.RFC3339), r.Timestamp.Format("Jan 2, 2006 15:04 MST"))
-	fmt.Fprint(w, "</dl>\n</section>\n")
-
-	// 5. Features.
-	fmt.Fprint(w, "<section class=\"section-card\">\n<h2>🎛️ Features</h2>\n<ul class=\"feature-list\">\n")
-	fmt.Fprintf(w, "%s\n", overlayFeatureItem("🧅", "Tor", r.Features.Tor.Status, r.Features.Tor.Hostname, r.Features.Tor.Enabled))
-	fmt.Fprintf(w, "%s\n", overlayFeatureItem("🔗", "I2P", r.Features.I2P.Status, r.Features.I2P.Hostname, r.Features.I2P.Enabled))
-	if r.Features.GeoIP {
-		fmt.Fprint(w, "<li class=\"feature-enabled\">🌍 GeoIP</li>\n")
-	} else {
-		fmt.Fprint(w, "<li class=\"feature-disabled\">🌍 GeoIP</li>\n")
-	}
-	fmt.Fprint(w, "</ul>\n</section>\n")
-
-	// 6. Component checks.
-	fmt.Fprint(w, "<section class=\"section-card\">\n<h2>🔧 Component Status</h2>\n")
-	fmt.Fprint(w, "<div class=\"table-wrapper\">\n<table class=\"data-table\">\n")
-	fmt.Fprint(w, "<thead><tr><th>Component</th><th>Status</th></tr></thead>\n<tbody>\n")
-	rows := []struct {
-		label string
-		value string
-	}{
-		{"🗄️ Database", r.Checks.Database},
-		{"💾 Cache", r.Checks.Cache},
-		{"💿 Disk", r.Checks.Disk},
-		{"⏰ Scheduler", r.Checks.Scheduler},
-		{"🧅 Tor", r.Checks.Tor},
-		{"🔗 I2P", r.Checks.I2P},
-	}
-	for _, row := range rows {
-		if row.value == "" {
-			continue
-		}
-		fmt.Fprintf(w, "<tr><td>%s</td><td>%s</td></tr>\n", row.label, checkBadge(row.value))
-	}
-	fmt.Fprint(w, "</tbody>\n</table>\n</div>\n</section>\n")
-
-	// 7. Statistics.
-	fmt.Fprint(w, "<section class=\"section-card\">\n<h2>📈 Server Statistics</h2>\n")
-	fmt.Fprint(w, "<dl class=\"info-list stats-grid\">\n")
-	fmt.Fprintf(w, "<dt>📥 Total Requests</dt>\n<dd>%s</dd>\n", formatThousands(r.Stats.RequestsTotal))
-	fmt.Fprintf(w, "<dt>📅 Requests (24 hours)</dt>\n<dd>%s</dd>\n", formatThousands(r.Stats.Requests24h))
-	fmt.Fprintf(w, "<dt>🔌 Active Connections</dt>\n<dd>%s</dd>\n", formatThousands(int64(r.Stats.ActiveConns)))
-	fmt.Fprint(w, "</dl>\n</section>\n")
-
-	fmt.Fprintf(w, "<footer class=\"health-footer\">\n<p>Last checked: <time datetime=\"%s\">%s</time></p>\n</footer>\n",
-		r.Timestamp.Format(time.RFC3339), r.Timestamp.Format("Jan 2, 2006 15:04 MST"))
-	fmt.Fprint(w, "</main>\n<script src=\"/static/js/app.js\" defer></script>\n</body>\n</html>\n")
+// HumanizeHealthCheckKey converts a stable check key into its fallback label.
+func HumanizeHealthCheckKey(key string) string {
+	return humanizeCheckKey(key)
 }
 
 // HandleVersion handles /api/v1/version endpoint
@@ -728,7 +606,7 @@ func HandleVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // UptimeSeconds returns server uptime in whole seconds, for callers (such as
@@ -747,6 +625,7 @@ func Status() string {
 		Cache:     checkCache(),
 		Disk:      checkDisk(),
 		Scheduler: checkScheduler(),
+		Datasets:  health.Snapshot(),
 	}
 	maintenance, shutdown, pending, _ := lifecycleState()
 	return resolveStatus(checks, maintenance, shutdown, pending)
@@ -755,10 +634,10 @@ func Status() string {
 // checkDatabase checks database connectivity
 func checkDatabase() string {
 	if dbPinger == nil {
-		return "unknown"
+		return "error"
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := dbPinger.PingContext(ctx); err != nil {
@@ -770,18 +649,14 @@ func checkDatabase() string {
 
 // checkCache checks cache connectivity
 func checkCache() string {
-	// In-memory cache is always available
-	// Valkey/Redis check would go here if configured
-	return "ok"
+	return cache.HealthStatus()
 }
 
-// checkScheduler reports the internal scheduler's health. An unwired probe
-// reports "unknown", matching checkDatabase: the health endpoint can be served
-// by an embedding that never started a scheduler, and an unknown component is
-// not treated as a failure of the whole server.
+// checkScheduler reports the required internal scheduler's health. A missing
+// probe is an error because this service always runs its built-in scheduler.
 func checkScheduler() string {
 	if schedulerProbe == nil {
-		return "unknown"
+		return "error"
 	}
 	if schedulerProbe() != nil {
 		return "error"
@@ -802,41 +677,81 @@ func torFeature() TorInfo {
 		return TorInfo{Status: "disabled"}
 	}
 
-	info := TorInfo{Enabled: true}
-	if !manager.Running() {
-		info.Status = "starting"
-		return info
+	enabled, running, status, hostname := manager.StatusSnapshot()
+	if !enabled {
+		return TorInfo{Status: "disabled"}
 	}
-
-	info.Running = true
-	info.Hostname = manager.OnionAddress()
-	switch {
-	case manager.Ping() != nil:
-		info.Status = "error"
-	case info.Hostname == "":
-		info.Status = "starting"
-	default:
-		info.Status = "healthy"
-	}
-	return info
+	return TorInfo{Enabled: enabled, Running: running, Status: status, Hostname: hostname}
 }
 
 // i2pFeature reports the eepsite state (PART 31.2). I2P is opt-in, so without
 // a registered provider the feature reports itself as disabled rather than
 // claiming an eepsite that does not exist.
 func i2pFeature() I2PInfo {
-	if i2pProbe == nil {
-		return I2PInfo{Status: "disabled", Provider: "none"}
+	var info I2PInfo
+	if i2pProbe != nil {
+		info = i2pProbe()
+	} else if manager := i2p.Get(); manager != nil {
+		snapshot := manager.Snapshot()
+		info = I2PInfo{Enabled: snapshot.Enabled, Running: snapshot.Running, Status: normalizeI2PHealthStatus(i2pLifecycleState(snapshot.State)), State: string(snapshot.State), Hostname: snapshot.Address, Provider: string(snapshot.Provider)}
+	} else {
+		return I2PInfo{Status: "disabled", State: "disabled", Provider: "none"}
 	}
-
-	info := i2pProbe()
 	if info.Provider == "" {
 		info.Provider = "none"
 	}
 	if info.Status == "" {
-		info.Status = "disabled"
+		info.Status = normalizeI2PHealthStatus(StateToI2P(info.State))
+	}
+	if info.State == "" {
+		info.State = string(StateToI2P(info.Status))
 	}
 	return info
+}
+
+type i2pLifecycleState string
+
+const (
+	i2pDisabled    i2pLifecycleState = "disabled"
+	i2pStarting    i2pLifecycleState = "starting"
+	i2pBuilding    i2pLifecycleState = "building"
+	i2pRunning     i2pLifecycleState = "running"
+	i2pUnavailable i2pLifecycleState = "error"
+	i2pNoProvider  i2pLifecycleState = "no_provider"
+)
+
+func StateToI2P(state string) i2pLifecycleState {
+	switch state {
+	case "healthy":
+		return i2pRunning
+	case "unavailable":
+		return i2pUnavailable
+	case "starting":
+		return i2pStarting
+	case "building":
+		return i2pBuilding
+	case "running":
+		return i2pRunning
+	case "error":
+		return i2pUnavailable
+	case "no_provider":
+		return i2pNoProvider
+	default:
+		return i2pDisabled
+	}
+}
+
+func normalizeI2PHealthStatus(state i2pLifecycleState) string {
+	switch state {
+	case i2pStarting, i2pBuilding:
+		return "starting"
+	case i2pRunning:
+		return "healthy"
+	case i2pUnavailable:
+		return "unavailable"
+	default:
+		return "disabled"
+	}
 }
 
 // geoipFeature reports whether GeoIP lookups are actually available
@@ -868,8 +783,8 @@ func overlayCheck(enabled bool, status string) string {
 	if !enabled {
 		return ""
 	}
-	if status == "error" {
-		return "error"
+	if status == "unavailable" || status == "error" {
+		return "degraded"
 	}
 	return "ok"
 }

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/apimgr/api/src/config"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -41,14 +42,22 @@ var formBodyContextKey = formBodyContextKeyType{}
 // Existing shapes are untouched: any other content type (JSON, raw text) is
 // passed through unread, and an explicit query parameter always wins over a
 // form field of the same name.
-func formInputMiddleware(next http.Handler) http.Handler {
+func formInputMiddleware(next http.Handler, configs ...*config.Config) http.Handler {
+	limit := int64(formValueLimit)
+	if len(configs) > 0 && configs[0] != nil {
+		limit = configs[0].Server.Limits.MaxBodySizeBytes()
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !isFormSubmission(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if err := parseSubmittedForm(w, r); err != nil {
+		if err := parseSubmittedForm(w, r, limit); err != nil {
 			next.ServeHTTP(w, r)
+			return
+		}
+		if !normalizeInputValues(r.PostForm) || !normalizeInputValues(r.Form) {
+			writePasswordWhitespaceError(w, r)
 			return
 		}
 		next.ServeHTTP(w, requestWithFormInput(r))
@@ -75,8 +84,12 @@ func isFormSubmission(r *http.Request) bool {
 
 // parseSubmittedForm parses the submitted form with a bounded reader so a
 // large or malformed body cannot exhaust memory.
-func parseSubmittedForm(w http.ResponseWriter, r *http.Request) error {
-	r.Body = http.MaxBytesReader(w, r.Body, formValueLimit)
+func parseSubmittedForm(w http.ResponseWriter, r *http.Request, limits ...int64) error {
+	limit := int64(formValueLimit)
+	if len(limits) > 0 && limits[0] > 0 {
+		limit = limits[0]
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
 		return err
@@ -162,7 +175,7 @@ func formFallbackPattern(pattern string) string {
 func handlerIdentity(handler http.Handler) (uintptr, bool) {
 	value := reflect.ValueOf(handler)
 	switch value.Kind() {
-	case reflect.Func, reflect.Ptr, reflect.UnsafePointer:
+	case reflect.Func, reflect.Pointer, reflect.UnsafePointer:
 		return value.Pointer(), true
 	default:
 		return 0, false

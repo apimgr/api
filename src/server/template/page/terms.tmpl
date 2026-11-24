@@ -1,0 +1,12 @@
+{{define "content"}}
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{.PageTitle}}</h1>
+    <p class="page-lead">{{.SiteTitle}}</p>
+  </header>
+
+  <section class="section-card" aria-label="{{.PageTitle}}">
+    {{.TermsContent}}
+  </section>
+</article>
+{{end}}

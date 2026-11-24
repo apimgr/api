@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/apimgr/api/src/common/i18n"
+	appmode "github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/service/network"
 )
 
@@ -51,7 +53,7 @@ func apiNetworkMACVendorHandler(w http.ResponseWriter, r *http.Request) {
 	mac := paramValue(r, "mac")
 	vendor, err := networkService.MACVendor(mac)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MAC", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MAC")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"mac": mac, "vendor": vendor})
@@ -66,12 +68,12 @@ type networkSubnetParams struct {
 // CIDR block passed as ?cidr=.
 func apiNetworkSubnetHandler(w http.ResponseWriter, r *http.Request) {
 	params := networkSubnetParams{CIDR: r.URL.Query().Get("cidr")}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 	info, err := networkService.SubnetCalculate(params.CIDR)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CIDR", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CIDR")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, info)
@@ -82,7 +84,7 @@ func apiNetworkSubnetHandler(w http.ResponseWriter, r *http.Request) {
 func apiNetworkULAHandler(w http.ResponseWriter, r *http.Request) {
 	ula, err := networkService.GenerateULA()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "ULA_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "ULA_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"ula": ula})
@@ -92,7 +94,7 @@ func apiNetworkULAHandler(w http.ResponseWriter, r *http.Request) {
 func apiNetworkPortHandler(w http.ResponseWriter, r *http.Request) {
 	port, err := networkService.RandomPort()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "PORT_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "PORT_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]int{"port": port})
@@ -112,18 +114,18 @@ func apiNetworkPingHandler(w http.ResponseWriter, r *http.Request) {
 	if countParam := r.URL.Query().Get("count"); countParam != "" {
 		parsed, err := strconv.Atoi(countParam)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a positive integer", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COUNT")
 			return
 		}
 		params.Count = parsed
 	}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 
 	result, err := networkService.Ping(params.Host, params.Count)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "PING_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "PING_FAILED")
 		return
 	}
 
@@ -139,13 +141,13 @@ type networkSSLParams struct {
 // using network.Service.SSLInfo.
 func apiNetworkSSLHandler(w http.ResponseWriter, r *http.Request) {
 	params := networkSSLParams{Host: r.URL.Query().Get("host")}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 
 	result, err := networkService.SSLInfo(params.Host)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "SSL_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "SSL_LOOKUP_FAILED")
 		return
 	}
 
@@ -161,13 +163,13 @@ type networkURLParams struct {
 // network.Service.ParseURL.
 func apiNetworkURLHandler(w http.ResponseWriter, r *http.Request) {
 	params := networkURLParams{URL: r.URL.Query().Get("url")}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 
 	result, err := networkService.ParseURL(params.URL)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_URL", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_URL")
 		return
 	}
 
@@ -183,13 +185,13 @@ type networkWhoisParams struct {
 // network.Service.Whois.
 func apiNetworkWhoisHandler(w http.ResponseWriter, r *http.Request) {
 	params := networkWhoisParams{Domain: r.URL.Query().Get("domain")}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 
 	result, err := networkService.Whois(params.Domain)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "WHOIS_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "WHOIS_LOOKUP_FAILED")
 		return
 	}
 
@@ -205,11 +207,32 @@ func apiNetworkWhoisHandler(w http.ResponseWriter, r *http.Request) {
 // root). This project ships as an unprivileged, non-root, self-contained
 // binary with no guarantee of that capability on the host it runs on, so
 // this honestly reports unsupported rather than shipping a fake
-// TCP-connect approximation mislabeled as "traceroute". See TODO.AI.md
-// "Known permanent API gaps" for the same pattern applied to generate/qr,
-// language/detect, and research/extract.
+// TCP-connect approximation mislabeled as "traceroute".
 func apiNetworkTracerouteHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "traceroute requires a raw ICMP socket (CAP_NET_RAW/root), which this unprivileged self-contained binary cannot assume it has", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
+}
+
+func writeLocalizedAPIError(w http.ResponseWriter, r *http.Request, status int, code string) {
+	key := "errors.server_error"
+	switch status {
+	case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusRequestTimeout:
+		key = "errors.bad_request"
+	case http.StatusUnauthorized:
+		key = "errors.unauthorized"
+	case http.StatusForbidden:
+		key = "errors.forbidden"
+	case http.StatusNotFound:
+		key = "errors.not_found"
+	case http.StatusConflict:
+		key = "errors.conflict"
+	case http.StatusTooManyRequests:
+		key = "errors.rate_limited"
+	case http.StatusNotImplemented:
+		key = "errors.not_supported"
+	case http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout:
+		key = "errors.maintenance_mode"
+	}
+	writeEnvelopeError(w, status, code, i18n.Translate(i18n.LangFromRequest(r), key), nil)
 }
 
 // writeEnvelopeOK writes a PART 14 success envelope: {"ok":true,"data":...}.
@@ -217,7 +240,7 @@ func writeEnvelopeOK(w http.ResponseWriter, status int, data interface{}) {
 	writeJSONEnvelope(w, status, map[string]interface{}{
 		"ok":   true,
 		"data": data,
-	})
+	}, i18n.Translate(appmode.GetLang(), "errors.server_error"))
 }
 
 // writeEnvelopeError writes a PART 14 error envelope:
@@ -231,21 +254,31 @@ func writeEnvelopeError(w http.ResponseWriter, status int, code, message string,
 	if details != nil {
 		body["details"] = details
 	}
-	writeJSONEnvelope(w, status, body)
+	writeJSONEnvelope(w, status, body, message)
 }
 
 // writeJSONEnvelope marshals with 2-space indentation and a single
 // trailing newline, per PART 14 JSON formatting rules.
-func writeJSONEnvelope(w http.ResponseWriter, status int, body interface{}) {
+func writeJSONEnvelope(w http.ResponseWriter, status int, body interface{}, fallbackMessage ...string) {
 	data, err := json.MarshalIndent(body, "", "  ")
 	if err != nil {
+		message := i18n.Translate(appmode.GetLang(), "errors.server_error")
+		if len(fallbackMessage) > 0 && fallbackMessage[0] != "" {
+			message = fallbackMessage[0]
+		}
+		encodedMessage, marshalErr := json.Marshal(message)
+		if marshalErr != nil {
+			encodedMessage = []byte(`""`)
+		}
+		fallback := append([]byte(`{"ok":false,"error":"INTERNAL","message":`), encodedMessage...)
+		fallback = append(fallback, '}', '\n')
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"ok":false,"error":"INTERNAL","message":"failed to encode response"}` + "\n"))
+		_, _ = w.Write(fallback)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Write(data)
-	w.Write([]byte("\n"))
+	_, _ = w.Write(data)
+	_, _ = w.Write([]byte("\n"))
 }

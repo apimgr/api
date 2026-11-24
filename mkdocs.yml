@@ -112,6 +112,7 @@ nav:
   - Development:
     - Contributing: development.md
     - Translating: translating.md
+    - Vendored browser assets: vendor-assets.md
 
 extra:
   social:

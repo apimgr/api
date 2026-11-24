@@ -9,7 +9,7 @@
   <div class="container">
     {{/* LogoURL is empty unless server.branding.logo is configured, in which
          case the brand renders that image instead of the title text. */}}
-    <a href="/" class="site-brand">
+    <a href="{{path .BaseURL "/"}}" class="site-brand">
       {{if .LogoURL}}<img class="site-logo" src="{{.LogoURL}}" alt="{{.SiteTitle}}">{{else}}{{.SiteTitle}}{{end}}
     </a>
 
@@ -18,14 +18,22 @@
     {{/* Actions stay in the header on mobile too - never inside the slide-in
          menu (PART 16 "Mobile Responsive Rules"). */}}
     <div class="header-actions">
-      {{/* No owner-token profile menu exists yet, so this is the plain
-           preferences link branch; the route is /server/preferences either way. */}}
-      <a href="/server/preferences" class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><span aria-hidden="true">⚙</span></a>
+      {{if .OwnerTokenCookieExists}}
+      <details class="header-preferences">
+        <summary class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><span aria-hidden="true">⚙</span></summary>
+        <div class="header-preferences-menu">
+          <a href="{{path .BaseURL "/server/preferences/tokens"}}">{{t .Lang "page_text.text.owner.tokens.a5dc2b2bfe"}}</a>
+          <a href="{{path .BaseURL "/server/preferences"}}">{{t .Lang "common.preferences"}}</a>
+        </div>
+      </details>
+      {{else}}
+      <a href="{{path .BaseURL "/server/preferences"}}" class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><span aria-hidden="true">⚙</span></a>
+      {{end}}
 
       {{/* A real form submit, so switching themes works with JavaScript
            disabled; static/js/theme.js only adds instant preview. The target is
            nextTheme of the theme actually in effect, never a fixed value. */}}
-      <form action="/server/preferences" method="POST" class="theme-toggle-form">
+      <form action="{{path .BaseURL "/server/preferences"}}" method="POST" class="theme-toggle-form">
         {{csrfField .CSRFToken}}
         <input type="hidden" name="theme" value="{{nextTheme .Theme}}">
         <button type="submit" class="theme-button" aria-label="{{t .Lang "theme.toggle"}}" title="{{t .Lang "theme.toggle"}}">
@@ -33,10 +41,8 @@
         </button>
       </form>
 
-      <button id="pwa-install-btn" class="btn btn-sm" type="button" hidden>{{t .Lang "pwa.install"}}</button>
-
-      <span id="offline-indicator" class="offline-indicator" role="status" aria-live="polite" hidden>{{t .Lang "pwa.offline_message"}}</span>
     </div>
   </div>
+  {{if .HeaderExtension}}{{.HeaderExtension}}{{end}}
 </header>
 {{end}}

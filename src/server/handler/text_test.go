@@ -84,15 +84,14 @@ func TestTextUUIDsHandler(t *testing.T) {
 	}
 }
 
-// TestTextHashHandler covers the sha256 default algorithm, an explicit
-// algorithm, the missing-input 400, and the unsupported-algorithm 400
-// (routed through text.Hash's own error).
+// TestTextHashHandler covers the sha256 default, an explicit algorithm, and
+// canonical bad-request errors for missing input and unsupported algorithms.
 func TestTextHashHandler(t *testing.T) {
 	t.Run("missing input returns 400", func(t *testing.T) {
 		rec := doGet(TextHashHandler, "/api/v1/text/hash?algorithm=md5")
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		m := decodeJSON(t, rec)
-		assert.Equal(t, "input parameter required", m["error"])
+		assert.Equal(t, "BAD_REQUEST", m["error"])
 	})
 
 	t.Run("default algorithm is sha256", func(t *testing.T) {
@@ -114,7 +113,7 @@ func TestTextHashHandler(t *testing.T) {
 		rec := doGet(TextHashHandler, "/api/v1/text/hash?algorithm=notreal&input=hello")
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		m := decodeJSON(t, rec)
-		assert.Contains(t, m["error"], "unsupported algorithm")
+		assert.Equal(t, "BAD_REQUEST", m["error"])
 	})
 }
 
@@ -431,12 +430,15 @@ func TestRegisterTextRoutes(t *testing.T) {
 // the JSON content type even on error responses, not just success ones.
 func TestJSONError_ContentType(t *testing.T) {
 	rec := httptest.NewRecorder()
-	jsonError(rec, "boom", http.StatusTeapot)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/text/hash", nil)
+	jsonError(rec, req, "errors.bad_request", http.StatusTeapot)
 
 	assert.Equal(t, http.StatusTeapot, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 	m := decodeJSON(t, rec)
-	assert.Equal(t, "boom", m["error"])
+	assert.Equal(t, false, m["ok"])
+	assert.Equal(t, "BAD_REQUEST", m["error"])
+	assert.Equal(t, "Invalid request format", m["message"])
 }
 
 // TestJSONResponse_ContentType confirms the shared jsonResponse helper sets

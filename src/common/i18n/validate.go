@@ -10,6 +10,9 @@ import (
 // loaded locales, without triggering MustLoad's panic-on-failure behavior.
 // Callers (tests, CLI diagnostics) can use this to get a plain error.
 func Validate() error {
+	if err := validateEmbeddedRegistry(); err != nil {
+		return err
+	}
 	return validateLocales(locales)
 }
 
@@ -20,8 +23,9 @@ func Validate() error {
 //  2. no translation value is an empty string
 //  3. the set of {token} interpolation variables in a value matches exactly
 //     between each language and English, for the same key
-//  4. every "plurals.<group>.*" family defines all categories required for
-//     that language (per requiredPluralCategories/pluralCategoriesFor)
+//  4. every "plurals.<group>.*" family defines the required categories for
+//     that language, has no orphan categories, and may add explicit zero
+//     text as allowed by AI.md PART 30
 func validateLocales(all map[string]*locale) error {
 	englishLocale, ok := all[DefaultLanguage]
 	if !ok {
@@ -36,6 +40,11 @@ func validateLocales(all map[string]*locale) error {
 		if !ok {
 			errs = append(errs, fmt.Sprintf("locale %q: not loaded", lang))
 			continue
+		}
+		if registration, ok := registeredLanguage(lang); ok {
+			if l.meta.Name != registration.name || l.meta.NativeName != registration.nativeName || l.meta.Direction != registration.direction {
+				errs = append(errs, fmt.Sprintf("locale %q: metadata does not match language registry", lang))
+			}
 		}
 
 		if msgs := validateKeySet(lang, l, englishKeys); len(msgs) > 0 {
@@ -137,8 +146,8 @@ func validateInterpolationVars(lang string, l *locale, english *locale) []string
 	return msgs
 }
 
-// validatePluralCategories reports any "plurals.<group>" family missing a
-// category required for lang.
+// validatePluralCategories reports required plural categories that are
+// missing and categories outside the language's CLDR set or optional zero.
 func validatePluralCategories(lang string, l *locale) []string {
 	var msgs []string
 
@@ -161,12 +170,30 @@ func validatePluralCategories(lang string, l *locale) []string {
 	}
 	sort.Strings(groupNames)
 
+	allowed := make(map[string]bool, len(required)+1)
+	for _, category := range required {
+		allowed[category] = true
+	}
+	allowed["zero"] = true
+
 	for _, group := range groupNames {
 		for _, category := range required {
 			key := prefix + group + "." + category
 			if _, ok := l.flat[key]; !ok {
 				msgs = append(msgs, fmt.Sprintf(
 					"locale %q: plural group %q missing required category %q (key %q)",
+					lang, group, category, key,
+				))
+			}
+		}
+		for key := range l.flat {
+			if !strings.HasPrefix(key, prefix+group+".") {
+				continue
+			}
+			category := strings.TrimPrefix(key, prefix+group+".")
+			if !allowed[category] {
+				msgs = append(msgs, fmt.Sprintf(
+					"locale %q: plural group %q has orphaned category %q (key %q)",
 					lang, group, category, key,
 				))
 			}

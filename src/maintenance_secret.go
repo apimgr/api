@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/paths"
+	"github.com/apimgr/api/src/pgp"
 	"golang.org/x/term"
 )
 
@@ -66,26 +69,58 @@ func handleSecretCommand(args []string, binaryName string) {
 		cprintf("❌ Failed to initialize database: %v\n", err)
 		os.Exit(exUnavailable)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	ctx := context.Background()
+	if err := database.EnsureAppSecrets(ctx); err != nil {
+		cprintf("❌ Failed to initialize project secrets: %v\n", err)
+		os.Exit(exUnavailable)
+	}
+	if err := resumeEncryptionKeyRotation(ctx, cfg); err != nil {
+		cprintf("❌ Failed to finish encryption-key rotation before maintenance: %v\n", err)
+		os.Exit(exUnavailable)
+	}
 	if name == database.SecretInstallationSecret {
-		if err := database.RotateSecret(ctx, database.SecretInstallationSecret); err != nil {
+		if err := pgp.RotateInstallationSecret(ctx); err != nil {
 			cprintf("❌ Failed to rotate %s: %v\n", name, err)
 			os.Exit(1)
 		}
 		cprintln("✅ installation_secret rotated; the previous value stays valid for 7 days")
 	} else {
-		if err := config.RotateEncryptionKey(cfg); err != nil {
+		currentKey, err := decodeAtRestKey(cfg.Server.Security.EncryptionKey)
+		if err != nil {
+			cprintf("❌ Failed to read current encryption key: %v\n", err)
+			os.Exit(exConfig)
+		}
+		if _, err := database.LoadPreviousEncryptionKey(ctx, currentKey, time.Now().UTC()); err == nil {
+			cprintln("❌ An encryption-key grace period is still active; retry after it expires.")
+			os.Exit(exUnavailable)
+		} else if !errors.Is(err, database.ErrSecretNotFound) {
+			cprintf("❌ Failed to check encryption-key rotation state: %v\n", err)
+			os.Exit(exUnavailable)
+		}
+		if err := config.RotateEncryptionKey(cfg, func(previousKey, nextKey []byte, until time.Time) error {
+			if err := database.StorePendingEncryptionKey(ctx, previousKey, nextKey, until); err != nil {
+				return err
+			}
+			return database.StorePreviousEncryptionKey(ctx, previousKey, nextKey, until)
+		}); err != nil {
 			cprintf("❌ Failed to rotate %s: %v\n", name, err)
 			os.Exit(1)
+		}
+		if err := database.DeletePendingEncryptionKey(ctx); err != nil {
+			cprintf("❌ Encryption key changed, but pending rotation state could not be cleared: %v\n", err)
+			os.Exit(exUnavailable)
+		}
+		if err := resumeEncryptionKeyRotation(ctx, cfg); err != nil {
+			cprintf("❌ Encryption key changed, but dependent data migration is incomplete: %v\n", err)
+			os.Exit(exUnavailable)
 		}
 		cprintln("✅ encryption_key rotated; the previous key stays valid for 30 days")
 	}
 
-	if err := database.WriteAuditEvent(ctx, event, actor, "", map[string]any{
+	if err := database.WriteAuditEventWithSource(ctx, event, actor, "", "cli", map[string]any{
 		"secret": name,
-		"source": "maintenance_cli",
 	}); err != nil {
 		cprintf("⚠️ Rotation succeeded but the audit entry failed: %v\n", err)
 	}

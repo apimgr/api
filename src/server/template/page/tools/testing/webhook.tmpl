@@ -4,32 +4,39 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/testing">Testing Tools</a> / Webhook Inspector
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/testing"}}">{{t .Lang "categories.testing.name"}}</a> {{t .Lang "tool_pages.text.webhook.inspector.aaf2549357"}}
     </nav>
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Webhook Inspector</h1>
-        <button class="btn btn-icon" data-favorite="testing-webhook" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.webhook.inspector.a98bb85ee7"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="testing-webhook" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
       <p class="tool-description">
-        POST a payload and get back an inspection of its headers and body in the same
-        response. Nothing is stored — this is a same-request echo, not a persistent
-        webhook receiver.
+        {{t .Lang "tool_pages.text.post.a.payload.and.get.back.an.inspection.of.d28aedd6c7"}}
       </p>
-      <form id="webhook-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/test/webhook">
+      <form id="webhook-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/test/webhook" method="post" action="{{path .BaseURL "/testing/webhook"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Payload (raw body)</label>
-          <textarea name="body" class="form-input" rows="6" placeholder='{"event":"example","data":{}}'></textarea>
+          <label class="form-label" for="webhook-form-body">{{t .Lang "tool_pages.text.payload.raw.body.59a1a5eb65"}}</label>
+          <textarea name="body" class="form-input" rows="6" placeholder='{"event":"example","data":{}}' id="webhook-form-body"></textarea>
         </div>
-        <button type="submit" class="btn btn-primary">Send</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.send.f6f4688ff2"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
       <div id="webhook-form-result" class="tool-result" hidden></div>
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/test/webhook -d '{"event":"example"}'</pre>

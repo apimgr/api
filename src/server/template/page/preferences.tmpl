@@ -1,58 +1,68 @@
 {{define "content"}}
-<section class="hero">
-  <div class="container">
-    <h1 class="hero-title">⚙️ Preferences</h1>
-    <p class="hero-subtitle">Theme and language are stored in your browser only — no account, no server-side record.</p>
-  </div>
-</section>
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{t .Lang "common.preferences"}}</h1>
+    <p class="page-lead">{{t .Lang "page_text.text.theme.and.language.preferences.are.stored.in.ed090ff2da"}}</p>
+  </header>
 
-<section>
-  <div class="container container-sm">
-    <div class="card">
-      <div class="card-header">Appearance &amp; Language</div>
-      <div class="card-body">
-        <form action="/server/preferences" method="POST" class="form">
-          {{csrfField .CSRFToken}}
-          <div class="form-group">
-            <label for="pref-theme">Theme</label>
-            <select id="pref-theme" name="theme" class="form-control">
-              <option value="dark"{{if eq .Theme "dark"}} selected{{end}}>Dark</option>
-              <option value="light"{{if eq .Theme "light"}} selected{{end}}>Light</option>
-              <option value="auto"{{if eq .Theme "auto"}} selected{{end}}>Auto (match system)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="pref-lang">Language</label>
-            <select id="pref-lang" name="lang" class="form-control">
-              {{range .Languages}}
-              <option value="{{.Code}}"{{if eq $.Lang .Code}} selected{{end}}>{{.NativeName}} ({{.Name}})</option>
-              {{end}}
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary">Save preferences</button>
-        </form>
+  <form id="preferences-form" action="{{path .BaseURL "/server/preferences"}}" method="POST" class="form">
+    {{csrfField .CSRFToken}}
+    <input type="hidden" name="consent_form" value="1">
+  <section class="section-card" aria-labelledby="preferences-appearance">
+    <h2 id="preferences-appearance">{{t .Lang "page_text.text.appearance.and.language.dfe87d5e5b"}}</h2>
+      <div class="form-group">
+        <label class="form-label" for="pref-theme">{{t .Lang "page_text.text.theme.efb52e7172"}}</label>
+        <select id="pref-theme" name="theme" class="form-select">
+          <option value="dark"{{if eq .Theme "dark"}} selected{{end}}>{{t .Lang "theme.dark"}}</option>
+          <option value="light"{{if eq .Theme "light"}} selected{{end}}>{{t .Lang "theme.light"}}</option>
+          <option value="auto"{{if eq .Theme "auto"}} selected{{end}}>{{t .Lang "theme.auto"}}</option>
+        </select>
       </div>
-    </div>
+      <div class="form-group" id="language">
+        <label class="form-label" for="pref-lang">{{t .Lang "page_text.text.language.a4fe65264e"}}</label>
+        <select id="pref-lang" name="lang" class="form-select">
+          <option value=""{{if eq .PreferenceLanguage ""}} selected{{end}}>{{t .Lang "theme.auto"}} ({{range .Languages}}{{if eq $.Lang .Code}}{{.NativeName}}{{end}}{{end}})</option>
+          {{range .Languages}}
+          <option value="{{.Code}}" lang="{{.Code}}"{{if eq $.PreferenceLanguage .Code}} selected{{end}}>{{.NativeName}}</option>
+          {{end}}
+        </select>
+      </div>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Move these settings to another device</div>
-      <div class="card-body">
-        <p>Open this link in another browser, or type the short code into the field below on that device.</p>
-        <dl>
-          <dt>Link</dt>
-          <dd><code class="break-all">{{.PrefExportURL}}</code></dd>
-          <dt>Short code</dt>
-          <dd><code class="break-all">{{.PrefExportCode}}</code></dd>
-        </dl>
-        <form action="/server/preferences/import" method="GET" class="form">
-          <div class="form-group">
-            <label for="pref-code">Paste a link or short code</label>
-            <input id="pref-code" name="code" type="text" class="form-control" autocomplete="off" required>
-          </div>
-          <button type="submit" class="btn btn-secondary">Import preferences</button>
-        </form>
-      </div>
+  <section class="section-card" aria-labelledby="preferences-privacy">
+    <h2 id="preferences-privacy">{{t .Lang "page_text.text.privacy.54a57c3147"}}</h2>
+    <fieldset class="form-group">
+      <legend>{{t .Lang "page_text.text.cookie.categories.a4bd027064"}}</legend>
+      <div class="form-group"><input type="checkbox" id="consent-essential" checked disabled><label for="consent-essential">{{t .Lang "page_text.text.essential.cookies.always.on.670343c845"}}</label></div>
+      <div class="form-group"><input type="checkbox" id="consent-preferences" name="consent_preferences"{{if .ConsentPreferences}} checked{{end}}{{if not .Privacy.Cookies.Preferences.Enabled}} disabled{{end}}><label for="consent-preferences">{{t .Lang "page_text.text.preference.cookies.f6c6b2f457"}}</label><p class="form-help">{{.Privacy.Cookies.Preferences.Description}}</p></div>
+      <div class="form-group"><input type="checkbox" id="consent-analytics" name="consent_analytics"{{if .ConsentAnalytics}} checked{{end}}{{if not .Privacy.Cookies.Analytics.Enabled}} disabled{{end}}><label for="consent-analytics">{{t .Lang "page_text.text.analytics.cookies.3e157596e9"}}</label><p class="form-help">{{.Privacy.AnalyticsCookieDescription}}</p></div>
+    </fieldset>
+    {{if .Privacy.Data.Sold}}
+    <div class="form-group"><input type="checkbox" id="ccpa-opt-out" name="ccpa_opt_out" value="true"{{if .CCPAOptOut}} checked{{end}}><label for="ccpa-opt-out">{{t .Lang "page_text.text.do.not.sell.or.share.my.personal.information.115467752c"}}</label></div>
+    {{end}}
+  </section>
+
+  <div class="form-actions">
+    <a class="btn btn-secondary" href="{{.CancelURL}}">{{t .Lang "common.cancel"}}</a>
+    <button class="btn btn-secondary" type="button" popovertarget="reset-preferences">{{t .Lang "page_text.text.reset.daee7606b3"}}</button>
+    <button class="btn btn-primary" type="submit">{{t .Lang "common.save"}}</button>
+  </div>
+  <div id="reset-preferences" class="reset-popover" popover>
+    <h2>{{t .Lang "page_text.text.forget.these.preferences.8c965f7367"}}</h2>
+    <p>{{t .Lang "page_text.text.this.erases.this.site.s.non.credential.cooki.353bf506e3"}}</p>
+    <div class="form-actions">
+      <button class="btn btn-secondary" type="button" popovertarget="reset-preferences" popovertargetaction="hide">{{t .Lang "page_text.text.keep.preferences.6d410e1ca4"}}</button>
+      <button class="btn btn-danger" type="submit" name="action" value="reset">{{t .Lang "page_text.text.erase.everything.240a9adadc"}}</button>
     </div>
   </div>
-</section>
+  </form>
+
+  <section class="section-card" aria-labelledby="more-preferences">
+    <h2 id="more-preferences">{{t .Lang "page_text.text.more.preferences.f63eb9a8c7"}}</h2>
+    <ul class="hub-list">
+      <li class="hub-item"><a class="hub-link" href="{{path .BaseURL "/server/preferences/sync"}}"><span class="hub-title">{{t .Lang "page_text.text.sync.preferences.fc79211080"}}</span><span class="hub-desc">{{t .Lang "page_text.text.transfer.theme.and.language.settings.to.anot.69eb391118"}}</span></a></li>
+      <li class="hub-item"><a class="hub-link" href="{{path .BaseURL "/server/preferences/tokens"}}"><span class="hub-title">{{t .Lang "page_text.text.owner.tokens.a5dc2b2bfe"}}</span><span class="hub-desc">{{t .Lang "page_text.text.manage.the.credentials.that.identify.your.an.e3e4a1b248"}}</span></a></li>
+    </ul>
+  </section>
+</article>
 {{end}}

@@ -6,7 +6,7 @@ FROM casjaysdev/go:latest AS builder
 RUN apk add --no-cache git bash
 
 ARG TARGETARCH
-ARG VERSION=dev
+ARG VERSION=devel
 ARG BUILD_EPOCH
 ARG COMMIT_ID
 ARG OFFICIAL_SITE
@@ -31,7 +31,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOFLAGS=-buildvcs=false go bui
 FROM alpine:latest
 
 # ARGs for build-time values (set by docker build --build-arg)
-ARG VERSION=dev
+ARG VERSION=devel
 ARG BUILD_DATE
 ARG BUILD_EPOCH
 ARG COMMIT_ID
@@ -56,7 +56,10 @@ RUN apk add --no-cache \
     bash \
     tini \
     shadow \
-    tor
+    tor \
+    i2pd \
+    tzdata \
+    ca-certificates
 
 # NO USER directive and no user/group creation - the container starts as root
 # and the binary creates its own user/group, sets permissions, then drops

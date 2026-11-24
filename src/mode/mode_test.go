@@ -190,8 +190,8 @@ func TestLang(t *testing.T) {
 
 func TestInitialize_CLIModeWins(t *testing.T) {
 	resetState(t)
-	os.Unsetenv("MODE")
-	os.Unsetenv("DEBUG")
+	require.NoError(t, os.Unsetenv("MODE"))
+	require.NoError(t, os.Unsetenv("DEBUG"))
 
 	require.NoError(t, Initialize("development", false, false))
 	assert.Equal(t, Development, GetCurrentMode())
@@ -200,7 +200,7 @@ func TestInitialize_CLIModeWins(t *testing.T) {
 func TestInitialize_EnvModeUsedWhenNoCLI(t *testing.T) {
 	resetState(t)
 	t.Setenv("MODE", "development")
-	os.Unsetenv("DEBUG")
+	require.NoError(t, os.Unsetenv("DEBUG"))
 
 	require.NoError(t, Initialize("", false, false))
 	assert.Equal(t, Development, GetCurrentMode())
@@ -208,8 +208,8 @@ func TestInitialize_EnvModeUsedWhenNoCLI(t *testing.T) {
 
 func TestInitialize_DefaultProductionWhenNothingSet(t *testing.T) {
 	resetState(t)
-	os.Unsetenv("MODE")
-	os.Unsetenv("DEBUG")
+	require.NoError(t, os.Unsetenv("MODE"))
+	require.NoError(t, os.Unsetenv("DEBUG"))
 
 	require.NoError(t, Initialize("", false, false))
 	assert.Equal(t, Production, GetCurrentMode())
@@ -218,7 +218,7 @@ func TestInitialize_DefaultProductionWhenNothingSet(t *testing.T) {
 
 func TestInitialize_CLIDebugWinsOverEnv(t *testing.T) {
 	resetState(t)
-	os.Unsetenv("MODE")
+	require.NoError(t, os.Unsetenv("MODE"))
 	t.Setenv("DEBUG", "true")
 
 	// cliDebugSet=true with cliDebug=false must win over DEBUG=true env var.
@@ -228,7 +228,7 @@ func TestInitialize_CLIDebugWinsOverEnv(t *testing.T) {
 
 func TestInitialize_EnvDebugUsedWhenCLINotSet(t *testing.T) {
 	resetState(t)
-	os.Unsetenv("MODE")
+	require.NoError(t, os.Unsetenv("MODE"))
 	t.Setenv("DEBUG", "true")
 
 	require.NoError(t, Initialize("", false, false))
@@ -237,7 +237,7 @@ func TestInitialize_EnvDebugUsedWhenCLINotSet(t *testing.T) {
 
 func TestInitialize_DebugModeDefaultsDebugOnWhenNoExplicitDebug(t *testing.T) {
 	resetState(t)
-	os.Unsetenv("DEBUG")
+	require.NoError(t, os.Unsetenv("DEBUG"))
 
 	require.NoError(t, Initialize("debug", false, false))
 	assert.Equal(t, Debug, GetCurrentMode())
@@ -265,8 +265,8 @@ func TestInitialize_DebugModeWithFalsyDebugEnv(t *testing.T) {
 // env-var case: an explicit --debug=false wins over debug mode's default.
 func TestInitialize_DebugModeWithFalsyDebugFlag(t *testing.T) {
 	resetState(t)
-	os.Unsetenv("MODE")
-	os.Unsetenv("DEBUG")
+	require.NoError(t, os.Unsetenv("MODE"))
+	require.NoError(t, os.Unsetenv("DEBUG"))
 
 	require.NoError(t, Initialize("debug", false, true))
 	assert.Equal(t, Debug, GetCurrentMode())
@@ -277,7 +277,7 @@ func TestInitialize_DebugModeWithFalsyDebugFlag(t *testing.T) {
 // nothing but an explicit debug mode selection may select it.
 func TestInitialize_DebugModeIsNeverImplied(t *testing.T) {
 	resetState(t)
-	os.Unsetenv("MODE")
+	require.NoError(t, os.Unsetenv("MODE"))
 	t.Setenv("DEBUG", "true")
 
 	require.NoError(t, Initialize("development", false, false))

@@ -86,6 +86,26 @@ func TestParseGlobalFlags_DefaultColor(t *testing.T) {
 	assert.Equal(t, "auto", p.Color)
 }
 
+func TestParseGlobalFlags_UpdateOption(t *testing.T) {
+	tests := []struct {
+		name string
+		argv []string
+		want string
+		rest []string
+	}{
+		{name: "check", argv: []string{"--update", "check", "text", "uuid"}, want: "check", rest: []string{"text", "uuid"}},
+		{name: "yes equals", argv: []string{"--update=yes"}, want: "yes"},
+		{name: "yes default", argv: []string{"--update"}, want: "yes"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := parseGlobalFlags(test.argv)
+			assert.Equal(t, test.want, got.Update)
+			assert.Equal(t, test.rest, got.Rest)
+		})
+	}
+}
+
 // TestParseGlobalFlags_UnknownFlagsAndPositionalsPassThrough verifies that
 // anything not recognized as a global flag (including unknown --flags)
 // lands in Rest untouched, in argv order.

@@ -1,6 +1,6 @@
 // Package update implements the AI.md PART 22 self-update system: querying
-// GitHub Releases for the three cumulative release channels (stable, beta,
-// daily), defer_days-gated eligibility for the scheduled update_check task,
+// GitHub Releases for the cumulative stable, beta and devel channels,
+// defer_days-gated eligibility for the scheduled update_check task,
 // mandatory SHA256 checksum verification, and platform-specific binary
 // replacement (see update_unix.go / update_windows.go).
 package update
@@ -10,13 +10,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/apimgr/api/src/config"
@@ -30,12 +34,96 @@ const releasesRepo = "apimgr/api"
 // httptest server instead of the real network.
 var apiBaseURL = "https://api.github.com"
 
+var restartPending atomic.Bool
+var startupFailureMu sync.Mutex
+var startupFailureVersion string
+var startupFailureReason string
+
+type appliedUpdate struct {
+	PreviousVersion string `json:"previous_version"`
+	NewVersion      string `json:"new_version"`
+}
+
+// TakeStartupFailure consumes the staged version whose startup application
+// failed, allowing the initialized database to record the required audit row.
+func TakeStartupFailure() (string, string) {
+	startupFailureMu.Lock()
+	defer startupFailureMu.Unlock()
+	version, reason := startupFailureVersion, startupFailureReason
+	startupFailureVersion = ""
+	startupFailureReason = ""
+	return version, reason
+}
+
+// TakeStartupSuccess consumes the update marker left before a successful
+// privileged replacement so startup can emit the completion audit/event.
+func TakeStartupSuccess(dataDir string) (string, string, error) {
+	path := filepath.Join(dataDir, "update-applied.json")
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	var applied appliedUpdate
+	if err := json.Unmarshal(data, &applied); err != nil {
+		return "", "", fmt.Errorf("read update completion marker: %w", err)
+	}
+	if err := os.Remove(path); err != nil {
+		return "", "", fmt.Errorf("remove update completion marker: %w", err)
+	}
+	return applied.PreviousVersion, applied.NewVersion, nil
+}
+
+// SanitizeUpdateFailure converts an internal update error into a short
+// operator-facing class without exposing filesystem paths, URLs, or secrets.
+func SanitizeUpdateFailure(err error) string {
+	if err == nil {
+		return "unknown update failure"
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "checksum") || strings.Contains(message, "sha256"):
+		return "release checksum verification failed"
+	case strings.Contains(message, "permission") || strings.Contains(message, "access is denied"):
+		return "insufficient permission to apply the update"
+	case strings.Contains(message, "rename") || strings.Contains(message, "replace"):
+		return "binary replacement failed"
+	case strings.Contains(message, "download") || strings.Contains(message, "fetch") || strings.Contains(message, "github"):
+		return "release download or verification failed"
+	default:
+		return "staged update could not be applied"
+	}
+}
+
+func discardStaged(updateDir, version string, cause error) (bool, error) {
+	if err := os.RemoveAll(updateDir); err != nil {
+		cause = errors.Join(cause, fmt.Errorf("remove failed staged update: %w", err))
+	}
+	if version != "" {
+		startupFailureMu.Lock()
+		startupFailureVersion = version
+		startupFailureReason = cause.Error()
+		startupFailureMu.Unlock()
+	}
+	return true, cause
+}
+
+// RestartPending reports whether the scheduler staged an update and asked
+// the server to shut down with EX_TEMPFAIL so its supervisor restarts it.
+func RestartPending() bool { return restartPending.Load() }
+
+// RequestRestart marks the process for the staged-update exit path.
+func RequestRestart() { restartPending.Store(true) }
+
 // Release-channel names accepted by SetBranch and the --update branch
 // command (AI.md PART 22 "Update Branches").
 const (
 	BranchStable = "stable"
 	BranchBeta   = "beta"
-	BranchDaily  = "daily"
+	BranchDevel  = "devel"
+	BranchDaily  = BranchDevel
 )
 
 // Release mirrors the subset of the GitHub Releases API response used to
@@ -56,21 +144,34 @@ type Asset struct {
 // ValidBranch reports whether branch is one of the three supported update
 // channels.
 func ValidBranch(branch string) bool {
-	switch branch {
-	case BranchStable, BranchBeta, BranchDaily:
-		return true
+	_, ok := NormalizeBranch(branch)
+	return ok
+}
+
+// NormalizeBranch maps documented rolling-channel aliases to their canonical
+// stored name, devel.
+func NormalizeBranch(branch string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(branch)) {
+	case BranchStable:
+		return BranchStable, true
+	case BranchBeta:
+		return BranchBeta, true
+	case BranchDevel, "daily", "rolling", "dev", "development":
+		return BranchDevel, true
+	default:
+		return "", false
 	}
-	return false
 }
 
 // SetBranch validates branch and assigns it to cfg.Branch. server.yml
 // remains the single source of truth for the selected update channel - the
 // caller is responsible for persisting cfg via config.Save.
 func SetBranch(cfg *config.UpdateConfig, branch string) error {
-	if !ValidBranch(branch) {
-		return fmt.Errorf("invalid update channel %q: must be one of stable, beta, daily", branch)
+	canonical, ok := NormalizeBranch(branch)
+	if !ok {
+		return fmt.Errorf("invalid update channel %q: must be stable, beta, or devel", branch)
 	}
-	cfg.Branch = branch
+	cfg.Branch = canonical
 	return nil
 }
 
@@ -83,6 +184,11 @@ func SetBranch(cfg *config.UpdateConfig, branch string) error {
 // used to detect a newer nightly on the rolling "daily" tag. A nil Release
 // with a nil error means the running version is already current.
 func CheckForUpdate(ctx context.Context, currentVersion, branch string, buildEpoch int64) (*Release, error) {
+	canonical, ok := NormalizeBranch(branch)
+	if !ok {
+		return nil, fmt.Errorf("invalid update channel %q", branch)
+	}
+	branch = canonical
 	if branch == BranchStable {
 		release, err := fetchLatestStableRelease(ctx, currentVersion)
 		if err != nil {
@@ -107,7 +213,7 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string, buildEpo
 		if !matchesBranch(r, branch) {
 			continue
 		}
-		if r.TagName == "daily" {
+		if r.TagName == "devel" {
 			// Rolling tag: a newer nightly exists when the release was
 			// published after this binary was built.
 			if r.PublishedAt.Unix() > buildEpoch {
@@ -133,6 +239,11 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string, buildEpo
 // than currentVersion is returned, so a brand-new release never resets the
 // clock for an older release that has already aged past the window.
 func CheckEligible(ctx context.Context, currentVersion, branch string, buildEpoch int64, deferDays int) (*Release, error) {
+	canonical, ok := NormalizeBranch(branch)
+	if !ok {
+		return nil, fmt.Errorf("invalid update channel %q", branch)
+	}
+	branch = canonical
 	releases, err := fetchReleaseList(ctx, currentVersion)
 	if err != nil {
 		return nil, err
@@ -145,7 +256,7 @@ func CheckEligible(ctx context.Context, currentVersion, branch string, buildEpoc
 		if !matchesBranch(r, branch) {
 			continue
 		}
-		if r.TagName == "daily" {
+		if r.TagName == "devel" {
 			if r.PublishedAt.Unix() <= buildEpoch {
 				continue
 			}
@@ -165,7 +276,11 @@ func CheckEligible(ctx context.Context, currentVersion, branch string, buildEpoc
 // skipped), and replaces the currently running binary. The caller is
 // responsible for restarting the process/service afterward via Restart or
 // RestartService.
-func Install(ctx context.Context, release *Release) error {
+
+func Install(ctx context.Context, release *Release) (retErr error) {
+	if release == nil {
+		return fmt.Errorf("release is required")
+	}
 	assetName := binaryAssetName()
 	var downloadURL string
 	for _, asset := range release.Assets {
@@ -185,13 +300,18 @@ func Install(ctx context.Context, release *Release) error {
 	tmpPath := tmpFile.Name()
 	// Clean up on any early return; a successful replaceBinary moves the
 	// file away so this becomes a harmless no-op.
-	defer os.Remove(tmpPath)
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary update: %w", err))
+		}
+	}()
 
 	if err := downloadTo(ctx, tmpFile, downloadURL); err != nil {
-		tmpFile.Close()
-		return err
+		return errors.Join(err, tmpFile.Close())
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close downloaded update: %w", err)
+	}
 
 	expectedHash, err := fetchExpectedChecksum(ctx, release, assetName)
 	if err != nil {
@@ -219,8 +339,313 @@ func Install(ctx context.Context, release *Release) error {
 	return replaceBinary(currentPath, tmpPath)
 }
 
+type stagedUpdate struct {
+	Version string `json:"version"`
+	SHA256  string `json:"sha256"`
+}
+
+// Stage downloads and verifies a release into the data directory for the
+// next privileged startup to apply. The running executable is never touched.
+func Stage(ctx context.Context, release *Release, dataDir string) (retErr error) {
+	if release == nil || release.TagName == "" {
+		return fmt.Errorf("release version is required")
+	}
+	assetName := binaryAssetName()
+	var downloadURL string
+	for _, asset := range release.Assets {
+		if asset.Name == assetName {
+			downloadURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+	if downloadURL == "" {
+		return fmt.Errorf("no binary found for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	updateDir := filepath.Join(dataDir, "update")
+	if err := os.MkdirAll(updateDir, 0700); err != nil {
+		return fmt.Errorf("create update directory: %w", err)
+	}
+	if err := requireDirectory(updateDir); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(updateDir, ".api.new-*")
+	if err != nil {
+		return fmt.Errorf("create staged update: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary staged binary: %w", err))
+		}
+	}()
+	if err := downloadTo(ctx, tmp, downloadURL); err != nil {
+		return errors.Join(err, tmp.Close())
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close staged update: %w", err)
+	}
+	hash, err := fetchExpectedChecksum(ctx, release, assetName)
+	if err != nil {
+		return fmt.Errorf("fetch update checksum: %w", err)
+	}
+	if err := verifyChecksum(tmpPath, hash); err != nil {
+		return err
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(tmpPath, 0755); err != nil {
+			return fmt.Errorf("set staged update permissions: %w", err)
+		}
+	}
+	binaryPath := filepath.Join(updateDir, "api.new")
+	if err := replaceStagedFile(tmpPath, binaryPath); err != nil {
+		return err
+	}
+	metadata, err := json.Marshal(stagedUpdate{Version: release.TagName, SHA256: hash})
+	if err != nil {
+		return err
+	}
+	if err := writePrivateFile(filepath.Join(updateDir, "api.new.json"), metadata); err != nil {
+		return errors.Join(err, os.Remove(binaryPath))
+	}
+	return nil
+}
+
+// ApplyStaged verifies and atomically installs a staged update. Call only
+// before privilege drop; false means no staged update is waiting.
+func ApplyStaged(dataDir, currentVersion string) (didStage bool, retErr error) {
+	updateDir := filepath.Join(dataDir, "update")
+	metadataPath := filepath.Join(updateDir, "api.new.json")
+	if _, err := os.Lstat(updateDir); os.IsNotExist(err) {
+		return false, nil
+	} else if err != nil {
+		return true, err
+	}
+	if err := requireDirectory(updateDir); err != nil {
+		return true, err
+	}
+	if err := requireRegularFile(metadataPath); err != nil && !os.IsNotExist(err) {
+		return true, err
+	}
+	data, err := os.ReadFile(metadataPath)
+	if os.IsNotExist(err) {
+		if cleanupErr := os.RemoveAll(updateDir); cleanupErr != nil {
+			return true, cleanupErr
+		}
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	var staged stagedUpdate
+	if err := json.Unmarshal(data, &staged); err != nil {
+		return discardStaged(updateDir, "", fmt.Errorf("invalid staged update metadata: %w", err))
+	}
+	binaryPath := filepath.Join(updateDir, "api.new")
+	if err := requireRegularFile(binaryPath); err != nil {
+		return discardStaged(updateDir, staged.Version, err)
+	}
+	if staged.Version == "" || staged.SHA256 == "" {
+		return discardStaged(updateDir, "", fmt.Errorf("staged update metadata is incomplete"))
+	}
+	// The staging directory is writable by the dropped service account. Fetch
+	// the release checksum again so a modified binary and sidecar cannot be
+	// promoted together by a compromised service account.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	releases, err := fetchReleaseList(ctx, currentVersion)
+	if err != nil {
+		return true, fmt.Errorf("fetch staged release for verification: %w", err)
+	}
+	var release *Release
+	for i := range releases {
+		if releases[i].TagName == staged.Version {
+			release = &releases[i]
+			break
+		}
+	}
+	if release == nil {
+		return discardStaged(updateDir, staged.Version, fmt.Errorf("staged version %q is no longer present in the release feed", staged.Version))
+	}
+	expectedHash, err := fetchExpectedChecksum(ctx, release, binaryAssetName())
+	if err != nil || !strings.EqualFold(expectedHash, staged.SHA256) {
+		if err != nil {
+			return true, fmt.Errorf("fetch authoritative staged checksum: %w", err)
+		}
+		return discardStaged(updateDir, staged.Version, fmt.Errorf("staged checksum does not match the release checksum"))
+	}
+	if err := verifyChecksum(binaryPath, staged.SHA256); err != nil {
+		return discardStaged(updateDir, staged.Version, fmt.Errorf("staged update verification failed: %w", err))
+	}
+	if !isNewerRelease(staged.Version, currentVersion) {
+		return discardStaged(updateDir, staged.Version, fmt.Errorf("staged version %q is not newer than %q", staged.Version, currentVersion))
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return true, err
+	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return true, err
+	}
+	// Copy from the service-user-writable staging tree into a root-owned
+	// temporary file beside the executable. Re-hash the copied bytes before
+	// replacement, so a path swap between verification and rename cannot
+	// redirect the privileged replacement to a symlink or different file.
+	stagedFile, err := os.Open(binaryPath)
+	if err != nil {
+		return discardStaged(updateDir, staged.Version, err)
+	}
+	installFile, err := os.CreateTemp(filepath.Dir(exe), ".api-update-*")
+	if err != nil {
+		return true, errors.Join(err, stagedFile.Close())
+	}
+	installPath := installFile.Name()
+	defer func() {
+		if err := os.Remove(installPath); err != nil && !os.IsNotExist(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary installed binary: %w", err))
+		}
+	}()
+	_, copyErr := io.Copy(installFile, stagedFile)
+	closeStageErr := stagedFile.Close()
+	closeInstallErr := installFile.Close()
+	if err := errors.Join(copyErr, closeStageErr, closeInstallErr); err != nil {
+		return discardStaged(updateDir, staged.Version, err)
+	}
+	if err := verifyChecksum(installPath, staged.SHA256); err != nil {
+		return discardStaged(updateDir, staged.Version, err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(installPath, 0755); err != nil {
+			return discardStaged(updateDir, staged.Version, err)
+		}
+	}
+	markerPath := filepath.Join(dataDir, "update-applied.json")
+	marker, err := json.Marshal(appliedUpdate{PreviousVersion: currentVersion, NewVersion: staged.Version})
+	if err != nil {
+		return discardStaged(updateDir, staged.Version, err)
+	}
+	if err := writeAtomicPrivateFile(markerPath, marker); err != nil {
+		return discardStaged(updateDir, staged.Version, err)
+	}
+	if err := replaceBinary(exe, installPath); err != nil {
+		if removeErr := os.Remove(markerPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			err = errors.Join(err, removeErr)
+		}
+		return discardStaged(updateDir, staged.Version, err)
+	}
+	if err := os.RemoveAll(updateDir); err != nil {
+		return true, fmt.Errorf("remove staged update directory: %w", err)
+	}
+	return true, Restart()
+}
+
+func requireDirectory(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("update path is not a real directory")
+	}
+	return nil
+}
+
+func requireRegularFile(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("staged update file is not a regular file")
+	}
+	return nil
+}
+
+func isNewerRelease(candidate, current string) bool {
+	clean := func(s string) string { return strings.TrimPrefix(strings.TrimPrefix(s, "v"), "V") }
+	if candidate == "devel" {
+		return current != "devel"
+	}
+	if current == "devel" {
+		return false
+	}
+	a, b := strings.Split(clean(candidate), "."), strings.Split(clean(current), ".")
+	for i := 0; i < len(a) || i < len(b); i++ {
+		var av, bv int
+		if i < len(a) {
+			var err error
+			av, err = strconv.Atoi(strings.SplitN(a[i], "-", 2)[0])
+			if err != nil {
+				return false
+			}
+		}
+		if i < len(b) {
+			var err error
+			bv, err = strconv.Atoi(strings.SplitN(b[i], "-", 2)[0])
+			if err != nil {
+				return false
+			}
+		}
+		if av != bv {
+			return av > bv
+		}
+	}
+	return false
+}
+
+func replaceStagedFile(source, target string) error {
+	if err := os.Rename(source, target); err == nil {
+		return nil
+	}
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove previous staged update: %w", err)
+	}
+	if err := os.Rename(source, target); err != nil {
+		return fmt.Errorf("publish staged update: %w", err)
+	}
+	return nil
+}
+
+func writePrivateFile(path string, content []byte) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(content); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	return f.Close()
+}
+
+func writeAtomicPrivateFile(path string, content []byte) (retErr error) {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".update-marker-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary update marker: %w", err))
+		}
+	}()
+	if err := tmp.Chmod(0600); err != nil {
+		return errors.Join(err, tmp.Close())
+	}
+	if _, err := tmp.Write(content); err != nil {
+		return errors.Join(err, tmp.Close())
+	}
+	if err := tmp.Sync(); err != nil {
+		return errors.Join(err, tmp.Close())
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return replaceStagedFile(tmpPath, path)
+}
+
 // downloadTo streams downloadURL's body into dst.
-func downloadTo(ctx context.Context, dst io.Writer, downloadURL string) error {
+func downloadTo(ctx context.Context, dst io.Writer, downloadURL string) (retErr error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
 		return err
@@ -231,7 +656,7 @@ func downloadTo(ctx context.Context, dst io.Writer, downloadURL string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { retErr = errors.Join(retErr, resp.Body.Close()) }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed: %d", resp.StatusCode)
@@ -255,7 +680,7 @@ func binaryAssetName() string {
 
 // fetchExpectedChecksum downloads the release's sha256.txt asset and
 // returns the SHA256 hash recorded for assetName.
-func fetchExpectedChecksum(ctx context.Context, release *Release, assetName string) (string, error) {
+func fetchExpectedChecksum(ctx context.Context, release *Release, assetName string) (checksum string, retErr error) {
 	var checksumsURL string
 	for _, asset := range release.Assets {
 		if asset.Name == "sha256.txt" {
@@ -277,7 +702,7 @@ func fetchExpectedChecksum(ctx context.Context, release *Release, assetName stri
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { retErr = errors.Join(retErr, resp.Body.Close()) }()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("checksum download failed: %d", resp.StatusCode)
 	}
@@ -299,12 +724,12 @@ func fetchExpectedChecksum(ctx context.Context, release *Release, assetName stri
 // verifyChecksum verifies the SHA256 checksum of the file at filePath
 // against expectedHash. Checksum verification is mandatory and is never
 // skipped for a self-update install.
-func verifyChecksum(filePath, expectedHash string) error {
+func verifyChecksum(filePath, expectedHash string) (retErr error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { retErr = errors.Join(retErr, f.Close()) }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -326,13 +751,13 @@ func matchesBranch(r Release, branch string) bool {
 		return true
 	}
 	isBeta := strings.HasSuffix(r.TagName, "-beta")
-	// The daily channel is a single rolling release: tag "daily", rebuilt
+	// The devel channel is a single rolling release: tag "devel", rebuilt
 	// nightly.
-	isDaily := r.TagName == "daily"
+	isDaily := r.TagName == "devel"
 	switch branch {
 	case BranchBeta:
 		return isBeta
-	case BranchDaily:
+	case BranchDevel:
 		return isBeta || isDaily
 	default:
 		return false
@@ -342,7 +767,7 @@ func matchesBranch(r Release, branch string) bool {
 // fetchLatestStableRelease queries the GitHub Releases "latest" endpoint,
 // used only for the stable channel's manual-check fast path. currentVersion
 // is unused beyond documenting intent; callers compare TagName themselves.
-func fetchLatestStableRelease(ctx context.Context, currentVersion string) (*Release, error) {
+func fetchLatestStableRelease(ctx context.Context, currentVersion string) (releaseResult *Release, retErr error) {
 	url := apiBaseURL + "/repos/" + releasesRepo + "/releases/latest"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -356,7 +781,7 @@ func fetchLatestStableRelease(ctx context.Context, currentVersion string) (*Rele
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { retErr = errors.Join(retErr, resp.Body.Close()) }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		// No releases published at all - already current.
@@ -377,7 +802,7 @@ func fetchLatestStableRelease(ctx context.Context, currentVersion string) (*Rele
 // first), used by every non-stable-fast-path lookup: beta/daily manual
 // checks and every CheckEligible call, since defer_days eligibility
 // requires scanning more than just the single newest release.
-func fetchReleaseList(ctx context.Context, currentVersion string) ([]Release, error) {
+func fetchReleaseList(ctx context.Context, currentVersion string) (releaseResults []Release, retErr error) {
 	url := apiBaseURL + "/repos/" + releasesRepo + "/releases"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -391,7 +816,7 @@ func fetchReleaseList(ctx context.Context, currentVersion string) ([]Release, er
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { retErr = errors.Join(retErr, resp.Body.Close()) }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
@@ -405,4 +830,61 @@ func fetchReleaseList(ctx context.Context, currentVersion string) ([]Release, er
 		return nil, err
 	}
 	return releases, nil
+}
+
+// IsNewerVersion compares release versions using the same stable/beta/devel
+// ordering as the server updater.
+func IsNewerVersion(candidate, current string) bool {
+	return isNewerRelease(candidate, current)
+}
+
+// VerifyChecksum exposes the mandatory SHA-256 verifier to companion binaries.
+func VerifyChecksum(filePath, expectedHash string) error {
+	return verifyChecksum(filePath, expectedHash)
+}
+
+// ReplaceBinary installs a verified staged binary using a same-filesystem
+// temporary file so atomic replacement works when the download lives in the
+// system temporary directory.
+func ReplaceBinary(currentPath, stagedPath string) (retErr error) {
+	info, err := os.Stat(currentPath)
+	if err != nil {
+		return fmt.Errorf("cannot stat installed binary: %w", err)
+	}
+	dir := filepath.Dir(currentPath)
+	staged, err := os.Open(stagedPath)
+	if err != nil {
+		return fmt.Errorf("cannot open staged binary: %w", err)
+	}
+	defer func() {
+		if err := staged.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close staged binary: %w", err))
+		}
+	}()
+	tmp, err := os.CreateTemp(dir, ".api-update-*.tmp")
+	if err != nil {
+		return fmt.Errorf("cannot stage binary beside install path: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary update binary: %w", err))
+		}
+	}()
+	if err := tmp.Chmod(info.Mode()); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := io.Copy(tmp, staged); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return replaceBinary(currentPath, tmpPath)
 }

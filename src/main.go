@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -13,19 +17,25 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/apimgr/api/src/common/banner"
+	"github.com/apimgr/api/src/common/display"
 	"github.com/apimgr/api/src/common/i18n"
+	commonversion "github.com/apimgr/api/src/common/version"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/email"
 	"github.com/apimgr/api/src/geoip"
+	"github.com/apimgr/api/src/i2p"
 	"github.com/apimgr/api/src/metrics"
 	appmode "github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/paths"
+	"github.com/apimgr/api/src/pgp"
 	"github.com/apimgr/api/src/pidfile"
 	"github.com/apimgr/api/src/scheduler"
 	"github.com/apimgr/api/src/server"
@@ -34,6 +44,7 @@ import (
 	"github.com/apimgr/api/src/sysservice"
 	"github.com/apimgr/api/src/tor"
 	"github.com/apimgr/api/src/update"
+	"github.com/pires/go-proxyproto"
 )
 
 var (
@@ -61,9 +72,7 @@ func buildEpoch() int64 {
 // init derives BuildDate (RFC 3339 UTC) from the embedded BuildEpoch, per
 // AI.md "Embedded Build Info" - BuildDate is never itself an ldflag.
 func init() {
-	if n := buildEpoch(); n > 0 {
-		BuildDate = time.Unix(n, 0).UTC().Format("2006-01-02T15:04:05Z")
-	}
+	BuildDate = (commonversion.BuildInfo{Version: Version, CommitID: CommitID, BuildEpoch: buildEpoch()}).BuildDate()
 }
 
 // Sysexits-style exit codes (BSD sysexits.h); the stdlib does not export
@@ -79,59 +88,93 @@ const (
 func main() {
 	// Get actual binary name for user-facing messages
 	binaryName := filepath.Base(os.Args[0])
+	appmode.SetLang(earlyLanguage(os.Args[1:]))
 
 	// CLI flags (only -h and -v have short forms per spec)
-	showHelp := flag.Bool("help", false, "Show help")
-	flag.BoolVar(showHelp, "h", false, "Show help (short)")
-	showVersion := flag.Bool("version", false, "Show version")
-	flag.BoolVar(showVersion, "v", false, "Show version (short)")
+	showHelp := flag.Bool("help", false, i18n.Translate(appmode.GetLang(), "cli.show_help"))
+	flag.BoolVar(showHelp, "h", false, i18n.Translate(appmode.GetLang(), "cli.show_help"))
+	showVersion := flag.Bool("version", false, i18n.Translate(appmode.GetLang(), "cli.show_version"))
+	flag.BoolVar(showVersion, "v", false, i18n.Translate(appmode.GetLang(), "cli.show_version"))
 
 	// Server configuration
-	mode := flag.String("mode", "", "Application mode: {production|development|debug}")
-	configDir := flag.String("config", "", "Configuration directory")
-	dataDir := flag.String("data", "", "Data directory")
-	logDir := flag.String("log", "", "Log directory")
-	cacheDir := flag.String("cache", "", "Cache directory")
-	backupDir := flag.String("backup", "", "Backup directory")
-	pidFile := flag.String("pid", "", "PID file path")
-	address := flag.String("address", "", "Listen address")
-	port := flag.String("port", "", "Listen port")
-	baseURL := flag.String("baseurl", "", "URL path prefix (default: /)")
-	daemon := flag.Bool("daemon", false, "Daemonize (detach from terminal)")
-	debug := flag.Bool("debug", false, "Enable debug mode")
-	colorFlag := flag.String("color", "auto", "Color output: auto, yes, no")
-	langFlag := flag.String("lang", "", "Interface language code")
-	shellCmd := flag.String("shell", "", "Shell integration: completions, init, help")
+	mode := flag.String("mode", "", i18n.Translate(appmode.GetLang(), "cli.flag_mode"))
+	configDir := flag.String("config", "", i18n.Translate(appmode.GetLang(), "cli.flag_config"))
+	dataDir := flag.String("data", "", i18n.Translate(appmode.GetLang(), "cli.flag_data"))
+	logDir := flag.String("log", "", i18n.Translate(appmode.GetLang(), "cli.flag_log"))
+	cacheDir := flag.String("cache", "", i18n.Translate(appmode.GetLang(), "cli.flag_cache"))
+	backupDir := flag.String("backup", "", i18n.Translate(appmode.GetLang(), "cli.flag_backup"))
+	pidFile := flag.String("pid", "", i18n.Translate(appmode.GetLang(), "cli.flag_pid"))
+	address := flag.String("address", "", i18n.Translate(appmode.GetLang(), "cli.flag_address"))
+	port := flag.String("port", "", i18n.Translate(appmode.GetLang(), "cli.flag_port"))
+	baseURL := flag.String("baseurl", "", i18n.Translate(appmode.GetLang(), "cli.flag_baseurl"))
+	i2pFlag := flag.Bool("i2p", false, i18n.Translate(appmode.GetLang(), "cli.flag_i2p"))
+	daemon := flag.Bool("daemon", false, i18n.Translate(appmode.GetLang(), "cli.flag_daemon"))
+	debug := flag.Bool("debug", false, i18n.Translate(appmode.GetLang(), "cli.flag_debug"))
+	colorFlag := flag.String("color", "auto", i18n.Translate(appmode.GetLang(), "cli.flag_color"))
+	languageOptions := make([]string, 0)
+	for _, language := range i18n.AvailableLanguages() {
+		languageOptions = append(languageOptions, fmt.Sprintf("%s (%s)", language.Code, language.NativeName))
+	}
+	langFlag := flag.String("lang", "", i18n.Translate(appmode.GetLang(), "cli.flag_lang")+": "+strings.Join(languageOptions, ", "))
+	shellCmd := flag.String("shell", "", i18n.Translate(appmode.GetLang(), "cli.flag_shell"))
 
 	// Status check
-	showStatus := flag.Bool("status", false, "Show service status")
+	showStatus := flag.Bool("status", false, i18n.Translate(appmode.GetLang(), "cli.flag_status"))
 
 	// Service management
-	serviceCmd := flag.String("service", "", "Service command: start, restart, stop, reload, --install, --uninstall, --disable, --help")
+	serviceCmd := flag.String("service", "", i18n.Translate(appmode.GetLang(), "cli.flag_service"))
 
 	// Maintenance commands
-	maintenanceCmd := flag.String("maintenance", "", "Maintenance command: backup, restore, update, mode, setup")
+	maintenanceCmd := flag.String("maintenance", "", i18n.Translate(appmode.GetLang(), "cli.flag_maintenance"))
 
 	// Update command
-	updateCmd := flag.String("update", "", "Update command: check, yes, or branch {stable|beta|daily}")
+	updateCmd := flag.String("update", "", i18n.Translate(appmode.GetLang(), "cli.flag_update"))
 
 	// Tor management commands
-	torCmd := flag.String("tor", "", "Tor command: status, validate, restart, regenerate, vanity, import-keys")
+	torCmd := flag.String("tor", "", i18n.Translate(appmode.GetLang(), "cli.flag_tor"))
+
+	switch commandFlagHelp(os.Args[1:], "shell", "service", "maintenance", "update", "tor") {
+	case "shell":
+		printShellHelp(binaryName)
+		os.Exit(0)
+	case "service":
+		printServiceHelp(binaryName)
+		os.Exit(0)
+	case "maintenance":
+		printMaintenanceHelp(binaryName)
+		os.Exit(0)
+	case "update":
+		printUpdateHelp(binaryName)
+		os.Exit(0)
+	case "tor":
+		printTorHelp(binaryName)
+		os.Exit(0)
+	}
 
 	flag.Parse()
 
 	// Handle help
 	if *showHelp {
-		printHelp(binaryName)
+		switch {
+		case *serviceCmd != "":
+			printServiceHelp(binaryName)
+		case *maintenanceCmd != "":
+			printMaintenanceHelp(binaryName)
+		case *updateCmd != "":
+			printUpdateHelp(binaryName)
+		case *shellCmd != "":
+			printShellHelp(binaryName)
+		case *torCmd != "":
+			printTorHelp(binaryName)
+		default:
+			printHelp(binaryName)
+		}
 		os.Exit(0)
 	}
 
 	// Handle version
 	if *showVersion {
-		cprintf("%s v%s\n", binaryName, Version)
-		cprintf("Built: %s\n", BuildDate)
-		cprintf("Go: %s\n", runtime.Version())
-		cprintf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+		fmt.Print(commonversion.FormatOutput(binaryName, Version, CommitID, BuildDate, runtime.Version(), runtime.GOOS, runtime.GOARCH))
 		os.Exit(0)
 	}
 
@@ -145,6 +188,28 @@ func main() {
 	resolvedPIDFile := envOrFlag(*pidFile, "PID_FILE")
 	resolvedAddress := envOrFlag(*address, "LISTEN")
 	resolvedPort := envOrFlag(*port, "PORT")
+	for _, directory := range []*string{
+		&resolvedConfigDir, &resolvedDataDir, &resolvedLogDir,
+		&resolvedCacheDir, &resolvedBackupDir,
+	} {
+		if *directory == "" {
+			continue
+		}
+		safe, err := paths.SafeDirPath(*directory)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: invalid directory path: %v\n", binaryName, err)
+			os.Exit(exConfig)
+		}
+		*directory = safe
+	}
+	if resolvedPIDFile != "" {
+		safePID, err := paths.SafeDirPath(resolvedPIDFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: invalid PID file path: %v\n", binaryName, err)
+			os.Exit(exConfig)
+		}
+		resolvedPIDFile = safePID
+	}
 
 	// Initialize paths early for commands that need them
 	paths.Init(resolvedConfigDir, resolvedDataDir, resolvedLogDir)
@@ -157,9 +222,9 @@ func main() {
 	// once config.Load() succeeds, per AI.md PART 8's priority order.
 	applyColorMode(*colorFlag, nil)
 	if *langFlag != "" {
-		appmode.SetLang(*langFlag)
-	} else if envLang := os.Getenv("LANG"); envLang != "" {
-		appmode.SetLang(envLang)
+		appmode.SetLang(normalizeLanguage(*langFlag))
+	} else if envLang := firstNonEmpty(os.Getenv("LC_ALL"), os.Getenv("LANG")); envLang != "" {
+		appmode.SetLang(normalizeLanguage(envLang))
 	}
 
 	// Handle --shell before anything else needs a config/database
@@ -232,6 +297,9 @@ func main() {
 	serviceUID, serviceGID, err := sysservice.RootSetup()
 	if err != nil {
 		log.Printf("Failed to prepare the service account and runtime directories: %v", err)
+		if errors.Is(err, sysservice.ErrAccountToolsUnavailable) {
+			os.Exit(exUnavailable)
+		}
 		os.Exit(exOSErr)
 	}
 
@@ -243,6 +311,22 @@ func main() {
 		log.Printf("Failed to load configuration: %v", err)
 		os.Exit(exConfig)
 	}
+	if *langFlag == "" && cfg.Server.I18N.DefaultLanguage != "" {
+		appmode.SetLang(normalizeLanguage(cfg.Server.I18N.DefaultLanguage))
+	}
+
+	// A root-started restart applies a service-user staged update before
+	// dropping privileges. The staged binary and its checksum are rechecked
+	// here, then Restart replaces this process with the new version.
+	if paths.IsElevated() && runtime.GOOS != "windows" {
+		if staged, applyErr := update.ApplyStaged(paths.DataDir(), Version); staged {
+			if applyErr != nil {
+				log.Printf("Update: staged update could not be applied: %v", applyErr)
+			} else {
+				log.Printf("Update: staged update restart returned unexpectedly")
+			}
+		}
+	}
 
 	// Override config with CLI flags (flags have highest priority)
 	if resolvedAddress != "" {
@@ -253,6 +337,15 @@ func main() {
 	}
 	if *baseURL != "" {
 		cfg.Server.BaseURL = *baseURL
+	}
+	i2pFlagSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "i2p" {
+			i2pFlagSet = true
+		}
+	})
+	if i2pFlagSet {
+		cfg.Server.I2P.Enabled = *i2pFlag
 	}
 
 	// Determine whether --debug was explicitly passed (as opposed to
@@ -270,6 +363,7 @@ func main() {
 		log.Printf("Invalid --mode value: %v", err)
 		os.Exit(exUsage)
 	}
+	appmode.SetProfilingRates(cfg.Server.Debug.BlockProfileRate, cfg.Server.Debug.MutexProfileFraction)
 	cfg.Server.Mode = appmode.GetCurrentMode().String()
 
 	// Daemonize (detach from terminal) before writing the PID file, so the
@@ -324,7 +418,43 @@ func main() {
 		log.Printf("Failed to initialize database: %v", err)
 		os.Exit(exUnavailable)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
+	cacheReadOnlyOffline := database.CacheReadOnlyOffline()
+	if cacheReadOnlyOffline {
+		log.Printf("Database: remote is unavailable; serving from the fresh local cache in read-only mode")
+	} else {
+		if err := database.EnsureCaptchaSchema(context.Background()); err != nil {
+			log.Printf("Failed to initialize CAPTCHA challenge storage: %v", err)
+			os.Exit(exUnavailable)
+		}
+		if err := database.EnsureRateLimitSchema(context.Background()); err != nil {
+			log.Printf("Failed to initialize persisted rate-limit storage: %v", err)
+			os.Exit(exUnavailable)
+		}
+	}
+	var startupPreviousVersion, startupNewVersion string
+	var startupFailureVersion, startupFailureReason string
+	if !cacheReadOnlyOffline {
+		var startupSuccessErr error
+		startupPreviousVersion, startupNewVersion, startupSuccessErr = update.TakeStartupSuccess(paths.DataDir())
+		if startupSuccessErr != nil {
+			log.Printf("Update: failed to read update completion marker: %v", startupSuccessErr)
+		}
+		if startupNewVersion != "" {
+			if err := database.WriteAuditEventWithSource(context.Background(), "update.installed", "system", "", "startup", map[string]interface{}{"previous_version": startupPreviousVersion, "new_version": startupNewVersion}); err != nil {
+				log.Printf("Update: failed to record update.installed audit event: %v", err)
+			}
+		}
+		startupFailureVersion, startupFailureReason = update.TakeStartupFailure()
+		if startupFailureVersion != "" {
+			if err := database.SetConfigValue(context.Background(), "scheduler.update_check.last_failed_version", startupFailureVersion); err != nil {
+				log.Printf("Update: failed to record failed update version: %v", err)
+			}
+			if err := database.WriteAuditEventWithSource(context.Background(), "update.failed", "system", "", "startup", map[string]interface{}{"version": startupFailureVersion}); err != nil {
+				log.Printf("Update: failed to record update.failed audit event: %v", err)
+			}
+		}
+	}
 
 	// Generate the project-level cryptographic secrets on first start and
 	// apply their automatic rotation schedule (AI.md PART 11 "Cryptographic
@@ -334,9 +464,33 @@ func main() {
 		log.Printf("Failed to initialize project secrets: %v", err)
 		os.Exit(exUnavailable)
 	}
+	if !cacheReadOnlyOffline {
+		if err := pgp.ResumeInstallationSecretRotation(context.Background()); err != nil {
+			log.Printf("Failed to finish installation-secret rotation: %v", err)
+			os.Exit(exUnavailable)
+		}
+		if err := pgp.RecoverRotation(context.Background(), cfg); err != nil {
+			log.Printf("Failed to recover PGP key rotation: %v", err)
+			os.Exit(exUnavailable)
+		}
+		if err := resumeEncryptionKeyRotation(context.Background(), cfg); err != nil {
+			log.Printf("Failed to finish encryption-key rotation: %v", err)
+			os.Exit(exUnavailable)
+		}
+		if err := syncDNSConfigState(context.Background(), cfg); err != nil {
+			log.Printf("Failed to synchronize DNS provider state: %v", err)
+			os.Exit(exUnavailable)
+		}
+	}
+	if cfg.Server.SSL.LetsEncrypt.Challenge == "dns-01" || cfg.Server.SSL.LetsEncrypt.DNSProvider != "" {
+		if err := ssl.ValidateDNSProvider(cfg.Server.SSL.LetsEncrypt.DNSProvider, cfg.Server.SSL.LetsEncrypt.DNSCredentials); err != nil {
+			log.Printf("SSL: [ERROR] DNS provider validation failed: %v", err)
+			os.Exit(exConfig)
+		}
+	}
 
 	// Set database for health checks
-	handler.SetDatabase(database.GetServerDB())
+	handler.SetDatabase(database.ServerDBProbe{})
 
 	// Re-resolve --color/NO_COLOR now that config is available, applying the
 	// output.color/output.emoji config-file tier per AI.md PART 8's
@@ -347,6 +501,23 @@ func main() {
 	// Initialize logging system
 	if err := server.InitLogger(&cfg.Server.Logs); err != nil {
 		log.Printf("Warning: Failed to initialize logging system: %v", err)
+	}
+	if logger := server.GetLogger(); logger != nil {
+		for _, key := range cfg.GeneratedSecrets {
+			logger.LogAudit("config.secret_generated", map[string]interface{}{"key": key})
+		}
+	}
+	if startupNewVersion != "" {
+		log.Printf("Update: [INFO] update_installed previous_version=%s new_version=%s", startupPreviousVersion, startupNewVersion)
+		if logger := server.GetLogger(); logger != nil {
+			logger.LogAudit("update.installed", map[string]interface{}{"previous_version": startupPreviousVersion, "new_version": startupNewVersion})
+		}
+	}
+	for _, key := range cfg.GeneratedSecrets {
+		if key == "server.token" {
+			_, _ = fmt.Fprintf(os.Stdout, "First-start operator token (save this now): %s\n", cfg.Server.Token)
+			break
+		}
 	}
 
 	// Record any first-run IDEA.md → Header Tightening Auto-Map changes to
@@ -364,15 +535,43 @@ func main() {
 		}
 	}
 
-	// Initialize GeoIP database (load if exists, or will download on first use)
+	// Initialize GeoIP from the fixed data directory and start the required
+	// first-run download without delaying server startup.
 	if err := geoip.Get().LoadFromConfig(cfg.Server.GeoIP, paths.DataDir()); err != nil {
-		log.Printf("Warning: Failed to load GeoIP database: %v (will auto-download on first request)", err)
+		log.Printf("Warning: Failed to load GeoIP database: %v", err)
+	}
+	geoip.RegisterHealthChecks(paths.DataDir())
+	if cfg.Server.GeoIP.Enabled && geoip.NeedsInitialDownload(paths.DataDir()) {
+		go func() {
+			if err := geoip.DownloadFromConfig(cfg.Server.GeoIP, paths.DataDir()); err != nil {
+				log.Printf("GeoIP: first-run database download failed: %v", err)
+				return
+			}
+			currentConfig := config.Get()
+			if err := geoip.Get().LoadFromConfig(currentConfig.Server.GeoIP, paths.DataDir()); err != nil {
+				log.Printf("GeoIP: failed to load first-run databases: %v", err)
+			}
+		}()
 	}
 
 	// Initialize outbound email (PART 17): auto-detect a local SMTP relay
 	// if none is configured, or connection-test the configured host every
 	// startup; never blocks startup either way.
 	initSMTP(cfg)
+	if startupNewVersion != "" {
+		if notifier := email.DefaultNotifier(); notifier != nil {
+			if nerr := notifier.NotifyUpdateInstalled(notifier.Recipients(), startupPreviousVersion, startupNewVersion); nerr != nil {
+				log.Printf("Update: failed to send update_installed notification: %v", nerr)
+			}
+		}
+	}
+	if startupFailureVersion != "" {
+		if notifier := email.DefaultNotifier(); notifier != nil {
+			if nerr := notifier.NotifyUpdateFailed(notifier.Recipients(), startupFailureVersion, update.SanitizeUpdateFailure(errors.New(startupFailureReason))); nerr != nil {
+				log.Printf("Update: failed to send update_failed notification: %v", nerr)
+			}
+		}
+	}
 
 	// Write PID file (skipped entirely in containers per PART 8 - the
 	// container runtime supervises the process and PIDs are namespace-local)
@@ -384,7 +583,11 @@ func main() {
 		log.Printf("Failed to write PID file: %v", err)
 		os.Exit(exCantCreat)
 	}
-	defer pidfile.RemovePIDFile(pidPath)
+	defer func() {
+		if err := pidfile.RemovePIDFile(pidPath); err != nil {
+			log.Printf("Failed to remove PID file: %v", err)
+		}
+	}()
 
 	// Pass build version info to the health handler
 	handler.Version = Version
@@ -413,6 +616,9 @@ func main() {
 		IncludeSystem:   cfg.Server.Metrics.IncludeSystem,
 		IncludeRuntime:  cfg.Server.Metrics.IncludeRuntime,
 		DataDir:         paths.DataDir(),
+		OwnerTokenCounts: func() (float64, float64, error) {
+			return database.ActiveOwnerTokenCounts(context.Background(), database.GetServerDB())
+		},
 	})
 	metrics.Get().SetBuildInfo(Version, CommitID, BuildDate)
 	metrics.Get().StartCollectors()
@@ -420,45 +626,49 @@ func main() {
 
 	// Create server
 	srv := server.New(cfg)
+	i2pBackendHandler := server.I2PBackend(srv.Handler)
 
 	// Wire SSL/TLS per AI.md PART 15 Port Configuration rules: a single
 	// port of 443 is HTTPS-only, ssl.enabled forces HTTPS on any other
 	// single port, and "port1,port2" runs HTTP on the first and HTTPS on
-	// the second. DNS-01 multi-provider support is a separate, deferred
-	// item (see TODO.AI.md). The listeners themselves were already bound
+	// the second. The listeners themselves were already bound
 	// above, while the process still had the privileges to claim a port
 	// below 1024.
 	var httpsSrv *http.Server
+	var sslManager *ssl.Manager
 	if httpsPort != "" {
 		sslCertPath := cfg.Server.SSL.CertPath
 		if sslCertPath == "" {
 			sslCertPath = filepath.Join(paths.ConfigDir(), "ssl")
 		}
-		domain := cfg.Server.FQDN
-		if domain == "" {
-			domain = "localhost"
-		}
+		domain := server.GetFQDN(paths.ProjectName)
 		sslMgr := ssl.NewManager(ssl.Config{
 			Enabled:  true,
 			CertPath: sslCertPath,
+			OnDNSCertificateIssued: func(validatedAt time.Time) {
+				if err := database.SetAppSecretValue(context.Background(), database.SecretDNSValidatedAt, validatedAt.UTC().Format(time.RFC3339)); err != nil {
+					log.Printf("SSL: failed to record DNS provider validation time: %v", err)
+				}
+			},
 			LetsEncrypt: ssl.LetsEncryptConfig{
-				Enabled:   cfg.Server.SSL.LetsEncrypt.Enabled,
-				Email:     cfg.Server.SSL.LetsEncrypt.Email,
-				Challenge: cfg.Server.SSL.LetsEncrypt.Challenge,
+				Enabled:        cfg.Server.SSL.LetsEncrypt.Enabled,
+				Email:          cfg.Server.SSL.LetsEncrypt.Email,
+				Challenge:      cfg.Server.SSL.LetsEncrypt.Challenge,
+				DNSProvider:    cfg.Server.SSL.LetsEncrypt.DNSProvider,
+				DNSCredentials: cfg.Server.SSL.LetsEncrypt.DNSCredentials,
 			},
 		})
+		sslManager = sslMgr
 		tlsConfig, err := sslMgr.GetTLSConfig([]string{domain})
 		if err != nil {
 			log.Printf("Failed to configure TLS: %v", err)
 			os.Exit(exConfig)
 		}
 		httpsSrv = &http.Server{
-			Addr:         fmt.Sprintf("%s:%s", cfg.Server.Address, httpsPort),
-			Handler:      srv.Handler,
-			TLSConfig:    tlsConfig,
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 30 * time.Second,
-			IdleTimeout:  120 * time.Second,
+			Addr:      fmt.Sprintf("%s:%s", cfg.Server.Address, httpsPort),
+			Handler:   srv.Handler,
+			TLSConfig: tlsConfig,
+			ConnState: server.TimeoutConnState,
 		}
 		if httpPort != "" {
 			// The HTTP listener stays up solely to answer ACME HTTP-01
@@ -472,6 +682,13 @@ func main() {
 		}
 	}
 
+	// The I2P manager owns a separate loopback-only backend listener and
+	// returns immediately while the SAM router builds tunnels.
+	i2pManager := i2p.NewManager(cfg.Server.I2P, i2pBackendHandler)
+	i2p.Set(i2pManager)
+	i2pManager.Start(context.Background())
+	var torMgr *tor.Manager
+
 	// The built-in scheduler is mandatory and always runs (AI.md PART 18).
 	// There is no enable/disable toggle for the scheduler itself; individual
 	// tasks carry their own enabled flag.
@@ -481,6 +698,13 @@ func main() {
 	// so both identity fields come from the embedded ldflag values.
 	schedOpts.Version = Version
 	schedOpts.BuildEpoch = buildEpoch()
+	if sslManager != nil {
+		if managedCertificatePath := sslManager.ManagedCertificatePath(); managedCertificatePath != "" {
+			schedOpts.SSLRenewer = sslManager.RenewCertificate
+			schedOpts.SSLCertificatePath = managedCertificatePath
+			schedOpts.SSLDomain = sslManager.ManagedDomain()
+		}
+	}
 	// The scheduler shares the process-wide operator notifier so failed tasks
 	// send scheduler_error (and its backup/SSL replacements) through the same
 	// templates and recipients as every other PART 17 event.
@@ -491,6 +715,7 @@ func main() {
 	sched := scheduler.NewWithOptions(schedOpts)
 	sched.RegisterDefaultTasks()
 	sched.Start()
+	server.SetDebugSchedulerStatus(func() any { return sched.GetTasks() })
 	defer sched.Stop()
 	handler.SetSchedulerProbe(sched.Health)
 	// The health response advertises GeoIP as a feature only when the country
@@ -504,6 +729,29 @@ func main() {
 		log.Printf("Configuration reloaded")
 		// Update global config - server will pick up changes via config.Get()
 		config.Set(newCfg)
+		if err := geoip.Get().LoadFromConfig(newCfg.Server.GeoIP, paths.DataDir()); err != nil {
+			log.Printf("GeoIP: configuration reload failed: %v", err)
+		} else if newCfg.Server.GeoIP.Enabled && geoip.NeedsInitialDownload(paths.DataDir()) {
+			go func(geoConfig config.GeoIPConfig) {
+				if err := geoip.DownloadFromConfig(geoConfig, paths.DataDir()); err != nil {
+					log.Printf("GeoIP: first-run database download failed after configuration reload: %v", err)
+					return
+				}
+				currentConfig := config.Get()
+				if err := geoip.Get().LoadFromConfig(currentConfig.Server.GeoIP, paths.DataDir()); err != nil {
+					log.Printf("GeoIP: failed to load databases after configuration reload: %v", err)
+				}
+			}(newCfg.Server.GeoIP)
+		}
+		server.SetHTTPTimeouts(newCfg.Server.Limits)
+		initSMTP(newCfg)
+		server.LogConfiguredPageContent(newCfg)
+		i2pManager.UpdateConfig(newCfg.Server.I2P)
+		if torMgr != nil {
+			if err := torMgr.UpdateConfig(context.Background(), mapTorConfig(newCfg.Server.Tor)); err != nil {
+				log.Printf("Tor: configuration reload failed: %v", err)
+			}
+		}
 	})
 	configWatcher.Start()
 	defer configWatcher.Stop()
@@ -511,50 +759,71 @@ func main() {
 	// Channel to listen for errors
 	errChan := make(chan error, 1)
 
-	// Start server(s) in goroutine(s)
-	go func() {
-		printStartup(cfg, binaryName)
-		if srv != nil && httpLn != nil {
-			if err := srv.Serve(httpLn); err != nil && err != http.ErrServerClosed {
-				errChan <- err
-			}
-		}
-	}()
-	if httpsSrv != nil && httpsLn != nil {
+	if err := printStartup(cfg, binaryName); err != nil {
+		log.Printf("Startup banner write failed: %v", err)
+	}
+	torBackendServer := srv
+	if torBackendServer == nil {
+		torBackendServer = httpsSrv
+	}
+	if torBackendServer != nil {
+		torBackendServer.ConnContext = server.TorConnContext(torBackendServer.ConnContext)
+	}
+	// Start server(s) in goroutine(s) after listeners and privilege drop are ready.
+	if srv != nil && httpLn != nil {
 		go func() {
-			if err := httpsSrv.ServeTLS(httpsLn, "", ""); err != nil && err != http.ErrServerClosed {
+			if err := srv.Serve(server.TimeoutListener(httpLn)); err != nil && err != http.ErrServerClosed {
 				errChan <- err
 			}
 		}()
+	}
+	if httpsSrv != nil && httpsLn != nil {
+		go func() {
+			if err := httpsSrv.ServeTLS(server.TimeoutListener(httpsLn), "", ""); err != nil && err != http.ErrServerClosed {
+				errChan <- err
+			}
+		}()
+	}
+	if notifier := email.DefaultNotifier(); notifier != nil {
+		hostname, _ := os.Hostname()
+		log.Printf("Server started version=%s mode=%s", Version, cfg.Server.Mode)
+		if err := notifier.NotifyStartup(notifier.Recipients(), hostname, Version, cfg.Server.Mode); err != nil {
+			log.Printf("Email: failed to send startup notification: %v", err)
+		}
 	}
 
 	// Start Tor hidden service, per AI.md PART 31. Tor is always optional -
 	// a missing binary or any startup failure logs a warning and the server
 	// continues running without it; nothing here may block or fail
 	// server startup.
-	var torMgr *tor.Manager
 	if listenPort := httpPort; listenPort != "" || httpsPort != "" {
 		if listenPort == "" {
 			listenPort = httpsPort
 		}
 		if serverPort, err := strconv.Atoi(listenPort); err == nil {
-			torCfg := tor.Config{
-				Binary:                    cfg.Server.Tor.Binary,
-				UseNetwork:                cfg.Server.Tor.UseNetwork,
-				MaxCircuits:               cfg.Server.Tor.MaxCircuits,
-				CircuitTimeout:            cfg.Server.Tor.CircuitTimeout,
-				BootstrapTimeout:          cfg.Server.Tor.BootstrapTimeout,
-				SafeLogging:               cfg.Server.Tor.SafeLogging,
-				MaxStreamsPerCircuit:      cfg.Server.Tor.MaxStreamsPerCircuit,
-				CloseCircuitOnStreamLimit: cfg.Server.Tor.CloseCircuitOnStreamLimit,
-				BandwidthRate:             cfg.Server.Tor.BandwidthRate,
-				BandwidthBurst:            cfg.Server.Tor.BandwidthBurst,
-				MaxMonthlyBandwidth:       cfg.Server.Tor.MaxMonthlyBandwidth,
-				NumIntroPoints:            cfg.Server.Tor.NumIntroPoints,
-				VirtualPort:               cfg.Server.Tor.VirtualPort,
-			}
-			torMgr = tor.NewManager(serverPort, torCfg, paths.ConfigDir(), paths.DataDir())
+			torCfg := mapTorConfig(cfg.Server.Tor)
+			torMgr = tor.NewManager(torCfg, paths.ConfigDir(), paths.DataDir())
 			tor.Set(torMgr)
+			if torBackendServer != nil {
+				torMgr.SetBackendListenerHandler(func(backend net.Listener) {
+					proxyListener := &proxyproto.Listener{
+						Listener:          backend,
+						ReadHeaderTimeout: 2 * time.Second,
+						ConnPolicy: func(options proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
+							upstream, ok := options.Upstream.(*net.TCPAddr)
+							if !ok || !upstream.IP.IsLoopback() {
+								return proxyproto.REJECT, fmt.Errorf("tor backend accepts loopback connections only")
+							}
+							return proxyproto.REQUIRE, nil
+						},
+					}
+					go func() {
+						if serveErr := torBackendServer.Serve(proxyListener); serveErr != nil && !errors.Is(serveErr, net.ErrClosed) && serveErr != http.ErrServerClosed {
+							errChan <- serveErr
+						}
+					}()
+				})
+			}
 
 			go func() {
 				// Confirm the HTTP(S) listener is actually accepting
@@ -565,7 +834,7 @@ func main() {
 				for time.Now().Before(deadline) {
 					conn, dialErr := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", serverPort), 500*time.Millisecond)
 					if dialErr == nil {
-						conn.Close()
+						_ = conn.Close()
 						break
 					}
 					time.Sleep(250 * time.Millisecond)
@@ -577,6 +846,7 @@ func main() {
 					} else {
 						log.Printf("Warning: Tor disabled - %v", err)
 					}
+					return
 				}
 			}()
 		}
@@ -592,9 +862,35 @@ func main() {
 		case sig := <-quit:
 			if sig == syscall.SIGHUP {
 				log.Printf("SIGHUP received, reloading configuration...")
+				previousConfig := config.Get()
 				if err := config.Reload(); err != nil {
 					log.Printf("Failed to reload config: %v", err)
 				} else {
+					newConfig := config.Get()
+					if err := resumeEncryptionKeyRotation(context.Background(), newConfig); err != nil {
+						config.Set(previousConfig)
+						log.Printf("Failed to finish encryption-key rotation; configuration reload rejected: %v", err)
+						continue
+					}
+					if newConfig.Server.SSL.LetsEncrypt.Challenge == "dns-01" || newConfig.Server.SSL.LetsEncrypt.DNSProvider != "" {
+						if err := ssl.ValidateDNSProvider(newConfig.Server.SSL.LetsEncrypt.DNSProvider, newConfig.Server.SSL.LetsEncrypt.DNSCredentials); err != nil {
+							config.Set(previousConfig)
+							log.Printf("SSL: [ERROR] DNS provider validation failed; configuration reload rejected: %v", err)
+							continue
+						}
+					}
+					if err := syncDNSConfigState(context.Background(), newConfig); err != nil {
+						config.Set(previousConfig)
+						log.Printf("Failed to synchronize DNS provider state; configuration reload rejected: %v", err)
+						continue
+					}
+					server.SetHTTPTimeouts(newConfig.Server.Limits)
+					initSMTP(newConfig)
+					if torMgr != nil {
+						if err := torMgr.UpdateConfig(context.Background(), mapTorConfig(newConfig.Server.Tor)); err != nil {
+							log.Printf("Tor: configuration reload failed: %v", err)
+						}
+					}
 					log.Printf("Configuration reloaded")
 				}
 				continue
@@ -612,6 +908,11 @@ func main() {
 			log.Printf("Tor: error during shutdown: %v", err)
 		}
 	}
+	i2pCtx, i2pCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	if err := i2pManager.Close(i2pCtx); err != nil {
+		log.Printf("I2P: error during shutdown: %v", err)
+	}
+	i2pCancel()
 
 	// Graceful shutdown with 30 second timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -627,8 +928,38 @@ func main() {
 			log.Printf("HTTPS server forced to shutdown: %v", err)
 		}
 	}
+	shutdownReason := "signal"
+	if update.RestartPending() {
+		shutdownReason = "update restart"
+	}
+	log.Printf("Server stopped version=%s mode=%s reason=%s", Version, cfg.Server.Mode, shutdownReason)
+	if notifier := email.DefaultNotifier(); notifier != nil {
+		hostname, _ := os.Hostname()
+		finished := make(chan error, 1)
+		go func() {
+			finished <- notifier.NotifyShutdown(notifier.Recipients(), hostname, Version, cfg.Server.Mode, shutdownReason)
+		}()
+		select {
+		case err := <-finished:
+			if err != nil {
+				log.Printf("Email: failed to send shutdown notification: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			log.Printf("Email: shutdown notification exceeded its 5 second delivery window")
+		}
+	}
+	if err := server.CloseRateLimiters(); err != nil {
+		log.Printf("Failed to flush rate-limit counters during shutdown: %v", err)
+	}
 
 	cprintln("✅ Server stopped")
+	if update.RestartPending() {
+		sched.Stop()
+		if err := database.Close(); err != nil {
+			log.Printf("Failed to close database before staged-update restart: %v", err)
+		}
+		os.Exit(75)
+	}
 }
 
 // initSMTP builds the process-wide email.Client from
@@ -639,6 +970,7 @@ func main() {
 // when no working SMTP server is found; see AI.md PART 17 "SMTP
 // Requirement".
 func initSMTP(cfg *config.Config) {
+	fqdn := server.GetFQDN(paths.ProjectName)
 	smtp := cfg.Server.Notifications.Email.SMTP
 	found := smtp.Host != ""
 
@@ -653,8 +985,10 @@ func initSMTP(cfg *config.Config) {
 			smtp = cfg.Server.Notifications.Email.SMTP
 			found = true
 		}
-	} else {
-		if err := email.TestConnection(smtp.Host, smtp.Port); err != nil {
+	}
+	if found {
+		probeConfig := email.ClientConfigFromConfig(cfg.Server.Notifications.Email, cfg.Server.Branding.Title, fqdn, true)
+		if err := email.TestConnectionWithConfig(probeConfig); err != nil {
 			log.Printf("Email: configured SMTP host %s:%d unreachable: %v (email features disabled, will retry next startup)", smtp.Host, smtp.Port, err)
 			found = false
 		}
@@ -663,7 +997,7 @@ func initSMTP(cfg *config.Config) {
 	client := email.NewClient(email.ClientConfigFromConfig(
 		cfg.Server.Notifications.Email,
 		cfg.Server.Branding.Title,
-		cfg.Server.FQDN,
+		fqdn,
 		found,
 	))
 	email.Set(client)
@@ -691,7 +1025,7 @@ func initCLINotifier() {
 	client := email.NewClient(email.ClientConfigFromConfig(
 		cfg.Server.Notifications.Email,
 		cfg.Server.Branding.Title,
-		cfg.Server.FQDN,
+		server.GetFQDN(paths.ProjectName),
 		cfg.Server.Notifications.Email.SMTP.Host != "",
 	))
 	email.Set(client)
@@ -707,15 +1041,16 @@ func initCLINotifier() {
 // delivery stays disabled through the client's own enabled flag.
 func initNotifier(cfg *config.Config, client *email.Client) {
 	httpPort, httpsPort := resolvePorts(cfg)
-	appURL := formatURL(cfg.Server.FQDN, httpPort, false)
+	fqdn := server.GetFQDN(paths.ProjectName)
+	appURL := server.GetDisplayURL(paths.ProjectName, portNumber(httpPort), false)
 	if httpPort == "" {
-		appURL = formatURL(cfg.Server.FQDN, httpsPort, true)
+		appURL = server.GetDisplayURL(paths.ProjectName, portNumber(httpsPort), true)
 	}
 
 	vars := email.GlobalVars{
 		AppName:             cfg.Server.Branding.Title,
 		AppURL:              appURL,
-		FQDN:                cfg.Server.FQDN,
+		FQDN:                fqdn,
 		NotificationReplyTo: cfg.Server.Notifications.Email.ReplyTo,
 	}
 	if manager := tor.Get(); manager != nil {
@@ -733,92 +1068,166 @@ func initNotifier(cfg *config.Config, client *email.Client) {
 	}
 
 	notifier := email.NewNotifier(client, paths.ConfigDir(), vars, email.EventTogglesFromConfig(cfg.Server.Notifications.Email.Events), recipients)
+	notifier.SetLanguage(cfg.Server.I18N.DefaultLanguage)
 	email.SetDefaultNotifier(notifier)
 }
 
 func printHelp(binaryName string) {
-	cprintf(`%s - Universal API Toolkit
+	cprintf("%s", i18n.TranslateFormat(appmode.GetLang(), "cli.server_help", map[string]string{"binary_name": binaryName}))
+}
 
-Usage: %s [options]
+func normalizeLanguage(value string) string {
+	parts := strings.FieldsFunc(strings.TrimSpace(value), func(r rune) bool {
+		return r == '_' || r == '-' || r == '.'
+	})
+	if len(parts) == 0 {
+		return i18n.DefaultLanguage
+	}
+	code := strings.ToLower(parts[0])
+	if !i18n.IsSupported(code) {
+		return i18n.DefaultLanguage
+	}
+	return code
+}
 
-Server Options:
-  --help, -h              Show this help message
-  --version, -v           Show version information
-  --status                Check service status
-  --mode MODE             Set application mode {production|development|debug}
-  --config DIR            Set configuration directory
-  --data DIR              Set data directory
-  --log DIR               Set log directory
-  --cache DIR             Set cache directory
-  --backup DIR            Set backup directory
-  --pid FILE              Set PID file path
-  --address ADDR          Set listen address (default: 0.0.0.0)
-  --port PORT             Set listen port (default: 64580)
-  --baseurl URL           Set the public base URL
-  --daemon                Daemonize (detach from terminal)
-  --debug                 Enable debug mode (verbose logging, debug endpoints)
-  --color MODE            Set color output (auto|yes|no)
-  --lang CODE             Set interface language
-  --shell ACTION [SHELL]  Shell integration (completions|init|help)
+func earlyLanguage(args []string) string {
+	for index, argument := range args {
+		if strings.HasPrefix(argument, "--lang=") {
+			return normalizeLanguage(strings.TrimPrefix(argument, "--lang="))
+		}
+		if argument == "--lang" && index+1 < len(args) {
+			return normalizeLanguage(args[index+1])
+		}
+	}
+	return normalizeLanguage(firstNonEmpty(os.Getenv("LC_ALL"), os.Getenv("LANG")))
+}
 
-Service Management:
-  --service start         Start the service
-  --service stop          Stop the service
-  --service restart       Restart the service
-  --service reload        Reload configuration
-  --service --install     Install as system service
-  --service --uninstall   Uninstall system service
-  --service --disable     Disable system service
-  --service --help        Show service command help
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
 
-Maintenance Commands:
-  --maintenance backup [path]    Create backup
-  --maintenance restore [path]   Restore from backup
-  --maintenance update [setting] Update configuration
-  --maintenance mode [mode]      Change application mode
-  --maintenance setup            Run first-time setup
-  --maintenance secret rotate <name>
-                                 Rotate installation_secret or encryption_key
+// syncDNSConfigState invalidates the server-written DNS validation timestamp
+// whenever the configured provider or any credential changes. The persisted
+// comparison value is an HMAC, so it does not expose a guessable digest of a
+// low-entropy credential.
+func syncDNSConfigState(ctx context.Context, cfg *config.Config) error {
+	secret, err := database.LoadSecret(ctx, database.SecretInstallationSecret)
+	if err != nil {
+		return fmt.Errorf("load installation secret for DNS state: %w", err)
+	}
+	provider := strings.ToLower(strings.TrimSpace(cfg.Server.SSL.LetsEncrypt.DNSProvider))
+	credentials := cfg.Server.SSL.LetsEncrypt.DNSCredentials
+	names := make([]string, 0, len(credentials))
+	for name := range credentials {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	mac := hmac.New(sha256.New, secret.Value)
+	_, _ = fmt.Fprintf(mac, "provider:%d:%s\n", len(provider), provider)
+	for _, name := range names {
+		value := credentials[name]
+		_, _ = fmt.Fprintf(mac, "credential:%d:%s:%d:%s\n", len(name), name, len(value), value)
+	}
+	fingerprint := hex.EncodeToString(mac.Sum(nil))
+	previous, err := database.GetAppSecretValue(ctx, database.SecretDNSConfigFingerprint)
+	if err != nil && !errors.Is(err, database.ErrSecretNotFound) {
+		return err
+	}
+	if err == nil && previous != fingerprint {
+		if err := database.DeleteAppSecretValue(ctx, database.SecretDNSValidatedAt); err != nil {
+			return err
+		}
+	}
+	return database.SetAppSecretValue(ctx, database.SecretDNSConfigFingerprint, fingerprint)
+}
 
-Update Commands:
-  --update check                 Check for available updates
-  --update yes                   Download and install updates
-  --update branch stable         Switch to stable channel
-  --update branch beta           Switch to beta channel
-  --update branch daily          Switch to daily channel
+// resumeEncryptionKeyRotation eagerly completes any interrupted database
+// migration left by the previous key rotation attempt.
+func resumeEncryptionKeyRotation(ctx context.Context, cfg *config.Config) error {
+	if cfg == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	currentKey, err := decodeAtRestKey(cfg.Server.Security.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("decode current encryption key: %w", err)
+	}
+	legacyStored := cfg.Server.Security.EncryptionKeyPrevious != ""
+	legacyPrevious := cfg.Server.Security.PreviousEncryptionKey(now)
+	if legacyPrevious != "" {
+		previousKey, err := decodeAtRestKey(legacyPrevious)
+		if err != nil {
+			return fmt.Errorf("decode retained encryption key: %w", err)
+		}
+		until, parseErr := time.Parse(time.RFC3339, cfg.Server.Security.EncryptionKeyPreviousExpires)
+		if parseErr != nil {
+			return fmt.Errorf("parse retained encryption key expiry: %w", parseErr)
+		}
+		if err := database.StorePreviousEncryptionKey(ctx, previousKey, currentKey, until); err != nil {
+			return fmt.Errorf("wrap retained encryption key in database: %w", err)
+		}
+	}
+	previousKey, err := database.LoadPreviousEncryptionKey(ctx, currentKey, now)
+	if err != nil {
+		nextKey, until, pendingErr := database.LoadPendingEncryptionKey(ctx, currentKey, now)
+		if pendingErr == nil {
+			previousKey = currentKey
+			if err := database.StorePreviousEncryptionKey(ctx, previousKey, nextKey, until); err != nil {
+				return fmt.Errorf("store recovered previous encryption key: %w", err)
+			}
+			cfg.Server.Security.EncryptionKey = base64.StdEncoding.EncodeToString(nextKey)
+			currentKey = nextKey
+			if err := config.Save(cfg); err != nil {
+				return fmt.Errorf("persist recovered encryption key: %w", err)
+			}
+		} else if errors.Is(err, database.ErrSecretNotFound) && errors.Is(pendingErr, database.ErrSecretNotFound) {
+			if legacyStored {
+				cfg.Server.Security.EncryptionKeyPrevious = ""
+				cfg.Server.Security.EncryptionKeyPreviousExpires = ""
+				if err := config.Save(cfg); err != nil {
+					return fmt.Errorf("remove expired plaintext previous encryption key: %w", err)
+				}
+			}
+			return nil
+		} else if !errors.Is(pendingErr, database.ErrSecretNotFound) {
+			return fmt.Errorf("recover pending encryption key after retained-key load failed: %w", errors.Join(err, pendingErr))
+		} else {
+			return fmt.Errorf("load retained encryption key: %w", err)
+		}
+	}
+	if err := database.DeletePendingEncryptionKey(ctx); err != nil {
+		return fmt.Errorf("clear pending encryption-key recovery state: %w", err)
+	}
+	if err := database.ReencryptOwnerTokens(ctx, database.GetServerDB(), previousKey, currentKey); err != nil {
+		return fmt.Errorf("reencrypt owner tokens: %w", err)
+	}
+	if err := database.ReencryptSecurityReportData(ctx, database.GetServerDB(), previousKey, currentKey); err != nil {
+		return fmt.Errorf("reencrypt security reports: %w", err)
+	}
+	if legacyStored {
+		cfg.Server.Security.EncryptionKeyPrevious = ""
+		cfg.Server.Security.EncryptionKeyPreviousExpires = ""
+		if err := config.Save(cfg); err != nil {
+			return fmt.Errorf("remove legacy plaintext previous encryption key: %w", err)
+		}
+	}
+	return nil
+}
 
-Email Commands:
-  email test [recipient]         Send a test email (requires working SMTP)
-
-Tor Commands:
-  --tor status                   Show Tor hidden service status
-  --tor validate                 Validate Tor configuration
-  --tor restart                  Restart the Tor process
-  --tor regenerate               Regenerate the .onion address
-  --tor vanity start <prefix>    Start a vanity address search
-  --tor vanity apply             Apply the last found vanity address
-  --tor import-keys <path>       Import an existing hidden service key
-
-Environment Variables:
-  MODE                    Application mode
-  CONFIG_DIR              Configuration directory
-  DATA_DIR                Data directory
-  CACHE_DIR               Cache directory
-  LOG_DIR                 Log directory
-  BACKUP_DIR              Backup directory
-  PID_FILE                PID file path
-  PORT                    Listen port
-  LISTEN                  Listen address
-  DEBUG                   Enable debug mode
-
-Signals:
-  SIGHUP                  Reload configuration (auto via file watcher)
-  SIGTERM/SIGINT          Graceful shutdown
-  SIGUSR1                 Reopen logs (for log rotation)
-  SIGUSR2                 Dump status to log
-
-Documentation: https://apimgr-api.readthedocs.io
-`, binaryName, binaryName)
+func decodeAtRestKey(value string) ([]byte, error) {
+	key, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		key, err = hex.DecodeString(value)
+	}
+	if err != nil || len(key) != 32 {
+		return nil, errors.New("at-rest encryption key must decode to 32 bytes")
+	}
+	return key, nil
 }
 
 // resolvePorts implements the AI.md PART 15 Port Configuration table: a
@@ -841,52 +1250,30 @@ func resolvePorts(cfg *config.Config) (httpPort, httpsPort string) {
 	}
 }
 
-// formatURL applies the AI.md PART 15 URL Format Rule: :80 and :443 are
-// always stripped from the displayed URL.
-func formatURL(host, port string, isHTTPS bool) string {
-	proto := "http"
-	if isHTTPS || port == "443" {
-		proto = "https"
-	}
-	if port == "" || port == "80" || port == "443" {
-		return fmt.Sprintf("%s://%s", proto, host)
-	}
-	return fmt.Sprintf("%s://%s:%s", proto, host, port)
-}
-
-func printStartup(cfg *config.Config, binaryName string) {
+func printStartup(cfg *config.Config, binaryName string) error {
 	httpPort, httpsPort := resolvePorts(cfg)
-	host := getDisplayAddress(cfg)
-
-	cprintln()
-	cprintf("✅ %s v%s started successfully\n", binaryName, Version)
+	urls := make([]string, 0, 8)
 	if httpPort != "" {
-		cprintf("📡 Listening on %s\n", formatURL(host, httpPort, false))
-		cprintf("📊 Swagger UI: %s/openapi\n", formatURL(host, httpPort, false))
-		cprintf("🔮 GraphQL: %s/graphql\n", formatURL(host, httpPort, false))
-		cprintf("📚 API Docs: %s/api\n", formatURL(host, httpPort, false))
+		base := server.GetDisplayURL(paths.ProjectName, portNumber(httpPort), false)
+		urls = append(urls, base, base+"/server/docs/swagger", base+"/server/docs/graphql")
 	}
 	if httpsPort != "" {
-		cprintf("🔐 Listening on %s\n", formatURL(host, httpsPort, true))
-		cprintf("📊 Swagger UI: %s/openapi\n", formatURL(host, httpsPort, true))
-		cprintf("🔮 GraphQL: %s/graphql\n", formatURL(host, httpsPort, true))
-		cprintf("📚 API Docs: %s/api\n", formatURL(host, httpsPort, true))
+		base := server.GetDisplayURL(paths.ProjectName, portNumber(httpsPort), true)
+		urls = append(urls, base, base+"/server/docs/swagger", base+"/server/docs/graphql")
 	}
-	cprintln()
+	lang := appmode.GetLang()
+	return banner.PrintStartup(banner.Config{
+		AppName: binaryName, Version: Version, AppMode: cfg.Server.Mode,
+		Debug: appmode.IsDebugEnabled(), URLs: urls, Writer: os.Stdout, Lang: lang,
+		Emojis: emojiEnabled, Colors: colorEnabled,
+		Terminal:    display.DetectDisplayEnv(),
+		StartupTime: time.Now().Format("January 02, 2006 at 15:04:05 MST"),
+	})
 }
 
-func getDisplayAddress(cfg *config.Config) string {
-	if cfg.Server.FQDN != "" {
-		return cfg.Server.FQDN
-	}
-	if cfg.Server.Address == "0.0.0.0" || cfg.Server.Address == "" {
-		hostname, err := os.Hostname()
-		if err == nil && hostname != "" {
-			return hostname
-		}
-		return "localhost"
-	}
-	return cfg.Server.Address
+func portNumber(value string) int {
+	port, _ := strconv.Atoi(value)
+	return port
 }
 
 func checkStatus() {
@@ -904,12 +1291,39 @@ func checkStatus() {
 		cprintln("❌ Service is not running")
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusOK {
 		cprintln("✅ Service is running")
 		cprintf("   Port: %s\n", cfg.Server.Port)
 		cprintf("   Config: %s\n", config.GetConfigPath())
+		if statusResp, statusErr := client.Get("http://localhost:" + cfg.Server.Port + "/server/i2p/status"); statusErr == nil {
+			defer func() { _ = statusResp.Body.Close() }()
+			var payload struct {
+				Data struct {
+					State    string `json:"state"`
+					Provider string `json:"provider"`
+					Address  string `json:"address"`
+				} `json:"data"`
+			}
+			if json.NewDecoder(statusResp.Body).Decode(&payload) == nil {
+				switch payload.Data.State {
+				case "running":
+					cprintf("   I2P Eepsite: Running (%s)\n", payload.Data.Provider)
+				case "no_provider":
+					cprintln("   I2P Eepsite: No Provider")
+				case "error":
+					cprintln("   I2P Eepsite: Error")
+				case "starting", "building":
+					cprintf("   I2P Eepsite: %s\n", payload.Data.State)
+				default:
+					cprintln("   I2P Eepsite: Disabled")
+				}
+				if payload.Data.Address != "" {
+					cprintf("     Address: %s\n", payload.Data.Address)
+				}
+			}
+		}
 		os.Exit(0)
 	}
 
@@ -946,10 +1360,12 @@ func handleServiceCommand(cmd string, binaryName string) {
 func installService(binaryName string) {
 	if err := sysservice.Install(); err != nil {
 		cprintf("❌ Failed to install service: %v\n", err)
+		if errors.Is(err, sysservice.ErrAccountToolsUnavailable) {
+			os.Exit(exUnavailable)
+		}
 		os.Exit(1)
 	}
-	cprintln("✅ Service installed successfully")
-	cprintf("   Run '%s --service start' to start the service\n", binaryName)
+	cprintln(i18n.TranslateFormat(appmode.GetLang(), "cli.service_install_success", map[string]string{"binary_name": binaryName}))
 }
 
 func uninstallService(binaryName string) {
@@ -1006,15 +1422,39 @@ func disableService(binaryName string) {
 // the live status block, from the sysservice package so the command list and
 // the detected state never drift apart.
 func printServiceHelp(binaryName string) {
-	cprintf("%s", sysservice.HelpText(binaryName))
-	cprintln("\nNote: Service commands require root/administrator privileges.")
+	cprintf("%s", sysservice.HelpText(binaryName, appmode.GetLang()))
+	cprintln(i18n.Translate(appmode.GetLang(), "cli.service_privilege_note"))
 }
 
 // Maintenance commands
 func handleMaintenanceCommand(cmd string, optionalArg string, args []string, binaryName string) {
 	switch strings.ToLower(cmd) {
+	case "help", "--help":
+		printMaintenanceHelp(binaryName)
+		return
+
 	case "backup":
-		handleBackup(optionalArg, binaryName)
+		if len(args) > 0 && strings.EqualFold(args[0], "test") {
+			handleBackupTest(args[1:], binaryName)
+			return
+		}
+		filename := ""
+		includeSSL, includeData := false, false
+		for _, argument := range args {
+			switch argument {
+			case "--include-ssl":
+				includeSSL = true
+			case "--include-data":
+				includeData = true
+			default:
+				if filename != "" {
+					cprintf("❌ Unexpected backup argument: %s\n", argument)
+					os.Exit(exUsage)
+				}
+				filename = argument
+			}
+		}
+		handleBackup(filename, binaryName, includeSSL, includeData)
 
 	case "restore":
 		if optionalArg == "" {
@@ -1025,13 +1465,15 @@ func handleMaintenanceCommand(cmd string, optionalArg string, args []string, bin
 		handleRestore(optionalArg, binaryName)
 
 	case "update":
-		if optionalArg == "" {
-			cprintln("❌ Update requires a setting name and value")
-			cprintf("   Usage: %s --maintenance update setting_name value\n", binaryName)
-			os.Exit(1)
+		if len(args) == 0 {
+			cprintf("Usage: %s --maintenance update {check|yes|branch <stable|beta|devel>}\n", binaryName)
+			os.Exit(exUsage)
 		}
-		cprintf("⚠️ Configuration update via CLI not yet implemented\n")
-		cprintf("   Edit server.yml directly, or use the API/CLI client to update settings\n")
+		updateArg := ""
+		if len(args) > 1 {
+			updateArg = args[1]
+		}
+		handleUpdateCommand(args[0], updateArg, binaryName)
 
 	case "mode":
 		if optionalArg == "" {
@@ -1042,17 +1484,70 @@ func handleMaintenanceCommand(cmd string, optionalArg string, args []string, bin
 		handleModeChange(optionalArg, binaryName)
 
 	case "setup":
-		cprintf("⚠️ Setup wizard is available via the CLI client\n")
-		cprintf("   Run: %s-cli setup\n", strings.TrimSuffix(binaryName, "-cli"))
+		handleSetupCommand(binaryName)
 
 	case "secret":
 		handleSecretCommand(args, binaryName)
 
+	case "security":
+		handleSecurityMaintenance(args, binaryName)
+
+	case "pgp":
+		handlePGPCommand(args, binaryName)
+
 	default:
 		cprintf("Unknown maintenance command: %s\n", cmd)
-		cprintln("Valid commands: backup, restore, update, mode, setup, secret")
+		cprintln("Valid commands: backup, restore, update, mode, setup, secret, security, pgp")
 		os.Exit(1)
 	}
+}
+
+func handleSetupCommand(binaryName string) {
+	hadConfigFiles := config.HasSourceFiles()
+	if !hadConfigFiles && !databaseIsEmpty(config.DefaultConfig()) && !paths.IsElevated() {
+		fmt.Fprintf(os.Stderr, "Error: setup already completed. To reconfigure, edit server.yml and restart the server, or run as root: sudo %s --maintenance setup\n", binaryName)
+		os.Exit(77)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to load configuration for setup: %v\n", err)
+		os.Exit(exConfig)
+	}
+	firstRun := databaseIsEmpty(cfg)
+	elevated := paths.IsElevated()
+	if !firstRun && !elevated {
+		fmt.Fprintf(os.Stderr, "Error: setup already completed. To reconfigure, edit server.yml and restart the server, or run as root: sudo %s --maintenance setup\n", binaryName)
+		os.Exit(77)
+	}
+	if elevated {
+		if !confirmSetup() {
+			cprintln("Setup cancelled; no configuration files were changed.")
+			os.Exit(0)
+		}
+	}
+	if hadConfigFiles {
+		fmt.Fprintf(os.Stderr, "Error: existing server.yml/yaml.d reset scope is awaiting a documented decision; no configuration files were changed.\n")
+		os.Exit(1)
+	}
+	if !firstRun {
+		fmt.Fprintf(os.Stderr, "Error: setup reset requires the approved reset scope; no configuration files were changed.\n")
+		os.Exit(1)
+	}
+	cprintln("✅ First-run server configuration is initialized with defaults")
+}
+
+func confirmSetup() bool {
+	cprintf("Reset server configuration to defaults? Continue? [y/N] ")
+	var answer string
+	if _, err := fmt.Scanln(&answer); err != nil {
+		return false
+	}
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	return answer == "y" || answer == "yes"
+}
+
+func printMaintenanceHelp(binaryName string) {
+	fmt.Print(i18n.TranslateFormat(appmode.GetLang(), "cli.maintenance_help", map[string]string{"binary_name": binaryName}))
 }
 
 // checkForUpdate queries GitHub Releases for the newest release on the
@@ -1082,6 +1577,10 @@ func checkForUpdate() *update.Release {
 // Update handling
 func handleUpdateCommand(cmd string, optionalArg string, binaryName string) {
 	switch strings.ToLower(cmd) {
+	case "help", "--help":
+		printUpdateHelp(binaryName)
+		return
+
 	case "check":
 		release := checkForUpdate()
 		if release == nil {
@@ -1095,6 +1594,10 @@ func handleUpdateCommand(cmd string, optionalArg string, binaryName string) {
 		release := checkForUpdate()
 		if release == nil {
 			cprintf("✅ %s %s is up to date\n", binaryName, Version)
+			return
+		}
+		if !paths.IsElevated() {
+			cprintf("❌ Updating the installed binary requires an elevated process. Retry with: sudo %s --update yes\n", binaryName)
 			return
 		}
 		cprintf("⬇️ Installing %s...\n", release.TagName)
@@ -1125,12 +1628,12 @@ func handleUpdateCommand(cmd string, optionalArg string, binaryName string) {
 	case "branch":
 		if optionalArg == "" {
 			cprintln("❌ Branch command requires a channel argument")
-			cprintf("   Usage: %s --update branch {stable|beta|daily}\n", binaryName)
+			cprintf("   Usage: %s --update branch {stable|beta|devel}\n", binaryName)
 			os.Exit(1)
 		}
 		if !update.ValidBranch(optionalArg) {
 			cprintf("❌ Unknown update channel: %s\n", optionalArg)
-			cprintln("   Valid channels: stable, beta, daily")
+			cprintln("   Valid channels: stable, beta, devel (aliases: daily, rolling, dev, development)")
 			os.Exit(1)
 		}
 		{
@@ -1156,6 +1659,10 @@ func handleUpdateCommand(cmd string, optionalArg string, binaryName string) {
 		cprintf("Usage: %s --update {check|yes|branch <channel>}\n", binaryName)
 		os.Exit(1)
 	}
+}
+
+func printUpdateHelp(binaryName string) {
+	fmt.Print(i18n.TranslateFormat(appmode.GetLang(), "cli.update_help", map[string]string{"binary_name": binaryName, "version": Version}))
 }
 
 // Tor management commands. Per AI.md PART 31.1, the server binary already
@@ -1233,7 +1740,7 @@ func torRequest(method, path string, body interface{}) (map[string]interface{}, 
 	if err != nil {
 		return nil, false, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var envelope map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
@@ -1417,21 +1924,7 @@ func torImportKeys(path string, binaryName string) {
 }
 
 func printTorHelp(binaryName string) {
-	cprintf(`Tor Management
-
-Available tor commands:
-  %s --tor status                 Show Tor hidden service status
-  %s --tor validate               Validate Tor configuration
-  %s --tor restart                Restart the Tor process
-  %s --tor regenerate             Regenerate the .onion address
-  %s --tor vanity start <prefix>  Start a vanity address search
-  %s --tor vanity apply           Apply the last found vanity address
-  %s --tor import-keys <path>     Import an existing hidden service key
-  %s --tor --help                 Show this help
-
-Note: restart, regenerate, vanity, and import-keys require the server to
-be running - they mutate a process the server owns.
-`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+	cprintf("%s", i18n.TranslateFormat(appmode.GetLang(), "cli.tor_help", map[string]string{"binary_name": binaryName}))
 }
 
 // Mode change handling
@@ -1459,4 +1952,23 @@ func handleModeChange(newMode string, binaryName string) {
 
 	cprintf("✅ Mode will be set to: %s\n", parsed.String())
 	cprintln("   Mode change requires server restart to take effect")
+}
+
+func mapTorConfig(cfg config.TorConfig) tor.Config {
+	return tor.Config{
+		Binary:                    cfg.Binary,
+		UseNetwork:                cfg.UseNetwork,
+		MaxCircuits:               cfg.MaxCircuits,
+		StartupTimeout:            cfg.StartupTimeout,
+		CircuitTimeout:            cfg.CircuitTimeout,
+		BootstrapTimeout:          cfg.BootstrapTimeout,
+		SafeLogging:               cfg.SafeLogging,
+		MaxStreamsPerCircuit:      cfg.MaxStreamsPerCircuit,
+		CloseCircuitOnStreamLimit: cfg.CloseCircuitOnStreamLimit,
+		BandwidthRate:             cfg.BandwidthRate,
+		BandwidthBurst:            cfg.BandwidthBurst,
+		MaxMonthlyBandwidth:       cfg.MaxMonthlyBandwidth,
+		NumIntroPoints:            cfg.NumIntroPoints,
+		VirtualPort:               cfg.VirtualPort,
+	}
 }

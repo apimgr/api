@@ -55,7 +55,7 @@ func csrfMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 				// covers the post-revocation case (revocation clears it).
 				issued, err := newCSRFToken(csrfCfg.TokenLength)
 				if err != nil {
-					writeEnvelopeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unable to issue a CSRF token", nil)
+					writeLocalizedAPIError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR")
 					return
 				}
 				setCSRFCookie(w, r, csrfCfg, issued)
@@ -113,7 +113,7 @@ func csrfValidationRequired(r *http.Request, cfg config.CSRFConfig) bool {
 // attack path; cross-origin abuse of these endpoints is handled by the
 // Sec-Fetch-Site layer and per-IP rate limiting instead.
 func isPublicAPIPath(requestPath string) bool {
-	return requestPath == "/api" || strings.HasPrefix(requestPath, "/api/")
+	return requestPath == "/api" || strings.HasPrefix(requestPath, "/api/") || requestPath == "/mcp"
 }
 
 // csrfPathExempt reports whether the request path matches one of the
@@ -195,7 +195,8 @@ func csrfCookieSecure(r *http.Request, setting string) bool {
 	case "false":
 		return false
 	default:
-		return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+		proto, _, _ := GetURLVars(r)
+		return proto == "https"
 	}
 }
 
@@ -216,7 +217,7 @@ func csrfReject(w http.ResponseWriter, r *http.Request, reason string) {
 		"endpoint", r.URL.Path,
 		"method", r.Method,
 		"reason", reason)
-	writeEnvelopeError(w, http.StatusForbidden, "CSRF_FAILED", "CSRF token validation failed", nil)
+	writeLocalizedAPIError(w, r, http.StatusForbidden, "CSRF_FAILED")
 }
 
 // CSRFTokenFromContext returns the token issued for this request, or "" when

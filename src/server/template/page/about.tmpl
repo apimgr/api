@@ -1,30 +1,48 @@
 {{define "content"}}
-<section class="hero">
-  <div class="container">
-    <h1 class="hero-title">ℹ️ About {{.SiteTitle}}</h1>
-    <p class="hero-subtitle">{{.Tagline}}</p>
-  </div>
-</section>
+<article class="container container-md">
+  <header class="page-header">
+    <h1 class="page-title">{{.SiteTitle}}</h1>
+    <p class="page-lead">{{.Tagline}}</p>
+  </header>
 
-<section>
-  <div class="container container-sm">
-    <div class="card">
-      <div class="card-header">Build Information</div>
-      <div class="card-body">
-        <p><strong>Version:</strong> {{.Version}}</p>
-        <p><strong>Commit:</strong> {{.CommitID}}</p>
-        <p><strong>Build Date:</strong> {{.BuildDate}}</p>
-        <p><strong>Mode:</strong> {{.Mode}}</p>
-      </div>
-    </div>
+  <section class="section-card" aria-labelledby="about-description">
+    <h2 id="about-description">{{t .Lang "about.title"}} {{.SiteTitle}}</h2>
+    <p>{{.SiteDescription}}</p>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Third-Party Attribution</div>
-      <div class="card-body">
-        <p><a href="https://db-ip.com/">IP Geolocation by DB-IP</a></p>
-        <p>Country and ASN data licensed CC BY 4.0 by the Number Resource Organization (NRO).</p>
-      </div>
-    </div>
-  </div>
-</section>
+  <section class="section-card" aria-labelledby="about-features">
+    <h2 id="about-features">{{t .Lang "about.features"}}</h2>
+    <ul>
+      {{range .Categories}}
+      <li><a href="{{.Path}}">{{.Name}}</a> — {{.Description}}</li>
+      {{end}}
+    </ul>
+  </section>
+
+  <section class="section-card" aria-labelledby="about-version">
+    <h2 id="about-version">{{t .Lang "about.version"}}</h2>
+    <dl>
+      <dt>{{t .Lang "page_text.text.version.dd167905de"}}</dt><dd>{{.Version}}</dd>
+      <dt>{{t .Lang "page_text.text.commit.82a9c46ffa"}}</dt><dd><code class="break-all">{{.CommitID}}</code></dd>
+      <dt>{{t .Lang "page_text.text.build.date.01fe9eb662"}}</dt><dd>{{.BuildDate}}</dd>
+      <dt>{{t .Lang "page_text.text.mode.5e23ec6a30"}}</dt><dd>{{.Mode}}</dd>
+    </dl>
+  </section>
+
+  <section class="section-card" aria-labelledby="about-links">
+    <h2 id="about-links">{{t .Lang "about.links"}}</h2>
+    <ul>
+      <li><a href="{{repoURL}}" rel="noopener">{{t .Lang "common.github"}}</a></li>
+      <li><a href="{{path .BaseURL "/server/docs/swagger"}}">{{t .Lang "help.api_documentation"}}</a></li>
+      <li><a href="{{.APIBasePath}}/server/swagger">{{t .Lang "page_text.text.openapi.json.507196495e"}}</a></li>
+    </ul>
+  </section>
+
+  <section class="section-card" aria-labelledby="about-attribution">
+    <h2 id="about-attribution">{{t .Lang "page_text.text.third.party.attribution.b64cc879fe"}}</h2>
+    <p><a href="https://db-ip.com/">IP Geolocation by DB-IP</a></p>
+    <p>{{t .Lang "page_text.text.asn.and.country.data.use.pddl.data.from.d9f3da2aa5"}} <a href="https://iptoasn.com/">{{t .Lang "page_text.text.iptoasn.com.6aaec00fd6"}}</a>.</p>
+  </section>
+  {{if .AboutExtension}}<section class="section-card prose">{{.AboutExtension}}</section>{{end}}
+</article>
 {{end}}

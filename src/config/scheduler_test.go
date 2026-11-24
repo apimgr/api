@@ -39,11 +39,16 @@ func TestDefaultSchedulerConfig(t *testing.T) {
 		{"cve_update", "0 5 * * *", true},
 		{"update_check", "0 6 * * *", true},
 		{"token_cleanup", "@every 15m", true},
+		{"security_cleanup", "30 3 * * *", true},
+		{"keyserver_retry", "@every 15m", true},
+		{"disk_check", "@every 5m", true},
+		{"database_check", "@every 1m", true},
 		{"log_rotation", "0 0 * * *", true},
 		{"backup_daily", "0 2 * * *", true},
 		{"backup_hourly", "@hourly", false},
 		{"healthcheck_self", "@every 5m", true},
 		{"tor_health", "@every 10m", true},
+		{"i2p_health", "@every 10m", true},
 	}
 
 	for _, tc := range tests {

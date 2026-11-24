@@ -1,16 +1,28 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/apimgr/api/src/config"
 )
+
+func execTestWrite(t *testing.T, query string, args ...any) {
+	t.Helper()
+	store := GetStore()
+	require.NotNil(t, store)
+	require.NoError(t, store.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(context.Background(), query, args...)
+		return err
+	}))
+}
 
 // TestMain initializes a single shared SQLite instance under a temp
 // directory for the whole package test run, since Init/GetServerDB
@@ -20,16 +32,19 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(dataDir)
-
 	if err := Init(config.DatabaseConfig{Driver: "sqlite"}, dataDir); err != nil {
+		_ = os.RemoveAll(dataDir)
 		panic(err)
 	}
 
 	code := m.Run()
 
-	Close()
-	os.RemoveAll(dataDir)
+	if err := Close(); err != nil && code == 0 {
+		code = 1
+	}
+	if err := os.RemoveAll(dataDir); err != nil && code == 0 {
+		code = 1
+	}
 	os.Exit(code)
 }
 
@@ -40,6 +55,20 @@ func TestInitCreatesDatabases(t *testing.T) {
 	require.NotNil(t, serverDBConn)
 
 	assert.NoError(t, serverDBConn.Ping())
+}
+
+func TestProbeServerDBChecksReadAndWriteHandles(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	require.NoError(t, ProbeServerDB(ctx))
+	require.NoError(t, (ServerDBProbe{}).PingContext(ctx))
+}
+
+func TestGetServerDBExposesReadOnlyPool(t *testing.T) {
+	db := GetServerDB()
+	require.NotNil(t, db)
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS external_write_probe (id INTEGER PRIMARY KEY)`)
+	assert.Error(t, err)
 }
 
 // Init must fail cleanly (rather than panic) when it cannot create the
@@ -114,7 +143,7 @@ func assertTablesExist(t *testing.T, db *sql.DB, want []string) {
 
 	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type = 'table'`)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	present := map[string]bool{}
 	for rows.Next() {

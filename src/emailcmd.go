@@ -45,7 +45,7 @@ func handleEmailCommand(args []string, binaryName string) {
 		cprintf("❌ Failed to initialize database: %v\n", err)
 		os.Exit(exUnavailable)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	// Reuse the server's own SMTP bring-up so the test exercises exactly what
 	// the running server would use: auto-detection when no host is configured,

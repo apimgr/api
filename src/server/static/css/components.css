@@ -106,6 +106,106 @@
 /* ============================================================================
    Forms
    ============================================================================ */
+.page-header {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin-block: var(--spacing-lg) var(--spacing-md);
+}
+
+.page-title {
+  margin: 0;
+}
+
+.page-lead {
+  max-width: 70ch;
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: break-word;
+}
+
+.breadcrumb {
+  margin: 0;
+}
+
+.section-card {
+  margin-block: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  background-color: var(--surface-alt-color);
+}
+
+.section-card > :first-child {
+  margin-top: 0;
+}
+
+.section-card > :last-child {
+  margin-bottom: 0;
+}
+
+.hub-list {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-link {
+  display: grid;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-color);
+  text-decoration: none;
+}
+
+.hub-link:hover {
+  border-color: var(--primary-color);
+}
+
+.hub-title {
+  font-weight: 600;
+}
+
+.hub-desc {
+  color: var(--text-muted);
+  overflow-wrap: break-word;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-block: var(--spacing-md);
+}
+
+.copy-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-color);
+  background: var(--bg-color);
+  cursor: pointer;
+}
+
+.reset-popover {
+  max-width: min(32rem, calc(100% - 2rem));
+  padding: var(--spacing-lg);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  color: var(--text-color);
+  background: var(--bg-color);
+  box-shadow: var(--shadow-lg);
+}
+
+.reset-popover::backdrop {
+  background: var(--overlay-color);
+}
+
 .form-group {
   margin-bottom: var(--spacing-md);
 }
@@ -246,8 +346,8 @@ dialog {
   border: var(--border-width) solid var(--border-color);
   border-radius: var(--border-radius-lg);
   padding: 0;
-  max-width: 600px;
-  width: 90%;
+  max-width: none;
+  width: 98%;
   box-shadow: var(--shadow-lg);
 }
 
@@ -307,11 +407,11 @@ dialog::backdrop {
   justify-content: flex-end;
 }
 
-/* Mobile modal per PART 17 */
-@media (max-width: 720px) {
+/* Wider viewports cap modal width while keeping mobile defaults compact. */
+@media (min-width: 768px) {
   dialog {
-    width: 98%;
-    max-width: none;
+    max-width: 600px;
+    width: 90%;
   }
 }
 
@@ -531,6 +631,9 @@ dialog::backdrop {
   max-width: 100%;
   overflow-x: auto;
   white-space: nowrap;
+  user-select: all;
+  word-break: break-all;
+  overflow-wrap: break-word;
   -webkit-overflow-scrolling: touch;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
@@ -651,4 +754,35 @@ dialog::backdrop {
   font-size: var(--font-size-sm);
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.contact-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.contact-review {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  gap: var(--spacing-md);
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+  color: var(--text-color);
+  background: var(--overlay-color);
+}
+
+.contact-review-card {
+  width: min(100%, 42rem);
+  margin-inline: auto;
+  padding: var(--spacing-lg);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  background: var(--bg-color);
+  box-shadow: var(--shadow-lg);
 }

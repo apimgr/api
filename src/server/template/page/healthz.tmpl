@@ -1,0 +1,64 @@
+{{define "content"}}
+<div class="container">
+    <header class="health-header">
+        <h1 class="page-title">📦 {{.Health.Project.Name}}</h1>
+        {{if .Health.Project.Tagline}}<p class="tagline">{{.Health.Project.Tagline}}</p>{{end}}
+        {{if .Health.Project.Description}}<p>{{.Health.Project.Description}}</p>{{end}}
+    </header>
+
+    <div class="status-banner {{.StatusClass}}" role="status">
+        <span class="status-icon" aria-hidden="true">{{.StatusIcon}}</span>
+        <span class="status-text">{{.StatusLabel}}</span>
+    </div>
+    {{if and .Health.PendingRestart .RestartReasons}}<p class="restart-reason">{{t .Lang "health.restart_required_for"}} {{.RestartReasons}}</p>{{end}}
+
+    <section class="section-card">
+        <h2>{{t .Lang "health.section.version"}}</h2>
+        <dl class="info-list">
+            <dt>{{t .Lang "health.field.version"}}</dt><dd><code>{{.Health.Version}}</code></dd>
+            <dt>{{t .Lang "health.field.go_version"}}</dt><dd><code>{{.Health.GoVersion}}</code></dd>
+            <dt>{{t .Lang "health.field.build_commit"}}</dt><dd><code>{{.Health.Build.Commit}}</code></dd>
+            <dt>{{t .Lang "health.field.build_date"}}</dt><dd><time datetime="{{.BuildDateISO}}">{{.BuildDateText}}</time></dd>
+        </dl>
+    </section>
+
+    <section class="section-card">
+        <h2>{{t .Lang "health.section.runtime"}}</h2>
+        <dl class="info-list">
+            <dt>{{t .Lang "health.field.uptime"}}</dt><dd>{{.Health.Uptime}}</dd>
+            <dt>{{t .Lang "health.field.mode"}}</dt><dd><span class="badge badge-{{.Health.Mode}}">{{.ModeLabel}}</span></dd>
+            <dt>{{t .Lang "health.field.timestamp"}}</dt><dd><time datetime="{{.TimestampText}}">{{.TimestampText}}</time></dd>
+        </dl>
+    </section>
+
+    <section class="section-card">
+        <h2>{{t .Lang "health.section.features"}}</h2>
+        <ul class="feature-list">
+            {{range .Features}}
+            <li class="{{.Class}}">{{.Icon}} {{.Label}}: <span class="status {{if eq .Class "feature-enabled"}}status-ok{{else}}status-warning{{end}}">{{.Status}}</span>
+                {{if .HasAddress}}<div class="code-block"><pre><code class="code-content">{{.Hostname}}</code></pre><button type="button" class="copy-btn" data-copy="{{.Hostname}}"><span class="copy-icon" aria-hidden="true">📋</span><span class="copy-text" aria-live="polite">{{t $.Lang "common.copy"}}</span></button></div>{{end}}
+            </li>
+            {{end}}
+        </ul>
+    </section>
+
+    <section class="section-card">
+        <h2>{{t .Lang "health.section.checks"}}</h2>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead><tr><th scope="col">{{t .Lang "health.field.component"}}</th><th scope="col">{{t .Lang "health.field.status"}}</th></tr></thead>
+                <tbody>{{range .Checks}}<tr><td>{{.Label}}</td><td><span class="status {{.StatusClass}}">{{.StatusIcon}} {{.Status}}</span></td></tr>{{end}}</tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="section-card">
+        <h2>{{t .Lang "health.section.stats"}}</h2>
+        <dl class="info-list stats-grid">
+            <dt>{{t .Lang "health.stat.requests_total"}}</dt><dd>{{.RequestTotal}}</dd>
+            <dt>{{t .Lang "health.stat.requests_24h"}}</dt><dd>{{.Request24h}}</dd>
+            <dt>{{t .Lang "health.stat.active_connections"}}</dt><dd>{{.ActiveConns}}</dd>
+        </dl>
+    </section>
+</div>
+{{end}}

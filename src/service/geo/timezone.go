@@ -56,7 +56,7 @@ func (s *Service) Timezone(lat, lon float64) (*TimezoneResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open-meteo request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("open-meteo returned status %d", resp.StatusCode)

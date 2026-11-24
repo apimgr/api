@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🐋 Docker Tools</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.docker.tools.57d5a8c735"}}</h1>
     <p class="hero-subtitle">
-      Docker run/compose conversion, linting, and validation
+      {{t .Lang "categories.docker.description"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/docker/run-to-compose" class="category-card">
+      <a href="{{path .BaseURL "/docker/run-to-compose"}}" class="category-card">
         <div class="category-icon">📝</div>
-        <h3 class="category-title">Run to Compose</h3>
-        <p class="category-description">Convert docker run to docker-compose</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.run.to.compose.4d66fe5d6d"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.convert.docker.run.to.docker.compose.a295a21524"}}</p>
       </a>
       
-      <a href="/docker/compose-to-run" class="category-card">
+      <a href="{{path .BaseURL "/docker/compose-to-run"}}" class="category-card">
         <div class="category-icon">▶️</div>
-        <h3 class="category-title">Compose to Run</h3>
-        <p class="category-description">Convert docker-compose to docker run</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.compose.to.run.03be2b5c84"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.convert.docker.compose.to.docker.run.4c438b4c4e"}}</p>
       </a>
       
-      <a href="/docker/dockerfile-lint" class="category-card">
+      <a href="{{path .BaseURL "/docker/dockerfile-lint"}}" class="category-card">
         <div class="category-icon">✅</div>
-        <h3 class="category-title">Dockerfile Linter</h3>
-        <p class="category-description">Lint and validate Dockerfiles</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.dockerfile.linter.33c5ab3f8b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.lint.and.validate.dockerfiles.69147ee59a"}}</p>
       </a>
       
-      <a href="/docker/dockerfile-generate" class="category-card">
+      <a href="{{path .BaseURL "/docker/dockerfile-generate"}}" class="category-card">
         <div class="category-icon">📄</div>
-        <h3 class="category-title">Dockerfile Generator</h3>
-        <p class="category-description">Generate Dockerfiles</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.dockerfile.generator.c1b7b6e4d6"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.dockerfiles.18efa7b938"}}</p>
       </a>
       
-      <a href="/docker/compose-validate" class="category-card">
+      <a href="{{path .BaseURL "/docker/compose-validate"}}" class="category-card">
         <div class="category-icon">🔍</div>
-        <h3 class="category-title">Compose Validator</h3>
-        <p class="category-description">Validate docker-compose files</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.compose.validator.5f492212f6"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.docker.compose.files.8dcab48ddb"}}</p>
       </a>
       
-      <a href="/docker/port-mapping" class="category-card">
+      <a href="{{path .BaseURL "/docker/port-mapping"}}" class="category-card">
         <div class="category-icon">🚪</div>
-        <h3 class="category-title">Port Mapping Helper</h3>
-        <p class="category-description">Generate port mappings</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.port.mapping.helper.446872e4a3"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.port.mappings.8d1fbbb13a"}}</p>
       </a>
       
-      <a href="/docker/env-parser" class="category-card">
+      <a href="{{path .BaseURL "/docker/env-parser"}}" class="category-card">
         <div class="category-icon">🔧</div>
-        <h3 class="category-title">ENV Parser</h3>
-        <p class="category-description">Parse environment variables</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.env.parser.80577dcaca"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.environment.variables.ae37de7cdc"}}</p>
       </a>
       
-      <a href="/docker/volume-helper" class="category-card">
+      <a href="{{path .BaseURL "/docker/volume-helper"}}" class="category-card">
         <div class="category-icon">💾</div>
-        <h3 class="category-title">Volume Helper</h3>
-        <p class="category-description">Generate volume configurations</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.volume.helper.87a1522dba"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.volume.configurations.4120d21135"}}</p>
       </a>
       
-      <a href="/docker/network-helper" class="category-card">
+      <a href="{{path .BaseURL "/docker/network-helper"}}" class="category-card">
         <div class="category-icon">🌐</div>
-        <h3 class="category-title">Network Helper</h3>
-        <p class="category-description">Generate network configurations</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.network.helper.6443e512aa"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.network.configurations.716fee310a"}}</p>
       </a>
       
-      <a href="/docker/best-practices" class="category-card">
+      <a href="{{path .BaseURL "/docker/best-practices"}}" class="category-card">
         <div class="category-icon">📚</div>
-        <h3 class="category-title">Best Practices</h3>
-        <p class="category-description">Docker best practices guide</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.best.practices.46d9a34a79"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.docker.best.practices.guide.9c41442332"}}</p>
       </a>
       
-      <a href="/docker/security-scan" class="category-card">
+      <a href="{{path .BaseURL "/docker/security-scan"}}" class="category-card">
         <div class="category-icon">🔒</div>
-        <h3 class="category-title">Security Scanner</h3>
-        <p class="category-description">Scan for security issues</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.security.scanner.ed161bc0a0"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.scan.for.security.issues.80510f8701"}}</p>
       </a>
       
-      <a href="/docker/size-optimizer" class="category-card">
+      <a href="{{path .BaseURL "/docker/size-optimizer"}}" class="category-card">
         <div class="category-icon">⚡</div>
-        <h3 class="category-title">Size Optimizer</h3>
-        <p class="category-description">Optimize image size</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.size.optimizer.eb5262dc32"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.optimize.image.size.dbaa6ba3ea"}}</p>
       </a>
     </div>
   </div>

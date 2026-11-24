@@ -12,7 +12,7 @@ import (
 // with PART 8 → "Auth Token Headers (All Headers Supported)" — a wildcard
 // is invalid here because Authorization is never covered by "*" and
 // wildcards can't be combined with credentials.
-const corsAllowedHeaders = "Content-Type, Accept, X-Requested-With, Authorization, X-API-Key, X-Api-Key, API-Key, ApiKey, X-Auth-Token, X-Access-Token, X-Token, Token, X-CSRF-Token, X-XSRF-Token, X-Session-ID, X-Service-Token, X-Internal-Token"
+const corsAllowedHeaders = "Content-Type, Accept, X-Requested-With, Authorization, X-API-Key, X-Api-Key, API-Key, ApiKey, X-Auth-Token, X-Access-Token, X-Token, Token, X-CSRF-Token, X-XSRF-Token, X-Session-ID, X-Service-Token, X-Internal-Token, MCP-Protocol-Version, Mcp-Method, Mcp-Name"
 
 // corsAllowedMethods is the fixed method list from AI.md PART 16 → "CORS
 // Headers" → Access-Control-Allow-Methods.

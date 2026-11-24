@@ -20,8 +20,12 @@ func EventTogglesFromConfig(events config.EmailEventsConfig) EventToggles {
 		SSLRenewalFailed: events.SSLRenewalFailed,
 		SecurityAlert:    events.SecurityAlert,
 		SchedulerError:   events.SchedulerError,
+		DiskLow:          events.DiskLow,
+		DatabaseError:    events.DatabaseError,
 		UpdateAvailable:  events.UpdateAvailable,
 		UpdateInstalled:  events.UpdateInstalled,
+		UpdateFailed:     events.UpdateFailed,
+		UpdateStaged:     events.UpdateStaged,
 	}
 }
 

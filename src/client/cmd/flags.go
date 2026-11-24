@@ -13,6 +13,7 @@ var globalValueFlags = map[string]bool{
 	"--color":      true,
 	"--lang":       true,
 	"--output":     true,
+	"--update":     true,
 	"--shell":      true,
 }
 
@@ -31,6 +32,7 @@ type parsedFlags struct {
 	Debug      bool
 	Shell      string
 	ShellArg   string
+	Update     string
 	Rest       []string
 }
 
@@ -54,6 +56,18 @@ func parseGlobalFlags(argv []string) parsedFlags {
 			continue
 		case "--debug":
 			p.Debug = true
+			continue
+		}
+
+		if name == "--update" {
+			if hasEquals {
+				p.Update = value
+			} else if i+1 < len(argv) && (argv[i+1] == "check" || argv[i+1] == "yes") {
+				i++
+				p.Update = argv[i]
+			} else {
+				p.Update = "yes"
+			}
 			continue
 		}
 

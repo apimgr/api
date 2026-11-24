@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/health"
 )
 
 // fakePinger is a minimal stand-in for the interface{ PingContext(...) error }
@@ -21,6 +22,17 @@ import (
 // success and failure branches of checkDatabase without a real database.
 type fakePinger struct {
 	err error
+}
+
+func TestChecksInfoEmitsOrderedDatasetKeysAsSiblings(t *testing.T) {
+	checks := ChecksInfo{Database: "ok", Cache: "ok", Disk: "ok", Scheduler: "ok", Datasets: []health.Check{{Key: "cve_nvd", Status: "degraded"}, {Key: "blocklist_ads", Status: "error"}}}
+	data, err := json.Marshal(checks)
+	require.NoError(t, err)
+	encoded := string(data)
+	require.Contains(t, encoded, `"cve_nvd":"degraded"`)
+	require.Contains(t, encoded, `"blocklist_ads":"error"`)
+	require.Less(t, strings.Index(encoded, `"scheduler"`), strings.Index(encoded, `"cve_nvd"`))
+	require.Less(t, strings.Index(encoded, `"cve_nvd"`), strings.Index(encoded, `"blocklist_ads"`))
 }
 
 func (f fakePinger) PingContext(ctx context.Context) error {
@@ -61,7 +73,7 @@ func resetHealthGlobals(t *testing.T) {
 		SetShuttingDown(origShutdown)
 		SetPendingRestart(origPending, origReason)
 	})
-	dbPinger = nil
+	dbPinger = fakePinger{err: nil}
 	SetSchedulerProbe(func() error { return nil })
 	// Tor and I2P are probed rather than reaching for the process-wide
 	// managers, so tests never depend on whether a Tor binary exists on the
@@ -75,12 +87,11 @@ func resetHealthGlobals(t *testing.T) {
 	SetPendingRestart(false, nil)
 }
 
-// TestCheckDatabase covers the nil-pinger, healthy-ping, and failing-ping
-// branches.
+// TestCheckDatabase covers the healthy-ping and failing-ping branches.
 func TestCheckDatabase(t *testing.T) {
 	resetHealthGlobals(t)
 
-	assert.Equal(t, "unknown", checkDatabase(), "nil pinger should report unknown")
+	assert.Equal(t, "ok", checkDatabase(), "reset helper installs a healthy fake pinger")
 
 	SetDatabase(fakePinger{err: nil})
 	assert.Equal(t, "ok", checkDatabase())
@@ -99,7 +110,7 @@ func TestCheckScheduler(t *testing.T) {
 	resetHealthGlobals(t)
 
 	schedulerProbe = nil
-	assert.Equal(t, "unknown", checkScheduler(), "unwired scheduler should report unknown")
+	assert.Equal(t, "error", checkScheduler(), "the required scheduler cannot be unwired")
 
 	SetSchedulerProbe(func() error { return nil })
 	assert.Equal(t, "ok", checkScheduler())
@@ -118,10 +129,10 @@ func TestOverallStatus(t *testing.T) {
 		want   string
 	}{
 		{"all ok", ChecksInfo{Database: "ok", Cache: "ok", Disk: "ok", Scheduler: "ok"}, "healthy"},
-		{"one warning", ChecksInfo{Database: "ok", Cache: "warning", Disk: "ok", Scheduler: "ok"}, "degraded"},
-		{"one error wins over warning", ChecksInfo{Database: "error", Cache: "warning", Disk: "ok", Scheduler: "ok"}, "unhealthy"},
-		{"all error", ChecksInfo{Database: "error", Cache: "error", Disk: "error", Scheduler: "error"}, "unhealthy"},
-		{"unknown does not degrade", ChecksInfo{Database: "unknown", Cache: "ok", Disk: "ok", Scheduler: "ok"}, "healthy"},
+		{"one degraded check", ChecksInfo{Database: "ok", Cache: "degraded", Disk: "ok", Scheduler: "ok"}, "degraded"},
+		{"database error wins over degradation", ChecksInfo{Database: "error", Cache: "degraded", Disk: "ok", Scheduler: "ok"}, "unhealthy"},
+		{"cache errors degrade", ChecksInfo{Database: "ok", Cache: "error", Disk: "ok", Scheduler: "ok"}, "degraded"},
+		{"unknown cache check degrades", ChecksInfo{Database: "ok", Cache: "unknown", Disk: "ok", Scheduler: "ok"}, "degraded"},
 		{"zero value", ChecksInfo{}, "healthy"},
 	}
 
@@ -137,7 +148,7 @@ func TestOverallStatus(t *testing.T) {
 // outranks failing checks, which outrank a pending restart.
 func TestResolveStatus(t *testing.T) {
 	okChecks := ChecksInfo{Database: "ok", Cache: "ok", Disk: "ok", Scheduler: "ok"}
-	warnChecks := ChecksInfo{Database: "ok", Cache: "warning", Disk: "ok", Scheduler: "ok"}
+	warnChecks := ChecksInfo{Database: "ok", Cache: "degraded", Disk: "ok", Scheduler: "ok"}
 	errChecks := ChecksInfo{Database: "error", Cache: "ok", Disk: "ok", Scheduler: "ok"}
 
 	tests := []struct {
@@ -250,6 +261,7 @@ func TestServerHealthz_StatusCodes(t *testing.T) {
 				t.Skip("host disk check is not ok; cannot assert a 200-level status")
 			}
 			tt.setup()
+			SetSchedulerProbe(func() error { return nil })
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/server/healthz", nil)
 			req.Header.Set("Accept", "application/json")
@@ -270,11 +282,10 @@ func TestServerHealthz_StatusCodes(t *testing.T) {
 	}
 }
 
-// TestServerHealthz_Degraded covers the remaining status value by driving a
-// warning-level component check straight through BuildHealthResponse, since
-// no live check currently reports "warning".
+// TestServerHealthz_Degraded covers the degraded status using the canonical
+// dataset/cache vocabulary.
 func TestServerHealthz_Degraded(t *testing.T) {
-	checks := ChecksInfo{Database: "ok", Cache: "warning", Disk: "ok", Scheduler: "ok"}
+	checks := ChecksInfo{Database: "ok", Cache: "degraded", Disk: "ok", Scheduler: "ok"}
 	status := resolveStatus(checks, false, false, false)
 
 	assert.Equal(t, StatusDegraded, status)
@@ -285,6 +296,8 @@ func TestServerHealthz_Degraded(t *testing.T) {
 // omitted entirely when no restart is pending and populated when one is.
 func TestPendingRestartFields(t *testing.T) {
 	resetHealthGlobals(t)
+	SetDatabase(fakePinger{err: nil})
+	SetSchedulerProbe(func() error { return nil })
 	cfg := testConfig()
 
 	raw, err := json.Marshal(BuildHealthResponse(cfg))
@@ -326,6 +339,7 @@ func TestSetPendingRestart_CopiesReason(t *testing.T) {
 // branding/mode values through from config and has a coherent status.
 func TestBuildHealthResponse(t *testing.T) {
 	resetHealthGlobals(t)
+	SetDatabase(nil)
 	cfg := testConfig()
 
 	resp := BuildHealthResponse(cfg)
@@ -338,8 +352,8 @@ func TestBuildHealthResponse(t *testing.T) {
 	assert.NotEmpty(t, resp.GoVersion)
 	assert.WithinDuration(t, time.Now().UTC(), resp.Timestamp, 5*time.Second)
 	assert.Contains(t, []string{"healthy", "degraded", "unhealthy"}, resp.Status)
-	assert.Equal(t, "unknown", resp.Checks.Database, "resetHealthGlobals leaves dbPinger nil")
-	assert.Equal(t, "healthy", resp.Status, "unknown database check should not degrade overall status")
+	assert.Equal(t, "error", resp.Checks.Database, "missing database probe is unavailable")
+	assert.Equal(t, "unhealthy", resp.Status, "missing required database probe must degrade service health")
 }
 
 // TestBuildHealthResponse_DatabaseError confirms an unhealthy DB check flips
@@ -356,7 +370,7 @@ func TestBuildHealthResponse_DatabaseError(t *testing.T) {
 }
 
 // TestNegotiateHealthFormat_API covers the API priority order: .txt suffix,
-// then Accept: text/plain, then non-interactive UA, then default JSON.
+// explicit Accept headers, non-interactive UA, then default JSON.
 func TestNegotiateHealthFormat_API(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -366,6 +380,7 @@ func TestNegotiateHealthFormat_API(t *testing.T) {
 		want   string
 	}{
 		{"txt suffix wins", "/server/healthz.txt", "application/json", "Mozilla/5.0", "text"},
+		{"explicit json beats curl UA", "/server/healthz", "application/json", "curl/8.0", "json"},
 		{"accept text/plain", "/server/healthz", "text/plain", "Mozilla/5.0", "text"},
 		{"curl UA defaults to text", "/server/healthz", "", "curl/8.0", "text"},
 		{"empty UA is non-interactive", "/server/healthz", "", "", "text"},
@@ -387,8 +402,8 @@ func TestNegotiateHealthFormat_API(t *testing.T) {
 	}
 }
 
-// TestNegotiateHealthFormat_Frontend covers the frontend priority order:
-// Accept: text/html, then text/plain, then UA sniffing, defaulting to html.
+// TestNegotiateHealthFormat_Frontend covers explicit Accept headers before
+// non-interactive-client detection, then defaults to HTML.
 func TestNegotiateHealthFormat_Frontend(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -397,6 +412,7 @@ func TestNegotiateHealthFormat_Frontend(t *testing.T) {
 		want   string
 	}{
 		{"accept html wins", "text/html", "curl/8.0", "html"},
+		{"explicit json beats curl UA", "application/json", "curl/8.0", "json"},
 		{"accept text/plain", "text/plain", "Mozilla/5.0", "text"},
 		{"curl UA defaults to text", "", "curl/8.0", "text"},
 		{"browser UA defaults to html", "", "Mozilla/5.0 (Macintosh)", "html"},
@@ -489,92 +505,22 @@ func TestServerHealthz_Text(t *testing.T) {
 	assert.True(t, strings.Contains(body, "checks.database: "))
 }
 
-// TestServerHealthz_HTML drives the frontend handler with Accept: text/html
-// and validates the PART 13 page structure: title, project header, status
-// banner, the four section cards, and the shared stylesheets.
-func TestServerHealthz_HTML(t *testing.T) {
+// TestServerHealthz_HTML delegates browser rendering to the server package so
+// the handler keeps content negotiation separate from the shared page shell.
+func TestServerHealthz_HTMLDelegatesRenderer(t *testing.T) {
 	resetHealthGlobals(t)
-	handlerFunc := ServerHealthz(testConfig(), true)
-
+	handlerFunc := ServerHealthz(testConfig(), true, func(w http.ResponseWriter, r *http.Request, code int, response HealthResponse) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(code)
+		_, _ = w.Write([]byte("health page"))
+	})
 	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
 	req.Header.Set("Accept", "text/html")
 	rec := httptest.NewRecorder()
-
 	handlerFunc(rec, req)
-
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
-	body := rec.Body.String()
-	assert.True(t, strings.Contains(body, "<title>Test API - Health Status</title>"))
-	assert.True(t, strings.Contains(body, "<h1>📦 Test API</h1>"))
-	assert.True(t, strings.Contains(body, `class="tagline">testing things`))
-	assert.True(t, strings.Contains(body, `class="status-banner status-ok"`))
-	assert.True(t, strings.Contains(body, "All Systems Operational"))
-	assert.True(t, strings.Contains(body, "/static/css/common.css"))
-	assert.True(t, strings.Contains(body, "/static/js/app.js"))
-	assert.True(t, strings.Contains(body, "<h2>🎛️ Features</h2>"))
-	assert.True(t, strings.Contains(body, `class="data-table"`))
-	assert.True(t, strings.Contains(body, "<h2>📈 Server Statistics</h2>"))
-	assert.True(t, strings.Contains(body, `class="theme-dark"`))
-}
-
-// TestHealthHTMLThemeCookie confirms the theme cookie drives the <html>
-// class so the page renders in the visitor's theme without init JavaScript.
-func TestHealthHTMLThemeCookie(t *testing.T) {
-	resetHealthGlobals(t)
-	handlerFunc := ServerHealthz(testConfig(), true)
-
-	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
-	req.Header.Set("Accept", "text/html")
-	req.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
-	rec := httptest.NewRecorder()
-
-	handlerFunc(rec, req)
-
-	assert.True(t, strings.Contains(rec.Body.String(), `class="theme-light"`))
-}
-
-// TestHealthHTMLOnionCopyButton confirms a running Tor hidden service renders
-// its onion address in a copy-enabled code block (PART 13 field display
-// rules), with the <pre> the shared clipboard helper reads from.
-func TestHealthHTMLOnionCopyButton(t *testing.T) {
-	resetHealthGlobals(t)
-	const onion = "abc123xyz456abcdef789xyz456abcdef789xyz456abcdef789xyzab.onion"
-	SetTorProbe(func() TorInfo {
-		return TorInfo{Enabled: true, Running: true, Status: "healthy", Hostname: onion}
-	})
-	handlerFunc := ServerHealthz(testConfig(), true)
-
-	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
-	req.Header.Set("Accept", "text/html")
-	rec := httptest.NewRecorder()
-
-	handlerFunc(rec, req)
-
-	body := rec.Body.String()
-	assert.True(t, strings.Contains(body, `class="code-block"`))
-	assert.True(t, strings.Contains(body, "<pre><code class=\"code-content\">"+onion+"</code></pre>"))
-	assert.True(t, strings.Contains(body, `class="copy-btn" data-copy="`+onion+`"`))
-	assert.True(t, strings.Contains(body, "🧅 Tor:"))
-}
-
-// TestHealthHTMLEscapesBranding confirms operator-supplied branding is
-// escaped rather than injected into the page.
-func TestHealthHTMLEscapesBranding(t *testing.T) {
-	resetHealthGlobals(t)
-	cfg := testConfig()
-	cfg.Server.Branding.Title = `<script>alert(1)</script>`
-	handlerFunc := ServerHealthz(cfg, true)
-
-	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
-	req.Header.Set("Accept", "text/html")
-	rec := httptest.NewRecorder()
-
-	handlerFunc(rec, req)
-
-	body := rec.Body.String()
-	assert.False(t, strings.Contains(body, "<script>alert(1)</script>"))
-	assert.True(t, strings.Contains(body, "&lt;script&gt;alert(1)&lt;/script&gt;"))
+	assert.Equal(t, "health page", rec.Body.String())
 }
 
 // TestHealthBanner covers every PART 13 status-to-banner mapping.
@@ -585,12 +531,12 @@ func TestHealthBanner(t *testing.T) {
 		icon   string
 		text   string
 	}{
-		{StatusHealthy, "status-ok", "✅", "All Systems Operational"},
-		{StatusDegraded, "status-warning", "⚠️", "Degraded Performance"},
-		{StatusRestartRequired, "status-warning", "🔄", "Restart Required"},
-		{StatusUnhealthy, "status-error", "❌", "Systems Unhealthy"},
-		{StatusMaintenance, "status-error", "🚧", "Maintenance in Progress"},
-		{StatusShuttingDown, "status-error", "🛑", "Shutting Down"},
+		{StatusHealthy, "status-ok", "✅", "health.status.healthy"},
+		{StatusDegraded, "status-warning", "⚠️", "health.status.degraded"},
+		{StatusRestartRequired, "status-warning", "🔄", "health.status.restart_required"},
+		{StatusUnhealthy, "status-error", "❌", "health.status.unhealthy"},
+		{StatusMaintenance, "status-error", "🚧", "health.status.maintenance"},
+		{StatusShuttingDown, "status-error", "🛑", "health.status.shutting_down"},
 	}
 
 	for _, tt := range tests {
@@ -600,26 +546,6 @@ func TestHealthBanner(t *testing.T) {
 			assert.Equal(t, tt.icon, icon)
 			assert.Equal(t, tt.text, text)
 		})
-	}
-}
-
-// TestFormatThousands covers the comma grouping PART 13 requires for stats.
-func TestFormatThousands(t *testing.T) {
-	tests := []struct {
-		in   int64
-		want string
-	}{
-		{0, "0"},
-		{42, "42"},
-		{999, "999"},
-		{1000, "1,000"},
-		{45678, "45,678"},
-		{1234567, "1,234,567"},
-		{-1234, "-1,234"},
-	}
-
-	for _, tt := range tests {
-		assert.Equal(t, tt.want, formatThousands(tt.in))
 	}
 }
 
@@ -819,13 +745,13 @@ func TestFormatUptime_DirectComponents(t *testing.T) {
 	}
 }
 
-// TestSetDatabase_Nil confirms passing a nil interface value resets the
-// pinger back to the "unknown" reporting state.
+// TestSetDatabase_Nil confirms a nil database pinger reports an error because
+// the database is a required service dependency.
 func TestSetDatabase_Nil(t *testing.T) {
 	resetHealthGlobals(t)
 	SetDatabase(fakePinger{err: nil})
 	assert.Equal(t, "ok", checkDatabase())
 
 	SetDatabase(nil)
-	assert.Equal(t, "unknown", checkDatabase())
+	assert.Equal(t, "error", checkDatabase())
 }

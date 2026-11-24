@@ -1,28 +1,28 @@
 {{define "content"}}
 <section>
   <div class="container">
-    <h1>Lorem & Fake Data</h1>
-    <p class="lead">Generate realistic fake data for testing and development - names, addresses, companies, financial data, and more.</p>
+    <h1>{{t .Lang "categories.lorem.name"}}</h1>
+    <p class="lead">{{t .Lang "page_text.text.generate.realistic.fake.data.for.testing.and.1975dc57c1"}}</p>
     
     <div class="tool-grid">
-      <a href="/tools/lorem/person" class="tool-card-link">
+      <a href="{{path .BaseURL "/lorem/person"}}" class="tool-card-link">
         <div class="tool-card">
-          <h3>Person Generator</h3>
-          <p>Generate realistic person profiles with names, emails, phones</p>
+          <h3>{{t .Lang "page_text.text.person.generator.7092acf1c3"}}</h3>
+          <p>{{t .Lang "page_text.text.generate.realistic.person.profiles.with.name.e32d6fcddb"}}</p>
         </div>
       </a>
       
-      <a href="/tools/lorem/address" class="tool-card-link">
+      <a href="{{path .BaseURL "/lorem/address"}}" class="tool-card-link">
         <div class="tool-card">
-          <h3>Address Generator</h3>
-          <p>Generate realistic addresses worldwide</p>
+          <h3>{{t .Lang "page_text.text.address.generator.8a76387fb7"}}</h3>
+          <p>{{t .Lang "page_text.text.generate.realistic.addresses.worldwide.3fe1627b0a"}}</p>
         </div>
       </a>
       
-      <a href="/tools/lorem/company" class="tool-card-link">
+      <a href="{{path .BaseURL "/lorem/company"}}" class="tool-card-link">
         <div class="tool-card">
-          <h3>Company Generator</h3>
-          <p>Generate fake company data</p>
+          <h3>{{t .Lang "page_text.text.company.generator.e42e123d6c"}}</h3>
+          <p>{{t .Lang "page_text.text.generate.fake.company.data.b1947e5f92"}}</p>
         </div>
       </a>
     </div>

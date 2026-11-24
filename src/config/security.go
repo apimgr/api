@@ -1,11 +1,100 @@
 package config
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"math/big"
+	"net/url"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
+
+	"golang.org/x/net/idna"
+	"golang.org/x/net/publicsuffix"
 )
+
+const dnsCredentialCipherPrefix = "enc:v1:"
+
+// EncryptDNSCredential protects one provider credential with the configured
+// AES-256-GCM key. Values already encrypted with the active key are preserved.
+func EncryptDNSCredential(value, encryptionKey string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(value, dnsCredentialCipherPrefix) {
+		if _, err := DecryptDNSCredential(value, encryptionKey, ""); err == nil {
+			return value, nil
+		}
+	}
+	key, err := decodeEncryptionKey(encryptionKey)
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	sealed := aead.Seal(nonce, nonce, []byte(value), nil)
+	return dnsCredentialCipherPrefix + base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// DecryptDNSCredential opens an enc:v1 value with the active key or, during
+// the configured grace period, the retained previous key. Errors never
+// include credential material.
+func DecryptDNSCredential(value, encryptionKey, previousKey string) (string, error) {
+	if !strings.HasPrefix(value, dnsCredentialCipherPrefix) {
+		return value, nil
+	}
+	encoded := strings.TrimPrefix(value, dnsCredentialCipherPrefix)
+	sealed, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", fmt.Errorf("invalid encrypted DNS credential")
+	}
+	for _, candidate := range []string{encryptionKey, previousKey} {
+		key, keyErr := decodeEncryptionKey(candidate)
+		if keyErr != nil {
+			continue
+		}
+		block, blockErr := aes.NewCipher(key)
+		if blockErr != nil {
+			continue
+		}
+		aead, aeadErr := cipher.NewGCM(block)
+		if aeadErr != nil || len(sealed) < aead.NonceSize()+aead.Overhead() {
+			continue
+		}
+		nonce, ciphertext := sealed[:aead.NonceSize()], sealed[aead.NonceSize():]
+		plain, openErr := aead.Open(nil, nonce, ciphertext, nil)
+		if openErr == nil {
+			return string(plain), nil
+		}
+	}
+	return "", fmt.Errorf("cannot decrypt DNS credential")
+}
+
+func decodeEncryptionKey(value string) ([]byte, error) {
+	key, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		key, err = hex.DecodeString(value)
+	}
+	if err != nil || len(key) != encryptionKeyBytes {
+		return nil, fmt.Errorf("invalid server.security.encryption_key")
+	}
+	return key, nil
+}
 
 // encryptionKeyBytes is the AES-256-GCM key length for
 // server.security.encryption_key.
@@ -27,36 +116,110 @@ type ServerSecurityConfig struct {
 	BlockedIPs []BlockedIPEntry `yaml:"blocked_ips"`
 	// AbuseDetection configures the automatic flood detection thresholds.
 	AbuseDetection AbuseDetectionConfig `yaml:"abuse_detection"`
+	// Reports controls coordinated-disclosure report retention.
+	Reports    SecurityReportsConfig `yaml:"reports"`
+	Blocklists BlocklistsConfig      `yaml:"blocklists"`
 	// EncryptionKey is the canonical AES-256-GCM key for all at-rest
 	// sensitive data, generated on first run. Never logged, never returned
 	// by any API, always included in backups.
 	EncryptionKey string `yaml:"encryption_key"`
-	// EncryptionKeyPrevious is the outgoing key retained after a manual
-	// rotation so data not yet re-encrypted still decrypts.
+	// EncryptionKeyVersion identifies the encoding and algorithm for the
+	// current at-rest encryption key.
+	EncryptionKeyVersion int `yaml:"encryption_key_version"`
+	// EncryptionKeyPrevious is read only to migrate legacy configurations to
+	// the database-wrapped previous-key format; current rotations never write it.
 	EncryptionKeyPrevious string `yaml:"encryption_key_previous,omitempty"`
-	// EncryptionKeyPreviousExpires is the RFC 3339 instant at which the
-	// retained previous key stops being accepted. PART 11 grants a 30 day
-	// grace window.
+	// EncryptionKeyPreviousExpires is the legacy expiry paired with the
+	// previous key during migration.
 	EncryptionKeyPreviousExpires string `yaml:"encryption_key_previous_expires,omitempty"`
+}
+
+type BlocklistsConfig struct {
+	Enabled      bool              `yaml:"enabled"`
+	ExtraSources []BlocklistSource `yaml:"extra_sources"`
+}
+
+type BlocklistSource struct {
+	ID      string `yaml:"id"`
+	Type    string `yaml:"type"`
+	URL     string `yaml:"url"`
+	Enabled *bool  `yaml:"enabled"`
+}
+
+var blocklistIDPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
+
+func (c BlocklistsConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	seen := map[string]bool{"firehol_level1": true}
+	for i, source := range c.ExtraSources {
+		if !blocklistIDPattern.MatchString(source.ID) || seen[source.ID] {
+			return fmt.Errorf("server.security.blocklists.extra_sources[%d].id is invalid or duplicated", i)
+		}
+		seen[source.ID] = true
+		if source.Type != "ip" && source.Type != "domain" {
+			return fmt.Errorf("server.security.blocklists.extra_sources[%d].type must be ip or domain", i)
+		}
+		parsed, err := url.Parse(source.URL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+			return fmt.Errorf("server.security.blocklists.extra_sources[%d].url must be HTTPS", i)
+		}
+	}
+	return nil
+}
+
+func NormalizeBlocklistDomain(value string) (string, bool) {
+	value = strings.TrimSpace(strings.TrimPrefix(value, "*."))
+	value = strings.TrimSuffix(strings.ToLower(value), ".")
+	if value == "" {
+		return "", false
+	}
+	ascii, err := idna.Lookup.ToASCII(value)
+	if err != nil || strings.ContainsAny(ascii, ":/@?# \\*") {
+		return "", false
+	}
+	return strings.ToLower(ascii), true
+}
+
+func IsPublicSuffix(value string) bool {
+	suffix, _ := publicsuffix.PublicSuffix(value)
+	return strings.EqualFold(value, suffix)
+}
+
+// SecurityReportsConfig controls retention of closed disclosure reports.
+type SecurityReportsConfig struct {
+	RetentionDays int `yaml:"retention_days"`
 }
 
 // encryptionKeyGrace is how long a rotated-out at-rest encryption key stays
 // valid for decryption (AI.md PART 11 "Rotate encryption_key").
 const encryptionKeyGrace = 30 * 24 * time.Hour
 
-// RotateEncryptionKey generates a fresh AES-256-GCM key, retains the outgoing
-// key for its 30 day grace window, and persists the result to server.yml.
-func RotateEncryptionKey(cfg *Config) error {
+// RotateEncryptionKey prepares a new AES-256-GCM key, lets the caller persist
+// recovery material, and then saves the key and its dependent config secrets.
+func RotateEncryptionKey(cfg *Config, prepare func(previousKey, nextKey []byte, until time.Time) error) error {
 	next, err := randomSecretString(encryptionKeyBytes, true)
 	if err != nil {
 		return err
 	}
-	previous := cfg.Server.Security.EncryptionKey
-	cfg.Server.Security.EncryptionKey = next
-	if previous != "" {
-		cfg.Server.Security.EncryptionKeyPrevious = previous
-		cfg.Server.Security.EncryptionKeyPreviousExpires = time.Now().UTC().Add(encryptionKeyGrace).Format(time.RFC3339)
+	previous, err := decodeEncryptionKey(cfg.Server.Security.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("decode current encryption key: %w", err)
 	}
+	nextBytes, err := decodeEncryptionKey(next)
+	if err != nil {
+		return fmt.Errorf("decode generated encryption key: %w", err)
+	}
+	until := time.Now().UTC().Add(encryptionKeyGrace)
+	if prepare != nil {
+		if err := prepare(previous, nextBytes, until); err != nil {
+			return fmt.Errorf("prepare encryption-key rotation: %w", err)
+		}
+	}
+	cfg.Server.Security.EncryptionKey = next
+	cfg.Server.Security.EncryptionKeyPrevious = ""
+	cfg.Server.Security.EncryptionKeyPreviousExpires = ""
 	return Save(cfg)
 }
 
@@ -120,29 +283,108 @@ func defaultServerSecurityConfig() ServerSecurityConfig {
 			AutoBlockIP: true,
 			AutoAlert:   true,
 		},
-		EncryptionKey: "",
+		EncryptionKey:        "",
+		EncryptionKeyVersion: 1,
+		Reports:              SecurityReportsConfig{RetentionDays: 365},
+		Blocklists:           BlocklistsConfig{Enabled: true, ExtraSources: []BlocklistSource{}},
 	}
 }
 
-// ensureFirstRunSecrets fills in the two server.yml-resident secrets that are
-// auto-generated on first run: the AES-256-GCM at-rest encryption key and the
-// global operator token. It reports whether anything changed so the caller
-// can persist the config. Neither value is ever logged.
+// ensureFirstRunSecrets fills the generated credentials after all config
+// sources have merged. The caller persists them only to secrets.yml; values
+// are never logged.
 func ensureFirstRunSecrets(cfg *Config) bool {
 	changed := false
 	if cfg.Server.Security.EncryptionKey == "" {
 		if key, err := randomSecretString(encryptionKeyBytes, true); err == nil {
 			cfg.Server.Security.EncryptionKey = key
+			cfg.Server.Security.EncryptionKeyVersion = 1
+			cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.security.encryption_key")
 			changed = true
 		}
 	}
+	if cfg.Server.Security.EncryptionKeyVersion == 0 {
+		cfg.Server.Security.EncryptionKeyVersion = 1
+		changed = true
+	}
 	if cfg.Server.Token == "" {
-		if token, err := randomSecretString(operatorTokenBytes, false); err == nil {
-			cfg.Server.Token = token
+		if token, err := randomBase62String(operatorTokenBytes); err == nil {
+			cfg.Server.Token = "adm_" + token
+			cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.token")
+			changed = true
+		}
+	}
+	metricsTokens := []*string{
+		&cfg.Server.Metrics.Auth.Tokens.Prometheus,
+		&cfg.Server.Metrics.Auth.Tokens.Grafana,
+		&cfg.Server.Metrics.Auth.Tokens.Loki,
+	}
+	for i, token := range metricsTokens {
+		if *token != "" {
+			continue
+		}
+		generated, err := randomBase62String(32)
+		if err != nil {
+			continue
+		}
+		*token = "mtr_" + generated
+		cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, []string{
+			"server.metrics.auth.tokens.prometheus",
+			"server.metrics.auth.tokens.grafana",
+			"server.metrics.auth.tokens.loki",
+		}[i])
+		changed = true
+	}
+	roles := []struct {
+		name string
+		cfg  *ContactWebhooksConfig
+	}{
+		{"admin", &cfg.Server.Contact.Admin.Webhooks},
+		{"security", &cfg.Server.Contact.Security.Webhooks},
+		{"abuse", &cfg.Server.Contact.Abuse.Webhooks},
+		{"general", &cfg.Server.Contact.General.Webhooks},
+	}
+	for _, role := range roles {
+		if *role.cfg == nil {
+			*role.cfg = ContactWebhooksConfig{}
+		}
+		names := make([]string, 0, len(*role.cfg))
+		for name := range *role.cfg {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			webhookURL := (*role.cfg)[name]
+			if strings.HasSuffix(name, "_secret") || webhookURL == "" {
+				continue
+			}
+			secretKey := name + "_secret"
+			if (*role.cfg)[secretKey] != "" {
+				continue
+			}
+			generated, err := randomSecretString(32, false)
+			if err != nil {
+				continue
+			}
+			(*role.cfg)[secretKey] = generated
+			cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.contact."+role.name+".webhooks."+secretKey)
 			changed = true
 		}
 	}
 	return changed
+}
+
+func randomBase62String(length int) (string, error) {
+	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	var result []byte
+	for range length {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
+		if err != nil {
+			return "", err
+		}
+		result = append(result, alphabet[n.Int64()])
+	}
+	return string(result), nil
 }
 
 // randomSecretString returns cryptographically random material encoded as

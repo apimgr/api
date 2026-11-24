@@ -9,7 +9,6 @@ type PrivacyConfig struct {
 	Consent    PrivacyConsentConfig    `yaml:"consent"`
 	Cookies    PrivacyCookiesConfig    `yaml:"cookies"`
 	ThirdParty PrivacyThirdPartyConfig `yaml:"third_party"`
-	Content    PrivacyContentConfig    `yaml:"content"`
 }
 
 // PrivacyDataConfig describes how user data is handled.
@@ -102,15 +101,6 @@ type PrivacyThirdPartyService struct {
 	PolicyURL string `yaml:"policy_url"`
 }
 
-// PrivacyContentConfig holds the markdown sections rendered on the privacy
-// page. DataUsageIfSold replaces DataUsage when Data.Sold is true.
-type PrivacyContentConfig struct {
-	DataCollection  string `yaml:"data_collection"`
-	DataUsage       string `yaml:"data_usage"`
-	DataUsageIfSold string `yaml:"data_usage_if_sold"`
-	DataSecurity    string `yaml:"data_security"`
-}
-
 // ConsentMessage returns the banner copy matching the current data.sold
 // setting.
 func (p PrivacyConfig) ConsentMessage() string {
@@ -140,12 +130,19 @@ func (p PrivacyConfig) AnalyticsCookieDescription() string {
 // current data.sold setting.
 func (p PrivacyConfig) DataUsageContent() string {
 	if p.Data.Sold {
-		return p.Content.DataUsageIfSold
+		return defaultPrivacyDataUsageIfSold
 	}
-	return p.Content.DataUsage
+	return defaultPrivacyDataUsage
 }
 
-// defaultPrivacyConfig returns the PART 12 defaults verbatim.
+// DataCollectionContent returns the project's built-in collection notice.
+func (PrivacyConfig) DataCollectionContent() string { return defaultPrivacyDataCollection }
+
+// DataSecurityContent returns the project's built-in security notice.
+func (PrivacyConfig) DataSecurityContent() string { return defaultPrivacyDataSecurity }
+
+// defaultPrivacyConfig combines the shared PART 12 behavior defaults with
+// the data-handling facts of this project.
 func defaultPrivacyConfig() PrivacyConfig {
 	return PrivacyConfig{
 		Data: PrivacyDataConfig{
@@ -170,9 +167,9 @@ func defaultPrivacyConfig() PrivacyConfig {
 			},
 		},
 		Retention: PrivacyRetentionConfig{
-			Period:            "Account data is retained while your account is active. Upon account deletion, all personal data is permanently deleted within 30 days. Anonymized analytics data may be retained for up to 12 months.",
-			ExportAvailable:   true,
-			DeletionAvailable: true,
+			Period:            "User-submitted utility inputs are processed to provide a response and are not retained as user records. Operational logs follow the deployment operator's configured retention policy.",
+			ExportAvailable:   false,
+			DeletionAvailable: false,
 		},
 		Consent: PrivacyConsentConfig{
 			ShowUntilAcknowledged: true,
@@ -210,66 +207,44 @@ func defaultPrivacyConfig() PrivacyConfig {
 		ThirdParty: PrivacyThirdPartyConfig{
 			Services: []PrivacyThirdPartyService{},
 		},
-		Content: PrivacyContentConfig{
-			DataCollection:  defaultPrivacyDataCollection,
-			DataUsage:       defaultPrivacyDataUsage,
-			DataUsageIfSold: defaultPrivacyDataUsageIfSold,
-			DataSecurity:    defaultPrivacyDataSecurity,
-		},
 	}
 }
 
-// The four privacy page sections below are the PART 12 defaults; operators
-// override them in server.yml.
+// These privacy sections describe the application's actual data handling and
+// are built-in project content; deployment facts remain operator-configured.
 const defaultPrivacyDataCollection = `**We collect only what is necessary to provide our service:**
 
-**Usage Information (with consent):**
-- Pages visited and features used
-- Browser type and device information
-- Approximate location (country/region from IP, not precise)
+Utility inputs are processed to produce the result requested by the visitor. They are not retained as user records.
 
 **Technical Information:**
-- IP address (for security and abuse prevention)
-- API token identifiers (hashed, never stored in plain text)
+- Request source information is processed for rate limiting, abuse prevention and, when enabled, GeoIP features.
+- Operational request metadata may be written to server logs according to the deployment configuration.
 
-**We do NOT collect:**
-- Payment information (unless explicitly required by the service)
-- Precise location data
-- Data from other websites or apps
+Some tools make user-requested lookups through third-party services. The relevant tool documentation identifies those services and the query data sent.
 `
 
 const defaultPrivacyDataUsage = `**Your data is used solely to:**
 
-- **Provide the service:** Authentication, core functionality
-- **Improve the experience:** Performance optimization, bug fixes, feature improvements
-- **Ensure security:** Prevent abuse, detect fraud, protect your account
-- **Communicate:** Service updates, security alerts, and (with consent) product news
+- **Provide requested results:** Process the input for the selected utility.
+- **Operate and protect the service:** Apply rate limits, prevent abuse and maintain service reliability.
 
-**Your data is NEVER:**
-- Sold to third parties
-- Used for targeted advertising
-- Shared without your explicit consent (except as required by law)
+The application does not create user accounts or retain submitted utility inputs as user records. A visitor-requested lookup may send its query to the provider described by that tool.
 `
 
 const defaultPrivacyDataUsageIfSold = `**Your data may be used to:**
 
-- **Provide the service:** Authentication, core functionality
-- **Improve the experience:** Performance optimization, bug fixes, feature improvements
-- **Ensure security:** Prevent abuse, detect fraud, protect your account
-- **Communicate:** Service updates, security alerts, and (with consent) product news
-- **Third-party sharing:** Your data may be shared with or sold to third parties for analytics, advertising, or other purposes as described below
+- **Provide requested results:** Process the input for the selected utility.
+- **Operate and protect the service:** Apply rate limits, prevent abuse and maintain service reliability.
+- **Third-party sharing:** Data may be shared or sold under the deployment's configured policy, described below.
 
 **Your rights:**
-- You can opt out of data sales via your account privacy settings
-- You can request deletion of your data at any time
-- See "Your Rights" section below for details
+- The privacy page shows the deployment's available export and deletion options.
+- When enabled, use the Do Not Sell or Share control in Preferences to opt out.
 `
 
 const defaultPrivacyDataSecurity = `**How we protect your data:**
 
-- All data is stored on our servers (not third-party cloud services unless specified)
-- API tokens are stored as SHA-256 hashes (never in plain text)
-- All connections are encrypted (HTTPS/TLS)
-- Regular security audits and updates
-- Access controls and audit logging for operator actions
+- Submitted utility inputs are processed for the requested response and are not retained as user records.
+- Request handling, logging and network encryption depend on the configuration of the service operator's deployment.
+- The server applies input validation, request limits and security controls defined by the project.
 `

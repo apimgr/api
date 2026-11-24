@@ -1,4 +1,4 @@
-name: api-test
+name: api
 
 x-logging: &default-logging
   options:
@@ -10,7 +10,7 @@ services:
   api:
     image: ghcr.io/apimgr/api:devel
     pull_policy: always
-    container_name: api-test
+    container_name: api-app
     hostname: api
     restart: "no"
     logging: *default-logging
@@ -18,8 +18,8 @@ services:
       PORT: 80
       DEBUG: true
       MODE: development
-      TZ: America/New_York
-      CACHE_URL: valkey://api-cache-test:6379
+      TZ: ${TZ:-America/New_York}
+      CACHE_URL: valkey://api-cache:6379
     volumes:
       # CRITICAL: ./volumes/ must resolve to $TEMP_DIR/volumes/, NOT project directory
       # This file MUST be copied to a temp directory before running
@@ -27,7 +27,7 @@ services:
       - ./volumes/config:/config:z
       - ./volumes/data:/data:z
     ports:
-      - "172.17.0.1:64581:80"
+      - "172.17.0.1:${HOST_PORT:-64581}:80"
     healthcheck:
       test: ["CMD", "/usr/local/bin/api", "--status"]
       interval: 10s
@@ -35,15 +35,15 @@ services:
       retries: 3
       start_period: 90s
     depends_on:
-      api-cache-test:
+      api-cache:
         condition: service_healthy
     networks:
-      - api-test
+      - api
 
   api-cache-test:
     image: valkey/valkey:alpine
     pull_policy: always
-    container_name: api-cache-test
+    container_name: api-cache
     restart: "no"
     logging: *default-logging
     tmpfs:
@@ -55,9 +55,9 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - api-test
+      - api
 
 networks:
-  api-test:
-    name: api-test
+  api:
+    name: api
     external: false

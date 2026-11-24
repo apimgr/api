@@ -295,18 +295,18 @@ func TestWhoisQuery(t *testing.T) {
 		if err != nil {
 			t.Skipf("reason: could not bind 127.0.0.1:43 in this environment (%v) — port 43 may already be in use or unavailable", err)
 		}
-		defer ln.Close()
+		defer func() { _ = ln.Close() }()
 
 		go func() {
 			conn, err := ln.Accept()
 			if err != nil {
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 			buf := make([]byte, 256)
 			n, _ := conn.Read(buf)
 			if strings.TrimSpace(string(buf[:n])) == "example.com" {
-				conn.Write([]byte("domain: EXAMPLE.COM\n"))
+				_, _ = conn.Write([]byte("domain: EXAMPLE.COM\n"))
 			}
 		}()
 
@@ -321,7 +321,7 @@ func TestWhoisQuery(t *testing.T) {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
 		addr := ln.Addr().String()
-		ln.Close()
+		_ = ln.Close()
 
 		host, _, err := net.SplitHostPort(addr)
 		require.NoError(t, err)

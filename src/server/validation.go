@@ -1,10 +1,10 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -18,9 +18,9 @@ var validate = validator.New()
 // writes a canonical VALIDATION_FAILED envelope response (PART 9 error
 // code table: VALIDATION_FAILED -> 400) and returns false. Callers must
 // return immediately when validateStruct returns false.
-func validateStruct(w http.ResponseWriter, v interface{}) bool {
+func validateStruct(w http.ResponseWriter, r *http.Request, v interface{}) bool {
 	if err := validate.Struct(v); err != nil {
-		message, details := validationErrorDetails(err)
+		message, details := validationErrorDetails(err, i18n.LangFromRequest(r))
 		writeEnvelopeError(w, http.StatusBadRequest, "VALIDATION_FAILED", message, details)
 		return false
 	}
@@ -30,63 +30,66 @@ func validateStruct(w http.ResponseWriter, v interface{}) bool {
 // validationErrorDetails renders every failing field of a
 // validator.ValidationErrors into a details map (field name -> message)
 // and returns the first failure's message as the top-level message.
-func validationErrorDetails(err error) (message string, details map[string]interface{}) {
+func validationErrorDetails(err error, lang string) (message string, details map[string]interface{}) {
 	verrs, ok := err.(validator.ValidationErrors)
 	if !ok || len(verrs) == 0 {
-		return "request validation failed", nil
+		return i18n.Translate(lang, "errors.bad_request"), nil
 	}
 
 	details = make(map[string]interface{}, len(verrs))
 	for _, fe := range verrs {
-		details[strings.ToLower(fe.Field())] = fieldErrorMessage(fe)
+		details[strings.ToLower(fe.Field())] = fieldErrorMessage(fe, lang)
 	}
 
-	return fieldErrorMessage(verrs[0]), details
+	return fieldErrorMessage(verrs[0], lang), details
 }
 
 // fieldErrorMessage renders a single validator.FieldError as a concise,
 // user-facing message naming the field, the failing rule, and (where
 // relevant) the rule's parameter.
-func fieldErrorMessage(fe validator.FieldError) string {
+func fieldErrorMessage(fe validator.FieldError, lang string) string {
 	field := strings.ToLower(fe.Field())
+	key := "errors.validation.invalid"
+	args := map[string]string{"field": field, "param": fe.Param()}
 	switch fe.Tag() {
 	case "required":
-		return fmt.Sprintf("%s is required", field)
+		key = "errors.validation.required"
 	case "min":
-		return fmt.Sprintf("%s must be at least %s", field, fe.Param())
+		key = "errors.validation.min"
 	case "max":
-		return fmt.Sprintf("%s must be at most %s", field, fe.Param())
+		key = "errors.validation.max"
 	case "gte":
-		return fmt.Sprintf("%s must be >= %s", field, fe.Param())
+		key = "errors.validation.gte"
 	case "lte":
-		return fmt.Sprintf("%s must be <= %s", field, fe.Param())
+		key = "errors.validation.lte"
 	case "gt":
-		return fmt.Sprintf("%s must be > %s", field, fe.Param())
+		key = "errors.validation.gt"
 	case "lt":
-		return fmt.Sprintf("%s must be < %s", field, fe.Param())
+		key = "errors.validation.lt"
 	case "oneof":
-		return fmt.Sprintf("%s must be one of: %s", field, fe.Param())
+		key = "errors.validation.oneof"
 	case "email":
-		return fmt.Sprintf("%s must be a valid email address", field)
+		key = "errors.validation.email"
 	case "url", "http_url", "uri":
-		return fmt.Sprintf("%s must be a valid URL", field)
+		key = "errors.validation.url"
 	case "latitude":
-		return fmt.Sprintf("%s must be a valid latitude (-90 to 90)", field)
+		key = "errors.validation.latitude"
 	case "longitude":
-		return fmt.Sprintf("%s must be a valid longitude (-180 to 180)", field)
+		key = "errors.validation.longitude"
 	case "numeric":
-		return fmt.Sprintf("%s must be numeric", field)
+		key = "errors.validation.numeric"
 	case "alpha":
-		return fmt.Sprintf("%s must contain only letters", field)
+		key = "errors.validation.alpha"
 	case "alphanum":
-		return fmt.Sprintf("%s must be alphanumeric", field)
+		key = "errors.validation.alphanum"
 	case "hostname", "hostname_rfc1123", "fqdn":
-		return fmt.Sprintf("%s must be a valid hostname", field)
+		key = "errors.validation.hostname"
 	case "ip", "ip4_addr", "ip6_addr":
-		return fmt.Sprintf("%s must be a valid IP address", field)
+		key = "errors.validation.ip"
 	case "len":
-		return fmt.Sprintf("%s must be exactly %s characters", field, fe.Param())
+		key = "errors.validation.len"
 	default:
-		return fmt.Sprintf("%s failed validation (%s)", field, fe.Tag())
+		args["rule"] = fe.Tag()
 	}
+	return i18n.TranslateFormat(lang, key, args)
 }

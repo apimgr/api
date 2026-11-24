@@ -10,6 +10,9 @@ func TestFormatNumberGrouping(t *testing.T) {
 	if got == "" {
 		t.Fatal("FormatNumber(\"en\", 1234.5) returned an empty string")
 	}
+	if got := FormatNumber("it", 1234.5); got != "1.234,5" {
+		t.Errorf("FormatNumber(\"it\", 1234.5) = %q, want \"1.234,5\"", got)
+	}
 }
 
 func TestFormatDateUsesLanguageLayout(t *testing.T) {
@@ -23,6 +26,9 @@ func TestFormatDateUsesLanguageLayout(t *testing.T) {
 	if got := FormatDate("zh", ref); got != "2026/03/04" {
 		t.Errorf("FormatDate(\"zh\", ref) = %q, want \"2026/03/04\"", got)
 	}
+	if got := FormatDate("it", ref); got != "04/03/2026" {
+		t.Errorf("FormatDate(\"it\", ref) = %q, want \"04/03/2026\"", got)
+	}
 }
 
 func TestFormatTimeTwelveVsTwentyFourHour(t *testing.T) {
@@ -32,5 +38,8 @@ func TestFormatTimeTwelveVsTwentyFourHour(t *testing.T) {
 	}
 	if got := FormatTime("de", ref); got != "15:04" {
 		t.Errorf("FormatTime(\"de\", ref) = %q, want \"15:04\"", got)
+	}
+	if got := FormatTime("it", ref); got != "15:04" {
+		t.Errorf("FormatTime(\"it\", ref) = %q, want \"15:04\"", got)
 	}
 }

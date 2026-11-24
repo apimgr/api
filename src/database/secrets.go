@@ -19,7 +19,13 @@ const (
 	// SecretCookieSigningKey signs session cookies to detect tampering.
 	SecretCookieSigningKey = "cookie_signing_key"
 	// SecretCSRFTokenSecret is the HMAC base for CSRF double-submit tokens.
-	SecretCSRFTokenSecret = "csrf_token_secret"
+	SecretCSRFTokenSecret            = "csrf_token_secret"
+	SecretDNSValidatedAt             = "dns_validated_at"
+	SecretDNSConfigFingerprint       = "dns_config_fingerprint"
+	SecretEncryptionKeyPrevious      = "encryption_key_previous"
+	SecretEncryptionKeyPreviousUntil = "encryption_key_previous_until"
+	SecretEncryptionKeyPending       = "encryption_key_pending"
+	SecretEncryptionKeyPendingUntil  = "encryption_key_pending_until"
 )
 
 // secretByteLength is the generated length of every project secret.
@@ -80,10 +86,14 @@ func generateSecretBytes() ([]byte, error) {
 // applies the automatic rotation schedule to the secrets that have one. It is
 // safe to call on every startup.
 func EnsureAppSecrets(ctx context.Context) error {
+	offlineReadOnly := CacheReadOnlyOffline()
 	names := []string{SecretInstallationSecret, SecretCookieSigningKey, SecretCSRFTokenSecret}
 	for _, name := range names {
 		secret, err := LoadSecret(ctx, name)
 		if errors.Is(err, ErrSecretNotFound) {
+			if offlineReadOnly {
+				return fmt.Errorf("required secret %s is missing from the fresh read-only libsql cache", name)
+			}
 			if _, err := generateSecret(ctx, name); err != nil {
 				return err
 			}
@@ -91,6 +101,12 @@ func EnsureAppSecrets(ctx context.Context) error {
 		}
 		if err != nil {
 			return err
+		}
+		if len(secret.Value) != 32 {
+			return fmt.Errorf("required secret %s in database has an invalid length", name)
+		}
+		if secret.PreviousValid(time.Now().UTC()) && len(secret.Previous) != 32 {
+			return fmt.Errorf("previous secret %s in database has an invalid length", name)
 		}
 		interval, auto := autoRotationIntervals[name]
 		if !auto {
@@ -101,6 +117,9 @@ func EnsureAppSecrets(ctx context.Context) error {
 			age = secret.CreatedAt
 		}
 		if time.Since(age) < interval {
+			continue
+		}
+		if offlineReadOnly {
 			continue
 		}
 		if err := RotateSecret(ctx, name); err != nil {
@@ -180,16 +199,72 @@ func LoadSecret(ctx context.Context, name string) (Secret, error) {
 	return secret, nil
 }
 
+// SetAppSecretValue stores a server-written app_secrets value that is not
+// cryptographic key material and therefore is not base64 encoded.
+func SetAppSecretValue(ctx context.Context, name, value string) error {
+	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
+	defer cancel()
+	_, err := execContext(queryCtx, serverDB,
+		`INSERT INTO app_secrets (name, value, created_at) VALUES (?, ?, ?)
+		 ON CONFLICT(name) DO UPDATE SET value = excluded.value`,
+		name, value, time.Now().UTC().Unix())
+	if err != nil {
+		return fmt.Errorf("store app secret value %s: %w", name, err)
+	}
+	return nil
+}
+
+// GetAppSecretValue returns a server-written app_secrets value without
+// interpreting it as encoded key material.
+func GetAppSecretValue(ctx context.Context, name string) (string, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
+	defer cancel()
+	const query = `SELECT value FROM app_secrets WHERE name = ?`
+	var value string
+	if err := queryRowContext(queryCtx, serverDB, query, name).Scan(&value); err != nil {
+		recordQueryError(query, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrSecretNotFound
+		}
+		return "", fmt.Errorf("load app secret value %s: %w", name, err)
+	}
+	return value, nil
+}
+
+// DeleteAppSecretValue removes a server-written app_secrets value.
+func DeleteAppSecretValue(ctx context.Context, name string) error {
+	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
+	defer cancel()
+	if _, err := execContext(queryCtx, serverDB, `DELETE FROM app_secrets WHERE name = ?`, name); err != nil {
+		return fmt.Errorf("delete app secret value %s: %w", name, err)
+	}
+	return nil
+}
+
 // RotateSecret replaces the named secret with fresh material, retaining the
 // outgoing value for the grace window so in-flight signatures still verify.
 func RotateSecret(ctx context.Context, name string) error {
+	return RotateSecretWithTransition(ctx, name, nil)
+}
+
+// RotateSecretWithTransition updates a secret and a dependent encrypted
+// artifact as one coordinated operation. The transition runs before commit;
+// rollback restores any filesystem artifact if the database commit fails.
+func RotateSecretWithTransition(ctx context.Context, name string, transition func(oldValue, newValue []byte) (rollback func() error, err error)) error {
 	current, err := LoadSecret(ctx, name)
 	if errors.Is(err, ErrSecretNotFound) {
+		if transition != nil {
+			return fmt.Errorf("rotate secret %s: dependent artifact cannot be transitioned without the current secret", name)
+		}
 		_, err = generateSecret(ctx, name)
 		return err
 	}
 	if err != nil {
 		return err
+	}
+	now := time.Now().UTC()
+	if current.PreviousValid(now) {
+		return fmt.Errorf("rotate secret %s: a previous value is still inside its grace window", name)
 	}
 
 	next, err := generateSecretBytes()
@@ -199,18 +274,59 @@ func RotateSecret(ctx context.Context, name string) error {
 
 	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
 	defer cancel()
-	now := time.Now().UTC()
-	_, err = execContext(queryCtx, serverDB,
-		`UPDATE app_secrets
-		 SET value = ?, previous_value = ?, previous_expires_at = ?, rotated_at = ?
-		 WHERE name = ?`,
-		base64.StdEncoding.EncodeToString(next),
-		base64.StdEncoding.EncodeToString(current.Value),
-		now.Add(secretGraceWindow).Unix(),
-		now.Unix(),
-		name)
-	if err != nil {
-		return fmt.Errorf("rotate secret %s: %w", name, err)
+	if err := withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
+		result, err := execTxContext(queryCtx, tx,
+			`UPDATE app_secrets SET previous_value = ?, previous_expires_at = ? WHERE name = ?`,
+			base64.StdEncoding.EncodeToString(current.Value),
+			now.Add(secretGraceWindow).Unix(),
+			name)
+		if err != nil {
+			return err
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if updated != 1 {
+			return fmt.Errorf("secret row changed during rotation")
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("store previous secret %s: %w", name, err)
+	}
+	if err := withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
+		result, err := execTxContext(queryCtx, tx,
+			`UPDATE app_secrets SET value = ?, rotated_at = ? WHERE name = ?`,
+			base64.StdEncoding.EncodeToString(next), now.Unix(), name)
+		if err != nil {
+			return err
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if updated != 1 {
+			return fmt.Errorf("secret row changed during rotation")
+		}
+		return nil
+	}); err != nil {
+		clearErr := withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
+			_, clearErr := execTxContext(queryCtx, tx, `UPDATE app_secrets SET previous_value = NULL, previous_expires_at = NULL WHERE name = ?`, name)
+			return clearErr
+		})
+		return fmt.Errorf("persist rotated secret %s: %w", name, errors.Join(err, clearErr))
+	}
+	var rollback func() error
+	if transition != nil {
+		rollback, err = transition(current.Value, next)
+		if err != nil {
+			if rollback != nil {
+				if rollbackErr := rollback(); rollbackErr != nil {
+					return fmt.Errorf("rotate secret %s: transition failed: %v (rollback failed: %w)", name, err, rollbackErr)
+				}
+			}
+			return fmt.Errorf("rotate secret %s: transition dependent artifact; rotation will resume at startup: %w", name, err)
+		}
 	}
 	return nil
 }

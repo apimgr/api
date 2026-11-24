@@ -26,7 +26,7 @@ func TestDetectServiceManager(t *testing.T) {
 	case "freebsd", "openbsd", "netbsd":
 		assert.Equal(t, ServiceBSDRC, got)
 	case "linux":
-		assert.Contains(t, []ServiceType{ServiceSystemd, ServiceOpenRC, ServiceSysVinit, ServiceRunit, ServiceUnknown}, got)
+		assert.Contains(t, []ServiceType{ServiceSystemd, ServiceOpenRC, ServiceSysVinit, ServiceRunit, ServiceS6, ServiceUnknown}, got)
 	default:
 		assert.Equal(t, ServiceUnknown, got)
 	}
@@ -36,7 +36,7 @@ func TestDetectServiceManager(t *testing.T) {
 // the zero value (callers rely on this as the "nothing detected" default).
 func TestServiceTypeConstants(t *testing.T) {
 	assert.Equal(t, ServiceType(0), ServiceUnknown)
-	values := []ServiceType{ServiceUnknown, ServiceSystemd, ServiceOpenRC, ServiceSysVinit, ServiceRunit, ServiceLaunchd, ServiceWindows, ServiceBSDRC}
+	values := []ServiceType{ServiceUnknown, ServiceSystemd, ServiceOpenRC, ServiceSysVinit, ServiceRunit, ServiceS6, ServiceLaunchd, ServiceWindows, ServiceBSDRC}
 	seen := map[ServiceType]bool{}
 	for _, v := range values {
 		assert.False(t, seen[v], "duplicate ServiceType value %d", v)
@@ -92,7 +92,7 @@ func TestServiceTypeString(t *testing.T) {
 	assert.Equal(t, "unknown", ServiceUnknown.String())
 
 	seen := map[string]bool{}
-	for _, v := range []ServiceType{ServiceSystemd, ServiceOpenRC, ServiceSysVinit, ServiceRunit, ServiceLaunchd, ServiceWindows, ServiceBSDRC} {
+	for _, v := range []ServiceType{ServiceSystemd, ServiceOpenRC, ServiceSysVinit, ServiceRunit, ServiceS6, ServiceLaunchd, ServiceWindows, ServiceBSDRC} {
 		label := v.String()
 		assert.NotEmpty(t, label)
 		assert.NotEqual(t, "unknown", label)
@@ -127,7 +127,7 @@ func TestDetectLinuxServiceManagerPrefersSystemd(t *testing.T) {
 // HelpText must document every --service command AI.md PART 23 defines and
 // must end with the live status block.
 func TestHelpText(t *testing.T) {
-	out := HelpText("api")
+	out := HelpText("api", "en")
 
 	for _, want := range []string{
 		"Usage: api --service <command>",
@@ -146,7 +146,7 @@ func TestHelpText(t *testing.T) {
 // HelpText must reflect the actual (possibly renamed) binary name it is
 // given, per the PART 8 renamed-binary rule.
 func TestHelpTextUsesGivenBinaryName(t *testing.T) {
-	assert.Contains(t, HelpText("apictl"), "Usage: apictl --service <command>")
+	assert.Contains(t, HelpText("apictl", "en"), "Usage: apictl --service <command>")
 }
 
 // yesNo renders the booleans in the status block.

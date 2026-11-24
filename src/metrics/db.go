@@ -23,3 +23,13 @@ func (m *Metrics) SetDBConnections(open, inUse int) {
 	m.dbConnectionsOpen.Set(float64(open))
 	m.dbConnectionsInUse.Set(float64(inUse))
 }
+
+// RecordDBBusy records a retryable SQLite writer lock conflict.
+func (m *Metrics) RecordDBBusy() {
+	m.dbBusyTotal.Inc()
+}
+
+// ObserveDBWriteWait records the total elapsed time of one write transaction.
+func (m *Metrics) ObserveDBWriteWait(duration time.Duration) {
+	m.dbWriteWait.Observe(duration.Seconds())
+}

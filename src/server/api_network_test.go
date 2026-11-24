@@ -323,7 +323,19 @@ func TestWriteEnvelopeHelpers(t *testing.T) {
 	})
 }
 
-// writeJSONEnvelope must fall back to a hardcoded INTERNAL error body when
+func TestWriteLocalizedAPIErrorUsesRequestLanguage(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/network/traceroute", nil)
+	r.Header.Set("Accept-Language", "es")
+	w := httptest.NewRecorder()
+
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
+
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "NOT_SUPPORTED", env["error"])
+	assert.Equal(t, "Esta operación no es compatible.", env["message"])
+}
+
+// writeJSONEnvelope must fall back to a minimal INTERNAL error body when
 // the value passed cannot be marshaled to JSON (e.g. a channel).
 func TestWriteJSONEnvelopeMarshalFailure(t *testing.T) {
 	w := httptest.NewRecorder()
@@ -331,4 +343,5 @@ func TestWriteJSONEnvelopeMarshalFailure(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Contains(t, w.Body.String(), `"error":"INTERNAL"`)
+	assert.Contains(t, w.Body.String(), `"message":"Internal server error"`)
 }

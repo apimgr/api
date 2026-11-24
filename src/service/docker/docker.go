@@ -203,17 +203,21 @@ func (s *Service) IsValidContainerName(name string) bool {
 	}
 
 	firstChar := name[0]
-	if !((firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z') || (firstChar >= '0' && firstChar <= '9')) {
+	if !isContainerNameChar(rune(firstChar)) {
 		return false
 	}
 
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-') {
+		if !isContainerNameChar(r) && r != '_' && r != '.' && r != '-' {
 			return false
 		}
 	}
 
 	return true
+}
+
+func isContainerNameChar(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 }
 
 // Port mapping helpers

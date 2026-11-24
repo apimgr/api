@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">📖 Language Tools</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.language.tools.2d5688c84d"}}</h1>
     <p class="hero-subtitle">
-      spell checking, dictionary, thesaurus, and language detection
+      {{t .Lang "page_text.text.spell.checking.dictionary.thesaurus.and.lang.0957327799"}}
     </p>
   </div>
 </section>
@@ -12,52 +12,52 @@
   <div class="container">
     <div class="category-grid">
       
-      <a href="/language/dictionary" class="category-card">
+      <a href="{{path .BaseURL "/language/dictionary"}}" class="category-card">
         <div class="category-icon">📚</div>
-        <h3 class="category-title">Dictionary</h3>
-        <p class="category-description">Word definitions and meanings</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.dictionary.f12e2c9be9"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.word.definitions.and.meanings.de673e0253"}}</p>
       </a>
       
-      <a href="/language/thesaurus" class="category-card">
+      <a href="{{path .BaseURL "/language/thesaurus"}}" class="category-card">
         <div class="category-icon">📖</div>
-        <h3 class="category-title">Thesaurus</h3>
-        <p class="category-description">Synonyms and antonyms</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.thesaurus.39ee7c3843"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.synonyms.and.antonyms.8688443b17"}}</p>
       </a>
       
-      <a href="/language/word-count" class="category-card">
+      <a href="{{path .BaseURL "/language/word-count"}}" class="category-card">
         <div class="category-icon">🔢</div>
-        <h3 class="category-title">Word Count</h3>
-        <p class="category-description">Count words, characters, lines</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.word.count.dfe17006f6"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.count.words.characters.lines.fc5a8e6421"}}</p>
       </a>
       
-      <a href="/language/reading-time" class="category-card">
+      <a href="{{path .BaseURL "/language/reading-time"}}" class="category-card">
         <div class="category-icon">⏱️</div>
-        <h3 class="category-title">Reading Time</h3>
-        <p class="category-description">Calculate reading time</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.reading.time.b9d66bf9a2"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.reading.time.746d10f785"}}</p>
       </a>
       
-      <a href="/language/sentiment" class="category-card">
+      <a href="{{path .BaseURL "/language/sentiment"}}" class="category-card">
         <div class="category-icon">😊</div>
-        <h3 class="category-title">Sentiment Analysis</h3>
-        <p class="category-description">Analyze text sentiment</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.sentiment.analysis.8e86c8f501"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.analyze.text.sentiment.adcda1255b"}}</p>
       </a>
       
-      <a href="/language/keywords" class="category-card">
+      <a href="{{path .BaseURL "/language/keywords"}}" class="category-card">
         <div class="category-icon">🔑</div>
-        <h3 class="category-title">Keyword Extraction</h3>
-        <p class="category-description">Extract keywords from text</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.keyword.extraction.f83e603232"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.extract.keywords.from.text.434bdd4da2"}}</p>
       </a>
       
-      <a href="/language/phonetic" class="category-card">
+      <a href="{{path .BaseURL "/language/phonetic"}}" class="category-card">
         <div class="category-icon">🔊</div>
-        <h3 class="category-title">Phonetic Encoding</h3>
-        <p class="category-description">Soundex, Metaphone encoding</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.phonetic.encoding.4aaf196d79"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.soundex.metaphone.encoding.c040ded198"}}</p>
       </a>
       
-      <a href="/language/readability" class="category-card">
+      <a href="{{path .BaseURL "/language/readability"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">Readability Score</h3>
-        <p class="category-description">Flesch-Kincaid, Gunning Fog</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.readability.score.e91b01b55b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.flesch.kincaid.gunning.fog.3b4205ae64"}}</p>
       </a>
     </div>
   </div>

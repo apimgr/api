@@ -4,31 +4,40 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/fun">Fun &amp; Content</a> / Compliment Generator
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/fun"}}">{{t .Lang "categories.fun.name"}}</a> {{t .Lang "tool_pages.text.compliment.generator.be96754efb"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Compliment Generator</h1>
-        <button class="btn btn-icon" data-favorite="fun-compliment" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.compliment.generator.c64607eb76"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="fun-compliment" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Get a random compliment from the built-in curated collection.
+        {{t .Lang "tool_pages.text.get.a.random.compliment.from.the.built.in.cu.a4f48e7855"}}
       </p>
 
-      <form id="compliment-form" class="tool-form" data-template="{{.APIBasePath}}/fun/compliment">
-        <button type="submit" class="btn btn-primary">Compliment Me</button>
+      <form id="compliment-form" class="tool-form" data-template="{{.APIBasePath}}/fun/compliment" method="post" action="{{path .BaseURL "/fun/compliment"}}">
+        {{csrfField .CSRFToken}}
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.compliment.me.9fdcece3f6"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="compliment-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/fun/compliment</pre>

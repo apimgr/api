@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation and support information
+    url: https://github.com/apimgr/api/tree/main/docs
+    about: Check the project documentation before opening an issue.
+  - name: Report a security vulnerability privately
+    url: https://github.com/apimgr/api/security/advisories/new
+    about: Do not report vulnerabilities in public issues.

@@ -23,8 +23,12 @@ func newTestNotifier(t *testing.T) *Notifier {
 		SSLRenewalFailed: true,
 		SecurityAlert:    true,
 		SchedulerError:   true,
+		DiskLow:          true,
+		DatabaseError:    true,
 		UpdateAvailable:  true,
 		UpdateInstalled:  true,
+		UpdateFailed:     true,
+		UpdateStaged:     true,
 	}
 	return NewNotifier(nil, t.TempDir(), GlobalVars{AppName: "api"}, toggles, []string{"ops@example.com"})
 }
@@ -47,6 +51,20 @@ func TestSuppression_BackupFailedSuppressesSchedulerError(t *testing.T) {
 
 	require.NoError(t, n.NotifySchedulerError("exec-1", nil, "backup_daily", "disk full", "tomorrow"))
 	assert.False(t, n.isSuppressed("exec-1"), "suppression mark must be consumed once used")
+}
+
+func TestUpdateStagedAndFailedNotifications(t *testing.T) {
+	n := newTestNotifier(t)
+	require.NoError(t, n.NotifyUpdateStaged(nil, "1.2.3"))
+	require.NoError(t, n.NotifyUpdateFailed(nil, "1.2.3", "checksum mismatch"))
+}
+
+func TestNotifyLifecycleAndSystemEvents(t *testing.T) {
+	n := newTestNotifier(t)
+	require.NoError(t, n.NotifyStartup(nil, "api.example.com", "1.2.3", "production"))
+	require.NoError(t, n.NotifyShutdown(nil, "api.example.com", "1.2.3", "production", "signal"))
+	require.NoError(t, n.NotifyDiskLow(nil, "/var/lib/api", "92%", "1 GB", "85%"))
+	require.NoError(t, n.NotifyDatabaseError(nil, "connection refused", "2031-01-15 02:00:00 UTC"))
 }
 
 // TestSuppression_SSLRenewalFailedSuppressesSchedulerError covers the

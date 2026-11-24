@@ -5,6 +5,8 @@ import (
 	stdcrypto "crypto"
 	"fmt"
 	"io"
+	"strings"
+	"time"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
@@ -55,6 +57,131 @@ func GeneratePGPKeys(name, email string) (string, string, error) {
 	}
 
 	return pubBuf.String(), privBuf.String(), nil
+}
+
+// GenerateSecurityPGPKeys creates the project disclosure key with an Ed25519
+// signing primary key, Curve25519 encryption subkey, and two-year expiry.
+func GenerateSecurityPGPKeys(name, email string, created time.Time) (string, string, string, error) {
+	name, email = strings.TrimSpace(name), strings.TrimSpace(email)
+	if name == "" || email == "" {
+		return "", "", "", fmt.Errorf("name and email are required")
+	}
+	if created.IsZero() {
+		created = time.Now().UTC()
+	}
+	created = created.UTC().Truncate(time.Second)
+	config := &packet.Config{
+		DefaultHash:     stdcrypto.SHA256,
+		Algorithm:       packet.PubKeyAlgoEd25519,
+		Curve:           packet.Curve25519,
+		KeyLifetimeSecs: uint32((2 * 365 * 24 * time.Hour) / time.Second),
+		Time:            func() time.Time { return created },
+	}
+	entity, err := openpgp.NewEntity(name, "", email, config)
+	if err != nil {
+		return "", "", "", fmt.Errorf("generate security PGP key: %w", err)
+	}
+	publicKey, err := serializePublicEntity(entity)
+	if err != nil {
+		return "", "", "", err
+	}
+	privateKey, err := serializePrivateEntity(entity)
+	if err != nil {
+		return "", "", "", err
+	}
+	return publicKey, privateKey, strings.ToUpper(fmt.Sprintf("%x", entity.PrimaryKey.Fingerprint)), nil
+}
+
+// PGPKeyFingerprint reads the v4 fingerprint from an armored key.
+func PGPKeyFingerprint(armored string) (string, error) {
+	entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armored))
+	if err != nil {
+		return "", fmt.Errorf("read PGP key: %w", err)
+	}
+	if len(entities) == 0 || len(entities[0].PrimaryKey.Fingerprint) != 20 {
+		return "", fmt.Errorf("expected an OpenPGP v4 key")
+	}
+	return strings.ToUpper(fmt.Sprintf("%x", entities[0].PrimaryKey.Fingerprint)), nil
+}
+
+// PGPIdentityMatches reports whether the armored key has the expected
+// primary user identity components.
+func PGPIdentityMatches(armored, name, email string) (bool, error) {
+	entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armored))
+	if err != nil {
+		return false, fmt.Errorf("read PGP key: %w", err)
+	}
+	if len(entities) == 0 {
+		return false, fmt.Errorf("no PGP key found")
+	}
+	for _, identity := range entities[0].Identities {
+		if identity.UserId != nil && identity.UserId.Name == name && identity.UserId.Email == email {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// CrossSignPGPPublicKey embeds an old-key certification on a new primary key.
+func CrossSignPGPPublicKey(newPublic, oldPrivate string) (string, error) {
+	newEntities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(newPublic))
+	if err != nil {
+		return "", fmt.Errorf("read new public key: %w", err)
+	}
+	if len(newEntities) == 0 {
+		return "", fmt.Errorf("new public key contains no OpenPGP entity")
+	}
+	oldEntities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(oldPrivate))
+	if err != nil {
+		return "", fmt.Errorf("read old private key: %w", err)
+	}
+	if len(oldEntities) == 0 || oldEntities[0].PrivateKey == nil {
+		return "", fmt.Errorf("old private key contains no signing entity")
+	}
+	signature := &packet.Signature{
+		Version:      4,
+		SigType:      packet.SigTypeDirectSignature,
+		PubKeyAlgo:   oldEntities[0].PrimaryKey.PubKeyAlgo,
+		Hash:         stdcrypto.SHA256,
+		CreationTime: time.Now().UTC(),
+	}
+	if err := signature.CrossSignKey(newEntities[0].PrimaryKey, oldEntities[0].PrimaryKey, oldEntities[0].PrivateKey, pgpConfig()); err != nil {
+		return "", fmt.Errorf("cross-sign new public key: %w", err)
+	}
+	newEntities[0].Signatures = append(newEntities[0].Signatures, signature)
+	return serializePublicEntity(newEntities[0])
+}
+
+func serializePublicEntity(entity *openpgp.Entity) (string, error) {
+	var buf bytes.Buffer
+	writer, err := armor.Encode(&buf, openpgp.PublicKeyType, nil)
+	if err != nil {
+		return "", fmt.Errorf("armor public key: %w", err)
+	}
+	if err := entity.Serialize(writer); err != nil {
+		_ = writer.Close()
+		return "", fmt.Errorf("serialize public key: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("close public key armor: %w", err)
+	}
+	return buf.String(), nil
+}
+
+func serializePrivateEntity(entity *openpgp.Entity) (string, error) {
+	var buf bytes.Buffer
+	writer, err := armor.Encode(&buf, openpgp.PrivateKeyType, nil)
+	if err != nil {
+		return "", fmt.Errorf("armor private key: %w", err)
+	}
+	if err := entity.SerializePrivate(writer, nil); err != nil {
+		_ = writer.Close()
+		return "", fmt.Errorf("serialize private key: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("close private key armor: %w", err)
+	}
+	return buf.String(), nil
 }
 
 // PGPEncrypt encrypts plaintext to an ASCII-armored PGP message for the

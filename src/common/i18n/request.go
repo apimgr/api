@@ -18,30 +18,31 @@ const QueryParam = "lang"
 type contextKey int
 
 const langContextKey contextKey = 0
+const enabledLanguagesContextKey contextKey = 1
 
 // LangFromRequest resolves the effective language for r using the fixed
 // priority chain from AI.md PART 30:
 //
 //	?lang= query param -> lang cookie -> Accept-Language header -> "en"
 //
-// An unsupported value at any stage is skipped (never surfaced as an
-// error), and the final result is always one of the seven supported
-// language codes.
+// A value outside the request's enabled language set is skipped (never
+// surfaced as an error), and the final result is always an enabled code.
 func LangFromRequest(r *http.Request) string {
+	enabled := enabledLanguagesFromContext(r.Context())
 	if q := r.URL.Query().Get(QueryParam); q != "" {
-		if lang, ok := normalizeSupported(q); ok {
+		if lang, ok := normalizeEnabled(q, enabled); ok {
 			return lang
 		}
 	}
 
 	if c, err := r.Cookie(CookieName); err == nil && c.Value != "" {
-		if lang, ok := normalizeSupported(c.Value); ok {
+		if lang, ok := normalizeEnabled(c.Value, enabled); ok {
 			return lang
 		}
 	}
 
 	if al := r.Header.Get("Accept-Language"); al != "" {
-		if lang, ok := langFromAcceptLanguage(al); ok {
+		if lang, ok := langFromAcceptLanguageEnabled(al, enabled); ok {
 			return lang
 		}
 	}
@@ -49,23 +50,41 @@ func LangFromRequest(r *http.Request) string {
 	return DefaultLanguage
 }
 
-// normalizeSupported reduces a BCP 47 tag (e.g. "en-US", "zh-Hans-CN") to
-// its base language subtag and reports whether that subtag is one of the
-// seven supported languages.
-func normalizeSupported(tag string) (string, bool) {
+// LangFromEmailRequest selects the submitter language using PART 17's
+// email-specific order: the lang cookie first, then Accept-Language. Query
+// parameters are intentionally ignored because they only select the page's
+// rendered language, not the submitter's saved preference.
+func LangFromEmailRequest(r *http.Request) string {
+	enabled := enabledLanguagesFromContext(r.Context())
+	if c, err := r.Cookie(CookieName); err == nil && c.Value != "" {
+		if lang, ok := normalizeEnabled(c.Value, enabled); ok {
+			return lang
+		}
+	}
+	if header := r.Header.Get("Accept-Language"); header != "" {
+		if lang, ok := langFromAcceptLanguageEnabled(header, enabled); ok {
+			return lang
+		}
+	}
+	return DefaultLanguage
+}
+
+func normalizeEnabled(tag string, enabled []string) (string, bool) {
 	base := strings.ToLower(strings.TrimSpace(tag))
 	if i := strings.IndexAny(base, "-_"); i != -1 {
 		base = base[:i]
 	}
 	if IsSupported(base) {
-		return base, true
+		for _, code := range enabled {
+			if code == base {
+				return base, true
+			}
+		}
 	}
 	return "", false
 }
 
-// langFromAcceptLanguage parses an RFC 9110 Accept-Language header and
-// returns the highest-quality supported language, if any.
-func langFromAcceptLanguage(header string) (string, bool) {
+func langFromAcceptLanguageEnabled(header string, enabled []string) (string, bool) {
 	type candidate struct {
 		lang string
 		q    float64
@@ -88,7 +107,7 @@ func langFromAcceptLanguage(header string) (string, bool) {
 				}
 			}
 		}
-		if base, ok := normalizeSupported(tag); ok {
+		if base, ok := normalizeEnabled(tag, enabled); ok {
 			candidates = append(candidates, candidate{lang: base, q: q})
 		}
 	}
@@ -111,26 +130,56 @@ func langFromAcceptLanguage(header string) (string, bool) {
 // — when the resolution came from an explicit ?lang= query parameter —
 // persists the choice to CookieName for one year.
 func LanguageMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lang := LangFromRequest(r)
+	return LanguageMiddlewareFor(SupportedLanguageCodes())(next)
+}
 
-		if q := r.URL.Query().Get(QueryParam); q != "" {
-			if normalized, ok := normalizeSupported(q); ok && normalized == lang {
-				http.SetCookie(w, &http.Cookie{
-					Name:     CookieName,
-					Value:    lang,
-					Path:     "/",
-					MaxAge:   int((365 * 24 * time.Hour).Seconds()),
-					HttpOnly: true,
-					Secure:   r.TLS != nil,
-					SameSite: http.SameSiteLaxMode,
-				})
+// LanguageMiddlewareFor negotiates requests against the configured enabled
+// language set while preserving the standard fallback chain.
+func LanguageMiddlewareFor(enabled []string) func(http.Handler) http.Handler {
+	if len(enabled) == 0 {
+		enabled = SupportedLanguageCodes()
+	}
+	allowed := append([]string(nil), enabled...)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(r.Context(), enabledLanguagesContextKey, allowed)
+			r = r.WithContext(ctx)
+			lang := LangFromRequest(r)
+
+			if q := r.URL.Query().Get(QueryParam); q != "" {
+				if normalized, ok := normalizeEnabled(q, allowed); ok && normalized == lang {
+					http.SetCookie(w, &http.Cookie{
+						Name:     CookieName,
+						Value:    lang,
+						Path:     "/",
+						MaxAge:   int((365 * 24 * time.Hour).Seconds()),
+						HttpOnly: true,
+						Secure:   r.TLS != nil,
+						SameSite: http.SameSiteLaxMode,
+					})
+				}
 			}
-		}
 
-		ctx := context.WithValue(r.Context(), langContextKey, lang)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+			ctx = context.WithValue(r.Context(), langContextKey, lang)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func enabledLanguagesFromContext(ctx context.Context) []string {
+	if enabled, ok := ctx.Value(enabledLanguagesContextKey).([]string); ok && len(enabled) > 0 {
+		return enabled
+	}
+	return SupportedLanguageCodes()
+}
+
+// IsEnabledForRequest reports whether lang is both embedded and enabled for r.
+func IsEnabledForRequest(r *http.Request, lang string) bool {
+	if r == nil {
+		return IsSupported(lang)
+	}
+	_, ok := normalizeEnabled(lang, enabledLanguagesFromContext(r.Context()))
+	return ok
 }
 
 // LangFromContext returns the language stored by LanguageMiddleware, or

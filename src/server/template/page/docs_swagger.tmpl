@@ -1,0 +1,23 @@
+{{define "head-extra"}}
+{{range .DocsStylesheets}}<link rel="stylesheet" href="{{path $.BaseURL (asset .)}}">
+{{end}}{{end}}
+{{define "page-scripts"}}
+{{range .DocsScripts}}<script src="{{path $.BaseURL (asset .)}}"></script>
+{{end}}{{end}}
+{{define "content"}}
+<div class="container container-lg">
+  <header class="page-header">
+    <p class="breadcrumb"><a href="{{path .BaseURL "/server/docs/swagger"}}">{{t .Lang "nav.api_docs"}}</a></p>
+    <h1 class="page-title">{{.PageTitle}}</h1>
+    <p class="page-lead">{{.PageDescription}}</p>
+  </header>
+  <section class="section-card" aria-labelledby="swagger-heading">
+    <h2 id="swagger-heading">{{t .Lang "swagger.title"}}</h2>
+    <div id="swagger-ui" data-spec-url="{{.DocsEndpoint}}" aria-live="polite"></div>
+  </section>
+  <noscript><section class="section-card" aria-labelledby="swagger-fallback-heading">
+    <h2 id="swagger-fallback-heading">{{t .Lang "docs.fallback_heading"}}</h2>
+    <p>{{t .Lang "docs.javascript_required"}} <a href="{{path .BaseURL (printf "%s/server/swagger" .APIBasePath)}}">{{t .Lang "docs.openapi_json"}}</a></p>
+  </section></noscript>
+</div>
+{{end}}

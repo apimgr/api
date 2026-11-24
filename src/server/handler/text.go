@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/service/text"
 	"github.com/go-chi/chi/v5"
 )
@@ -12,13 +13,21 @@ import (
 // Helper functions for JSON responses
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
-func jsonError(w http.ResponseWriter, message string, code int) {
+func jsonError(w http.ResponseWriter, r *http.Request, messageKey string, status int) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	errorCode := "BAD_REQUEST"
+	if status >= http.StatusInternalServerError {
+		errorCode = "INTERNAL_ERROR"
+	}
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":      false,
+		"error":   errorCode,
+		"message": i18n.Translate(i18n.LangFromRequest(r), messageKey),
+	})
 }
 
 // UUID generates a UUID
@@ -36,7 +45,7 @@ func TextUUIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := text.UUID(version)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusInternalServerError)
+		jsonError(w, r, "errors.server_error", http.StatusInternalServerError)
 		return
 	}
 
@@ -66,7 +75,7 @@ func TextUUIDsHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := text.UUIDs(version, count)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusInternalServerError)
+		jsonError(w, r, "errors.server_error", http.StatusInternalServerError)
 		return
 	}
 
@@ -90,7 +99,7 @@ func TextHashHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	if algorithm == "" {
@@ -99,7 +108,7 @@ func TextHashHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := text.Hash(algorithm, input)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
+		jsonError(w, r, "errors.bad_request", http.StatusBadRequest)
 		return
 	}
 
@@ -121,7 +130,7 @@ func TextHashAllHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
@@ -142,7 +151,7 @@ func TextBase64EncodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
@@ -165,13 +174,13 @@ func TextBase64DecodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
 	result, err := text.Base64Decode(input)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
+		jsonError(w, r, "errors.bad_request", http.StatusBadRequest)
 		return
 	}
 
@@ -192,7 +201,7 @@ func TextBase64URLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
@@ -215,13 +224,13 @@ func TextBase64URLDecodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
 	result, err := text.Base64URLDecode(input)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
+		jsonError(w, r, "errors.bad_request", http.StatusBadRequest)
 		return
 	}
 
@@ -242,7 +251,7 @@ func TextBase32EncodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
@@ -265,13 +274,13 @@ func TextBase32DecodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
 	result, err := text.Base32Decode(input)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
+		jsonError(w, r, "errors.bad_request", http.StatusBadRequest)
 		return
 	}
 
@@ -292,7 +301,7 @@ func TextHexEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
@@ -315,13 +324,13 @@ func TextHexDecodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
 	result, err := text.HexDecode(input)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
+		jsonError(w, r, "errors.bad_request", http.StatusBadRequest)
 		return
 	}
 
@@ -342,7 +351,7 @@ func TextURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
@@ -365,13 +374,13 @@ func TextURLDecodeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 
 	result, err := text.URLDecode(input)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
+		jsonError(w, r, "errors.bad_request", http.StatusBadRequest)
 		return
 	}
 
@@ -391,7 +400,7 @@ func TextURLDecodeHandler(w http.ResponseWriter, r *http.Request) {
 func TextCaseLowerHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.ToLower(input), "input": input})
@@ -406,7 +415,7 @@ func TextCaseLowerHandler(w http.ResponseWriter, r *http.Request) {
 func TextCaseUpperHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.ToUpper(input), "input": input})
@@ -421,7 +430,7 @@ func TextCaseUpperHandler(w http.ResponseWriter, r *http.Request) {
 func TextCaseTitleHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.ToTitle(input), "input": input})
@@ -436,7 +445,7 @@ func TextCaseTitleHandler(w http.ResponseWriter, r *http.Request) {
 func TextCaseCamelHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.ToCamelCase(input), "input": input})
@@ -451,7 +460,7 @@ func TextCaseCamelHandler(w http.ResponseWriter, r *http.Request) {
 func TextCaseSnakeHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.ToSnakeCase(input), "input": input})
@@ -466,7 +475,7 @@ func TextCaseSnakeHandler(w http.ResponseWriter, r *http.Request) {
 func TextCaseKebabHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.ToKebabCase(input), "input": input})
@@ -481,7 +490,7 @@ func TextCaseKebabHandler(w http.ResponseWriter, r *http.Request) {
 func TextReverseHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.Reverse(input), "input": input})
@@ -496,7 +505,7 @@ func TextReverseHandler(w http.ResponseWriter, r *http.Request) {
 func TextStatsHandler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, text.Stats(input))
@@ -511,7 +520,7 @@ func TextStatsHandler(w http.ResponseWriter, r *http.Request) {
 func TextROT13Handler(w http.ResponseWriter, r *http.Request) {
 	input := r.URL.Query().Get("input")
 	if input == "" {
-		jsonError(w, "input parameter required", http.StatusBadRequest)
+		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"result": text.ROT13(input), "input": input})

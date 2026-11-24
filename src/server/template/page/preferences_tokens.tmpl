@@ -1,0 +1,125 @@
+{{define "content"}}
+<article class="container container-sm token-page">
+  <header class="page-header">
+    <a class="back-link" href="{{path .BaseURL "/server/preferences"}}">{{t .Lang "page_text.text.preferences.c74d9b177e"}}</a>
+    <h1 class="page-title">{{t .Lang "page_text.text.owner.tokens.a5dc2b2bfe"}}</h1>
+    <p class="page-lead">{{t .Lang "page_text.text.manage.the.credentials.that.identify.your.an.e3e4a1b248"}}</p>
+  </header>
+
+  {{if .ErrorMessage}}<div class="alert alert-error" role="alert">{{.ErrorMessage}}</div>{{end}}
+  {{if .SuccessMessage}}<div class="alert alert-success" role="status">{{.SuccessMessage}}</div>{{end}}
+
+  {{if not .OwnerCookie}}
+  <div class="token-grid">
+    <section class="section-card" aria-labelledby="token-new-heading">
+      <h2 id="token-new-heading">{{t .Lang "page_text.text.new.token.fe46cb83ad"}}</h2>
+      <p>{{t .Lang "page_text.text.create.an.anonymous.owner.and.its.primary.to.0fecbbd8a6"}}</p>
+      <form action="{{path .BaseURL "/server/preferences/token/create"}}" method="POST">
+        {{csrfField .CSRFToken}}
+        <button class="btn btn-primary" type="submit">{{t .Lang "page_text.text.create.token.5d8e8e30bc"}}</button>
+      </form>
+    </section>
+    <section class="section-card" aria-labelledby="token-restore-heading">
+      <h2 id="token-restore-heading">{{t .Lang "page_text.text.use.an.existing.token.4a463c5c30"}}</h2>
+      <form action="{{path .BaseURL "/server/preferences/token/restore"}}" method="POST" class="form">
+        {{csrfField .CSRFToken}}
+        <label class="form-label" for="owner-token-restore">{{t .Lang "page_text.text.primary.token.75c3eecb8f"}}</label>
+        <input class="form-input" id="owner-token-restore" name="token" type="password" autocomplete="off" required>
+        <p class="form-help">{{t .Lang "page_text.text.paste.your.primary.token.to.restore.this.bro.1c034676ba"}}</p>
+        <button class="btn btn-primary" type="submit">{{t .Lang "page_text.text.restore.identity.f94b9e9cbe"}}</button>
+      </form>
+    </section>
+  </div>
+  {{else}}
+  <div class="token-grid">
+    <div class="token-column">
+      <section class="section-card" id="primary" aria-labelledby="primary-token-heading">
+        <h2 id="primary-token-heading">{{t .Lang "page_text.text.primary.token.75c3eecb8f"}}</h2>
+        <p><span class="status-badge status-active">{{t .Lang "page_text.text.active.9234069589"}}</span></p>
+        <p class="copy-value break-all">{{if eq .RevealedCard "primary"}}{{.RevealedToken}}{{else}}own_••••••••••••••••••••••••{{.PrimaryToken.Last4}}{{end}}</p>
+        {{if eq .RevealedCard "primary"}}
+        <p class="form-help">{{t .Lang "page_text.text.shown.once.on.this.page.load.c5f804ea3a"}}</p>
+        <button class="btn btn-secondary copy-btn" type="button" data-copy="{{.RevealedToken}}">{{t .Lang "page_text.text.copy.e21f935f11"}}</button>
+        {{else}}
+        <p class="form-help">{{tf .Lang "owner_tokens.full_access" "resources" .ResourcePlural}}</p>
+        <div class="form-actions">
+          <form action="{{path .BaseURL "/server/preferences/token/reveal"}}" method="POST">{{csrfField .CSRFToken}}<button class="btn btn-secondary" type="submit">{{t .Lang "page_text.text.reveal.36b830bdb4"}}</button></form>
+          <button class="btn btn-secondary" type="button" disabled>{{t .Lang "page_text.text.copy.e21f935f11"}}</button>
+          <button class="btn btn-secondary" type="button" popovertarget="rotate-primary-confirm">{{t .Lang "page_text.text.rotate.c3613b1704"}}</button>
+        </div>
+        <div id="rotate-primary-confirm" class="reset-popover" popover>
+          <h3>{{t .Lang "page_text.text.rotate.primary.token.95b5b92c24"}}</h3>
+          <p>{{tf .Lang "owner_tokens.rotate_warning" "resources" .ResourcePlural}}</p>
+          <form action="{{path .BaseURL "/server/preferences/token/rotate"}}" method="POST">{{csrfField .CSRFToken}}<input type="hidden" name="confirm" value="rotate"><button class="btn btn-danger" type="submit">{{t .Lang "page_text.text.rotate.token.4ade788283"}}</button></form>
+        </div>
+        {{end}}
+      </section>
+
+      <section class="section-card" aria-labelledby="linked-create-heading">
+        <h2 id="linked-create-heading">{{t .Lang "page_text.text.create.linked.token.a0bb57f7cb"}}</h2>
+        <form action="{{path .BaseURL "/server/preferences/tokens"}}" method="POST" class="form">
+          {{csrfField .CSRFToken}}
+          <div class="form-group"><label class="form-label" for="linked-name">{{t .Lang "page_text.text.name.dcd1d5223f"}}</label><input class="form-input" id="linked-name" name="name" maxlength="64" required><p class="form-help">{{t .Lang "page_text.text.for.example.mcp.client.76eeb0e80f"}}</p></div>
+          <div class="form-group"><label class="form-label" for="linked-expiry">{{t .Lang "page_text.text.expiry.6956d81401"}}</label><select class="form-select" id="linked-expiry" name="expiry"><option value="never">{{t .Lang "page_text.text.never.6300ef800b"}}</option><option value="7d">{{t .Lang "page_text.text.7.days.7f920bb639"}}</option><option value="30d">{{t .Lang "page_text.text.30.days.ffd7280513"}}</option><option value="90d">{{t .Lang "page_text.text.90.days.38825b0f64"}}</option><option value="1y">{{t .Lang "page_text.text.1.year.91647badc3"}}</option><option value="custom">{{t .Lang "page_text.text.custom.date.43bce05349"}}</option></select></div>
+          <details><summary>{{t .Lang "page_text.text.custom.expiry.date.b4e0b31d08"}}</summary><div class="form-group"><label class="form-label" for="linked-expiry-date">{{t .Lang "page_text.text.expires.on.71712ec2f7"}}</label><input class="form-input" id="linked-expiry-date" name="expiry_date" type="date"></div></details>
+          <button class="btn btn-primary" type="submit">{{t .Lang "page_text.text.create.token.5d8e8e30bc"}}</button>
+        </form>
+      </section>
+
+      <section class="section-card" aria-labelledby="this-browser-heading">
+        <h2 id="this-browser-heading">{{t .Lang "page_text.text.this.browser.101f4d9537"}}</h2>
+        <p>{{tf .Lang "owner_tokens.saved_browser" "resources" .ResourcePlural}}</p>
+        <button class="btn btn-danger-ghost" type="button" popovertarget="forget-token-confirm">{{t .Lang "page_text.text.forget.saved.token.e6d844ef54"}}</button>
+        <div id="forget-token-confirm" class="reset-popover" popover><h3>{{t .Lang "page_text.text.forget.saved.token.31d36b04e7"}}</h3><p>{{tf .Lang "owner_tokens.forget_warning" "resources" .ResourcePlural}}</p><form action="{{path .BaseURL "/server/preferences/token/forget"}}" method="POST">{{csrfField .CSRFToken}}<button class="btn btn-danger" type="submit">{{t .Lang "page_text.text.forget.token.ef4db61624"}}</button></form></div>
+      </section>
+
+      <section class="section-card section-danger" aria-labelledby="revoke-primary-heading">
+        <h2 id="revoke-primary-heading">{{t .Lang "page_text.text.revoke.primary.token.de6eb10f58"}}</h2>
+        <p>{{tf .Lang "owner_tokens.delete_owner_warning" "resources" .ResourcePlural}}</p>
+        <button class="btn btn-danger" type="button" popovertarget="revoke-primary-confirm">{{t .Lang "page_text.text.revoke.primary.token.and.delete.everything.38c8ebef2d"}}</button>
+        <div id="revoke-primary-confirm" class="reset-popover" popover>
+          <h3>{{t .Lang "page_text.text.delete.this.owner.e020c69fc4"}}</h3>
+          <p>{{t .Lang "page_text.text.this.action.cannot.be.undone.3d6a452672"}}</p>
+          <form action="{{path .BaseURL "/server/preferences/token/revoke"}}" method="POST" class="form">
+            {{csrfField .CSRFToken}}
+            <label class="form-label" for="confirm-primary-last4">{{tf .Lang "owner_tokens.confirm_last4" "last4" .PrimaryToken.Last4}}</label>
+            <input class="form-input" id="confirm-primary-last4" name="confirm_last4" maxlength="4" required>
+            <button class="btn btn-danger" type="submit">{{t .Lang "page_text.text.delete.owner.and.everything.4a778fec69"}}</button>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <section class="section-card token-column" aria-labelledby="linked-list-heading">
+      <h2 id="linked-list-heading">{{tf .Lang "owner_tokens.linked_tokens" "count" (len .LinkedTokens)}}</h2>
+      {{if .LinkedTokens}}
+      <ul class="token-list">
+        {{range .LinkedTokens}}
+        <li class="token-list-item" id="token-{{.ID}}">
+          <h3>{{.Name}}</h3>
+          <p><span class="status-badge status-{{.Status}}">{{t $.Lang (printf "owner_tokens.status_%s" .Status)}}</span></p>
+          {{if and (eq $.RevealedCard (printf "%d" .ID)) $.RevealedToken}}
+          <p class="copy-value break-all">{{$.RevealedToken}}</p><p class="form-help">{{t .Lang "page_text.text.shown.once.on.this.page.load.c5f804ea3a"}}</p>
+          <button class="btn btn-secondary copy-btn" type="button" data-copy="{{$.RevealedToken}}">{{t .Lang "page_text.text.copy.e21f935f11"}}</button>
+          {{else}}
+          <p class="copy-value break-all">{{.Prefix}}••••{{.Last4}}</p>
+          <dl><dt>{{t .Lang "page_text.text.created.d70b9e24bc"}}</dt><dd>{{.CreatedAt.Format "Jan 2, 2006"}}</dd><dt>{{t .Lang "page_text.text.last.used.830ec7f812"}}</dt><dd>{{if .LastUsed}}{{.LastUsed.Format "Jan 2, 2006"}}{{else}}{{t .Lang "page_text.text.never.6300ef800b"}}{{end}}</dd><dt>{{t .Lang "page_text.text.expires.f6725f3af0"}}</dt><dd>{{if .ExpiresAt}}{{.ExpiresAt.Format "Jan 2, 2006"}}{{else}}{{t .Lang "page_text.text.never.6300ef800b"}}{{end}}</dd></dl>
+          <div class="form-actions">
+            <form action="{{path $.BaseURL (printf "/server/preferences/tokens/%s/reveal" .ID)}}" method="POST">{{csrfField $.CSRFToken}}<button class="btn btn-secondary" type="submit">{{t .Lang "page_text.text.reveal.36b830bdb4"}}</button></form>
+            <form action="{{path $.BaseURL (printf "/server/preferences/tokens/%s/rotate" .ID)}}" method="POST">{{csrfField $.CSRFToken}}<button class="btn btn-secondary" type="submit">{{t .Lang "page_text.text.rotate.c3613b1704"}}</button></form>
+            <details><summary>{{t .Lang "page_text.text.edit.464c4ffd01"}}</summary><form action="{{path $.BaseURL (printf "/server/preferences/tokens/%s/update" .ID)}}" method="POST" class="form">{{csrfField $.CSRFToken}}<label class="form-label" for="token-name-{{.ID}}">{{t .Lang "page_text.text.name.dcd1d5223f"}}</label><input class="form-input" id="token-name-{{.ID}}" name="name" value="{{.Name}}" maxlength="64" required><label class="form-label" for="token-expiry-{{.ID}}">{{t .Lang "page_text.text.expiry.6956d81401"}}</label><select class="form-select" id="token-expiry-{{.ID}}" name="expiry"><option value="never"{{if not .ExpiresAt}} selected{{end}}>{{t .Lang "page_text.text.never.6300ef800b"}}</option><option value="7d">{{t .Lang "page_text.text.7.days.7f920bb639"}}</option><option value="30d">{{t .Lang "page_text.text.30.days.ffd7280513"}}</option><option value="90d">{{t .Lang "page_text.text.90.days.38825b0f64"}}</option><option value="1y">{{t .Lang "page_text.text.1.year.91647badc3"}}</option><option value="custom">{{t .Lang "page_text.text.custom.date.43bce05349"}}</option></select><button class="btn btn-primary" type="submit">{{t .Lang "page_text.text.save.1509f561f2"}}</button></form></details>
+            <button class="btn btn-danger-ghost" type="button" popovertarget="revoke-linked-{{.ID}}">{{t .Lang "page_text.text.revoke.87e6d00bbf"}}</button>
+          </div>
+          <div id="revoke-linked-{{.ID}}" class="reset-popover" popover><h4>{{tf .Lang "owner_tokens.revoke_prompt" "name" .Name}}</h4><p>{{t .Lang "page_text.text.this.token.stops.working.immediately.a94281d6e5"}}</p><form action="{{path $.BaseURL (printf "/server/preferences/tokens/%s/revoke" .ID)}}" method="POST">{{csrfField $.CSRFToken}}<button class="btn btn-danger" type="submit">{{t .Lang "page_text.text.revoke.token.14683b3793"}}</button></form></div>
+          {{end}}
+        </li>
+        {{end}}
+      </ul>
+      {{else}}
+      <p>{{t .Lang "page_text.text.no.linked.tokens.yet.create.one.per.app.for.833be43e25"}}</p>
+      {{end}}
+    </section>
+  </div>
+  {{end}}
+</article>
+{{end}}

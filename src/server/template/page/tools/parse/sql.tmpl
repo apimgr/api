@@ -4,36 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/parse">Parsers</a> / SQL Structure Parser
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/parse"}}">{{t .Lang "categories.parse.name"}}</a> {{t .Lang "tool_pages.text.sql.structure.parser.4aab8d1abc"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">SQL Structure Parser</h1>
-        <button class="btn btn-icon" data-favorite="parse-sql" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.sql.structure.parser.4e09a022c3"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="parse-sql" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Best-effort extraction of statement type, referenced tables, and columns from a single SQL statement. Not a SQL validator.
+        {{t .Lang "tool_pages.text.best.effort.extraction.of.statement.type.ref.e7af492bd8"}}
       </p>
 
-      <form id="sql-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/sql">
+      <form id="sql-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/parse/sql" method="post" action="{{path .BaseURL "/parse/sql"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">SQL statement</label>
-          <textarea name="body" class="form-input" rows="8" required placeholder="SELECT id, name FROM users WHERE id = 1"></textarea>
+          <label class="form-label" for="sql-form-body">{{t .Lang "tool_pages.text.sql.statement.47bb0c0705"}}</label>
+          <textarea name="body" class="form-input" rows="8" required placeholder="{{t .Lang "tool_pages.text.select.id.name.from.users.where.id.1.ecca31e765"}}" id="sql-form-body"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Parse</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.parse.605537ca5d"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="sql-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/parse/sql -d 'SELECT id, name FROM users'</pre>

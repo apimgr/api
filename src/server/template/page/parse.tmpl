@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🔍 Parsers</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.parsers.6220f71c22"}}</h1>
     <p class="hero-subtitle">
-      parsing JSON, YAML, XML, CSV, and format conversions
+      {{t .Lang "page_text.text.parsing.json.yaml.xml.csv.and.format.convers.06776f093b"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/parse/json" class="category-card">
+      <a href="{{path .BaseURL "/parse/json"}}" class="category-card">
         <div class="category-icon">{ }</div>
-        <h3 class="category-title">JSON Parser</h3>
-        <p class="category-description">Parse and format JSON</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.json.parser.af9fd9bf44"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.and.format.json.09cfe54870"}}</p>
       </a>
       
-      <a href="/parse/yaml" class="category-card">
+      <a href="{{path .BaseURL "/parse/yaml"}}" class="category-card">
         <div class="category-icon">📄</div>
-        <h3 class="category-title">YAML Parser</h3>
-        <p class="category-description">Parse and convert YAML</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.yaml.parser.67597551bb"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.and.convert.yaml.4d4aeadd5d"}}</p>
       </a>
       
-      <a href="/parse/xml" class="category-card">
+      <a href="{{path .BaseURL "/parse/xml"}}" class="category-card">
         <div class="category-icon">📃</div>
-        <h3 class="category-title">XML Parser</h3>
-        <p class="category-description">Parse and convert XML</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.xml.parser.fc202c9dad"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.and.convert.xml.c98ecad414"}}</p>
       </a>
       
-      <a href="/parse/csv" class="category-card">
+      <a href="{{path .BaseURL "/parse/csv"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">CSV Parser</h3>
-        <p class="category-description">Parse CSV files</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.csv.parser.f065f3641c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.csv.files.039ef2a40f"}}</p>
       </a>
       
-      <a href="/parse/toml" class="category-card">
+      <a href="{{path .BaseURL "/parse/toml"}}" class="category-card">
         <div class="category-icon">⚙️</div>
-        <h3 class="category-title">TOML Parser</h3>
-        <p class="category-description">Parse TOML configuration</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.toml.parser.98a54e4262"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.toml.configuration.90ed33ac0c"}}</p>
       </a>
       
-      <a href="/parse/ini" class="category-card">
+      <a href="{{path .BaseURL "/parse/ini"}}" class="category-card">
         <div class="category-icon">📝</div>
-        <h3 class="category-title">INI Parser</h3>
-        <p class="category-description">Parse INI config files</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ini.parser.de21f65885"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.ini.config.files.d272cff286"}}</p>
       </a>
       
-      <a href="/parse/env" class="category-card">
+      <a href="{{path .BaseURL "/parse/env"}}" class="category-card">
         <div class="category-icon">🔧</div>
-        <h3 class="category-title">ENV Parser</h3>
-        <p class="category-description">Parse .env files</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.env.parser.80577dcaca"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.env.files.d4e1d6a8d3"}}</p>
       </a>
       
-      <a href="/parse/jwt" class="category-card">
+      <a href="{{path .BaseURL "/parse/jwt"}}" class="category-card">
         <div class="category-icon">🎫</div>
-        <h3 class="category-title">JWT Parser</h3>
-        <p class="category-description">Decode and parse JWTs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.jwt.parser.d88d03f10b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.decode.and.parse.jwts.c7c43c626d"}}</p>
       </a>
       
-      <a href="/parse/html" class="category-card">
+      <a href="{{path .BaseURL "/parse/html"}}" class="category-card">
         <div class="category-icon">🌐</div>
-        <h3 class="category-title">HTML Parser</h3>
-        <p class="category-description">Parse HTML documents</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.html.parser.23136302a4"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.html.documents.cc90817b4c"}}</p>
       </a>
       
-      <a href="/parse/markdown" class="category-card">
+      <a href="{{path .BaseURL "/parse/markdown"}}" class="category-card">
         <div class="category-icon">📝</div>
-        <h3 class="category-title">Markdown Parser</h3>
-        <p class="category-description">Parse and convert Markdown</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.markdown.parser.bf2fc46b4e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.and.convert.markdown.d19320df79"}}</p>
       </a>
       
-      <a href="/parse/sql" class="category-card">
+      <a href="{{path .BaseURL "/parse/sql"}}" class="category-card">
         <div class="category-icon">🗄️</div>
-        <h3 class="category-title">SQL Parser</h3>
-        <p class="category-description">Parse SQL queries</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.sql.parser.69bc4d6d9c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.sql.queries.3b3b3188be"}}</p>
       </a>
       
-      <a href="/parse/log" class="category-card">
+      <a href="{{path .BaseURL "/parse/log"}}" class="category-card">
         <div class="category-icon">📋</div>
-        <h3 class="category-title">Log Parser</h3>
-        <p class="category-description">Parse log files</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.log.parser.ec83755288"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.log.files.feb5f7bb2a"}}</p>
       </a>
     </div>
   </div>

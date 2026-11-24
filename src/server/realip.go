@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/pires/go-proxyproto"
 )
 
 // originalPeerContextKey stores the original TCP peer address (before any
@@ -41,6 +43,44 @@ type trustedProxyResolver struct {
 }
 
 var proxyResolver = &trustedProxyResolver{}
+
+// TorConnContext tags Tor backend connections with the circuit identity
+// exported in Tor's PROXY-protocol source address.
+func TorConnContext(previous func(context.Context, net.Conn) context.Context) func(context.Context, net.Conn) context.Context {
+	return func(ctx context.Context, conn net.Conn) context.Context {
+		if previous != nil {
+			ctx = previous(ctx, conn)
+		}
+		proxyConn, ok := conn.(*proxyproto.Conn)
+		if !ok {
+			return ctx
+		}
+		header := proxyConn.ProxyHeader()
+		if header == nil {
+			return ctx
+		}
+		source, ok := header.SourceAddr.(*net.TCPAddr)
+		if !ok {
+			return ctx
+		}
+		ip := source.IP.To16()
+		if ip == nil || ip[0] != 0xfc {
+			return ctx
+		}
+		return context.WithValue(ctx, torCircuitContextKey, "tor:"+hex.EncodeToString(ip[8:16]))
+	}
+}
+
+const torCircuitContextKey contextKey = "torCircuitID"
+
+// IsTorRequest reports whether an HTTP connection arrived through the Tor backend.
+func IsTorRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	circuitID, ok := r.Context().Value(torCircuitContextKey).(string)
+	return ok && strings.HasPrefix(circuitID, "tor:")
+}
 
 // resolve refreshes the trusted-proxy allow-list from the configured
 // entries, re-resolving DNS names at most once every 5 minutes
@@ -150,8 +190,18 @@ func realIPMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			originalPeer := r.RemoteAddr
+			circuitID, torRequest := r.Context().Value(torCircuitContextKey).(string)
+			if torRequest && circuitID != "" {
+				originalPeer = circuitID
+				r.RemoteAddr = circuitID
+			}
 			ctx := context.WithValue(r.Context(), originalPeerContextKey, originalPeer)
+			ctx = context.WithValue(ctx, serverConfigKey, cfg)
 			r = r.WithContext(ctx)
+			if torRequest && circuitID != "" {
+				next.ServeHTTP(w, r)
+				return
+			}
 
 			if isTrustedPeer(cfg, originalPeer) {
 				if clientIP := resolveForwardedClientIP(r); clientIP != "" {

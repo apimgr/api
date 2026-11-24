@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -38,7 +39,9 @@ func (m *Metrics) GrafanaHandler(projectName string) http.Handler {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(dashboard)
+		if err := enc.Encode(dashboard); err != nil {
+			log.Printf("Metrics: failed to encode Grafana dashboard: %v", err)
+		}
 	})
 }
 
@@ -84,7 +87,9 @@ func (m *Metrics) LokiHandler(source LogSource, maxEntries int, maxAge time.Dura
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(body)
+		if err := enc.Encode(body); err != nil {
+			log.Printf("Metrics: failed to encode Loki response: %v", err)
+		}
 	})
 }
 

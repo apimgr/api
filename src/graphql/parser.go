@@ -111,9 +111,10 @@ func (p *docParser) parseVariableDefinitions() error {
 			}
 			continue
 		}
-		if c == '(' {
+		switch c {
+		case '(':
 			depth++
-		} else if c == ')' {
+		case ')':
 			depth--
 		}
 		p.pos++
@@ -374,10 +375,10 @@ func (p *docParser) expect(c rune) error {
 func (p *docParser) skipIgnored() {
 	for p.pos < len(p.input) {
 		c := p.input[p.pos]
-		switch {
-		case c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',':
+		switch c {
+		case ' ', '\t', '\n', '\r', ',':
 			p.pos++
-		case c == '#':
+		case '#':
 			for p.pos < len(p.input) && p.input[p.pos] != '\n' {
 				p.pos++
 			}

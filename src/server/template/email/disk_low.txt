@@ -1,0 +1,14 @@
+Subject: Disk Space Low - {app_name}
+---
+DISK SPACE LOW
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+Disk usage on {path} reached {used_percent}.
+Free space: {free}
+Notification threshold: {threshold_percent}
+
+--
+{app_name}
+{app_url}

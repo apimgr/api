@@ -1,27 +1,34 @@
 package tor
 
 import (
+	"context"
+	"net"
 	"testing"
 	"time"
 
-	"github.com/cretz/bine/tor"
+	"golang.org/x/net/proxy"
 )
 
-// TestServiceOnionAddress verifies the .onion suffix is appended to the
-// stored service ID.
+type testContextDialer struct{}
+
+func (testContextDialer) DialContext(context.Context, string, string) (net.Conn, error) {
+	return nil, nil
+}
+
+// TestServiceOnionAddress verifies the Tor-owned hostname is returned as read.
 func TestServiceOnionAddress(t *testing.T) {
 	tests := []struct {
 		name    string
-		onionID string
+		address string
 		want    string
 	}{
-		{"typical id", "abcdefghijklmnop", "abcdefghijklmnop.onion"},
-		{"empty id", "", ".onion"},
+		{"typical address", "abcdefghijklmnop.onion", "abcdefghijklmnop.onion"},
+		{"empty address", "", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{onionID: tt.onionID}
+			s := &Service{onionAddress: tt.address}
 			if got := s.OnionAddress(); got != tt.want {
 				t.Errorf("OnionAddress() = %q, want %q", got, tt.want)
 			}
@@ -37,9 +44,7 @@ func TestServiceOutboundEnabled(t *testing.T) {
 		t.Error("expected OutboundEnabled() to be false with no dialer")
 	}
 
-	// A zero-value Dialer is safe to construct and assign - its
-	// DialContext method is only assigned, never invoked, by this test.
-	s.dialer = &tor.Dialer{}
+	s.dialer = testContextDialer{}
 	if !s.OutboundEnabled() {
 		t.Error("expected OutboundEnabled() to be true once a dialer is set")
 	}
@@ -50,13 +55,13 @@ func TestServiceOutboundEnabled(t *testing.T) {
 func TestServiceGetHTTPClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		dialer      *tor.Dialer
+		dialer      proxy.ContextDialer
 		useTor      bool
 		wantTimeout time.Duration
 	}{
 		{"no dialer, tor requested", nil, true, 30 * time.Second},
-		{"dialer present, tor not requested", &tor.Dialer{}, false, 30 * time.Second},
-		{"dialer present, tor requested", &tor.Dialer{}, true, 60 * time.Second},
+		{"dialer present, tor not requested", testContextDialer{}, false, 30 * time.Second},
+		{"dialer present, tor requested", testContextDialer{}, true, 60 * time.Second},
 	}
 
 	for _, tt := range tests {

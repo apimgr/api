@@ -9,13 +9,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/apimgr/api/src/common/i18n"
 )
 
-// TestDefaultTemplates_AllPresentAndValid asserts every one of the 10
+// TestDefaultTemplates_AllPresentAndValid asserts every built-in
 // built-in templates from AI.md PART 17 exists as an embedded default,
 // parses, and validates cleanly with zero configuration.
 func TestDefaultTemplates_AllPresentAndValid(t *testing.T) {
-	require.Len(t, TemplateNames, 10)
+	require.Len(t, TemplateNames, 16)
 	for _, name := range TemplateNames {
 		tmpl, err := LoadTemplate(name, t.TempDir())
 		require.NoError(t, err, name)
@@ -26,6 +28,44 @@ func TestDefaultTemplates_AllPresentAndValid(t *testing.T) {
 		warnings, err := ValidateTemplate(name, []byte(raw))
 		require.NoError(t, err, name)
 		assert.Empty(t, warnings, name)
+	}
+}
+
+func TestLifecycleAndSystemTemplatesExposeRequiredVariables(t *testing.T) {
+	checks := map[string][]string{
+		"startup":        {"{hostname}", "{version}", "{mode}", "{app_url}"},
+		"shutdown":       {"{hostname}", "{version}", "{mode}", "{reason}", "{app_url}"},
+		"disk_low":       {"{path}", "{used_percent}", "{free}", "{threshold_percent}", "{app_url}"},
+		"database_error": {"{error}", "{since}", "{app_url}"},
+	}
+	for name, required := range checks {
+		tmpl, err := LoadTemplate(name, t.TempDir())
+		require.NoError(t, err, name)
+		for _, variable := range required {
+			assert.Contains(t, tmpl.Body, variable, name)
+		}
+	}
+}
+
+func TestLifecycleAndSystemTemplateTranslationsExistForEveryLocale(t *testing.T) {
+	for _, language := range i18n.SupportedLanguageCodes() {
+		for _, name := range []string{"startup", "shutdown", "disk_low", "database_error"} {
+			tmpl, err := LoadTemplate(name, t.TempDir())
+			require.NoError(t, err, name)
+			vars := SampleVars(name, GlobalVars{AppName: "api", AppURL: "https://example.com", FQDN: "example.com"})
+			localizeTemplate(tmpl, language, vars)
+			subjectKey := templateSubjectKeys[name]
+			assert.NotEqual(t, subjectKey, i18n.Translate(language, subjectKey), language+" "+name)
+			if language != i18n.DefaultLanguage {
+				assert.NotEqual(t, i18n.Translate(i18n.DefaultLanguage, subjectKey), i18n.Translate(language, subjectKey), language+" "+name)
+			}
+			bodyKey := "email.templates." + name + ".body"
+			assert.NotEqual(t, bodyKey, i18n.Translate(language, bodyKey), language+" "+name)
+			if language != i18n.DefaultLanguage {
+				assert.NotEqual(t, i18n.Translate(i18n.DefaultLanguage, bodyKey), i18n.Translate(language, bodyKey), language+" "+name)
+			}
+			assert.NotContains(t, tmpl.Body, "email.templates.", language+" "+name)
+		}
 	}
 }
 
@@ -67,6 +107,23 @@ func TestRenderTemplate_LeavesUnknownTokensLiteral(t *testing.T) {
 	})
 	assert.Equal(t, "Hi api", subject)
 	assert.Equal(t, "See https://example.com and {nope}\n", body)
+}
+
+func TestLocalizeTemplate_UsesSelectedLanguageBeforePlainRendering(t *testing.T) {
+	tmpl := &Template{
+		Name:    "backup_complete",
+		Subject: "Backup Completed - {app_name}",
+		Body:    "BACKUP COMPLETE\n\nFilename: {filename}\n",
+	}
+	vars := map[string]string{"app_name": "API", "filename": "archivio.zip", "size": "2 MB"}
+
+	localizeTemplate(tmpl, "it", vars)
+	subject, body := RenderTemplate(tmpl, vars)
+
+	assert.Equal(t, "Backup completato - API", subject)
+	assert.Contains(t, body, "BACKUP COMPLETATO")
+	assert.Contains(t, body, "Nome file: archivio.zip")
+	assert.NotContains(t, body, "{filename}")
 }
 
 // TestLoadTemplate_CustomOverridesEmbedded covers the two-tier resolution
@@ -123,6 +180,20 @@ func TestLoadTemplate_LiveReloadAndReset(t *testing.T) {
 
 	// Resetting an override that is already gone is not an error.
 	require.NoError(t, ResetTemplate("backup_failed", configDir))
+}
+
+func TestLoadTemplate_InvalidCustomUsesEmbeddedDefault(t *testing.T) {
+	configDir := t.TempDir()
+	defaultTemplate, err := LoadTemplate("backup_failed", configDir)
+	require.NoError(t, err)
+	customDir := filepath.Join(configDir, "template", "email")
+	require.NoError(t, os.MkdirAll(customDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(customDir, "backup_failed.txt"), []byte("Subject: Bad {unknown}\n---\nBody\n"), 0o600))
+
+	loaded, err := LoadTemplate("backup_failed", configDir)
+	require.NoError(t, err)
+	assert.Equal(t, defaultTemplate.Subject, loaded.Subject)
+	assert.Equal(t, defaultTemplate.Body, loaded.Body)
 }
 
 func TestSaveCustomTemplate_RejectsInvalidAndUnknownName(t *testing.T) {

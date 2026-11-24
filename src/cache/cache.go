@@ -21,6 +21,9 @@ type Store interface {
 	// (used for the Retry-After / X-RateLimit-Reset calculation).
 	SlidingWindow(ctx context.Context, key string, now time.Time, window time.Duration) (count int, resetAt time.Time, err error)
 
+	// CountWindow reads a sliding window without recording a hit.
+	CountWindow(ctx context.Context, key string, now time.Time, window time.Duration) (count int, resetAt time.Time, err error)
+
 	// Close releases any underlying connections. Safe to call on a store
 	// that was never connected.
 	Close() error
@@ -42,13 +45,17 @@ func New(cfg config.CacheConfig) Store {
 		store, err := newRedisStore(cfg)
 		if err != nil {
 			slog.Warn("cache: falling back to in-process memory store", "type", cfg.Type, "error", err)
+			SetHealthStatus("backend", "degraded")
 			return newMemoryStore()
 		}
+		SetHealthStatus("backend", "ok")
 		return store
 	case "none", "memory", "":
+		SetHealthStatus("backend", "ok")
 		return newMemoryStore()
 	default:
 		slog.Warn("cache: unknown server.cache.type, using memory", "type", cfg.Type)
+		SetHealthStatus("backend", "degraded")
 		return newMemoryStore()
 	}
 }

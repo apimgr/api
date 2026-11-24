@@ -83,7 +83,7 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 				// cookies). The CSRF exempt_paths allow-list is not
 				// consulted here (see doc comment above).
 				if r.Header.Get("Sec-Fetch-Site") == "cross-site" && !hasBearerToken(r) {
-					writeSecFetchRejected(w)
+					writeSecFetchRejected(w, r)
 					return
 				}
 
@@ -92,7 +92,7 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 				// by the stateChanging gate above — opening an API URL in
 				// a browser still returns JSON normally.
 				if r.Header.Get("Sec-Fetch-Mode") == "navigate" && strings.HasPrefix(r.URL.Path, "/api/") {
-					writeSecFetchRejected(w)
+					writeSecFetchRejected(w, r)
 					return
 				}
 
@@ -107,7 +107,7 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 				// confirmed-participating browser, not a legacy omission.
 				if hasBearerToken(r) && r.Header.Get("Sec-Fetch-Mode") == "navigate" {
 					if user := r.Header.Get("Sec-Fetch-User"); user != "" && user != "?1" {
-						writeSecFetchRejected(w)
+						writeSecFetchRejected(w, r)
 						return
 					}
 				}
@@ -120,7 +120,7 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 			// per-path allow-list here, so any cross-site framing
 			// destination is outright disallowed.
 			if r.Header.Get("Sec-Fetch-Dest") == "iframe" && r.Header.Get("Sec-Fetch-Site") == "cross-site" {
-				writeSecFetchRejected(w)
+				writeSecFetchRejected(w, r)
 				return
 			}
 
@@ -131,8 +131,8 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 
 // writeSecFetchRejected writes the canonical PART 14 error envelope for a
 // request blocked by Sec-Fetch-* validation.
-func writeSecFetchRejected(w http.ResponseWriter) {
-	writeEnvelopeError(w, http.StatusForbidden, "SEC_FETCH_REJECTED", "Request blocked by Sec-Fetch validation", nil)
+func writeSecFetchRejected(w http.ResponseWriter, r *http.Request) {
+	writeLocalizedAPIError(w, r, http.StatusForbidden, "SEC_FETCH_REJECTED")
 }
 
 // cspDirective builds one CSP directive from the built-in default value,
@@ -155,12 +155,9 @@ func cspDirective(name, def, extra, override string) string {
 func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			scheme := "http"
-			if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
-				scheme = "https"
-			}
-			reportsURL := fmt.Sprintf("%s://%s%s/server/reports/default", scheme, r.Host, APIBasePath(cfg))
-			cspReportURI := fmt.Sprintf("%s://%s%s/server/reports/csp", scheme, r.Host, APIBasePath(cfg))
+			r = requestWithServerConfig(r, cfg)
+			reportsURL := BuildURL(r, APIBasePath(cfg)+"/server/reports/default")
+			cspReportURI := BuildURL(r, APIBasePath(cfg)+"/server/reports/csp")
 
 			csp := cfg.Web.CSP
 			if csp.Enabled {
@@ -197,7 +194,7 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 					cspDirective("form-action", formActionDefault, csp.FormActionExtra, csp.FormActionOverride),
 					"object-src 'none'",
 				}
-				if cfg.Server.SSL.Enabled {
+				if cfg.Server.SSL.Enabled && !isI2PBackendRequest(r) {
 					directives = append(directives, "upgrade-insecure-requests")
 				}
 				if csp.ReportsEnabled {
@@ -274,8 +271,8 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 				w.Header().Set("X-DNS-Prefetch-Control", headers.DNSPrefetchControl)
 			}
 
-			// Permissions Policy — fully config-driven per AI.md PART 11 →
-			// "Permissions-Policy Configuration"
+			// Permissions Policy is project-declared and always emitted; the
+			// internal value cannot be changed through deployment config.
 			if permissions := cfg.Web.PermissionsPolicy.Header(); permissions != "" {
 				w.Header().Set("Permissions-Policy", permissions)
 			}
@@ -296,7 +293,7 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 
 			// HSTS (only if SSL is enabled and the operator hasn't
 			// disabled it) — per RFC 6797
-			if cfg.Server.SSL.Enabled && cfg.Web.HSTS.Enabled && cfg.Web.HSTS.MaxAgeSeconds > 0 {
+			if !isI2PBackendRequest(r) && cfg.Server.SSL.Enabled && cfg.Web.HSTS.Enabled && cfg.Web.HSTS.MaxAgeSeconds > 0 {
 				hsts := fmt.Sprintf("max-age=%d", cfg.Web.HSTS.MaxAgeSeconds)
 				if cfg.Web.HSTS.IncludeSubdomains {
 					hsts += "; includeSubDomains"

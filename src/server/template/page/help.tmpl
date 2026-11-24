@@ -1,46 +1,40 @@
 {{define "content"}}
-<section class="hero">
-  <div class="container">
-    <h1 class="hero-title">❓ Help</h1>
-    <p class="hero-subtitle">Getting started with {{.SiteTitle}}</p>
-  </div>
-</section>
+<article class="container container-md">
+  <header class="page-header">
+    <h1 class="page-title">{{t .Lang "help.title"}}</h1>
+    <p class="page-lead">{{t .Lang "help.getting_started"}}</p>
+  </header>
 
-<section>
-  <div class="container container-sm">
-    <div class="card">
-      <div class="card-header">Getting Started</div>
-      <div class="card-body">
-        <p>
-          Use the navigation above to browse tool categories, or call the
-          REST API directly under <code>{{.APIBasePath}}</code>. Full API
-          documentation is available at <a href="/api">/api</a>.
-        </p>
-      </div>
-    </div>
+  <section class="section-card" aria-labelledby="help-start">
+    <h2 id="help-start">{{t .Lang "help.getting_started"}}</h2>
+    <p>{{t .Lang "page_text.text.browse.the.tool.categories.or.call.the.rest.231f18ec97"}} <code class="break-all">{{.APIBasePath}}</code>.</p>
+    <ul>
+      <li><a href="{{path .BaseURL "/server/docs/swagger"}}">{{t .Lang "help.api_documentation"}}</a></li>
+      <li><a href="{{path .BaseURL "/server/docs/graphql"}}">{{t .Lang "help.graphql_description"}}</a></li>
+    </ul>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Rate Limits</div>
-      <div class="card-body">
-        <p>
-          Read requests are limited to
-          <strong>{{.RateLimitRequests}}</strong> requests per
-          <strong>{{.RateLimitWindow}}</strong> second window per client.
-          Exceeding this limit returns an HTTP 429 response.
-        </p>
-      </div>
-    </div>
+  <section class="section-card" aria-labelledby="help-features">
+    <h2 id="help-features">{{t .Lang "help.features"}}</h2>
+    <ul class="hub-list">
+      {{range .Categories}}
+      <li class="hub-item"><a class="hub-link" href="{{.Path}}"><span class="hub-title">{{.Name}}</span><span class="hub-desc">{{.Description}}</span></a></li>
+      {{end}}
+    </ul>
+  </section>
 
-    <div class="card">
-      <div class="card-header">Need More Help?</div>
-      <div class="card-body">
-        <p>
-          See the <a href="/server/contact">Contact</a> page to reach the
-          team, or the <a href="/api">API documentation</a> for endpoint
-          details.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
+  <section class="section-card" aria-labelledby="help-limits">
+    <h2 id="help-limits">{{t .Lang "help.rate_limits"}}</h2>
+    <p>{{tf .Lang "help.rate_limit_message" (dict "requests" (printf "%d" .RateLimitRequests) "window" (printf "%d" .RateLimitWindow))}}</p>
+  </section>
+
+  <section class="section-card" aria-labelledby="help-more">
+    <h2 id="help-more">{{t .Lang "help.more_help"}}</h2>
+    <ul class="hub-list">
+      {{range .HelpPages}}
+      <li class="hub-item"><a class="hub-link" href="{{.Path}}"><span class="hub-title">{{.Title}}</span><span class="hub-desc">{{.Description}}</span></a></li>
+      {{end}}
+    </ul>
+  </section>
+</article>
 {{end}}

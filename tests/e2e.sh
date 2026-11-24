@@ -13,80 +13,106 @@ set -eo pipefail
 PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-PROJECT_NAME="$(basename "$PROJECT_ROOT")"
-PROJECT_ORG="$(basename "$(dirname -- "$PROJECT_ROOT")")"
-RUN_ID="$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"
+REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
+PROJECT_NAME="$(sed -E 's#.*[:/]([^/]+)(\.git)?$#\1#' <<<"$REMOTE_URL")"
+PROJECT_ORG="$(sed -E 's#.*[:/]([^/]+)/[^/]+(\.git)?$#\1#' <<<"$REMOTE_URL")"
+PROJECT_NAME="${PROJECT_NAME:-$(basename "$PROJECT_ROOT")}"
+PROJECT_ORG="${PROJECT_ORG:-$(basename "$(dirname "$PROJECT_ROOT")")}"
+INTERNAL_NAME="$(sed -nE 's/^internal_name:[[:space:]]*([^[:space:]]+).*$/\1/p' IDEA.md | head -n1)"
+INTERNAL_NAME="${INTERNAL_NAME:-$PROJECT_NAME}"
+RUN_ID="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
 
 NETWORK_NAME="${PROJECT_NAME}-e2e-${RUN_ID}"
 BROWSER_NAME="${PROJECT_NAME}-e2e-browser-${RUN_ID}"
 TESTS_NAME="${PROJECT_NAME}-e2e-tests-${RUN_ID}"
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: docker is required — E2E tests never run on the host" >&2
+  exit 69
+fi
 
 GO_IMAGE="casjaysdev/go:latest"
 BROWSER_IMAGE="chromedp/headless-shell:latest"
 GO_CACHE="${GO_CACHE:-$HOME/go/pkg/mod}"
 GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 
-ARTIFACT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX" 2>/dev/null || {
-  mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
-  mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX"
-})"
+mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
+ARTIFACT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")"
+chmod 0700 "$ARTIFACT_ROOT"
+DOCKER_MEM="${DOCKER_MEM:-4g}"
+DOCKER_CPUS="${DOCKER_CPUS:-2}"
+DOCKER_CPU_SHARES="${DOCKER_CPU_SHARES:-256}"
+BROWSER_MEM="${BROWSER_MEM:-2g}"
+BROWSER_CPUS="${BROWSER_CPUS:-2}"
+DOCKER_TIMEOUT="${DOCKER_TIMEOUT:-3600}"
 
 # Stop only the containers and network this run created, SIGTERM first.
-cleanup() {
+__cleanup() {
   local status=$?
-  if docker container inspect "$TESTS_NAME" >/dev/null 2>&1; then
-    docker stop -t 10 "$TESTS_NAME" >/dev/null 2>&1 || true
-    docker rm -f "$TESTS_NAME" >/dev/null 2>&1 || true
+  if timeout "$DOCKER_TIMEOUT" docker container inspect "$TESTS_NAME" >/dev/null 2>&1; then
+    timeout "$DOCKER_TIMEOUT" docker stop -t 10 "$TESTS_NAME" >/dev/null 2>&1 || true
+    timeout "$DOCKER_TIMEOUT" docker rm -f "$TESTS_NAME" >/dev/null 2>&1 || true
   fi
-  if docker container inspect "$BROWSER_NAME" >/dev/null 2>&1; then
-    docker stop -t 10 "$BROWSER_NAME" >/dev/null 2>&1 || true
-    docker rm -f "$BROWSER_NAME" >/dev/null 2>&1 || true
+  if timeout "$DOCKER_TIMEOUT" docker container inspect "$BROWSER_NAME" >/dev/null 2>&1; then
+    timeout "$DOCKER_TIMEOUT" docker stop -t 10 "$BROWSER_NAME" >/dev/null 2>&1 || true
+    timeout "$DOCKER_TIMEOUT" docker rm -f "$BROWSER_NAME" >/dev/null 2>&1 || true
   fi
-  if docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
-    docker network rm "$NETWORK_NAME" >/dev/null 2>&1 || true
+  if timeout "$DOCKER_TIMEOUT" docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
+    timeout "$DOCKER_TIMEOUT" docker network rm "$NETWORK_NAME" >/dev/null 2>&1 || true
   fi
-  echo "Artifacts: ${ARTIFACT_ROOT}"
+  if [ "$status" -eq 0 ]; then
+    rm -rf "$ARTIFACT_ROOT"
+  else
+    echo "Failure artifacts: ${ARTIFACT_ROOT}" >&2
+  fi
   exit "$status"
 }
-trap cleanup EXIT INT TERM
+trap __cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-command -v docker >/dev/null 2>&1 || {
-  echo "ERROR: docker is required — E2E tests never run on the host" >&2
-  exit 1
-}
-
-mkdir -p "$GO_CACHE" "$GO_BUILD" "$PROJECT_ROOT/binaries"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
 
 echo "=== Building ${PROJECT_NAME} (${GO_IMAGE}) ==="
-timeout 900 docker run --rm \
+timeout -k 30 "$DOCKER_TIMEOUT" docker run --rm \
+  --no-healthcheck \
   --name "${PROJECT_NAME}-build-${RUN_ID}" \
+  --memory="$DOCKER_MEM" --cpus="$DOCKER_CPUS" --cpu-shares="$DOCKER_CPU_SHARES" \
   -v "$PROJECT_ROOT:/app" \
+  -v "${ARTIFACT_ROOT}:/artifacts" \
   -v "$GO_CACHE:/usr/local/share/go/pkg/mod" \
   -v "$GO_BUILD:/usr/local/share/go/cache" \
   -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
   "$GO_IMAGE" sh -c "GOOS=\$(go env GOOS) GOARCH=\$(go env GOARCH) \
-    go build -buildvcs=false -trimpath -o /app/binaries/${PROJECT_NAME} ./src"
+    go build -buildvcs=false -trimpath -o /artifacts/${PROJECT_NAME} ./src"
 
 echo "=== Creating network ${NETWORK_NAME} ==="
-docker network create "$NETWORK_NAME" >/dev/null
+timeout "$DOCKER_TIMEOUT" docker network create "$NETWORK_NAME" >/dev/null
+NETWORK_GATEWAY="$(timeout "$DOCKER_TIMEOUT" docker network inspect --format '{{(index .IPAM.Config 0).Gateway}}' "$NETWORK_NAME")"
+NETWORK_PREFIX="${NETWORK_GATEWAY%.*}"
+BROWSER_IP="${NETWORK_PREFIX}.2"
+TESTS_IP="${NETWORK_PREFIX}.3"
 
 echo "=== Starting headless browser ${BROWSER_NAME} ==="
-docker run -d --rm \
+timeout -k 30 "$DOCKER_TIMEOUT" docker run -d --rm --no-healthcheck \
   --name "$BROWSER_NAME" \
   --network "$NETWORK_NAME" \
+  --ip "$BROWSER_IP" \
+  --memory="$BROWSER_MEM" --cpus="$BROWSER_CPUS" --cpu-shares="$DOCKER_CPU_SHARES" \
   --shm-size=2g \
   "$BROWSER_IMAGE" \
   --no-sandbox \
   --disable-gpu \
   --disable-dev-shm-usage \
-  --remote-debugging-address=0.0.0.0 \
-  --remote-debugging-port=9222 >/dev/null
+  --remote-debugging-address=0.0.0.0 >/dev/null
 
 echo "Waiting for the browser to accept CDP connections..."
 READY=0
 for _ in $(seq 1 60); do
-  if docker run --rm --network "$NETWORK_NAME" "$GO_IMAGE" \
-    sh -c "wget -q -O - http://${BROWSER_NAME}:9222/json/version >/dev/null 2>&1"; then
+  PROBE_NAME="${PROJECT_NAME}-e2e-probe-${RUN_ID}"
+  if timeout -k 30 "$DOCKER_TIMEOUT" docker run --rm --no-healthcheck --name "$PROBE_NAME" \
+    --memory=256m --cpus=0.25 --cpu-shares="$DOCKER_CPU_SHARES" --network "$NETWORK_NAME" "$GO_IMAGE" \
+    sh -c "wget -q -O - http://${BROWSER_IP}:9222/json/version >/dev/null 2>&1"; then
     READY=1
     break
   fi
@@ -94,14 +120,17 @@ for _ in $(seq 1 60); do
 done
 if [ "$READY" -ne 1 ]; then
   echo "ERROR: ${BROWSER_NAME} never became ready on port 9222" >&2
-  docker logs "$BROWSER_NAME" 2>&1 | tail -n 40 >&2 || true
+  timeout "$DOCKER_TIMEOUT" docker logs "$BROWSER_NAME" 2>&1 | tail -n 40 >&2 || true
   exit 1
 fi
 
 echo "=== Running E2E suite (all three tiers) ==="
-timeout 2400 docker run --rm \
+timeout -k 30 2400 docker run --rm \
+  --no-healthcheck \
   --name "$TESTS_NAME" \
+  --memory="$DOCKER_MEM" --cpus="$DOCKER_CPUS" --cpu-shares="$DOCKER_CPU_SHARES" \
   --network "$NETWORK_NAME" \
+  --ip "$TESTS_IP" \
   --network-alias "$TESTS_NAME" \
   -v "$PROJECT_ROOT:/app" \
   -v "$GO_CACHE:/usr/local/share/go/pkg/mod" \
@@ -110,8 +139,8 @@ timeout 2400 docker run --rm \
   -w /app \
   -e CGO_ENABLED=0 \
   -e GOFLAGS=-buildvcs=false \
-  -e E2E_BINARY="/app/binaries/${PROJECT_NAME}" \
-  -e E2E_BROWSER_URL="http://${BROWSER_NAME}:9222" \
-  -e E2E_SERVER_HOST="$TESTS_NAME" \
+  -e E2E_BINARY="/artifacts/${PROJECT_NAME}" \
+  -e E2E_BROWSER_URL="http://${BROWSER_IP}:9222" \
+  -e E2E_SERVER_HOST="$TESTS_IP" \
   -e E2E_ARTIFACT_ROOT="/artifacts" \
   "$GO_IMAGE" go test -tags e2e -count=1 -timeout 35m -v ./tests/e2e/...

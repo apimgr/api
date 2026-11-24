@@ -15,19 +15,16 @@ import (
 // "token_cleanup" task acts on here.
 func TestCleanupExpiredRateLimits(t *testing.T) {
 	db := GetServerDB()
-	_, err := db.Exec(`DELETE FROM rate_limits`)
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM rate_limits`)
 
 	now := time.Now()
 	stale := now.Add(-2 * time.Hour)
 	recent := now.Add(-1 * time.Minute)
 
-	_, err = db.Exec(`INSERT INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)`,
-		"stale-key", 5, stale)
-	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)`,
-		"recent-key", 3, recent)
-	require.NoError(t, err)
+	execTestWrite(t, `INSERT INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)`,
+		"stale-key", 5, stale.Unix())
+	execTestWrite(t, `INSERT INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)`,
+		"recent-key", 3, recent.Unix())
 
 	cleaned, err := CleanupExpiredRateLimits()
 	require.NoError(t, err)
@@ -41,9 +38,7 @@ func TestCleanupExpiredRateLimits(t *testing.T) {
 // CleanupExpiredRateLimits with nothing stale to clean must return zero,
 // not error.
 func TestCleanupExpiredRateLimitsNoop(t *testing.T) {
-	db := GetServerDB()
-	_, err := db.Exec(`DELETE FROM rate_limits`)
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM rate_limits`)
 
 	cleaned, err := CleanupExpiredRateLimits()
 	require.NoError(t, err)
@@ -54,16 +49,13 @@ func TestCleanupExpiredRateLimitsNoop(t *testing.T) {
 // window.
 func TestCleanupOldAuditLogs(t *testing.T) {
 	db := GetServerDB()
-	_, err := db.Exec(`DELETE FROM audit_log`)
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM audit_log`)
 
 	old := time.Now().AddDate(0, 0, -100)
 	recent := time.Now().AddDate(0, 0, -1)
 
-	_, err = db.Exec(`INSERT INTO audit_log (timestamp, event) VALUES (?, ?)`, old, "old-event")
-	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO audit_log (timestamp, event) VALUES (?, ?)`, recent, "recent-event")
-	require.NoError(t, err)
+	execTestWrite(t, `INSERT INTO audit_log (timestamp, event) VALUES (?, ?)`, old, "old-event")
+	execTestWrite(t, `INSERT INTO audit_log (timestamp, event) VALUES (?, ?)`, recent, "recent-event")
 
 	count, err := CleanupOldAuditLogs(90)
 	require.NoError(t, err)
@@ -78,17 +70,15 @@ func TestCleanupOldAuditLogs(t *testing.T) {
 // deleting the rest.
 func TestCleanupOldSchedulerHistory(t *testing.T) {
 	db := GetServerDB()
-	_, err := db.Exec(`DELETE FROM scheduler_history`)
-	require.NoError(t, err)
+	execTestWrite(t, `DELETE FROM scheduler_history`)
 
 	taskID := "history-task"
 	base := time.Now().Add(-24 * time.Hour)
 	const total = 105
 	for i := 0; i < total; i++ {
 		started := base.Add(time.Duration(i) * time.Minute)
-		_, err := db.Exec(`INSERT INTO scheduler_history (task_id, started_at, status) VALUES (?, ?, ?)`,
+		execTestWrite(t, `INSERT INTO scheduler_history (task_id, started_at, status) VALUES (?, ?, ?)`,
 			taskID, started, "success")
-		require.NoError(t, err)
 	}
 
 	deleted, err := CleanupOldSchedulerHistory()

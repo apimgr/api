@@ -1,0 +1,95 @@
+{{define "content"}}
+<article class="container container-lg">
+  <header class="page-header">
+    <nav class="breadcrumb" aria-label="{{t .Lang "help.breadcrumb"}}"><a href="{{path .BaseURL "/server/help"}}">← {{t .Lang "help.title"}}</a></nav>
+    <h1 class="page-title">{{t .Lang "help.mcp.title"}}</h1>
+    <p class="page-lead">{{t .Lang "help.mcp.description"}}</p>
+  </header>
+
+  <section class="section-card" id="overview" aria-labelledby="mcp-overview">
+    <h2 id="mcp-overview">{{t .Lang "help.mcp.overview_title"}}</h2>
+    <p>{{t .Lang "help.mcp.overview"}}</p>
+  </section>
+
+  <section class="section-card" id="endpoint" aria-labelledby="mcp-endpoint">
+    <h2 id="mcp-endpoint">{{t .Lang "help.mcp.endpoint_title"}}</h2>
+    <div class="code-block"><pre><code>{{.MCPHelp.Endpoint}}</code></pre><button type="button" class="copy-btn" data-copy="{{.MCPHelp.Endpoint}}" aria-live="polite" aria-label="{{t .Lang "help.mcp.copy_endpoint"}}">{{t .Lang "common.copy"}}</button></div>
+    <p>{{t .Lang "help.mcp.aliases"}}</p>
+    <ul>
+      <li><code class="break-all">{{.MCPHelp.APIAlias}}</code></li>
+      <li><code class="break-all">{{.MCPHelp.RootAlias}}</code></li>
+    </ul>
+  </section>
+
+  <section class="section-card" id="authentication" aria-labelledby="mcp-authentication">
+    <h2 id="mcp-authentication">{{t .Lang "help.mcp.authentication_title"}}</h2>
+    <p>{{t .Lang "help.mcp.authentication"}}</p>
+    <p><a href="{{path .BaseURL "/server/preferences/tokens"}}">{{t .Lang "help.mcp.manage_tokens"}}</a></p>
+  </section>
+
+  <section class="section-card" id="connect" aria-labelledby="mcp-connect">
+    <h2 id="mcp-connect">{{t .Lang "help.mcp.connect_title"}}</h2>
+    <h3>{{t .Lang "help.mcp.claude_code"}}</h3>
+    <div class="code-block"><pre><code>claude mcp add --transport http {{.SiteTitle}} {{.MCPHelp.Endpoint}} --header "Authorization: Bearer $MCP_TOKEN"</code></pre></div>
+    <h3>{{t .Lang "help.mcp.generic_client"}}</h3>
+    <div class="code-block"><pre><code>{
+  "mcpServers": {
+    "{{.SiteTitle}}": {
+      "type": "http",
+      "url": "{{.MCPHelp.Endpoint}}",
+      "headers": { "Authorization": "Bearer ${MCP_TOKEN}" }
+    }
+  }
+}</code></pre></div>
+    <h3>{{t .Lang "help.mcp.verify_connection"}}</h3>
+    <div class="code-block"><pre><code>curl -X POST '{{.MCPHelp.Endpoint}}' \
+  -H 'Authorization: Bearer '"$MCP_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/list' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}'</code></pre></div>
+  </section>
+
+  <section class="section-card" id="tools" aria-labelledby="mcp-tools">
+    <h2 id="mcp-tools">{{t .Lang "help.mcp.tools_title"}}</h2>
+    <p>{{t .Lang "help.mcp.tools_note"}}</p>
+    {{if .MCPHelp.Tools}}
+    <div class="table-wrapper">
+      <table class="data-table">
+        <caption>{{t .Lang "help.mcp.tools_caption"}}</caption>
+        <thead><tr><th scope="col">{{t .Lang "help.mcp.tool_name"}}</th><th scope="col">{{t .Lang "help.mcp.tool_description"}}</th></tr></thead>
+        <tbody>{{range .MCPHelp.Tools}}<tr><td><code>{{.Name}}</code></td><td>{{.Description}}</td></tr>{{end}}</tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="empty-state">{{t .Lang "help.mcp.no_tools"}}</p>
+    {{end}}
+  </section>
+
+  <section class="section-card" id="limits" aria-labelledby="mcp-limits">
+    <h2 id="mcp-limits">{{t .Lang "help.mcp.limits_title"}}</h2>
+    <p>{{t .Lang "help.mcp.limits"}}</p>
+  </section>
+
+  <section class="section-card" id="troubleshooting" aria-labelledby="mcp-troubleshooting">
+    <h2 id="mcp-troubleshooting">{{t .Lang "help.mcp.troubleshooting_title"}}</h2>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <caption>{{t .Lang "help.mcp.troubleshooting_caption"}}</caption>
+        <thead><tr><th scope="col">{{t .Lang "help.mcp.status"}}</th><th scope="col">{{t .Lang "help.mcp.cause"}}</th><th scope="col">{{t .Lang "help.mcp.fix"}}</th></tr></thead>
+        <tbody>
+          <tr><td>400</td><td>{{t .Lang "help.mcp.error_400"}}</td><td>{{t .Lang "help.mcp.fix_400"}}</td></tr>
+          <tr><td>401</td><td>{{t .Lang "help.mcp.error_401"}}</td><td>{{t .Lang "help.mcp.fix_401"}}</td></tr>
+          <tr><td>403</td><td>{{t .Lang "help.mcp.error_403"}}</td><td>{{t .Lang "help.mcp.fix_403"}}</td></tr>
+          <tr><td>405</td><td>{{t .Lang "help.mcp.error_405"}}</td><td>{{t .Lang "help.mcp.fix_405"}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section-card" id="project" aria-labelledby="mcp-project">
+    <h2 id="mcp-project">{{t .Lang "help.mcp.project_title"}}</h2>
+    <div class="markdown-content">{{.MCPHelp.ProjectContent}}</div>
+  </section>
+</article>
+{{end}}

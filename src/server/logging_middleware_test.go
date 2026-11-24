@@ -65,7 +65,7 @@ func TestResponseWriter_Write_AccumulatesSize(t *testing.T) {
 // 200, matching net/http's own implicit-200 behavior.
 func TestLoggingMiddleware_DefaultStatus200(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 
 	handler := loggingMiddleware(next)
@@ -84,7 +84,7 @@ func TestLoggingMiddleware_DefaultStatus200(t *testing.T) {
 func TestLoggingMiddleware_ExplicitStatus(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte("created"))
+		_, _ = w.Write([]byte("created"))
 	})
 
 	handler := loggingMiddleware(next)

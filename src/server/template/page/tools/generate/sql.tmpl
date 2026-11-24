@@ -4,37 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/generate">Generators</a> / SQL Schema
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/generate"}}">{{t .Lang "categories.generate.name"}}</a> {{t .Lang "tool_pages.text.sql.schema.975ed5eceb"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">SQL Schema</h1>
-        <button class="btn btn-icon" data-favorite="generate-sql" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.sql.schema.0d878832ad"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="generate-sql" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Generate a CREATE TABLE statement from a table name and column
-        definitions.
+        {{t .Lang "tool_pages.text.generate.a.create.table.statement.from.a.tab.7fa243c66a"}}
       </p>
 
-      <form id="sql-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/generate/sql">
+      <form id="sql-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/generate/sql" method="post" action="{{path .BaseURL "/generate/sql"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Request Body (JSON)</label>
-          <textarea name="body" class="form-input" rows="10" required placeholder='{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true},{"name":"email","type":"string","unique":true}]}'></textarea>
+          <label class="form-label" for="sql-form-body">{{t .Lang "tool_pages.text.request.body.json.54374517b4"}}</label>
+          <textarea name="body" class="form-input" rows="10" required placeholder='{{t .Lang "tool_pages.text.table.users.columns.name.id.type.integer.pri.1163544f06"}}' id="sql-form-body"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Generate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "common.generate"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="sql-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/generate/sql -d '{"table":"users","columns":[{"name":"id","type":"integer","primary_key":true}]}'</pre>

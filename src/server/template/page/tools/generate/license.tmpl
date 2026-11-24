@@ -4,52 +4,61 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/generate">Generators</a> / License File
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/generate"}}">{{t .Lang "categories.generate.name"}}</a> {{t .Lang "tool_pages.text.license.file.29bbc83d3b"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">License File</h1>
-        <button class="btn btn-icon" data-favorite="generate-license" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.license.file.c1c046a538"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="generate-license" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Generate canonical license text, optionally substituting your name and year.
+        {{t .Lang "tool_pages.text.generate.canonical.license.text.optionally.s.faaad99f58"}}
       </p>
 
-      <form id="license-form" class="tool-form" data-template="{{.APIBasePath}}/generate/license?type={type}&author={author}&year={year}">
+      <form id="license-form" class="tool-form" data-template="{{.APIBasePath}}/generate/license?type={type}&author={author}&year={year}" method="post" action="{{path .BaseURL "/generate/license"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">License Type</label>
-          <select name="type" class="form-input">
+          <label class="form-label" for="license-form-type">{{t .Lang "tool_pages.text.license.type.c172eeba98"}}</label>
+          <select name="type" class="form-input" id="license-form-type">
             <option value="mit">MIT</option>
-            <option value="apache-2.0">Apache-2.0</option>
+            <option value="apache-2.0">{{t .Lang "tool_pages.text.apache.2.0.2af71558e4"}}</option>
             <option value="gpl-3.0">GPL-3.0</option>
-            <option value="bsd-3-clause">BSD-3-Clause</option>
+            <option value="bsd-3-clause">{{t .Lang "tool_pages.text.bsd.3.clause.118dbcd2d5"}}</option>
             <option value="isc">ISC</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Author</label>
-          <input type="text" name="author" class="form-input" placeholder="Jane Doe">
+          <label class="form-label" for="license-form-author">{{t .Lang "tool_pages.text.author.d95082a2ee"}}</label>
+          <input type="text" name="author" class="form-input" placeholder="{{t .Lang "tool_pages.text.jane.doe.01332c8765"}}" id="license-form-author">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Year</label>
-          <input type="text" name="year" class="form-input" placeholder="2026">
+          <label class="form-label" for="license-form-year">{{t .Lang "tool_pages.text.year.89f6832560"}}</label>
+          <input type="text" name="year" class="form-input" placeholder="2026" id="license-form-year">
         </div>
 
-        <button type="submit" class="btn btn-primary">Generate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "common.generate"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="license-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/license?type=mit&author=Jane+Doe&year=2026"</pre>

@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🌐 Network Tools</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.network.tools.7211732443"}}</h1>
     <p class="hero-subtitle">
-      IP lookup, DNS, WHOIS, SSL, and URL analysis
+      {{t .Lang "page_text.text.ip.lookup.dns.whois.ssl.and.url.analysis.c23846a69a"}}
     </p>
   </div>
 </section>
@@ -11,70 +11,70 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/network/ip" class="category-card">
+      <a href="{{path .BaseURL "/network/ip"}}" class="category-card">
         <div class="category-icon">🌍</div>
-        <h3 class="category-title">IP Lookup</h3>
-        <p class="category-description">Get IP address information</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ip.lookup.3c0048d7a7"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.get.ip.address.information.3a57d21c41"}}</p>
       </a>
       
-      <a href="/network/dns" class="category-card">
+      <a href="{{path .BaseURL "/network/dns"}}" class="category-card">
         <div class="category-icon">🔍</div>
-        <h3 class="category-title">DNS Lookup</h3>
-        <p class="category-description">Query DNS records (A, AAAA, MX, TXT, etc.)</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.dns.lookup.e2cae60a16"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.query.dns.records.a.aaaa.mx.txt.etc.6402918230"}}</p>
       </a>
       
-      <a href="/network/whois" class="category-card">
+      <a href="{{path .BaseURL "/network/whois"}}" class="category-card">
         <div class="category-icon">📋</div>
-        <h3 class="category-title">WHOIS Lookup</h3>
-        <p class="category-description">Domain and IP WHOIS information</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.whois.lookup.8e4cb02877"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.domain.and.ip.whois.information.e8f02bc897"}}</p>
       </a>
       
-      <a href="/network/ssl" class="category-card">
+      <a href="{{path .BaseURL "/network/ssl"}}" class="category-card">
         <div class="category-icon">🔒</div>
-        <h3 class="category-title">SSL Certificate Info</h3>
-        <p class="category-description">Check SSL certificate details</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ssl.certificate.info.ee96daa24b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.check.ssl.certificate.details.3cc25b1c73"}}</p>
       </a>
       
-      <a href="/network/port" class="category-card">
+      <a href="{{path .BaseURL "/network/port"}}" class="category-card">
         <div class="category-icon">🚪</div>
-        <h3 class="category-title">Port Checker</h3>
-        <p class="category-description">Check if a port is open</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.port.checker.15fb74dca5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.check.if.a.port.is.open.282cf6583b"}}</p>
       </a>
       
-      <a href="/network/headers" class="category-card">
+      <a href="{{path .BaseURL "/network/headers"}}" class="category-card">
         <div class="category-icon">📨</div>
-        <h3 class="category-title">HTTP Headers</h3>
-        <p class="category-description">View HTTP request headers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.http.headers.bc2adeb0d6"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.view.http.request.headers.4f5b667720"}}</p>
       </a>
       
-      <a href="/network/user-agent" class="category-card">
+      <a href="{{path .BaseURL "/network/user-agent"}}" class="category-card">
         <div class="category-icon">🖥️</div>
-        <h3 class="category-title">User Agent Parser</h3>
-        <p class="category-description">Parse user agent strings</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.user.agent.parser.37b0d46988"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.user.agent.strings.a7f4a24334"}}</p>
       </a>
       
-      <a href="/network/url" class="category-card">
+      <a href="{{path .BaseURL "/network/url"}}" class="category-card">
         <div class="category-icon">🔗</div>
-        <h3 class="category-title">URL Parser</h3>
-        <p class="category-description">Parse and analyze URLs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.url.parser.19de4515e8"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.parse.and.analyze.urls.be2ccbcc9a"}}</p>
       </a>
       
-      <a href="/network/subnet" class="category-card">
+      <a href="{{path .BaseURL "/network/subnet"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">Subnet Calculator</h3>
-        <p class="category-description">Calculate subnet ranges</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.subnet.calculator.7f1973078b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.subnet.ranges.1bd13d8cfe"}}</p>
       </a>
       
-      <a href="/network/mac" class="category-card">
+      <a href="{{path .BaseURL "/network/mac"}}" class="category-card">
         <div class="category-icon">🏷️</div>
-        <h3 class="category-title">MAC Lookup</h3>
-        <p class="category-description">MAC address vendor lookup</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.mac.lookup.2a6d95c3a0"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.mac.address.vendor.lookup.15c9d47922"}}</p>
       </a>
       
-      <a href="/network/ping" class="category-card">
+      <a href="{{path .BaseURL "/network/ping"}}" class="category-card">
         <div class="category-icon">📡</div>
-        <h3 class="category-title">Ping Tool</h3>
-        <p class="category-description">Test network connectivity</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ping.tool.36671c5825"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.test.network.connectivity.fbfc40d818"}}</p>
       </a>
     </div>
   </div>

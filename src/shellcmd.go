@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/apimgr/api/src/common/i18n"
+	appmode "github.com/apimgr/api/src/mode"
 )
 
 // serverFlags lists every top-level flag this binary accepts, used as
@@ -12,7 +15,7 @@ import (
 var serverFlags = []string{
 	"--help", "--version", "--status",
 	"--mode", "--config", "--data", "--log", "--cache", "--backup", "--pid",
-	"--address", "--port", "--baseurl", "--daemon", "--debug",
+	"--address", "--port", "--baseurl", "--i2p", "--daemon", "--debug",
 	"--color", "--lang", "--shell",
 	"--service", "--maintenance", "--update",
 }
@@ -67,16 +70,7 @@ func normalizeShell(shell string) string {
 }
 
 func printShellHelp(binaryName string) {
-	fmt.Printf(`%s shell integration
-
-Usage:
-  %s --shell completions [SHELL]   Print a completion script to stdout
-  %s --shell init [SHELL]          Print the line to add to your shell rc file
-  %s --shell help                  Show this help
-
-Supported SHELL values: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
-If SHELL is omitted, it is detected from $SHELL.
-`, binaryName, binaryName, binaryName, binaryName)
+	fmt.Printf("%s", i18n.TranslateFormat(appmode.GetLang(), "cli.shell_help", map[string]string{"binary_name": binaryName}))
 }
 
 func printShellInitSnippet(binaryName, shell string) error {

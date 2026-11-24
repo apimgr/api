@@ -22,7 +22,7 @@ env:
 
 jobs:
   build-standard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: github.event_name != 'schedule'
     permissions:
       contents: read
@@ -100,10 +100,13 @@ jobs:
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.schema-version=${{ env.VERSION }}
             org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.vcs-type=Git
             org.opencontainers.image.licenses=MIT
+            com.github.containers.toolbox=false
           annotations: |
             manifest:org.opencontainers.image.vendor=apimgr
             manifest:org.opencontainers.image.authors=apimgr
@@ -113,14 +116,24 @@ jobs:
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.schema-version=${{ env.VERSION }}
             manifest:org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.vcs-type=Git
+            manifest:com.github.containers.toolbox=false
+
+      - name: Check standard image runtime contract
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}
+        run: |
+          docker pull "$IMAGE"
+          ./tests/check_image.sh "$IMAGE"
 
   build-devel:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-26.04
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     permissions:
       contents: read
       packages: write
@@ -144,6 +157,7 @@ jobs:
       - name: Set build info
         run: |
           echo "COMMIT_ID=$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
+          echo "VERSION=devel" >> $GITHUB_ENV
           BUILD_EPOCH=$(date -u +%s)
           echo "BUILD_EPOCH=${BUILD_EPOCH}" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date -u -d @${BUILD_EPOCH} +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
@@ -158,6 +172,7 @@ jobs:
           provenance: false
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel
           build-args: |
+            VERSION=${{ env.VERSION }}
             BUILD_DATE=${{ env.BUILD_DATE }}
             BUILD_EPOCH=${{ env.BUILD_EPOCH }}
             COMMIT_ID=${{ env.COMMIT_ID }}
@@ -167,21 +182,36 @@ jobs:
             org.opencontainers.image.title=${{ env.PROJECT_NAME }}
             org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             org.opencontainers.image.description=${{ env.PROJECT_NAME }} - development image (alpine, debug mode)
+            org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.schema-version=${{ env.VERSION }}
             org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.vcs-type=Git
             org.opencontainers.image.licenses=MIT
+            com.github.containers.toolbox=false
           annotations: |
             manifest:org.opencontainers.image.vendor=apimgr
             manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
             manifest:org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             manifest:org.opencontainers.image.description=${{ env.PROJECT_NAME }} - development image (alpine, debug mode)
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.schema-version=${{ env.VERSION }}
             manifest:org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.vcs-type=Git
+            manifest:com.github.containers.toolbox=false
+
+      - name: Check development image runtime contract
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel
+        run: |
+          docker pull "$IMAGE"
+          ./tests/check_image.sh "$IMAGE"

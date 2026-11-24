@@ -4,31 +4,40 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/network">Network</a> / Random Port
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/network"}}">{{t .Lang "tool_pages.text.network.1744b96470"}}</a> {{t .Lang "tool_pages.text.random.port.b1de7b374f"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Random Port</h1>
-        <button class="btn btn-icon" data-favorite="network-port" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.random.port.ea0123f898"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="network-port" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Suggest a random unprivileged TCP/UDP port for local development use.
+        {{t .Lang "tool_pages.text.suggest.a.random.unprivileged.tcp.udp.port.f.5b0d4449b3"}}
       </p>
 
-      <form id="port-form" class="tool-form" data-template="{{.APIBasePath}}/network/port">
-        <button type="submit" class="btn btn-primary">Generate</button>
+      <form id="port-form" class="tool-form" data-template="{{.APIBasePath}}/network/port" method="post" action="{{path .BaseURL "/network/port"}}">
+        {{csrfField .CSRFToken}}
+        <button type="submit" class="btn btn-primary">{{t .Lang "common.generate"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="port-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/network/port</pre>

@@ -22,7 +22,7 @@ import (
 // It drives backup.Manager so the archive format, manifest, SHA-256 checksum,
 // post-creation verification, retention sweep and audit events are identical
 // to the scheduled run.
-func handleBackup(name string, binaryName string) {
+func handleBackup(name string, binaryName string, includeSSL, includeData bool) {
 	cfg, err := config.Load()
 	if err != nil {
 		cprintf("❌ Failed to load configuration: %v\n", err)
@@ -33,7 +33,7 @@ func handleBackup(name string, binaryName string) {
 		cprintf("❌ Failed to initialize database: %v\n", err)
 		os.Exit(exUnavailable)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	password, err := resolveBackupPassword(cfg, "Enter backup password: ")
 	if err != nil {
@@ -41,7 +41,7 @@ func handleBackup(name string, binaryName string) {
 		os.Exit(1)
 	}
 
-	manager, err := cliBackupManager(cfg, password)
+	manager, err := cliBackupManager(cfg, password, includeSSL, includeData)
 	if err != nil {
 		cprintf("❌ %v\n", err)
 		os.Exit(1)
@@ -87,7 +87,7 @@ func handleRestore(restorePath string, binaryName string) {
 		cprintf("❌ Failed to initialize database: %v\n", err)
 		os.Exit(exUnavailable)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	caller, err := restoreCaller(cfg, restorePath, firstRun)
 	if err != nil {
@@ -104,7 +104,7 @@ func handleRestore(restorePath string, binaryName string) {
 		}
 	}
 
-	manager, err := cliBackupManager(cfg, password)
+	manager, err := cliBackupManager(cfg, password, false, false)
 	if err != nil {
 		cprintf("❌ %v\n", err)
 		os.Exit(1)
@@ -129,6 +129,89 @@ func handleRestore(restorePath string, binaryName string) {
 
 	cprintln("✅ Restore completed")
 	cprintln("   Restart the service to apply changes")
+}
+
+// handleBackupTest verifies an archive without touching live database or
+// configuration data, including the backed-up security PGP keypair.
+func handleBackupTest(args []string, binaryName string) {
+	if len(args) > 1 {
+		cprintf("❌ Usage: %s --maintenance backup test [file]\n", binaryName)
+		os.Exit(exUsage)
+	}
+	backupDir := paths.BackupDir()
+	files, err := backup.ListBackups(backupDir)
+	if err != nil {
+		cprintf("❌ Failed to list backups: %v\n", err)
+		os.Exit(exUnavailable)
+	}
+	password := ""
+	if len(args) == 1 {
+		if backup.IsEncryptedName(args[0]) {
+			password, err = promptPassword("Enter backup password: ")
+			if err != nil {
+				cprintf("❌ %v\n", err)
+				os.Exit(exUsage)
+			}
+		}
+		if err := verifyBackupWithBase(args[0], files, password); err != nil {
+			cprintf("❌ Backup test failed: %v\n", err)
+			os.Exit(1)
+		}
+		cprintln("✅ Backup verified: archive integrity, checksum, database, and PGP keypair (when present)")
+		return
+	}
+	if len(files) == 0 {
+		cprintln("❌ No backup archives were found")
+		os.Exit(exUnavailable)
+	}
+	for _, file := range files {
+		if file.Encrypted {
+			password, err = promptPassword("Enter backup password: ")
+			if err != nil {
+				cprintf("❌ %v\n", err)
+				os.Exit(exUsage)
+			}
+			break
+		}
+	}
+	var newest backup.File
+	var newestManifest *backup.Manifest
+	for _, candidate := range files {
+		manifest, verifyErr := backup.Verify(candidate.Path, password)
+		if verifyErr != nil {
+			cprintf("❌ Cannot select newest backup; %s failed verification: %v\n", candidate.Name, verifyErr)
+			os.Exit(1)
+		}
+		if newestManifest == nil || manifest.CreatedAt.After(newestManifest.CreatedAt) {
+			newest = candidate
+			newestManifest = manifest
+		}
+	}
+	if err := verifyBackupWithBase(newest.Path, files, password); err != nil {
+		cprintf("❌ Backup test failed for %s: %v\n", newest.Name, err)
+		os.Exit(1)
+	}
+	cprintf("✅ Newest backup verified (%s, snapshot %s): archive integrity, checksum, database, and PGP keypair (when present)\n",
+		newest.Name, newestManifest.CreatedAt.UTC().Format(time.RFC3339))
+}
+
+func verifyBackupWithBase(path string, files []backup.File, password string) error {
+	manifest, err := backup.Verify(path, password)
+	if err != nil {
+		return err
+	}
+	if manifest.BaseBackup == "" {
+		return nil
+	}
+	for _, candidate := range files {
+		if candidate.Name == manifest.BaseBackup {
+			if _, err := backup.Verify(candidate.Path, password); err != nil {
+				return fmt.Errorf("incremental base %s failed verification: %w", candidate.Name, err)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("incremental base %s is missing from the backup directory", manifest.BaseBackup)
 }
 
 // restoreCaller assembles the identity evidence PART 21's authorization matrix
@@ -190,16 +273,20 @@ func confirmRestore(restorePath string) bool {
 // cliBackupManager builds the Manager the maintenance commands drive. The
 // backup directory is resolved once here and cached by the Manager, matching
 // the scheduler's wiring so both paths write and prune the same directory.
-func cliBackupManager(cfg *config.Config, password string) (*backup.Manager, error) {
-	sources := []string{
-		filepath.Join(paths.DataDir(), "db"),
-		filepath.Join(paths.ConfigDir(), "server.yml"),
+func cliBackupManager(cfg *config.Config, password string, includeSSL, includeData bool) (*backup.Manager, error) {
+	sources, supplementalSources, err := backup.SourcesWithConfig(cfg, paths.ConfigDir(), paths.DataDir(), includeSSL, includeData)
+	if err != nil {
+		return nil, fmt.Errorf("resolve backup sources: %w", err)
 	}
-	for _, optional := range []string{"template", "theme"} {
-		path := filepath.Join(paths.ConfigDir(), optional)
-		if _, err := os.Stat(path); err == nil {
-			sources = append(sources, path)
-		}
+	var sqliteSourcePath string
+	var snapshotSQLite func(context.Context, string) error
+	if strings.EqualFold(cfg.Server.Database.Driver, "sqlite") || strings.EqualFold(cfg.Server.Database.Driver, "sqlite3") || strings.EqualFold(cfg.Server.Database.Driver, "sqlite2") {
+		sqliteSourcePath = filepath.Join(paths.GetDatabaseDir(paths.DataDir()), "server.db")
+		snapshotSQLite = database.SnapshotServerSQLite
+	}
+	restoreLimits, err := backupRestoreLimits(cfg.Server.Restore)
+	if err != nil {
+		return nil, fmt.Errorf("invalid server.restore configuration: %w", err)
 	}
 
 	backupDir := paths.BackupDir()
@@ -208,13 +295,40 @@ func cliBackupManager(cfg *config.Config, password string) (*backup.Manager, err
 	}
 
 	return backup.NewManager(backup.Options{
-		Dir:               backupDir,
-		Sources:           sources,
-		Password:          password,
-		Retention:         cfg.Server.Backup.Retention,
-		ComplianceEnabled: cfg.Server.Compliance.Enabled,
-		AppVersion:        Version,
-		Audit:             cliBackupAudit(),
+		Dir:                 backupDir,
+		Sources:             sources,
+		SupplementalSources: supplementalSources,
+		SQLiteSourcePath:    sqliteSourcePath,
+		SnapshotSQLite:      snapshotSQLite,
+		RestoreRoots:        backup.RestoreRoots(paths.ConfigDir(), paths.DataDir(), includeSSL, includeData),
+		Password:            password,
+		Retention:           cfg.Server.Backup.Retention,
+		RestoreLimits:       restoreLimits,
+		ComplianceEnabled:   cfg.Server.Compliance.Enabled,
+		AppVersion:          Version,
+		Audit:               cliBackupAudit(),
+	}), nil
+}
+
+func backupRestoreLimits(cfg config.RestoreConfig) (backup.RestoreLimits, error) {
+	maxArchiveSize, err := config.ParseByteSize(cfg.MaxArchiveSize)
+	if err != nil {
+		return backup.RestoreLimits{}, err
+	}
+	maxExpandedSize, err := config.ParseByteSize(cfg.MaxExpandedSize)
+	if err != nil {
+		return backup.RestoreLimits{}, err
+	}
+	maxFileSize, err := config.ParseByteSize(cfg.MaxFileSize)
+	if err != nil {
+		return backup.RestoreLimits{}, err
+	}
+	return backup.NormalizeRestoreLimits(backup.RestoreLimits{
+		MaxArchiveSize:  maxArchiveSize,
+		MaxExpandedSize: maxExpandedSize,
+		MaxFiles:        cfg.MaxFiles,
+		MaxFileSize:     maxFileSize,
+		MaxRatio:        cfg.MaxRatio,
 	}), nil
 }
 

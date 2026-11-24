@@ -1,0 +1,20 @@
+{{define "content"}}
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{t .Lang "security.status_title"}}</h1>
+    <p class="page-lead">{{t .Lang "security.status_description"}}</p>
+  </header>
+  <section class="section-card" aria-labelledby="security-status">
+    <h2 id="security-status">{{t .Lang "security.status_heading"}}</h2>
+    <dl>
+      <dt>{{t .Lang "security.tracking_id"}}</dt><dd>{{.TrackingID}}</dd>
+      <dt>{{t .Lang "security.status_label"}}</dt><dd>{{t .Lang (printf "security.status.%s" .Status)}}</dd>
+      <dt>{{t .Lang "security.severity"}}</dt><dd>{{t .Lang (printf "security.severity.%s" .Severity)}}</dd>
+      <dt>{{t .Lang "security.created"}}</dt><dd>{{.Created}}</dd>
+      <dt>{{t .Lang "security.updated"}}</dt><dd>{{.Updated}}</dd>
+      {{if .Disclosure}}<dt>{{t .Lang "security.disclosure_date"}}</dt><dd>{{.Disclosure}}</dd>{{end}}
+      {{if .Comment}}<dt>{{t .Lang "security.researcher_comment"}}</dt><dd>{{.Comment}}</dd>{{end}}
+    </dl>
+  </section>
+</article>
+{{end}}

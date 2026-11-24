@@ -5,13 +5,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/acme/autocert"
 
@@ -20,28 +23,29 @@ import (
 
 // Config holds SSL/TLS configuration
 type Config struct {
-	Enabled     bool
-	CertPath    string
-	LetsEncrypt LetsEncryptConfig
+	Enabled                bool
+	CertPath               string
+	LetsEncrypt            LetsEncryptConfig
+	OnDNSCertificateIssued func(time.Time)
 }
 
 // LetsEncryptConfig holds Let's Encrypt settings
 type LetsEncryptConfig struct {
-	Enabled         bool
-	Email           string
-	Challenge       string // http-01, tls-alpn-01, dns-01
-	DNSProviderType string
-	DNSProviderKey  string
-	RFC2136Server   string
-	RFC2136Name     string
-	RFC2136Algo     string
+	Enabled        bool
+	Email          string
+	Challenge      string // http-01, tls-alpn-01, dns-01
+	DNSProvider    string
+	DNSCredentials map[string]string
 }
 
 // Manager handles SSL/TLS certificates
 type Manager struct {
 	config      Config
 	certManager *autocert.Manager
+	domains     []string
+	managesACME bool
 	mu          sync.RWMutex
+	dnsMu       sync.Mutex
 }
 
 // NewManager creates a new SSL manager
@@ -55,17 +59,34 @@ func NewManager(cfg Config) *Manager {
 func (m *Manager) GetTLSConfig(domains []string) (*tls.Config, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.domains = append(m.domains[:0], domains...)
+	m.managesACME = false
 
 	if !m.config.Enabled {
 		return nil, nil
+	}
+	if m.config.LetsEncrypt.Enabled && ParseChallenge(m.config.LetsEncrypt.Challenge) == "dns-01" {
+		if cert, key := m.findSystemCerts(domains); cert != "" && key != "" {
+			if err := ValidateDNSProvider(m.config.LetsEncrypt.DNSProvider, m.config.LetsEncrypt.DNSCredentials); err != nil {
+				log.Printf("SSL: [ERROR] DNS provider validation failed: %v", err)
+				return nil, err
+			}
+			tlsCert, err := loadValidatedCertificate(cert, key, domains)
+			if err != nil {
+				return nil, err
+			}
+			return &tls.Config{Certificates: []tls.Certificate{tlsCert}, MinVersion: tls.VersionTLS12}, nil
+		}
+		m.managesACME = true
+		return m.getLetsEncryptTLSConfig(domains)
 	}
 
 	// Check for existing certificates first (e.g., from /etc/letsencrypt/live)
 	if cert, key := m.findExistingCerts(domains); cert != "" && key != "" {
 		log.Printf("Using existing certificate: %s", cert)
-		tlsCert, err := tls.LoadX509KeyPair(cert, key)
+		tlsCert, err := loadValidatedCertificate(cert, key, domains)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load certificate: %w", err)
+			return nil, err
 		}
 		return &tls.Config{
 			Certificates: []tls.Certificate{tlsCert},
@@ -75,15 +96,16 @@ func (m *Manager) GetTLSConfig(domains []string) (*tls.Config, error) {
 
 	// Use Let's Encrypt if enabled
 	if m.config.LetsEncrypt.Enabled {
+		m.managesACME = true
 		return m.getLetsEncryptTLSConfig(domains)
 	}
 
 	// Check for manual certificates
 	if cert, key := m.findManualCerts(domains); cert != "" && key != "" {
 		log.Printf("Using manual certificate: %s", cert)
-		tlsCert, err := tls.LoadX509KeyPair(cert, key)
+		tlsCert, err := loadValidatedCertificate(cert, key, domains)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load certificate: %w", err)
+			return nil, err
 		}
 		return &tls.Config{
 			Certificates: []tls.Certificate{tlsCert},
@@ -96,15 +118,76 @@ func (m *Manager) GetTLSConfig(domains []string) (*tls.Config, error) {
 	return m.getSelfSignedTLSConfig(domains)
 }
 
-// getLetsEncryptTLSConfig configures autocert for Let's Encrypt. autocert
-// only supports the HTTP-01 and TLS-ALPN-01 challenge types - DNS-01 is not
-// achievable through it (see PerformDNS01Challenge / AI.md PART 15 DNS-01
-// Provider Configuration, which requires a lego-based client and per-provider
-// credentials; tracked as a follow-up, not implemented here).
+func loadValidatedCertificate(certPath, keyPath string, domains []string) (tls.Certificate, error) {
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to load certificate: %w", err)
+	}
+	if len(cert.Certificate) == 0 {
+		return tls.Certificate{}, fmt.Errorf("certificate %s contains no leaf certificate", certPath)
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to parse certificate %s: %w", certPath, err)
+	}
+	if err := validateCertificate(leaf, domains, time.Now()); err != nil {
+		return tls.Certificate{}, fmt.Errorf("certificate %s is invalid: %w", certPath, err)
+	}
+	cert.Leaf = leaf
+	return cert, nil
+}
+
+func validateCertificate(cert *x509.Certificate, domains []string, now time.Time) error {
+	if cert == nil {
+		return fmt.Errorf("certificate is empty")
+	}
+	if now.Before(cert.NotBefore) {
+		return fmt.Errorf("certificate is not valid yet")
+	}
+	if !now.Before(cert.NotAfter) {
+		return fmt.Errorf("certificate has expired")
+	}
+	if len(domains) == 0 {
+		return fmt.Errorf("no configured domain to validate")
+	}
+
+	for _, domain := range domains {
+		domain = strings.TrimSpace(domain)
+		if domain == "" {
+			continue
+		}
+		if cert.VerifyHostname(domain) == nil || certificateCommonNameMatches(cert, domain) {
+			return nil
+		}
+	}
+	return fmt.Errorf("certificate common name or subject alternative name does not match configured domain")
+}
+
+func certificateCommonNameMatches(cert *x509.Certificate, domain string) bool {
+	commonName := strings.TrimSpace(cert.Subject.CommonName)
+	if commonName == "" {
+		return false
+	}
+	if ip := net.ParseIP(domain); ip != nil {
+		commonNameIP := net.ParseIP(commonName)
+		return commonNameIP != nil && commonNameIP.Equal(ip)
+	}
+	// VerifyHostname implements the same wildcard and case rules for a CN
+	// fallback while keeping SAN matching on the original certificate.
+	commonNameCert := *cert
+	commonNameCert.DNSNames = []string{commonName}
+	commonNameCert.IPAddresses = nil
+	return commonNameCert.VerifyHostname(domain) == nil
+}
+
+// getLetsEncryptTLSConfig configures the selected ACME challenge solver.
 func (m *Manager) getLetsEncryptTLSConfig(domains []string) (*tls.Config, error) {
 	if ParseChallenge(m.config.LetsEncrypt.Challenge) == "dns-01" {
-		log.Printf("SSL: dns-01 challenge requested but not supported by the current ACME client; falling back to self-signed for %v", domains)
-		return m.getSelfSignedTLSConfig(domains)
+		if err := ValidateDNSProvider(m.config.LetsEncrypt.DNSProvider, m.config.LetsEncrypt.DNSCredentials); err != nil {
+			log.Printf("SSL: [ERROR] DNS provider validation failed: %v", err)
+			return nil, err
+		}
+		return m.getDNS01TLSConfig(domains)
 	}
 
 	cacheDir := filepath.Join(m.config.CertPath, "autocert")
@@ -115,16 +198,19 @@ func (m *Manager) getLetsEncryptTLSConfig(domains []string) (*tls.Config, error)
 	m.certManager = &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist(domains...),
-		Cache:      renewalCache{Cache: autocert.DirCache(cacheDir)},
-		Email:      m.config.LetsEncrypt.Email,
+		Cache: renewalCache{
+			Cache:    autocert.DirCache(cacheDir),
+			CertPath: m.config.CertPath,
+		},
+		Email:       m.config.LetsEncrypt.Email,
+		RenewBefore: 7 * 24 * time.Hour,
 	}
 
 	tlsConfig := m.certManager.TLSConfig()
 	acmeGetCertificate := tlsConfig.GetCertificate
 
-	// Wrap autocert's issuance so that a failed/unreachable ACME request
-	// falls back to a self-signed certificate instead of failing the TLS
-	// handshake outright, per AI.md PART 15's no-self-signed-fallback gap.
+	// Preserve the existing HTTP-01/TLS-ALPN behavior when autocert cannot
+	// complete issuance.
 	tlsConfig.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		cert, err := acmeGetCertificate(hello)
 		if err == nil {
@@ -157,6 +243,29 @@ func (m *Manager) getLetsEncryptTLSConfig(domains []string) (*tls.Config, error)
 // live, which makes Put the only reliable hook.
 type renewalCache struct {
 	autocert.Cache
+	CertPath string
+}
+
+func (c renewalCache) Get(ctx context.Context, key string) ([]byte, error) {
+	data, err := c.Cache.Get(ctx, key)
+	if err == nil {
+		if !strings.Contains(key, "+") && safeCertificateDomain.MatchString(key) {
+			if storeErr := c.storeCertificate(key, data); storeErr != nil {
+				log.Printf("SSL: failed to sync app-managed certificate files for %s: %v", key, storeErr)
+			}
+		}
+		return data, nil
+	}
+	if strings.Contains(key, "+") || !safeCertificateDomain.MatchString(key) {
+		return data, err
+	}
+	domain := dnsCertificateDirectoryName(key)
+	cert, certErr := os.ReadFile(filepath.Join(c.CertPath, "letsencrypt", domain, "fullchain.pem"))
+	privateKey, keyErr := os.ReadFile(filepath.Join(c.CertPath, "letsencrypt", domain, "privkey.pem"))
+	if certErr != nil || keyErr != nil {
+		return nil, err
+	}
+	return append(cert, privateKey...), nil
 }
 
 // Put stores the bundle first and only raises the event once the write
@@ -166,9 +275,86 @@ func (c renewalCache) Put(ctx context.Context, key string, data []byte) error {
 	if err := c.Cache.Put(ctx, key, data); err != nil {
 		return err
 	}
+	if !strings.Contains(key, "+") && safeCertificateDomain.MatchString(key) {
+		if err := c.storeCertificate(key, data); err != nil {
+			return err
+		}
+	}
 
 	notifyCertificateRenewed(key, data)
 	return nil
+}
+
+func (c renewalCache) storeCertificate(domain string, data []byte) error {
+	var certificatePEM, privateKeyPEM []byte
+	for rest := data; len(rest) > 0; {
+		block, remaining := pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		rest = remaining
+		encoded := pem.EncodeToMemory(block)
+		if block.Type == "CERTIFICATE" {
+			certificatePEM = append(certificatePEM, encoded...)
+		} else if strings.Contains(block.Type, "PRIVATE KEY") {
+			privateKeyPEM = append(privateKeyPEM, encoded...)
+		}
+	}
+	if len(certificatePEM) == 0 || len(privateKeyPEM) == 0 {
+		return errors.New("ACME certificate bundle is missing its certificate or private key")
+	}
+	directory := filepath.Join(c.CertPath, "letsencrypt", dnsCertificateDirectoryName(domain))
+	if err := atomicPrivateWrite(filepath.Join(directory, "fullchain.pem"), certificatePEM); err != nil {
+		return err
+	}
+	return atomicPrivateWrite(filepath.Join(directory, "privkey.pem"), privateKeyPEM)
+}
+
+// RenewCertificate runs the active autocert manager against its configured
+// domains. The shared manager keeps HTTP-01 challenge state available to the
+// live HTTP handler while the daily scheduler requests renewal.
+func (m *Manager) RenewCertificate() error {
+	m.mu.RLock()
+	manager := m.certManager
+	domains := append([]string(nil), m.domains...)
+	m.mu.RUnlock()
+	if ParseChallenge(m.config.LetsEncrypt.Challenge) == "dns-01" {
+		if len(domains) == 0 {
+			return errors.New("DNS-01 certificate domains are not configured")
+		}
+		return m.RenewDNSCertificate(domains)
+	}
+	if manager == nil {
+		return errors.New("automatic ACME certificate manager is not configured")
+	}
+	for _, domain := range domains {
+		if _, err := manager.GetCertificate(&tls.ClientHelloInfo{ServerName: domain}); err != nil {
+			return fmt.Errorf("renew certificate for %s: %w", domain, err)
+		}
+	}
+	return nil
+}
+
+// ManagedCertificatePath returns the app-managed certificate path for the
+// first domain configured on this manager.
+func (m *Manager) ManagedCertificatePath() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if !m.managesACME || m.config.CertPath == "" || len(m.domains) == 0 {
+		return ""
+	}
+	domain := dnsCertificateDirectoryName(m.domains[0])
+	return filepath.Join(m.config.CertPath, "letsencrypt", domain, "fullchain.pem")
+}
+
+// ManagedDomain returns the first domain configured on this manager.
+func (m *Manager) ManagedDomain() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.domains) == 0 {
+		return ""
+	}
+	return m.domains[0]
 }
 
 // notifyCertificateRenewed logs the ssl_renewed event and hands it to the
@@ -238,30 +424,39 @@ func (m *Manager) GetHTTPHandler(fallback http.Handler) http.Handler {
 	return fallback
 }
 
-// findExistingCerts looks for system-managed certificates the app must never
-// renew itself, per AI.md PART 15's 4-tier priority chain: certbot's
-// /etc/letsencrypt/live (tiers 1-2), then the app-managed
-// {config_dir}/ssl/letsencrypt/{fqdn}/ tier (tier 3, previously issued by
-// this app via autocert and auto-renewed here rather than by certbot).
+// findExistingCerts returns system-managed certbot certificates. App-managed
+// ACME certificates must pass through autocert so its renewal state and live
+// HTTP-01/TLS-ALPN challenge handlers remain active.
 func (m *Manager) findExistingCerts(domains []string) (certPath, keyPath string) {
 	for _, domain := range domains {
-		cert := filepath.Join("/etc/letsencrypt/live", domain, "fullchain.pem")
-		key := filepath.Join("/etc/letsencrypt/live", domain, "privkey.pem")
+		cert := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "fullchain.pem")
+		key := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "privkey.pem")
 		if fileExists(cert) && fileExists(key) {
 			return cert, key
 		}
 	}
 
-	if m.config.CertPath != "" {
+	if m.config.CertPath != "" && !m.config.LetsEncrypt.Enabled {
 		for _, domain := range domains {
-			cert := filepath.Join(m.config.CertPath, "letsencrypt", domain, "fullchain.pem")
-			key := filepath.Join(m.config.CertPath, "letsencrypt", domain, "privkey.pem")
+			cert := filepath.Join(m.config.CertPath, "letsencrypt", dnsCertificateDirectoryName(domain), "fullchain.pem")
+			key := filepath.Join(m.config.CertPath, "letsencrypt", dnsCertificateDirectoryName(domain), "privkey.pem")
 			if fileExists(cert) && fileExists(key) {
 				return cert, key
 			}
 		}
 	}
 
+	return "", ""
+}
+
+func (m *Manager) findSystemCerts(domains []string) (certPath, keyPath string) {
+	for _, domain := range domains {
+		cert := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "fullchain.pem")
+		key := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "privkey.pem")
+		if fileExists(cert) && fileExists(key) {
+			return cert, key
+		}
+	}
 	return "", ""
 }
 
@@ -341,7 +536,7 @@ func (cs *ChallengeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) boo
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(auth))
+	_, _ = w.Write([]byte(auth))
 	return true
 }
 

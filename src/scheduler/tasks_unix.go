@@ -3,21 +3,28 @@
 package scheduler
 
 import (
+	"fmt"
 	"syscall"
-
-	"github.com/apimgr/api/src/paths"
 )
 
-// checkDiskSpace checks disk space (Unix implementation)
-func checkDiskSpace() (percentFree float64, ok bool) {
+// diskSpaceAt reports free space and filesystem identity on Unix.
+func diskSpaceAt(path string) (volume string, percentFree float64, freeBytes, totalBytes uint64, ok bool) {
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs(paths.DataDir(), &stat); err != nil {
-		return 0, false
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return "", 0, 0, 0, false
 	}
-
-	freeBytes := stat.Bfree * uint64(stat.Bsize)
-	totalBytes := stat.Blocks * uint64(stat.Bsize)
+	availableBlocks, totalBlocks, blockSize := int64(stat.Bavail), int64(stat.Blocks), int64(stat.Bsize)
+	if availableBlocks < 0 || totalBlocks <= 0 || blockSize <= 0 {
+		return "", 0, 0, 0, false
+	}
+	available, blocks, size := uint64(availableBlocks), uint64(totalBlocks), uint64(blockSize)
+	maxUint64 := ^uint64(0)
+	if available > maxUint64/size || blocks > maxUint64/size {
+		return "", 0, 0, 0, false
+	}
+	freeBytes = available * size
+	totalBytes = blocks * size
 	percentFree = float64(freeBytes) / float64(totalBytes) * 100
-
-	return percentFree, true
+	volume = fmt.Sprintf("%v", stat.Fsid)
+	return volume, percentFree, freeBytes, totalBytes, true
 }

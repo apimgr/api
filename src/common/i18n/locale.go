@@ -8,8 +8,11 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
+
+	"golang.org/x/text/language"
 )
 
 //go:embed locales/*.json
@@ -46,9 +49,56 @@ type locale struct {
 	plain map[string]interface{}
 }
 
-// supportedLanguages is the fixed, ordered set of languages every binary
-// ships. No partial support is permitted.
-var supportedLanguages = []string{"en", "es", "zh", "fr", "ar", "de", "ja"}
+type languageRegistration struct {
+	code, name, nativeName, direction string
+	pluralCategories                  []string
+	required                          bool
+	tag                               language.Tag
+	dateLayout, timeLayout            string
+}
+
+// languageRegistry is the single source of supported-language metadata.
+// Locale files, runtime negotiation, formatters, and the language selector
+// are checked against these registrations.
+var languageRegistry = []languageRegistration{
+	{code: "en", name: "English", nativeName: "English", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.AmericanEnglish, dateLayout: "01/02/2006", timeLayout: "3:04 PM"},
+	{code: "es", name: "Spanish", nativeName: "Español", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.Spanish, dateLayout: "02/01/2006", timeLayout: "15:04"},
+	{code: "zh", name: "Chinese", nativeName: "中文", direction: "ltr", pluralCategories: []string{"other"}, tag: language.SimplifiedChinese, dateLayout: "2006/01/02", timeLayout: "15:04"},
+	{code: "fr", name: "French", nativeName: "Français", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.French, dateLayout: "02/01/2006", timeLayout: "15:04"},
+	{code: "ar", name: "Arabic", nativeName: "العربية", direction: "rtl", pluralCategories: []string{"zero", "one", "two", "few", "many", "other"}, required: true, tag: language.Arabic, dateLayout: "02/01/2006", timeLayout: "15:04"},
+	{code: "de", name: "German", nativeName: "Deutsch", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.German, dateLayout: "02.01.2006", timeLayout: "15:04"},
+	{code: "it", name: "Italian", nativeName: "Italiano", direction: "ltr", pluralCategories: []string{"one", "many", "other"}, required: true, tag: language.Italian, dateLayout: "02/01/2006", timeLayout: "15:04"},
+	{code: "ja", name: "Japanese", nativeName: "日本語", direction: "ltr", pluralCategories: []string{"other"}, tag: language.Japanese, dateLayout: "2006/01/02", timeLayout: "15:04"},
+}
+
+func registeredLanguage(code string) (languageRegistration, bool) {
+	for _, registration := range languageRegistry {
+		if registration.code == code {
+			return registration, true
+		}
+	}
+	return languageRegistration{}, false
+}
+
+func languageCodes(requiredOnly bool) []string {
+	codes := make([]string, 0, len(languageRegistry))
+	for _, registration := range languageRegistry {
+		if !requiredOnly || registration.required {
+			codes = append(codes, registration.code)
+		}
+	}
+	return codes
+}
+
+// SupportedLanguageCodes returns every locale embedded in each binary, in
+// registry order.
+func SupportedLanguageCodes() []string { return languageCodes(false) }
+
+// RequiredLanguageCodes returns the minimum six languages that operators
+// cannot disable.
+func RequiredLanguageCodes() []string { return languageCodes(true) }
+
+var supportedLanguages = languageCodes(false)
 
 var locales map[string]*locale
 
@@ -62,6 +112,9 @@ func init() {
 // package init time; it is exported so callers (and tests) can force a
 // reload/re-validation deterministically.
 func MustLoad() {
+	if err := validateEmbeddedRegistry(); err != nil {
+		panic(fmt.Sprintf("i18n: embedded locale registry validation failed: %v", err))
+	}
 	loaded := make(map[string]*locale, len(supportedLanguages))
 	for _, lang := range supportedLanguages {
 		l, err := loadLocale(lang)
@@ -74,6 +127,30 @@ func MustLoad() {
 	if err := validateLocales(locales); err != nil {
 		panic(fmt.Sprintf("i18n: locale validation failed: %v", err))
 	}
+}
+
+func validateEmbeddedRegistry() error {
+	entries, err := localeFS.ReadDir("locales")
+	if err != nil {
+		return err
+	}
+	registered := make(map[string]bool, len(supportedLanguages))
+	for _, code := range supportedLanguages {
+		registered[code+".json"] = true
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		if !registered[entry.Name()] {
+			return fmt.Errorf("locale file %q has no registry entry", entry.Name())
+		}
+		delete(registered, entry.Name())
+	}
+	for file := range registered {
+		return fmt.Errorf("registered locale %q has no embedded file", file)
+	}
+	return nil
 }
 
 func loadLocale(lang string) (*locale, error) {
@@ -131,11 +208,21 @@ func flatten(prefix string, value interface{}, dst map[string]string) {
 	}
 }
 
-// IsSupported reports whether lang is one of the seven languages shipped by
-// every binary.
+// IsSupported reports whether lang is registered and shipped by every binary.
 func IsSupported(lang string) bool {
 	_, ok := locales[lang]
 	return ok
+}
+
+// LocaleJSON returns the embedded source JSON for a registered language.
+// The returned bytes are suitable for the browser's dynamic translation
+// loader; unsupported names never become filesystem paths.
+func LocaleJSON(lang string) ([]byte, error) {
+	lang = strings.ToLower(strings.TrimSpace(lang))
+	if !IsSupported(lang) {
+		return nil, fmt.Errorf("unsupported locale %q", lang)
+	}
+	return localeFS.ReadFile("locales/" + lang + ".json")
 }
 
 // resolveLocale returns the locale for lang, falling back to English when
@@ -167,8 +254,20 @@ func NativeName(lang string) string {
 // AvailableLanguages returns every supported language, sorted by code, for
 // rendering a language picker.
 func AvailableLanguages() []LanguageInfo {
+	return AvailableLanguagesFor(supportedLanguages)
+}
+
+// AvailableLanguagesFor returns enabled languages sorted by code.
+func AvailableLanguagesFor(enabled []string) []LanguageInfo {
+	allowed := make(map[string]bool, len(enabled))
+	for _, code := range enabled {
+		allowed[code] = true
+	}
 	out := make([]LanguageInfo, 0, len(supportedLanguages))
-	for _, code := range supportedLanguages {
+	for _, code := range languageCodes(false) {
+		if !allowed[code] {
+			continue
+		}
 		l := locales[code]
 		out = append(out, LanguageInfo{
 			Code:       code,
@@ -193,19 +292,12 @@ func (l *locale) allKeys() []string {
 
 // interpolationVars extracts the set of {token} variable names referenced
 // by a translation string.
+var interpolationVariable = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
 func interpolationVars(s string) map[string]bool {
 	vars := make(map[string]bool)
-	for {
-		start := strings.IndexByte(s, '{')
-		if start == -1 {
-			break
-		}
-		end := strings.IndexByte(s[start:], '}')
-		if end == -1 {
-			break
-		}
-		vars[s[start+1:start+end]] = true
-		s = s[start+end+1:]
+	for _, match := range interpolationVariable.FindAllStringSubmatch(s, -1) {
+		vars[match[1]] = true
 	}
 	return vars
 }

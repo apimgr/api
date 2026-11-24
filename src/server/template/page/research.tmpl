@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">📚 Research Tools</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.research.tools.eac51fb867"}}</h1>
     <p class="hero-subtitle">
-      content extraction, summarization, and citations
+      {{t .Lang "page_text.text.content.extraction.summarization.and.citatio.136dee1d1c"}}
     </p>
   </div>
 </section>
@@ -12,28 +12,28 @@
   <div class="container">
     <div class="category-grid">
       
-      <a href="/research/citation" class="category-card">
+      <a href="{{path .BaseURL "/research/citation"}}" class="category-card">
         <div class="category-icon">📖</div>
-        <h3 class="category-title">Citation Generator</h3>
-        <p class="category-description">APA, MLA, Chicago citations</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.citation.generator.cc3b336d17"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.apa.mla.chicago.citations.7e4a75b565"}}</p>
       </a>
       
-      <a href="/research/doi" class="category-card">
+      <a href="{{path .BaseURL "/research/doi"}}" class="category-card">
         <div class="category-icon">🔗</div>
-        <h3 class="category-title">DOI Resolver</h3>
-        <p class="category-description">Resolve DOI to metadata</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.doi.resolver.1ee25f9d11"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.resolve.doi.to.metadata.e9f2c92008"}}</p>
       </a>
       
-      <a href="/research/arxiv" class="category-card">
+      <a href="{{path .BaseURL "/research/arxiv"}}" class="category-card">
         <div class="category-icon">📄</div>
-        <h3 class="category-title">arXiv Lookup</h3>
-        <p class="category-description">Search arXiv papers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.arxiv.lookup.b88c8bef5e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.search.arxiv.papers.fb1e0289f8"}}</p>
       </a>
       
-      <a href="/research/isbn" class="category-card">
+      <a href="{{path .BaseURL "/research/isbn"}}" class="category-card">
         <div class="category-icon">📕</div>
-        <h3 class="category-title">ISBN Lookup</h3>
-        <p class="category-description">Book information from ISBN</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.isbn.lookup.1a01a9eaa1"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.book.information.from.isbn.9a2d8419dd"}}</p>
       </a>
     </div>
   </div>

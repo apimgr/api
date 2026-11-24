@@ -55,8 +55,8 @@ func newTestManager(t *testing.T, password string, retention config.BackupRetent
 	return manager, recorder, source
 }
 
-// A daily run creates a verified full backup plus a verified incremental and
-// emits the PART 21 audit events for both.
+// A first daily run creates and verifies a full backup; the incremental is
+// skipped because no previous full snapshot exists yet.
 func TestManagerRunDailyCreatesAndVerifies(t *testing.T) {
 	manager, recorder, _ := newTestManager(t, "", config.BackupRetentionConfig{MaxBackups: 1, MaxTotalSize: "0"})
 	now := time.Date(2026, 5, 20, 2, 0, 0, 0, time.UTC)
@@ -64,9 +64,9 @@ func TestManagerRunDailyCreatesAndVerifies(t *testing.T) {
 	require.NoError(t, manager.RunDaily(now))
 
 	assert.FileExists(t, filepath.Join(manager.Dir(), FullBackupName(now, false)))
-	assert.FileExists(t, filepath.Join(manager.Dir(), DailyIncrementalName(false)))
+	assert.NoFileExists(t, filepath.Join(manager.Dir(), DailyIncrementalName(false)))
 	assert.True(t, recorder.has(EventCreated))
-	assert.True(t, recorder.has(EventDailyUpdated))
+	assert.False(t, recorder.has(EventDailyUpdated))
 	assert.False(t, recorder.has(EventVerificationFailed))
 }
 

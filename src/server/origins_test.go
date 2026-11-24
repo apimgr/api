@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,6 +33,25 @@ func TestDomainEnvOrigins(t *testing.T) {
 			"https://other.example.com",
 		}, domainEnvOrigins())
 	})
+}
+
+func TestGetFQDNUsesFirstDomainOverride(t *testing.T) {
+	t.Setenv("DOMAIN", " api.example.com:8443, www.example.com")
+	assert.Equal(t, "api.example.com", GetFQDN("api"))
+}
+
+func TestGetDisplayURLUsesResolvedDomainAndStripsDefaultPorts(t *testing.T) {
+	t.Setenv("DOMAIN", "api.example.com")
+	assert.Equal(t, "http://api.example.com", GetDisplayURL("api", 80, false))
+	assert.Equal(t, "https://api.example.com", GetDisplayURL("api", 443, true))
+	assert.Equal(t, "https://api.example.com:8443", GetDisplayURL("api", 8443, true))
+}
+
+func TestIsDevTLD(t *testing.T) {
+	for _, host := range []string{"localhost", "api", "dev.api", "example.test", "node.home.arpa", "node.localhost"} {
+		assert.True(t, isDevTLD(host, "api"), host)
+	}
+	assert.False(t, isDevTLD("api.example.com", "api"))
 }
 
 // TestLearnedOrigins covers steps 2+3 of the CORS Allow-list Resolution
@@ -184,4 +204,67 @@ func TestResolveCORSOrigins(t *testing.T) {
 		assert.False(t, disabled)
 		assert.Equal(t, []string{"https://example.com", "https://custom.example.com"}, origins)
 	})
+}
+
+func TestBuildURLTrustAndDomainResolution(t *testing.T) {
+	t.Run("trusted proxy headers determine origin and default port is stripped", func(t *testing.T) {
+		t.Setenv("DOMAIN", "")
+		cfg := &config.Config{}
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:8080"
+		req.Header.Set("X-Forwarded-Host", "public.example:443")
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-Prefix", "/edge")
+		ctx := req.Context()
+		ctx = context.WithValue(ctx, serverConfigKey, cfg)
+		ctx = context.WithValue(ctx, originalPeerContextKey, req.RemoteAddr)
+		req = req.WithContext(ctx)
+
+		assert.Equal(t, "https://public.example/edge/path", BuildURL(req, "path"))
+	})
+
+	t.Run("untrusted forwarded headers are ignored", func(t *testing.T) {
+		t.Setenv("DOMAIN", "")
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = "public.example"
+		req.RemoteAddr = "203.0.113.10:8080"
+		req.Header.Set("X-Forwarded-Host", "attacker.example")
+		req.Header.Set("X-Forwarded-Proto", "https")
+
+		assert.Equal(t, "http://public.example/path", BuildURL(req, "/path"))
+	})
+
+	t.Run("host outside DOMAIN uses configured primary domain", func(t *testing.T) {
+		t.Setenv("DOMAIN", "primary.example,other.example")
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = "attacker.example"
+
+		assert.Equal(t, "http://primary.example/path", BuildURL(req, "/path"))
+	})
+
+	t.Run("configured base URL path is applied to absolute links", func(t *testing.T) {
+		t.Setenv("DOMAIN", "")
+		cfg := &config.Config{}
+		cfg.Server.BaseURL = "/configured"
+		req := httptest.NewRequest(http.MethodGet, "http://site.example/", nil)
+		req = requestWithServerConfig(req, cfg)
+
+		assert.Equal(t, "http://site.example/configured/path", BuildURL(req, "/path"))
+	})
+}
+
+func TestCSRFCookieSecureTrustsForwardedProto(t *testing.T) {
+	t.Setenv("DOMAIN", "")
+	cfg := &config.Config{}
+	makeRequest := func(peer string) *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "http://site.example/", nil)
+		req.RemoteAddr = peer
+		req.Header.Set("X-Forwarded-Proto", "https")
+		ctx := context.WithValue(req.Context(), serverConfigKey, cfg)
+		ctx = context.WithValue(ctx, originalPeerContextKey, peer)
+		return req.WithContext(ctx)
+	}
+
+	assert.False(t, csrfCookieSecure(makeRequest("203.0.113.10:1234"), "auto"))
+	assert.True(t, csrfCookieSecure(makeRequest("127.0.0.1:1234"), "auto"))
 }

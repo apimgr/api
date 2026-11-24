@@ -36,33 +36,6 @@ func ShouldRenew(daysUntilExpiry int) bool {
 	return daysUntilExpiry <= 7
 }
 
-// PerformHTTP01Challenge completes an HTTP-01 challenge. Not implemented on
-// this manual ACME path - the working HTTP-01 flow is autocert's built-in
-// handler (see Manager.GetHTTPHandler in ssl.go).
-func PerformHTTP01Challenge(domain, token, keyAuth string) error {
-	return fmt.Errorf("SSL: HTTP-01 challenge for %s: manual ACME challenge handling is not implemented, use ssl.Manager (autocert) instead", domain)
-}
-
-// PerformTLSALPN01Challenge completes a TLS-ALPN-01 challenge. Not
-// implemented on this manual ACME path - the working TLS-ALPN-01 flow is
-// handled internally by autocert (see Manager.getLetsEncryptTLSConfig in
-// ssl.go).
-func PerformTLSALPN01Challenge(domain, keyAuth string) error {
-	return fmt.Errorf("SSL: TLS-ALPN-01 challenge for %s: manual ACME challenge handling is not implemented, use ssl.Manager (autocert) instead", domain)
-}
-
-// PerformDNS01Challenge completes a DNS-01 challenge. Not implemented:
-// autocert (the ACME client actually wired up in ssl.go) only supports
-// HTTP-01 and TLS-ALPN-01. Full DNS-01 support requires a lego-based client
-// with a per-provider plugin model (AI.md PART 15, DNS-01 Provider
-// Configuration) - tracked as a follow-up needing a product decision on
-// provider scope, not implemented here. Returning an explicit error rather
-// than a silent no-op so callers cannot mistake this for a completed
-// challenge.
-func PerformDNS01Challenge(domain, keyAuth, provider string, credentials map[string]string) error {
-	return fmt.Errorf("SSL: DNS-01 challenge for %s via %s: DNS-01 is not supported by the current ACME client (autocert); requires a lego-based client, not yet implemented", domain, provider)
-}
-
 // expiryWarnDays is the point from which AI.md PART 17 wants an expiry
 // warning in the log (30 and 14 days are log-only).
 const expiryWarnDays = 30
@@ -140,28 +113,17 @@ func reportExpiry(certPath string, daysUntilExpiry int) {
 	}
 }
 
-// RenewalTask is the scheduler task for certificate renewal
-func RenewalTask(certPath string) error {
-	log.Println("SSL: Running certificate renewal check...")
-
-	// Check certificate expiry
+// ReportCertificateExpiry checks and reports the certificate's expiry without
+// applying a challenge-specific renewal flow.
+func ReportCertificateExpiry(certPath string) (int, error) {
 	daysUntilExpiry, err := CheckCertificateExpiry(certPath)
 	if err != nil {
 		log.Printf("SSL: Failed to check certificate: %v", err)
-		return err
+		return 0, err
 	}
-
 	log.Printf("SSL: Certificate expires in %d days", daysUntilExpiry)
 	reportExpiry(certPath, daysUntilExpiry)
-
-	// Renew if needed (within 7 days, per AI.md PART 15)
-	if ShouldRenew(daysUntilExpiry) {
-		log.Println("SSL: Certificate renewal needed (within 7 days)")
-		return fmt.Errorf("certificate renewal not yet implemented for manual ACME path; use ssl.Manager (autocert) which renews automatically")
-	}
-
-	log.Println("SSL: Certificate is valid, no renewal needed")
-	return nil
+	return daysUntilExpiry, nil
 }
 
 // GetCertificateInfo returns information about a certificate: subject

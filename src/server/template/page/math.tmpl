@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🔢 Math & Numbers</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.math.numbers.3836618314"}}</h1>
     <p class="hero-subtitle">
-      calculations, statistics, primes, and matrix operations
+      {{t .Lang "page_text.text.calculations.statistics.primes.and.matrix.op.4b0098d52a"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/math/calculate" class="category-card">
+      <a href="{{path .BaseURL "/math/calculate"}}" class="category-card">
         <div class="category-icon">🧮</div>
-        <h3 class="category-title">Calculator</h3>
-        <p class="category-description">Basic and advanced calculations</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.calculator.668b80455f"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.basic.and.advanced.calculations.d1de6800c1"}}</p>
       </a>
       
-      <a href="/math/stats" class="category-card">
+      <a href="{{path .BaseURL "/math/stats"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">Statistics</h3>
-        <p class="category-description">Mean, median, mode, std dev, variance</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.statistics.a656107e99"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.mean.median.mode.std.dev.variance.85f4670af0"}}</p>
       </a>
       
-      <a href="/math/prime" class="category-card">
+      <a href="{{path .BaseURL "/math/prime"}}" class="category-card">
         <div class="category-icon">🔢</div>
-        <h3 class="category-title">Prime Numbers</h3>
-        <p class="category-description">Check primes, factor numbers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.prime.numbers.dd8325d6a9"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.check.primes.factor.numbers.ab88a23ed1"}}</p>
       </a>
       
-      <a href="/math/fibonacci" class="category-card">
+      <a href="{{path .BaseURL "/math/fibonacci"}}" class="category-card">
         <div class="category-icon">🌀</div>
-        <h3 class="category-title">Fibonacci</h3>
-        <p class="category-description">Generate Fibonacci sequences</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.fibonacci.016be0f0bc"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.fibonacci.sequences.08430c2e9b"}}</p>
       </a>
       
-      <a href="/math/percentage" class="category-card">
+      <a href="{{path .BaseURL "/math/percentage"}}" class="category-card">
         <div class="category-icon">💯</div>
-        <h3 class="category-title">Percentage</h3>
-        <p class="category-description">Calculate percentages</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.percentage.379db318f5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.calculate.percentages.7f0b0e106a"}}</p>
       </a>
       
-      <a href="/math/matrix" class="category-card">
+      <a href="{{path .BaseURL "/math/matrix"}}" class="category-card">
         <div class="category-icon">📐</div>
-        <h3 class="category-title">Matrix Calculator</h3>
-        <p class="category-description">Matrix operations (add, multiply, determinant)</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.matrix.calculator.dd2abfedf3"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.matrix.operations.add.multiply.determinant.45cff4e3f3"}}</p>
       </a>
       
-      <a href="/math/trigonometry" class="category-card">
+      <a href="{{path .BaseURL "/math/trigonometry"}}" class="category-card">
         <div class="category-icon">📏</div>
-        <h3 class="category-title">Trigonometry</h3>
-        <p class="category-description">Sin, cos, tan calculations</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.trigonometry.97aa6022e5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.sin.cos.tan.calculations.c421200d90"}}</p>
       </a>
       
-      <a href="/math/logarithm" class="category-card">
+      <a href="{{path .BaseURL "/math/logarithm"}}" class="category-card">
         <div class="category-icon">📈</div>
-        <h3 class="category-title">Logarithms</h3>
-        <p class="category-description">Log calculations (natural, base 10)</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.logarithms.366efbae06"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.log.calculations.natural.base.10.7ddf9f23af"}}</p>
       </a>
       
-      <a href="/math/base" class="category-card">
+      <a href="{{path .BaseURL "/math/base"}}" class="category-card">
         <div class="category-icon">🔄</div>
-        <h3 class="category-title">Base Converter</h3>
-        <p class="category-description">Convert between number bases</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.base.converter.691a3e6354"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.convert.between.number.bases.b9a06dc7a9"}}</p>
       </a>
       
-      <a href="/math/gcd" class="category-card">
+      <a href="{{path .BaseURL "/math/gcd"}}" class="category-card">
         <div class="category-icon">🔀</div>
         <h3 class="category-title">GCD/LCM</h3>
-        <p class="category-description">Greatest common divisor, least common multiple</p>
+        <p class="category-description">{{t .Lang "page_text.text.greatest.common.divisor.least.common.multipl.4d86e8c392"}}</p>
       </a>
       
-      <a href="/math/random" class="category-card">
+      <a href="{{path .BaseURL "/math/random"}}" class="category-card">
         <div class="category-icon">🎲</div>
-        <h3 class="category-title">Random Number</h3>
-        <p class="category-description">Generate random numbers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.random.number.0071bf9a8a"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.random.numbers.732e39a57b"}}</p>
       </a>
       
-      <a href="/math/sequence" class="category-card">
+      <a href="{{path .BaseURL "/math/sequence"}}" class="category-card">
         <div class="category-icon">🔢</div>
-        <h3 class="category-title">Sequence Generator</h3>
-        <p class="category-description">Generate number sequences</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.sequence.generator.fab3761674"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.number.sequences.46639eec9a"}}</p>
       </a>
     </div>
   </div>

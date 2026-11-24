@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -15,6 +16,9 @@ import (
 // formTagPattern matches an opening form tag so its attributes can be checked
 // without executing any page script.
 var formTagPattern = regexp.MustCompile(`(?is)<form\b[^>]*>`)
+var formBlockPattern = regexp.MustCompile(`(?is)<form\b([^>]*)>(.*?)</form>`)
+var formControlPattern = regexp.MustCompile(`(?is)<(input|select|textarea)\b([^>]*)>`)
+var labelBlockPattern = regexp.MustCompile(`(?is)<label\b([^>]*)>(.*?)</label>`)
 
 // attrPattern extracts a single attribute value from an HTML tag.
 func attrPattern(name string) *regexp.Regexp {
@@ -92,9 +96,9 @@ func TestTier2NavigationWithoutJavaScript(t *testing.T) {
 	if !strings.HasSuffix(location, "/categories") {
 		t.Errorf("categories link landed on %q, want a URL ending in /categories", location)
 	}
-	if !strings.Contains(html, "Browse All Categories") {
+	if !strings.Contains(html, "category-grid") {
 		saveArtifacts(t, ctx, "tier2-nav")
-		t.Error("/categories did not render its heading without JavaScript")
+		t.Error("/categories did not render its category links without JavaScript")
 	}
 }
 
@@ -105,7 +109,7 @@ func TestTier2CategoryToToolNavigation(t *testing.T) {
 	for _, c := range categories {
 		t.Run(c.path, func(t *testing.T) {
 			ctx, _ := newTab(t, true)
-			selector := `main a[href^="` + c.path + `/"]`
+			selector := `main a.category-card, main a.tool-card-link`
 
 			var html string
 			if err := chromedp.Run(ctx,
@@ -123,8 +127,8 @@ func TestTier2CategoryToToolNavigation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: read current URL: %v", c.path, err)
 			}
-			if !strings.Contains(location, c.path+"/") {
-				t.Errorf("%s: tool link landed on %q", c.path, location)
+			if strings.TrimSuffix(location, "/") == strings.TrimSuffix(suite.browserURL+c.path, "/") {
+				t.Errorf("%s: tool link did not navigate away from its category", c.path)
 			}
 			if !strings.Contains(html, "<h1") {
 				saveArtifacts(t, ctx, "tier2-category"+strings.ReplaceAll(c.path, "/", "-"))
@@ -154,33 +158,106 @@ func TestTier2ToolPagesRenderWithoutJavaScript(t *testing.T) {
 	}
 }
 
-// TestTier2ToolFormsSubmitWithoutJavaScript asserts PART 14 progressive
-// enhancement: every tool form must carry a method and an action so the
-// browser submits it natively when JavaScript is unavailable.
+// unlabeledFormControls returns the visible form control names without an
+// explicit or wrapping label.
+func unlabeledFormControls(body string) []string {
+	var missing []string
+	labels := labelBlockPattern.FindAllStringSubmatch(body, -1)
+	for _, control := range formControlPattern.FindAllStringSubmatch(body, -1) {
+		attrs := control[2]
+		if fieldType := attrPattern("type").FindStringSubmatch(attrs); fieldType != nil {
+			switch strings.ToLower(fieldType[1]) {
+			case "hidden", "submit", "button", "reset", "image":
+				continue
+			}
+		}
+		fieldID := attrPattern("id").FindStringSubmatch(attrs)
+		associated := false
+		for _, label := range labels {
+			if fieldID != nil {
+				if labelFor := attrPattern("for").FindStringSubmatch(label[1]); labelFor != nil && labelFor[1] == fieldID[1] {
+					associated = true
+					break
+				}
+			}
+			if strings.Contains(label[2], control[0]) {
+				associated = true
+				break
+			}
+		}
+		if !associated {
+			name := attrPattern("name").FindStringSubmatch(attrs)
+			if name != nil {
+				missing = append(missing, name[1])
+			} else {
+				missing = append(missing, control[1])
+			}
+		}
+	}
+	return missing
+}
+
+// TestTier2ToolFormsSubmitWithoutJavaScript asserts every tool form has a
+// native POST action, a CSRF field, API endpoint metadata and accessible labels.
 func TestTier2ToolFormsSubmitWithoutJavaScript(t *testing.T) {
 	methodAttr := attrPattern("method")
 	actionAttr := attrPattern("action")
 	idAttr := attrPattern("id")
+	endpointAttrs := []*regexp.Regexp{
+		attrPattern("data-endpoint"),
+		attrPattern("data-template"),
+		attrPattern("data-body-endpoint"),
+		attrPattern("data-query-post-endpoint"),
+		attrPattern("data-image-template"),
+		attrPattern("data-api-endpoint"),
+	}
 
 	for _, tool := range toolPages {
 		t.Run(tool.path, func(t *testing.T) {
 			ctx, _ := newTab(t, true)
 			html := renderNoJS(t, ctx, tool.path)
 
-			tags := formTagPattern.FindAllString(html, -1)
-			if len(tags) == 0 {
+			mainStart := strings.Index(html, `<main id="main-content"`)
+			mainEnd := strings.Index(html, `</main>`)
+			if mainStart < 0 || mainEnd < mainStart {
+				t.Fatalf("%s: rendered document has no main content landmark", tool.path)
+			}
+			forms := formBlockPattern.FindAllStringSubmatch(html[mainStart:mainEnd], -1)
+			if len(forms) == 0 {
 				t.Skipf("%s: page has no form", tool.path)
 			}
-			for _, tag := range tags {
+			for _, form := range forms {
+				tag, body := "<form"+form[1]+">", form[2]
 				id := ""
-				if m := idAttr.FindStringSubmatch(tag); m != nil {
-					id = m[1]
+				if match := idAttr.FindStringSubmatch(tag); match != nil {
+					id = match[1]
 				}
 				method := methodAttr.FindStringSubmatch(tag)
 				action := actionAttr.FindStringSubmatch(tag)
-				if method == nil || action == nil || strings.TrimSpace(action[1]) == "" {
-					t.Errorf("%s: form %q has no method/action pair, so it cannot be submitted without JavaScript (PART 14): %s",
+				if method == nil || !strings.EqualFold(method[1], "post") || action == nil || strings.TrimSpace(action[1]) == "" {
+					t.Errorf("%s: form %q must submit with POST to a same-origin frontend path without JavaScript: %s",
 						tool.path, id, tag)
+					continue
+				}
+				parsedAction, err := url.Parse(action[1])
+				if err != nil || parsedAction.IsAbs() || parsedAction.Host != "" || !strings.HasSuffix(parsedAction.Path, tool.path) {
+					t.Errorf("%s: form %q action %q does not target its same-origin tool route", tool.path, id, action[1])
+				}
+				if !strings.Contains(body, `name="csrf_token"`) {
+					t.Errorf("%s: form %q is missing its CSRF field", tool.path, id)
+				}
+				wired := false
+				for _, attr := range endpointAttrs {
+					if match := attr.FindStringSubmatch(tag); match != nil && strings.TrimSpace(match[1]) != "" {
+						wired = true
+						break
+					}
+				}
+				if !wired {
+					t.Errorf("%s: form %q does not declare API endpoint metadata", tool.path, id)
+				}
+				if missing := unlabeledFormControls(body); len(missing) > 0 {
+					t.Errorf("%s: form %q has controls without associated labels: %s", tool.path, id, strings.Join(missing, ", "))
 				}
 			}
 		})

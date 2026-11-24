@@ -78,7 +78,7 @@ func GenerateSelfSigned(sslDir, fqdn string) (certPath, keyPath string, err erro
 	if err != nil {
 		return "", "", fmt.Errorf("failed to open %s for writing: %w", certPath, err)
 	}
-	defer certOut.Close()
+	defer func() { _ = certOut.Close() }()
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
 		return "", "", fmt.Errorf("failed to write certificate: %w", err)
 	}
@@ -92,7 +92,7 @@ func GenerateSelfSigned(sslDir, fqdn string) (certPath, keyPath string, err erro
 	if err != nil {
 		return "", "", fmt.Errorf("failed to open %s for writing: %w", keyPath, err)
 	}
-	defer keyOut.Close()
+	defer func() { _ = keyOut.Close() }()
 	if err := pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes}); err != nil {
 		return "", "", fmt.Errorf("failed to write private key: %w", err)
 	}

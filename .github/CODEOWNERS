@@ -1,0 +1,16 @@
+* @apimgr
+
+# Security-sensitive build, release, and automation paths.
+/.github/ @apimgr
+/.gitlab-ci.yml @apimgr
+/Jenkinsfile @apimgr
+/docker/ @apimgr
+/Makefile @apimgr
+/src/service/crypto/ @apimgr
+/src/backup/ @apimgr
+/src/update/ @apimgr
+/src/server/csrf.go @apimgr
+/src/server/realip.go @apimgr
+/src/server/owner_tokens*.go @apimgr
+/src/database/owner_tokens*.go @apimgr
+/src/metrics/auth*.go @apimgr

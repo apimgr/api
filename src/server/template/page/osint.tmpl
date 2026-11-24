@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🕵️ OSINT Tools</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.osint.tools.0fbffc3bf2"}}</h1>
     <p class="hero-subtitle">
-      email intelligence, domain research, and username searches
+      {{t .Lang "page_text.text.email.intelligence.domain.research.and.usern.4685b7eb94"}}
     </p>
   </div>
 </section>
@@ -11,40 +11,40 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/osint/email" class="category-card">
+      <a href="{{path .BaseURL "/osint/email"}}" class="category-card">
         <div class="category-icon">📧</div>
-        <h3 class="category-title">Email Intelligence</h3>
-        <p class="category-description">Email verification and lookup</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.email.intelligence.5befb20cd5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.email.verification.and.lookup.66cb632fee"}}</p>
       </a>
       
-      <a href="/osint/domain" class="category-card">
+      <a href="{{path .BaseURL "/osint/domain"}}" class="category-card">
         <div class="category-icon">🌐</div>
-        <h3 class="category-title">Domain Intelligence</h3>
-        <p class="category-description">WHOIS and DNS information</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.domain.intelligence.494604c0de"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.whois.and.dns.information.4fabfdc25f"}}</p>
       </a>
       
-      <a href="/osint/ip" class="category-card">
+      <a href="{{path .BaseURL "/osint/ip"}}" class="category-card">
         <div class="category-icon">🌍</div>
-        <h3 class="category-title">IP Intelligence</h3>
-        <p class="category-description">IP address research</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ip.intelligence.009e5e9a78"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.ip.address.research.8093400c9d"}}</p>
       </a>
       
-      <a href="/osint/subdomain" class="category-card">
+      <a href="{{path .BaseURL "/osint/subdomain"}}" class="category-card">
         <div class="category-icon">🔍</div>
-        <h3 class="category-title">Subdomain Enum</h3>
-        <p class="category-description">Discover subdomains</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.subdomain.enum.37cfe88f64"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.discover.subdomains.afd0f3959f"}}</p>
       </a>
       
-      <a href="/osint/tech-stack" class="category-card">
+      <a href="{{path .BaseURL "/osint/tech-stack"}}" class="category-card">
         <div class="category-icon">⚙️</div>
-        <h3 class="category-title">Technology Stack</h3>
-        <p class="category-description">Detect website technologies</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.technology.stack.c12c20b00b"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.detect.website.technologies.17dafa3613"}}</p>
       </a>
       
-      <a href="/osint/cert" class="category-card">
+      <a href="{{path .BaseURL "/osint/cert"}}" class="category-card">
         <div class="category-icon">🔒</div>
-        <h3 class="category-title">Certificate Search</h3>
-        <p class="category-description">SSL certificate history</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.certificate.search.f5151fb486"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.ssl.certificate.history.f922e5fe3d"}}</p>
       </a>
     </div>
   </div>

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -30,7 +31,9 @@ var (
 	// currentMode stores the active application mode
 	currentMode Mode = Production
 	// debugEnabled stores whether --debug/DEBUG=true diagnostics are active
-	debugEnabled bool
+	debugEnabled         bool
+	blockProfileRate     = 1
+	mutexProfileFraction = 1
 	// currentLang stores the active interface language code (--lang/LANG)
 	currentLang string
 	// mu protects concurrent access to currentMode, debugEnabled, and currentLang
@@ -130,6 +133,32 @@ func SetDebugEnabled(enabled bool) {
 	mu.Lock()
 	defer mu.Unlock()
 	debugEnabled = enabled
+	applyProfilingSettings()
+}
+
+// SetProfilingRates applies the operator's server.debug profile rates.
+func SetProfilingRates(blockRate, mutexFraction int) {
+	mu.Lock()
+	defer mu.Unlock()
+	if blockRate < 0 {
+		blockRate = 1
+	}
+	if mutexFraction < 0 {
+		mutexFraction = 1
+	}
+	blockProfileRate = blockRate
+	mutexProfileFraction = mutexFraction
+	applyProfilingSettings()
+}
+
+func applyProfilingSettings() {
+	if debugEnabled {
+		runtime.SetBlockProfileRate(blockProfileRate)
+		runtime.SetMutexProfileFraction(mutexProfileFraction)
+		return
+	}
+	runtime.SetBlockProfileRate(0)
+	runtime.SetMutexProfileFraction(0)
 }
 
 // IsDebugEnabled returns true if --debug/DEBUG=true diagnostics are active

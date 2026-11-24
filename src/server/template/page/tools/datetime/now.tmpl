@@ -2,36 +2,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/datetime">Date & Time</a> / Current Time
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/datetime"}}">{{t .Lang "categories.datetime.name"}}</a> {{t .Lang "tool_pages.text.current.time.dcfdbfb1c1"}}
     </nav>
     
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Current Time</h1>
-        <button class="btn btn-icon" data-favorite="datetime-now" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.current.time.f67e8e66bf"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="datetime-now" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
       
       <p class="tool-description">
-        Get the current timestamp in multiple formats including Unix, ISO 8601, and human-readable.
+        {{t .Lang "tool_pages.text.get.the.current.timestamp.in.multiple.format.40259cbe78"}}
       </p>
       
-      <form id="datetime-form" class="tool-form" method="get" action="{{.APIBasePath}}/datetime/now">
+      <form id="datetime-form" class="tool-form" method="post" action="{{path .BaseURL "/datetime/now"}}" data-endpoint="{{.APIBasePath}}/datetime/now">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Timezone (optional)</label>
-          <input type="text" name="timezone" class="form-input" placeholder="America/New_York">
+          <label class="form-label" for="datetime-form-timezone">{{t .Lang "tool_pages.text.timezone.optional.88a0be3b8e"}}</label>
+          <input type="text" name="timezone" class="form-input" placeholder="{{t .Lang "tool_pages.text.america.new.york.acb2a3287b"}}" id="datetime-form-timezone">
         </div>
         
-        <button type="submit" class="btn btn-primary">Get Current Time</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.get.current.time.d0a7b148ec"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
       
       <div id="datetime-result" class="tool-result" hidden></div>
       
       <div class="mt-3">
-        <h3>API Endpoints</h3>
+        <h3>{{t .Lang "tool_pages.text.api.endpoints.e85a69a745"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy>Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy>{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/now

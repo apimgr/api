@@ -24,7 +24,7 @@ func (s *Service) Config(format string, values map[string]string) (string, error
 	case "yaml", "":
 		var b strings.Builder
 		for _, k := range keys {
-			b.WriteString(fmt.Sprintf("%s: %s\n", k, configScalar(values[k])))
+			_, _ = fmt.Fprintf(&b, "%s: %s\n", k, configScalar(values[k]))
 		}
 		return b.String(), nil
 	case "json":
@@ -35,7 +35,7 @@ func (s *Service) Config(format string, values map[string]string) (string, error
 			if i == len(keys)-1 {
 				comma = ""
 			}
-			b.WriteString(fmt.Sprintf("  %q: %s%s\n", k, configJSONScalar(values[k]), comma))
+			_, _ = fmt.Fprintf(&b, "  %q: %s%s\n", k, configJSONScalar(values[k]), comma)
 		}
 		b.WriteString("}\n")
 		return b.String(), nil
@@ -43,13 +43,13 @@ func (s *Service) Config(format string, values map[string]string) (string, error
 		var b strings.Builder
 		for _, k := range keys {
 			envKey := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
-			b.WriteString(fmt.Sprintf("%s=%s\n", envKey, values[k]))
+			_, _ = fmt.Fprintf(&b, "%s=%s\n", envKey, values[k])
 		}
 		return b.String(), nil
 	case "toml":
 		var b strings.Builder
 		for _, k := range keys {
-			b.WriteString(fmt.Sprintf("%s = %s\n", k, configJSONScalar(values[k])))
+			_, _ = fmt.Fprintf(&b, "%s = %s\n", k, configJSONScalar(values[k]))
 		}
 		return b.String(), nil
 	default:

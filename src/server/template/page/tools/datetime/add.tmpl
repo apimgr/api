@@ -4,41 +4,50 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/datetime">Date/Time Tools</a> / Add Duration
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/datetime"}}">{{t .Lang "tool_pages.text.date.time.tools.0432ab3fde"}}</a> {{t .Lang "tool_pages.text.add.duration.fc414a537c"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Add Duration</h1>
-        <button class="btn btn-icon" data-favorite="datetime-add" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.add.duration.e3421c141e"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="datetime-add" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Add a duration (e.g. 1h30m, 24h, 7d) to a Unix timestamp.
+        {{t .Lang "tool_pages.text.add.a.duration.e.g.1h30m.24h.7d.to.a.unix.ti.f8d39964f6"}}
       </p>
 
-      <form id="add-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/add/{timestamp}/{duration}">
+      <form id="add-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/add/{timestamp}/{duration}" method="post" action="{{path .BaseURL "/datetime/add"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Unix timestamp</label>
-          <input type="number" name="timestamp" class="form-input" required placeholder="1700000000">
+          <label class="form-label" for="add-form-timestamp">{{t .Lang "tool_pages.text.unix.timestamp.57c536372f"}}</label>
+          <input type="number" name="timestamp" class="form-input" required placeholder="1700000000" id="add-form-timestamp">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Duration</label>
-          <input type="text" name="duration" class="form-input" required placeholder="24h">
+          <label class="form-label" for="add-form-duration">{{t .Lang "tool_pages.text.duration.4fc52a3c4c"}}</label>
+          <input type="text" name="duration" class="form-input" required placeholder="{{t .Lang "tool_pages.text.24h.0b509e6d4c"}}" id="add-form-duration">
         </div>
 
-        <button type="submit" class="btn btn-primary">Add</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.add.9fd728c66c"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="add-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/add/1700000000/24h</pre>

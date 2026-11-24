@@ -74,6 +74,13 @@ type Options struct {
 	// BuildEpoch is the embedded build timestamp (Unix seconds), used by
 	// update_check to compare dated pre-release channels.
 	BuildEpoch int64
+	// SSLRenewer invokes the live TLS manager so HTTP-01 challenge state is
+	// shared with the server while the daily task renews its certificate.
+	SSLRenewer func() error
+	// SSLCertificatePath is the live TLS manager's app-managed certificate.
+	SSLCertificatePath string
+	// SSLDomain is the first FQDN configured on the live TLS manager.
+	SSLDomain string
 }
 
 // normalized fills in every unset field with its AI.md PART 18 default and

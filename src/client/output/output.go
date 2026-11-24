@@ -65,7 +65,7 @@ func Capture(fn func() error) (string, error) {
 	fnErr := fn()
 
 	os.Stdout = orig
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	if _, copyErr := io.Copy(&buf, r); copyErr != nil {

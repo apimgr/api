@@ -114,7 +114,20 @@ func ParseSizeCap(value, dir string) (int64, error) {
 // mark yearly, monthly, weekly then daily archives, delete everything left
 // unmarked oldest first, and finally enforce the hard size cap. dir must be
 // the path cached at startup — PART 21 forbids re-resolving it here.
-func ApplyRetention(dir string, policy config.BackupRetentionConfig) (RetentionResult, error) {
+func ApplyRetention(dir string, policy config.BackupRetentionConfig, protectedBaseNames ...string) (RetentionResult, error) {
+	return applyRetention(dir, policy, protectedBaseNames, nil)
+}
+
+func ApplyRetentionWithDependencies(dir string, policy config.BackupRetentionConfig, dependencies map[string][]string) (RetentionResult, error) {
+	baseNames := make([]string, 0, len(dependencies))
+	for name := range dependencies {
+		baseNames = append(baseNames, name)
+	}
+	sort.Strings(baseNames)
+	return applyRetention(dir, policy, baseNames, dependencies)
+}
+
+func applyRetention(dir string, policy config.BackupRetentionConfig, protectedBaseNames []string, dependencies map[string][]string) (RetentionResult, error) {
 	normalized, warnings := policy.Normalized()
 	result := RetentionResult{Warnings: warnings}
 
@@ -123,7 +136,7 @@ func ApplyRetention(dir string, policy config.BackupRetentionConfig) (RetentionR
 		return result, err
 	}
 
-	keep, prune := markForRetention(files, normalized)
+	keep, prune := markForRetention(files, normalized, protectedBaseNames...)
 
 	for _, file := range prune {
 		if err := os.Remove(file.Path); err != nil && !os.IsNotExist(err) {
@@ -137,7 +150,7 @@ func ApplyRetention(dir string, policy config.BackupRetentionConfig) (RetentionR
 		if err != nil {
 			result.Warnings = append(result.Warnings, err.Error())
 		} else if capBytes > 0 {
-			kept, deleted, err := enforceSizeCap(keep, capBytes)
+			kept, deleted, err := enforceSizeCapWithBases(keep, capBytes, dependencies)
 			if err != nil {
 				return result, err
 			}
@@ -158,11 +171,15 @@ func ApplyRetention(dir string, policy config.BackupRetentionConfig) (RetentionR
 // the files it prunes, applying the yearly > monthly > weekly > daily
 // priority. Incrementals are never counted: exactly one of each exists and it
 // is replaced on every run.
-func markForRetention(files []File, policy config.BackupRetentionConfig) (keep, prune []File) {
+func markForRetention(files []File, policy config.BackupRetentionConfig, protectedBaseNames ...string) (keep, prune []File) {
+	protected := make(map[string]bool, len(protectedBaseNames))
+	for _, name := range protectedBaseNames {
+		protected[name] = true
+	}
 	// Newest first, so each category keeps its most recent members.
 	candidates := make([]File, 0, len(files))
 	for _, file := range files {
-		if file.Incremental() {
+		if file.Incremental() || protected[file.Name] {
 			keep = append(keep, file)
 			continue
 		}
@@ -240,9 +257,7 @@ func matchesCategory(file File, category string) bool {
 	}
 }
 
-// enforceSizeCap deletes the oldest archives until the retained set fits
-// under the hard cap. PART 21 lets the cap override every count limit.
-func enforceSizeCap(keep []File, capBytes int64) ([]File, []Deletion, error) {
+func enforceSizeCapWithBases(keep []File, capBytes int64, dependencies map[string][]string) ([]File, []Deletion, error) {
 	ordered := make([]File, len(keep))
 	copy(ordered, keep)
 	sort.SliceStable(ordered, func(i, j int) bool {
@@ -250,23 +265,48 @@ func enforceSizeCap(keep []File, capBytes int64) ([]File, []Deletion, error) {
 	})
 
 	var total int64
+	remainingByName := make(map[string]File, len(ordered))
 	for _, file := range ordered {
 		total += file.Size
+		remainingByName[file.Name] = file
 	}
 
 	var deleted []Deletion
-	remaining := make([]File, 0, len(ordered))
-	for index, file := range ordered {
+	for _, file := range ordered {
 		if total <= capBytes {
-			remaining = append(remaining, ordered[index:]...)
 			break
+		}
+		if _, exists := remainingByName[file.Name]; !exists {
+			continue
+		}
+		if dependents := dependencies[file.Name]; len(dependents) > 0 {
+			for _, name := range dependents {
+				dependent, exists := remainingByName[name]
+				if !exists {
+					continue
+				}
+				if err := os.Remove(dependent.Path); err != nil && !os.IsNotExist(err) {
+					return keep, deleted, fmt.Errorf("failed to delete %s: %w", dependent.Name, err)
+				}
+				delete(remainingByName, name)
+				total -= dependent.Size
+				deleted = append(deleted, Deletion{Name: dependent.Name, Size: dependent.Size, Reason: ReasonSizeCap})
+			}
+			if total <= capBytes {
+				continue
+			}
 		}
 		if err := os.Remove(file.Path); err != nil && !os.IsNotExist(err) {
 			return keep, deleted, fmt.Errorf("failed to delete %s: %w", file.Name, err)
 		}
+		delete(remainingByName, file.Name)
 		total -= file.Size
 		deleted = append(deleted, Deletion{Name: file.Name, Size: file.Size, Reason: ReasonSizeCap})
 	}
-
+	remaining := make([]File, 0, len(remainingByName))
+	for _, file := range remainingByName {
+		remaining = append(remaining, file)
+	}
+	sort.Slice(remaining, func(i, j int) bool { return remaining[i].Date.Before(remaining[j].Date) })
 	return remaining, deleted, nil
 }

@@ -321,9 +321,12 @@ func (s *Service) Ping(host string, count int) (*PingResult, error) {
 		if err != nil {
 			continue
 		}
-		times = append(times, float64(time.Since(start).Microseconds())/1000)
+		elapsed := float64(time.Since(start).Microseconds()) / 1000
+		if err := conn.Close(); err != nil {
+			continue
+		}
+		times = append(times, elapsed)
 		received++
-		conn.Close()
 	}
 	if received == 0 {
 		return nil, fmt.Errorf("host %q did not respond to any of %d connection attempts", host, count)
@@ -394,7 +397,7 @@ func (s *Service) SSLInfo(host string) (*SSLCertInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to establish TLS connection to %q: %w", host, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	certs := conn.ConnectionState().PeerCertificates
 	if len(certs) == 0 {
@@ -469,7 +472,7 @@ func whoisQuery(server, domain string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to reach whois server %q: %w", server, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		return "", fmt.Errorf("failed to set connection deadline: %w", err)

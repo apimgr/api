@@ -4,41 +4,50 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/datetime">Date/Time Tools</a> / Convert Timestamp
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/datetime"}}">{{t .Lang "tool_pages.text.date.time.tools.0432ab3fde"}}</a> {{t .Lang "tool_pages.text.convert.timestamp.0924a88e20"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Convert Timestamp</h1>
-        <button class="btn btn-icon" data-favorite="datetime-convert" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.convert.timestamp.7903b75597"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="datetime-convert" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Convert a Unix timestamp to a human-readable date/time in any timezone.
+        {{t .Lang "tool_pages.text.convert.a.unix.timestamp.to.a.human.readable.7010c834f4"}}
       </p>
 
-      <form id="convert-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/convert/{timestamp}/{timezone}">
+      <form id="convert-form" class="tool-form" data-template="{{.APIBasePath}}/datetime/convert/{timestamp}/{timezone}" method="post" action="{{path .BaseURL "/datetime/convert"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Unix timestamp</label>
-          <input type="number" name="timestamp" class="form-input" required placeholder="1700000000">
+          <label class="form-label" for="convert-form-timestamp">{{t .Lang "tool_pages.text.unix.timestamp.57c536372f"}}</label>
+          <input type="number" name="timestamp" class="form-input" required placeholder="1700000000" id="convert-form-timestamp">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Timezone</label>
-          <input type="text" name="timezone" class="form-input" required value="UTC" placeholder="UTC">
+          <label class="form-label" for="convert-form-timezone">{{t .Lang "tool_pages.text.timezone.4ceca1d52c"}}</label>
+          <input type="text" name="timezone" class="form-input" required value="UTC" placeholder="UTC" id="convert-form-timezone">
         </div>
 
-        <button type="submit" class="btn btn-primary">Convert</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.convert.5cd425f518"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="convert-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl {{.BaseURL}}{{.APIBasePath}}/datetime/convert/1700000000/UTC</pre>

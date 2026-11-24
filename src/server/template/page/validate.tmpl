@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">✅ Validators</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.validators.16df432e69"}}</h1>
     <p class="hero-subtitle">
-      validating emails, phones, URLs, credit cards, and more
+      {{t .Lang "page_text.text.validating.emails.phones.urls.credit.cards.a.7ca8901ffb"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/validate/email" class="category-card">
+      <a href="{{path .BaseURL "/validate/email"}}" class="category-card">
         <div class="category-icon">📧</div>
-        <h3 class="category-title">Email Validator</h3>
-        <p class="category-description">Validate email addresses</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.email.validator.335204db62"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.email.addresses.b2b206cd1c"}}</p>
       </a>
       
-      <a href="/validate/phone" class="category-card">
+      <a href="{{path .BaseURL "/validate/phone"}}" class="category-card">
         <div class="category-icon">📱</div>
-        <h3 class="category-title">Phone Validator</h3>
-        <p class="category-description">Validate phone numbers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.phone.validator.3bf2479db7"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.phone.numbers.224d462b0b"}}</p>
       </a>
       
-      <a href="/validate/url" class="category-card">
+      <a href="{{path .BaseURL "/validate/url"}}" class="category-card">
         <div class="category-icon">🔗</div>
-        <h3 class="category-title">URL Validator</h3>
-        <p class="category-description">Validate URLs and domains</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.url.validator.e240a0af17"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.urls.and.domains.058b567a59"}}</p>
       </a>
       
-      <a href="/validate/credit-card" class="category-card">
+      <a href="{{path .BaseURL "/validate/credit-card"}}" class="category-card">
         <div class="category-icon">💳</div>
-        <h3 class="category-title">Credit Card</h3>
-        <p class="category-description">Validate credit card numbers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.credit.card.9f629f57b7"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.credit.card.numbers.8041f7389b"}}</p>
       </a>
       
-      <a href="/validate/iban" class="category-card">
+      <a href="{{path .BaseURL "/validate/iban"}}" class="category-card">
         <div class="category-icon">🏦</div>
-        <h3 class="category-title">IBAN Validator</h3>
-        <p class="category-description">Validate international bank accounts</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.iban.validator.4497b70c0f"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.international.bank.accounts.89ab38abd7"}}</p>
       </a>
       
-      <a href="/validate/vat" class="category-card">
+      <a href="{{path .BaseURL "/validate/vat"}}" class="category-card">
         <div class="category-icon">📊</div>
-        <h3 class="category-title">VAT Number</h3>
-        <p class="category-description">Validate VAT numbers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.vat.number.53112c8adc"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.vat.numbers.99e451967c"}}</p>
       </a>
       
-      <a href="/validate/isbn" class="category-card">
+      <a href="{{path .BaseURL "/validate/isbn"}}" class="category-card">
         <div class="category-icon">📚</div>
-        <h3 class="category-title">ISBN Validator</h3>
-        <p class="category-description">Validate ISBN book numbers</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.isbn.validator.d46b9f6bee"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.isbn.book.numbers.fa8282ede4"}}</p>
       </a>
       
-      <a href="/validate/domain" class="category-card">
+      <a href="{{path .BaseURL "/validate/domain"}}" class="category-card">
         <div class="category-icon">🌐</div>
-        <h3 class="category-title">Domain Validator</h3>
-        <p class="category-description">Validate domain names</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.domain.validator.2d8a76034d"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.domain.names.460b0f4c4d"}}</p>
       </a>
       
-      <a href="/validate/ip" class="category-card">
+      <a href="{{path .BaseURL "/validate/ip"}}" class="category-card">
         <div class="category-icon">🌍</div>
-        <h3 class="category-title">IP Address</h3>
-        <p class="category-description">Validate IPv4/IPv6 addresses</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.ip.address.3c3de0c91c"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.ipv4.ipv6.addresses.21d56b2b37"}}</p>
       </a>
       
-      <a href="/validate/mac" class="category-card">
+      <a href="{{path .BaseURL "/validate/mac"}}" class="category-card">
         <div class="category-icon">🏷️</div>
-        <h3 class="category-title">MAC Address</h3>
-        <p class="category-description">Validate MAC addresses</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.mac.address.23e83318fc"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.mac.addresses.e0b6441081"}}</p>
       </a>
       
-      <a href="/validate/uuid" class="category-card">
+      <a href="{{path .BaseURL "/validate/uuid"}}" class="category-card">
         <div class="category-icon">🆔</div>
-        <h3 class="category-title">UUID Validator</h3>
-        <p class="category-description">Validate UUIDs</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.uuid.validator.ee7ba63e82"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.uuids.9f7c3802bc"}}</p>
       </a>
       
-      <a href="/validate/json" class="category-card">
+      <a href="{{path .BaseURL "/validate/json"}}" class="category-card">
         <div class="category-icon">📝</div>
-        <h3 class="category-title">JSON Validator</h3>
-        <p class="category-description">Validate JSON syntax</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.json.validator.4b7c96734a"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.validate.json.syntax.7fb2f4deb3"}}</p>
       </a>
     </div>
   </div>

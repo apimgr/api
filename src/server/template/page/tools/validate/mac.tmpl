@@ -4,36 +4,45 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/validate">Validators</a> / Validate MAC Address
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/validate"}}">{{t .Lang "categories.validate.name"}}</a> {{t .Lang "tool_pages.text.validate.mac.address.2e326fb6c5"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Validate MAC Address</h1>
-        <button class="btn btn-icon" data-favorite="validate-mac" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.validate.mac.address.8b053495da"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="validate-mac" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Check whether a string is a correctly formatted MAC address.
+        {{t .Lang "tool_pages.text.check.whether.a.string.is.a.correctly.format.95160b4e22"}}
       </p>
 
-      <form id="validate-mac-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/mac">
+      <form id="validate-mac-form" class="tool-form" data-query-post-endpoint="{{.APIBasePath}}/validate/mac" method="post" action="{{path .BaseURL "/validate/mac"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Validate MAC Address</label>
-          <input type="text" name="mac" class="form-input" required placeholder="00:1A:2B:3C:4D:5E">
+          <label class="form-label" for="validate-mac-form-mac">{{t .Lang "tool_pages.text.validate.mac.address.8b053495da"}}</label>
+          <input type="text" name="mac" class="form-input" required placeholder="00:1A:2B:3C:4D:5E" id="validate-mac-form-mac">
         </div>
 
-        <button type="submit" class="btn btn-primary">Validate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "common.validate"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="validate-mac-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST "{{.BaseURL}}{{.APIBasePath}}/validate/mac?mac=00:1A:2B:3C:4D:5E"</pre>

@@ -4,37 +4,46 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/text">Text</a> / Extract
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/text"}}">{{t .Lang "tool_pages.text.text.71988c4d8e"}}</a> {{t .Lang "tool_pages.text.extract.cf5ef429f2"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Extract</h1>
-        <button class="btn btn-icon" data-favorite="text-extract" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.extract.c15301c0e6"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="text-extract" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Pull emails, URLs, IP addresses, or phone numbers out of free-form text.
+        {{t .Lang "tool_pages.text.pull.emails.urls.ip.addresses.or.phone.numbe.24b6719c57"}}
       </p>
 
-      <form id="extract-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/text/extract">
+      <form id="extract-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/text/extract" method="post" action="{{path .BaseURL "/text/extract"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Request (JSON)</label>
-          <textarea name="body" class="form-input" rows="6" required placeholder='{"text":"contact us at test@example.com or https://example.com","type":"emails"}'></textarea>
-          <span class="form-help">type is one of emails, urls, ips, phones</span>
+          <label class="form-label" for="extract-form-body">{{t .Lang "tool_pages.text.request.json.0e9d4c0115"}}</label>
+          <textarea name="body" class="form-input" rows="6" required placeholder='{"text":"contact us at test@example.com or https://example.com","type":"emails"}' id="extract-form-body"></textarea>
+          <span class="form-help">{{t .Lang "tool_pages.text.type.is.one.of.emails.urls.ips.phones.298854371c"}}</span>
         </div>
 
-        <button type="submit" class="btn btn-primary">Extract</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.extract.c15301c0e6"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="extract-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/text/extract -d '{"text":"test@example.com","type":"emails"}'</pre>

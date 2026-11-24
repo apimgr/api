@@ -2,13 +2,30 @@ package server
 
 import (
 	"context"
+	"net/http"
+
+	"github.com/apimgr/api/src/config"
 )
+
+func requestWithServerConfig(r *http.Request, cfg *config.Config) *http.Request {
+	ctx := context.WithValue(r.Context(), serverConfigKey, cfg)
+	return r.WithContext(ctx)
+}
+
+func serverConfigMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, requestWithServerConfig(r, cfg))
+		})
+	}
+}
 
 type contextKey string
 
 const (
 	requestIDKey     contextKey = "requestID"
 	privacyOptOutKey contextKey = "privacyOptOut"
+	serverConfigKey  contextKey = "serverConfig"
 )
 
 // contextWithRequestID adds a request ID to the context

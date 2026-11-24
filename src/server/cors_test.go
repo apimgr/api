@@ -116,6 +116,9 @@ func TestCORSMiddleware_PreflightAllowed(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 	assert.Equal(t, corsAllowedMethods, rec.Header().Get("Access-Control-Allow-Methods"))
 	assert.Equal(t, corsAllowedHeaders, rec.Header().Get("Access-Control-Allow-Headers"))
+	assert.Contains(t, corsAllowedHeaders, "MCP-Protocol-Version")
+	assert.Contains(t, corsAllowedHeaders, "Mcp-Method")
+	assert.Contains(t, corsAllowedHeaders, "Mcp-Name")
 	assert.Equal(t, "86400", rec.Header().Get("Access-Control-Max-Age"))
 }
 

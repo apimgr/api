@@ -6,15 +6,21 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/database"
+	"github.com/apimgr/api/src/health"
 	"github.com/apimgr/api/src/paths"
+	"github.com/apimgr/api/src/server/handler"
 )
 
 // newTestConfig points the paths package at fresh per-test temp
@@ -52,13 +58,24 @@ func reqWithParams(method, target string, params map[string]string, body *bytes.
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 }
 
-// decodeJSON decodes the recorder body into a generic map for assertions
-// that only need to check a handful of keys.
-func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]interface{} {
+// decodeJSONResponseBody decodes a recorder body without changing its envelope.
+func decodeJSONResponseBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]interface{} {
 	t.Helper()
 	var out map[string]interface{}
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&out))
 	return out
+}
+
+// decodeJSON unwraps a successful PART 14 envelope for handler data assertions.
+func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]interface{} {
+	t.Helper()
+	body := decodeJSONResponseBody(t, rec)
+	if body["ok"] == true {
+		if data, ok := body["data"].(map[string]interface{}); ok {
+			return data
+		}
+	}
+	return body
 }
 
 // newTestServer builds the real router via New(). initTemplates() parses
@@ -69,6 +86,14 @@ func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]interfa
 // regression reintroducing a template-wiring gap.
 func newTestServer(t *testing.T, cfg *config.Config) *http.Server {
 	t.Helper()
+	if db := database.GetServerDB(); db != nil {
+		handler.SetDatabase(db)
+	}
+	handler.SetSchedulerProbe(func() error { return nil })
+	t.Cleanup(func() {
+		handler.SetDatabase(nil)
+		handler.SetSchedulerProbe(nil)
+	})
 	var srv *http.Server
 	func() {
 		defer func() {
@@ -87,11 +112,17 @@ func newTestServer(t *testing.T, cfg *config.Config) *http.Server {
 // health/version, and a nested API route registration all at once.
 func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 	cfg := newTestConfig(t)
+	require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+	defer func() { _ = database.Close() }()
+	require.NoError(t, database.EnsureAppSecrets(t.Context()))
+	require.NoError(t, database.EnsureCaptchaSchema(t.Context()))
+	require.NoError(t, database.EnsureRateLimitSchema(t.Context()))
 	// This test exercises route registration/wiring across every tool page,
 	// not rate-limiting behavior (that is covered by ratelimit_test.go), so
 	// raise the read-class ceiling well above the table size to avoid a
 	// false 429 as more tool pages are added over time.
 	cfg.Server.RateLimit.Read.Requests = 10000
+	cfg.Server.RateLimit.GlobalBurst = 10000
 	srv := newTestServer(t, cfg)
 	require.NotNil(t, srv)
 	require.NotNil(t, srv.Handler)
@@ -106,17 +137,39 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		wantStatus int
 	}{
 		{"home page", http.MethodGet, "/", http.StatusOK},
+		{"about page", http.MethodGet, "/server/about", http.StatusOK},
+		{"privacy page", http.MethodGet, "/server/privacy", http.StatusOK},
+		{"contact page", http.MethodGet, "/server/contact", http.StatusOK},
+		{"contact API descriptor", http.MethodGet, "/api/v1/server/contact", http.StatusOK},
+		{"help page", http.MethodGet, "/server/help", http.StatusOK},
+		{"MCP help page", http.MethodGet, "/server/help/mcp", http.StatusOK},
+		{"help API mirror", http.MethodGet, "/api/v1/server/help", http.StatusOK},
+		{"MCP help API mirror", http.MethodGet, "/api/v1/server/help/mcp", http.StatusOK},
+		{"terms page", http.MethodGet, "/server/terms", http.StatusOK},
+		{"security page", http.MethodGet, "/server/security", http.StatusOK},
+		{"security policy page", http.MethodGet, "/server/security/policy", http.StatusOK},
+		{"security acknowledgments page", http.MethodGet, "/server/security/thanks", http.StatusOK},
+		{"LLM discovery file", http.MethodGet, "/llms.txt", http.StatusOK},
 		{"robots.txt", http.MethodGet, "/robots.txt", http.StatusOK},
-		{"security.txt", http.MethodGet, "/security.txt", http.StatusOK},
+		{"noncanonical security.txt path", http.MethodGet, "/security.txt", http.StatusNotFound},
 		{"well-known security.txt", http.MethodGet, "/.well-known/security.txt", http.StatusOK},
+		{"unconfigured PGP public key", http.MethodGet, "/.well-known/pgp-key.asc", http.StatusNotFound},
 		{"manifest.json", http.MethodGet, "/manifest.json", http.StatusOK},
+		{"static stylesheet", http.MethodGet, "/static/css/common.css", http.StatusOK},
+		{"static application script", http.MethodGet, "/static/js/app.js", http.StatusOK},
 		{"healthz frontend", http.MethodGet, "/server/healthz", http.StatusOK},
 		{"healthz api", http.MethodGet, "/api/v1/server/healthz", http.StatusOK},
 		{"healthz unversioned alias", http.MethodGet, "/api/healthz", http.StatusOK},
 		// Per-service bearer tokens are mandatory (PART 20); the test config
 		// leaves them empty, which disables the service and answers 403.
-		{"metrics without token", http.MethodGet, "/metrics", http.StatusForbidden},
+		{"metrics without token", http.MethodGet, "/metrics", http.StatusUnauthorized},
+		{"unknown cli release artifact", http.MethodGet, "/cli/binaries/api-cli-linux-amd64", http.StatusNotFound},
+		{"unversioned autodiscover", http.MethodGet, "/api/autodiscover", http.StatusOK},
 		{"api v1 uuid", http.MethodGet, "/api/v1/text/uuid", http.StatusOK},
+		{"api terms page", http.MethodGet, "/api/v1/server/terms", http.StatusOK},
+		{"api security policy page", http.MethodGet, "/api/v1/server/security/policy", http.StatusOK},
+		{"api security page", http.MethodGet, "/api/v1/server/security", http.StatusOK},
+		{"api security acknowledgments", http.MethodGet, "/api/v1/server/security/thanks", http.StatusOK},
 		{"api v1 docker version missing image", http.MethodGet, "/api/v1/docker/version", http.StatusBadRequest},
 		{"unknown route 404", http.MethodGet, "/this-route-does-not-exist", http.StatusNotFound},
 		{"network category page", http.MethodGet, "/network", http.StatusOK},
@@ -342,10 +395,82 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 			require.NoError(t, err)
 			resp, err := ts.Client().Do(req)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			assert.Equal(t, tt.wantStatus, resp.StatusCode, "path %s", tt.path)
 		})
 	}
+}
+
+func TestHomePageToolCountMatchesRegisteredToolPages(t *testing.T) {
+	cfg := newTestConfig(t)
+	srv := newTestServer(t, cfg)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), i18n.TranslateFormat("en", "categories.summary", map[string]string{
+		"tools":      strconv.Itoa(len(toolPages())),
+		"categories": strconv.Itoa(len(allCategories())),
+	}))
+	assert.NotContains(t, rec.Body.String(), "1,418")
+}
+
+func TestInteractiveDocsUseSharedShellAndLocalAssets(t *testing.T) {
+	srv := newTestServer(t, newTestConfig(t))
+	for _, tt := range []struct {
+		path       string
+		mountID    string
+		localAsset string
+		endpoint   string
+	}{
+		{"/server/docs/swagger", "swagger-ui", "/static/vendor/swagger-ui/swagger-ui-bundle.js", "/api/v1/server/swagger"},
+		{"/server/docs/graphql", "graphiql", "/static/vendor/graphiql/graphiql.min.js", "/api/v1/server/graphql"},
+	} {
+		t.Run(tt.mountID, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set("Accept", "text/html")
+			rec := httptest.NewRecorder()
+			srv.Handler.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code)
+			body := rec.Body.String()
+			assert.Contains(t, body, `class="header"`)
+			assert.Contains(t, body, `class="footer"`)
+			assert.Contains(t, body, `class="page-title"`)
+			assert.Contains(t, body, tt.mountID)
+			assert.Contains(t, body, tt.localAsset)
+			assert.Contains(t, body, tt.endpoint)
+			assert.Contains(t, body, "<noscript>")
+			assert.NotContains(t, body, "https://cdn.")
+			assert.NotContains(t, body, "<script>")
+		})
+	}
+}
+
+func TestBrowserNotFoundUsesThemedSharedLayout(t *testing.T) {
+	srv := newTestServer(t, newTestConfig(t))
+	req := httptest.NewRequest(http.MethodGet, "/unknown-browser-page", nil)
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, rec.Body.String(), `class="header"`)
+	assert.Contains(t, rec.Body.String(), `class="footer"`)
+	assert.Contains(t, rec.Body.String(), `class="error-title page-title"`)
+	assert.Contains(t, rec.Body.String(), "/static/css/common.css")
+}
+
+func TestStaticStylesheetHasBrowserStylesheetContentType(t *testing.T) {
+	srv := newTestServer(t, newTestConfig(t))
+	req := httptest.NewRequest(http.MethodGet, "/static/css/common.css", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/css")
+	assert.Contains(t, rec.Body.String(), "body {")
 }
 
 func TestNew_ConfiguredAPIVersionRoutesAndOpenAPI(t *testing.T) {
@@ -358,17 +483,20 @@ func TestNew_ConfiguredAPIVersionRoutesAndOpenAPI(t *testing.T) {
 
 	resp, err := http.Get(ts.URL + "/api/v2/text/uuid")
 	require.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	resp, err = http.Get(ts.URL + "/api/v1/text/uuid")
 	require.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
-	resp, err = http.Get(ts.URL + "/api/swagger")
+	request, err := http.NewRequest(http.MethodGet, ts.URL+"/api/swagger", nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	request.Header.Set("Accept", "application/json")
+	resp, err = http.DefaultClient.Do(request)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	var spec map[string]interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&spec))
@@ -398,6 +526,8 @@ func TestNew_SecurityHeadersApplied(t *testing.T) {
 func TestNew_HealthzRootAlias(t *testing.T) {
 	t.Run("enabled", func(t *testing.T) {
 		cfg := newTestConfig(t)
+		require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+		t.Cleanup(func() { _ = database.Close() })
 		cfg.Server.Healthz.Root.Enabled = true
 		srv := newTestServer(t, cfg)
 
@@ -419,79 +549,53 @@ func TestNew_HealthzRootAlias(t *testing.T) {
 	})
 }
 
-// TestNewPageData covers the FQDN-based base URL derivation, including
-// the "localhost"/empty-FQDN fallback branch.
+// TestNewPageData covers request-aware public origin resolution for page
+// templates.
 func TestNewPageData(t *testing.T) {
-	tests := []struct {
-		name    string
-		fqdn    string
-		port    string
-		wantURL string
-	}{
-		{"empty fqdn falls back to localhost", "", "8080", "http://localhost:8080"},
-		{"explicit localhost fqdn", "localhost", "9090", "http://localhost:9090"},
-		{"real fqdn used as-is", "example.com", "443", "http://example.com:443"},
-	}
+	t.Setenv("DOMAIN", "")
+	cfg := &config.Config{}
+	cfg.Server.FQDN = "configured.example"
+	cfg.Server.Port = "8080"
+	cfg.Server.Branding.Title = "Test Title"
+	cfg.Web.UI.Theme = "dark"
+	req := httptest.NewRequest(http.MethodGet, "http://visitor.example/", nil)
+	data := newPageData(cfg, req, "home")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &config.Config{}
-			cfg.Server.FQDN = tt.fqdn
-			cfg.Server.Port = tt.port
-			cfg.Server.Branding.Title = "Test Title"
-			cfg.Web.UI.Theme = "dark"
-
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			data := newPageData(cfg, req, "home")
-
-			assert.Equal(t, tt.wantURL, data.BaseURL)
-			assert.Equal(t, "Test Title", data.SiteTitle)
-			assert.Equal(t, "dark", data.Theme)
-			assert.Equal(t, "theme-dark", data.ThemeClass)
-			assert.Equal(t, "home", data.ActivePage)
-			assert.Equal(t, "🛠️", data.SiteIcon)
-		})
-	}
+	assert.Equal(t, "http://visitor.example:8080", data.BaseURL)
+	assert.Equal(t, "Test Title", data.SiteTitle)
+	assert.Equal(t, "dark", data.Theme)
+	assert.Equal(t, "theme-dark", data.ThemeClass)
+	assert.Equal(t, "home", data.ActivePage)
+	assert.Equal(t, "🛠️", data.SiteIcon)
+	assert.Equal(t, len(toolPages()), data.TotalTools)
+	assert.Equal(t, len(allCategories()), data.TotalCategories)
 }
 
-// TestGetBaseURL covers all three branches: localhost fallback, plain
-// http with a real FQDN, and https once SSL is enabled (SSL takes
-// priority over the plain-http FQDN branch).
-func TestGetBaseURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		fqdn    string
-		ssl     bool
-		wantURL string
-	}{
-		{"empty fqdn", "", false, "http://localhost:8080"},
-		{"localhost fqdn", "localhost", false, "http://localhost:8080"},
-		{"real fqdn no ssl", "api.example.com", false, "http://api.example.com:8080"},
-		{"real fqdn with ssl", "api.example.com", true, "https://api.example.com:8080"},
-	}
+// TestBuildURLUsesConfiguredServerPort verifies the request-aware origin
+// falls back to the configured listen port when the public host has none.
+func TestBuildURLUsesConfiguredServerPort(t *testing.T) {
+	t.Setenv("DOMAIN", "")
+	cfg := &config.Config{}
+	cfg.Server.Port = "8080"
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "api.example.com"
+	req = requestWithServerConfig(req, cfg)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &config.Config{}
-			cfg.Server.FQDN = tt.fqdn
-			cfg.Server.Port = "8080"
-			cfg.Server.SSL.Enabled = tt.ssl
-
-			assert.Equal(t, tt.wantURL, getBaseURL(cfg))
-		})
-	}
+	assert.Equal(t, "http://api.example.com:8080", BuildURL(req, ""))
 }
 
-// TestJSONResponse verifies Content-Type and that the payload round-trips
-// through JSON encoding unmodified.
+// TestJSONResponse verifies JSON responses use the PART 14 success envelope.
 func TestJSONResponse(t *testing.T) {
 	rec := httptest.NewRecorder()
 	jsonResponse(rec, map[string]interface{}{"foo": "bar", "n": 42})
 
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-	got := decodeJSON(t, rec)
-	assert.Equal(t, "bar", got["foo"])
-	assert.Equal(t, float64(42), got["n"])
+	got := decodeJSONResponseBody(t, rec)
+	assert.Equal(t, true, got["ok"])
+	data, ok := got["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "bar", data["foo"])
+	assert.Equal(t, float64(42), data["n"])
 }
 
 // TestTextResponse verifies Content-Type and body are set exactly as
@@ -520,14 +624,29 @@ func TestErrorResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			errorResponse(rec, tt.message, tt.status)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+			errorResponse(rec, req, tt.message, tt.status)
 
 			assert.Equal(t, tt.status, rec.Code)
 			assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-			got := decodeJSON(t, rec)
-			assert.Equal(t, tt.message, got["error"])
+			got := decodeJSONResponseBody(t, rec)
+			assert.Equal(t, false, got["ok"])
+			assert.NotEmpty(t, got["error"])
+			assert.NotEmpty(t, got["message"])
+			if tt.message != "" {
+				assert.NotContains(t, got["message"], tt.message)
+			}
 		})
 	}
+}
+
+func TestErrorResponseUsesRequestLanguage(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/test?lang=es", nil)
+	rec := httptest.NewRecorder()
+	errorResponse(rec, req, "internal detail must not escape", http.StatusInternalServerError)
+	got := decodeJSONResponseBody(t, rec)
+	assert.Equal(t, "Error interno del servidor", got["message"])
+	assert.NotContains(t, rec.Body.String(), "internal detail must not escape")
 }
 
 // TestApiUUIDHandler covers default (v4) and explicit version params, and
@@ -556,9 +675,12 @@ func TestApiUUIDHandler(t *testing.T) {
 			apiUUIDHandler(rec, req)
 
 			assert.Equal(t, http.StatusOK, rec.Code)
-			got := decodeJSON(t, rec)
-			assert.NotEmpty(t, got["uuid"])
-			assert.Equal(t, tt.wantVersion, got["version"])
+			got := decodeJSONResponseBody(t, rec)
+			assert.Equal(t, true, got["ok"])
+			data, ok := got["data"].(map[string]interface{})
+			require.True(t, ok)
+			assert.NotEmpty(t, data["uuid"])
+			assert.Equal(t, tt.wantVersion, data["version"])
 		})
 	}
 }
@@ -573,9 +695,12 @@ func TestApiUUIDHandler_UnrecognizedVersionFallsBackToV4(t *testing.T) {
 	apiUUIDHandler(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	got := decodeJSON(t, rec)
-	assert.NotEmpty(t, got["uuid"])
-	assert.Equal(t, float64(99), got["version"])
+	got := decodeJSONResponseBody(t, rec)
+	assert.Equal(t, true, got["ok"])
+	data, ok := got["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, data["uuid"])
+	assert.Equal(t, float64(99), data["version"])
 }
 
 // TestApiUUIDTextHandler mirrors the JSON case but for the plain-text
@@ -628,9 +753,12 @@ func TestApiUUIDBatchHandler(t *testing.T) {
 			apiUUIDBatchHandler(rec, req)
 
 			assert.Equal(t, http.StatusOK, rec.Code)
-			got := decodeJSON(t, rec)
-			assert.Equal(t, tt.wantCount, got["count"])
-			uuids, ok := got["uuids"].([]interface{})
+			got := decodeJSONResponseBody(t, rec)
+			assert.Equal(t, true, got["ok"])
+			data, ok := got["data"].(map[string]interface{})
+			require.True(t, ok)
+			assert.Equal(t, tt.wantCount, data["count"])
+			uuids, ok := data["uuids"].([]interface{})
 			require.True(t, ok)
 			assert.Len(t, uuids, int(tt.wantCount))
 		})
@@ -750,9 +878,8 @@ func TestApiEncodeDecodeHandler_RoundTrip(t *testing.T) {
 	})
 }
 
-// TestApiEncodeTextHandler_UnsupportedEncoding covers the text-response
-// error path, which (unlike the JSON handler) always answers 200 with an
-// "Error: ..." body.
+// TestApiEncodeTextHandler_UnsupportedEncoding verifies the handler's
+// canonical API error envelope for an invalid encoding.
 func TestApiEncodeTextHandler_UnsupportedEncoding(t *testing.T) {
 	req := reqWithParams(http.MethodGet, "/api/v1/text/encode/x/y.txt", map[string]string{
 		"encoding": "nope",
@@ -761,11 +888,12 @@ func TestApiEncodeTextHandler_UnsupportedEncoding(t *testing.T) {
 	rec := httptest.NewRecorder()
 	apiEncodeTextHandler(rec, req)
 
-	assert.Equal(t, "Error: unsupported encoding", rec.Body.String())
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "INVALID_ENCODING", decodeJSON(t, rec)["error"])
 }
 
-// TestApiDecodeTextHandler_DecodeError covers the text-response decode
-// error path.
+// TestApiDecodeTextHandler_DecodeError verifies the canonical API error
+// envelope for invalid encoded input.
 func TestApiDecodeTextHandler_DecodeError(t *testing.T) {
 	req := reqWithParams(http.MethodGet, "/api/v1/text/decode/x/y.txt", map[string]string{
 		"encoding": "base64",
@@ -774,7 +902,8 @@ func TestApiDecodeTextHandler_DecodeError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	apiDecodeTextHandler(rec, req)
 
-	assert.True(t, strings.HasPrefix(rec.Body.String(), "Error:"))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "INVALID_INPUT", decodeJSON(t, rec)["error"])
 }
 
 // TestApiCaseHandler covers every supported style plus the unsupported
@@ -1389,4 +1518,154 @@ func TestAllCategoriesCountsRegisteredTools(t *testing.T) {
 	for _, category := range allCategories() {
 		assert.Equal(t, counts[strings.TrimPrefix(category.Path, "/")], category.Count, category.Path)
 	}
+}
+
+func TestMCPAliasesUseOneJSONHandler(t *testing.T) {
+	cfg := newTestConfig(t)
+	srv := newTestServer(t, cfg)
+	ts := httptest.NewServer(srv.Handler)
+	defer ts.Close()
+
+	for _, path := range []string{"/mcp", "/api/mcp", APIBasePath(cfg) + "/server/mcp"} {
+		t.Run(path, func(t *testing.T) {
+			get, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)
+			require.NoError(t, err)
+			getResponse, err := ts.Client().Do(get)
+			require.NoError(t, err)
+			defer func() { _ = getResponse.Body.Close() }()
+			assert.Equal(t, http.StatusMethodNotAllowed, getResponse.StatusCode)
+			assert.Contains(t, getResponse.Header.Get("Content-Type"), "application/json")
+
+			post, err := http.NewRequest(http.MethodPost, ts.URL+path, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+			require.NoError(t, err)
+			post.Header.Set("Content-Type", "application/json")
+			postResponse, err := ts.Client().Do(post)
+			require.NoError(t, err)
+			defer func() { _ = postResponse.Body.Close() }()
+			assert.Equal(t, http.StatusUnauthorized, postResponse.StatusCode)
+			assert.Contains(t, postResponse.Header.Get("Content-Type"), "application/json")
+		})
+	}
+}
+
+func TestHelpAPIMirrorsExposeRegisteredPagesAndMCPData(t *testing.T) {
+	cfg := newTestConfig(t)
+	srv := newTestServer(t, cfg)
+	ts := httptest.NewServer(srv.Handler)
+	defer ts.Close()
+
+	request, err := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/server/help", nil)
+	require.NoError(t, err)
+	request.Header.Set("Accept", "application/json")
+	response, err := ts.Client().Do(request)
+	require.NoError(t, err)
+	defer func() { _ = response.Body.Close() }()
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	var help struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Pages []map[string]string `json:"pages"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&help))
+	require.True(t, help.OK)
+	require.Len(t, help.Data.Pages, 1)
+	assert.Equal(t, "/server/help/mcp", help.Data.Pages[0]["path"])
+	assert.NotEmpty(t, help.Data.Pages[0]["title"])
+	assert.Len(t, help.Data.Pages[0], 2)
+
+	mcpRequest, err := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/server/help/mcp", nil)
+	require.NoError(t, err)
+	mcpRequest.Header.Set("Accept", "application/json")
+	mcpResponse, err := ts.Client().Do(mcpRequest)
+	require.NoError(t, err)
+	defer func() { _ = mcpResponse.Body.Close() }()
+	require.Equal(t, http.StatusOK, mcpResponse.StatusCode)
+	var mcp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Enabled bool     `json:"enabled"`
+			URL     string   `json:"url"`
+			Aliases []string `json:"aliases"`
+			Auth    struct {
+				Scheme string `json:"scheme"`
+			} `json:"auth"`
+			Tools []struct {
+				Name        string `json:"name"`
+				Description string `json:"description"`
+			} `json:"tools"`
+			Project string `json:"project"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(mcpResponse.Body).Decode(&mcp))
+	require.True(t, mcp.OK)
+	assert.True(t, mcp.Data.Enabled)
+	assert.Contains(t, mcp.Data.URL, "/api/v1/server/mcp")
+	assert.Equal(t, "Bearer", mcp.Data.Auth.Scheme)
+	assert.NotEmpty(t, mcp.Data.Project)
+	assert.NotEmpty(t, mcp.Data.Tools)
+}
+
+func TestHealthPageUsesSharedPublicShellAndTranslatedSections(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Server.Branding.Title = "Health Test"
+	cfg.Server.Branding.Tagline = "Status overview"
+	srv := New(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/server/healthz?lang=es", nil)
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	rec := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+	body := rec.Body.String()
+	assert.Contains(t, body, `<title>api - Estado del servidor</title>`)
+	assert.Contains(t, body, `id="main-content"`)
+	assert.Regexp(t, `data-base-url="http://example\.com:\d+"`, body)
+	assert.Contains(t, body, `class="theme-dark"`)
+	assert.Contains(t, body, `<h1 class="page-title">📦 Health Test</h1>`)
+	assert.Contains(t, body, `<h2>Versión y compilación</h2>`)
+	assert.Contains(t, body, `<h2>Tiempo de ejecución</h2>`)
+	assert.Contains(t, body, `<h2>Funciones</h2>`)
+	assert.Contains(t, body, `<h2>Estado de componentes</h2>`)
+	assert.Contains(t, body, `<h2>Estadísticas del servidor</h2>`)
+
+	positions := []int{
+		strings.Index(body, `<h1 class="page-title">📦 Health Test</h1>`),
+		strings.Index(body, `class="status-banner`),
+		strings.Index(body, `<h2>Versión y compilación</h2>`),
+		strings.Index(body, `<h2>Tiempo de ejecución</h2>`),
+		strings.Index(body, `<h2>Funciones</h2>`),
+		strings.Index(body, `<h2>Estado de componentes</h2>`),
+		strings.Index(body, `<h2>Estadísticas del servidor</h2>`),
+	}
+	for i := 1; i < len(positions); i++ {
+		assert.Greater(t, positions[i], positions[i-1], "health sections follow PART 13 order")
+	}
+}
+
+func TestHealthPageDatasetLabelsAndDates(t *testing.T) {
+	cfg := newTestConfig(t)
+	req := httptest.NewRequest(http.MethodGet, "/server/healthz?lang=fr", nil)
+	localTime := time.Date(2025, time.February, 3, 12, 34, 56, 0, time.FixedZone("test", -7*60*60))
+	response := handler.HealthResponse{
+		Timestamp: localTime,
+		Build:     handler.BuildInfo{Date: localTime.Format(time.RFC3339)},
+		Checks: handler.ChecksInfo{Datasets: []health.Check{
+			{Key: "cve_nvd", Status: "ok"},
+			{Key: "trivy_db", Status: "ok"},
+			{Key: "blocklist_firehol_level1", Status: "ok"},
+			{Key: "geoip_country", Status: "ok"},
+		}},
+	}
+	data := newHealthPageData(cfg, req, response)
+
+	assert.Equal(t, "2025-02-03T19:34:56Z", data.TimestampText)
+	assert.Equal(t, "2025-02-03T19:34:56Z", data.BuildDateText)
+	require.Len(t, data.Checks, 4)
+	assert.Equal(t, "Données de vulnérabilités NVD", data.Checks[0].Label)
+	assert.Equal(t, "Base de données de vulnérabilités Trivy", data.Checks[1].Label)
+	assert.Equal(t, "Source de liste de blocage : firehol_level1", data.Checks[2].Label)
+	assert.Equal(t, "Vérification de santé : geoip_country", data.Checks[3].Label)
 }

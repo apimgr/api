@@ -331,11 +331,10 @@ func buildHeaderAutoMap(cfg *Config, declared map[string][]string) []AutoTighten
 		h.ClearSiteData.ExecutionContexts = true
 	}
 
-	// Permissions-Policy sensors/camera/mic/geo lock (coppa row) and the
-	// FERPA tracking-proposals lock are both already "()" in
-	// defaultConfig() (see PermissionsPolicyConfig in config.go), so they
-	// never produce a logged change — the row's requirement is satisfied
-	// by this project's existing default, not by this auto-map.
+	// Permissions-Policy is fixed by the project declaration and is not
+	// configurable. This project declares no sensor, camera, microphone, or
+	// geolocation use, so those features remain locked; tracking proposals
+	// are always disabled by the policy builder.
 
 	// server_timing_in_debug_only (hipaa row) is already true in
 	// defaultConfig() ("already default" per the AI.md table itself) — no

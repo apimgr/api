@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/mode"
 )
 
@@ -43,6 +44,10 @@ func (w *serverTimingWriter) RecordTiming(name string, d time.Duration) {
 		return
 	}
 	w.timings = append(w.timings, timingEntry{name: name, dur: d})
+}
+
+func (w *serverTimingWriter) RecordDatabaseTiming(d time.Duration) {
+	w.RecordTiming("db", d)
 }
 
 // flushServerTiming builds and sets the Server-Timing header exactly once,
@@ -152,25 +157,8 @@ func recordServerTiming(w http.ResponseWriter, name string, d time.Duration) {
 // compress, security headers, rate limiting, CORS) and captures
 // Server-Timing on every response, including early rejections.
 //
-// Only "total" (whole request duration) is implemented. "db" is
-// intentionally NOT implemented: this project's HTTP handlers never call
-// the database package directly (see src/database/database.go) — only
-// src/main.go (bootstrap) and src/scheduler/tasks.go (background jobs, not
-// per-request) touch GetServerDB(), so there is no per-request DB call site
-// to accumulate query time from without inventing one.
-//
-// "render" was also investigated: src/server/server.go's renderPage is a
-// realistic, single chokepoint to time. It was NOT wired up, though —
-// timing it requires buffering template output (so the Server-Timing
-// header can still be set before the first byte reaches the client), and
-// buffering changes renderPage's error behavior: today, a template
-// execution error part-way through a page write still gets flushed
-// (implicit 200, truncated body) because bytes already reached the
-// ResponseWriter before the error surfaced. Buffering instead makes that
-// error a clean 500, which is more correct but a larger behavioral change
-// than this header warrants. recordServerTiming/findServerTimingWriter
-// remain here, fully implemented and unit-tested, ready for renderPage (or
-// any other call site) to opt into a "render"/other named span later.
+// Database operations and buffered template execution record named spans
+// before the response headers are written, alongside whole-request duration.
 func serverTimingMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +173,8 @@ func serverTimingMiddleware(cfg *config.Config) func(http.Handler) http.Handler 
 				start:          time.Now(),
 				enabled:        true,
 			}
-			next.ServeHTTP(stw, r)
+			ctx := database.WithRequestTimingRecorder(r.Context(), stw)
+			next.ServeHTTP(stw, r.WithContext(ctx))
 			// In case the handler never wrote anything at all (e.g. an
 			// empty 204/304 without an explicit WriteHeader call — rare
 			// but possible), flush here so the header still goes out via

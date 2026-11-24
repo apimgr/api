@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">🖼️ Images</h1>
+    <h1 class="hero-title">{{t .Lang "page_text.text.images.221dff1bea"}}</h1>
     <p class="hero-subtitle">
-      image resize, crop, filters, and manipulation
+      {{t .Lang "page_text.text.image.resize.crop.filters.and.manipulation.cb6285a81a"}}
     </p>
   </div>
 </section>
@@ -11,76 +11,76 @@
 <section>
   <div class="container">
     <div class="category-grid">
-      <a href="/image/resize" class="category-card">
+      <a href="{{path .BaseURL "/image/resize"}}" class="category-card">
         <div class="category-icon">📐</div>
-        <h3 class="category-title">Resize Image</h3>
-        <p class="category-description">Resize images to any dimension</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.resize.image.6cc5dc4897"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.resize.images.to.any.dimension.69e9bc0464"}}</p>
       </a>
       
-      <a href="/image/crop" class="category-card">
+      <a href="{{path .BaseURL "/image/crop"}}" class="category-card">
         <div class="category-icon">✂️</div>
-        <h3 class="category-title">Crop Image</h3>
-        <p class="category-description">Crop images</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.crop.image.fb3dabcf0d"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.crop.images.f6b1aa2ec2"}}</p>
       </a>
       
-      <a href="/image/filter" class="category-card">
+      <a href="{{path .BaseURL "/image/filter"}}" class="category-card">
         <div class="category-icon">🎨</div>
-        <h3 class="category-title">Image Filters</h3>
-        <p class="category-description">Grayscale, sepia, blur, sharpen</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.image.filters.77b717a4ea"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.grayscale.sepia.blur.sharpen.a58a622611"}}</p>
       </a>
       
-      <a href="/image/convert" class="category-card">
+      <a href="{{path .BaseURL "/image/convert"}}" class="category-card">
         <div class="category-icon">🔄</div>
-        <h3 class="category-title">Format Convert</h3>
-        <p class="category-description">Convert PNG, JPG, WEBP, GIF</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.format.convert.93b709e9d9"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.convert.png.jpg.webp.gif.3d3bc76427"}}</p>
       </a>
       
-      <a href="/image/qr" class="category-card">
+      <a href="{{path .BaseURL "/image/qr"}}" class="category-card">
         <div class="category-icon">📱</div>
-        <h3 class="category-title">QR Code Image</h3>
-        <p class="category-description">Generate QR code images</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.qr.code.image.950ecb830e"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.qr.code.images.14d30ec578"}}</p>
       </a>
       
-      <a href="/image/barcode" class="category-card">
-        <div class="category-icon">〡〡〡</div>
-        <h3 class="category-title">Barcode Image</h3>
-        <p class="category-description">Generate barcode images</p>
+      <a href="{{path .BaseURL "/image/barcode"}}" class="category-card">
+        <div class="category-icon">{{t .Lang "page_text.text.message.d990e76b76"}}</div>
+        <h3 class="category-title">{{t .Lang "page_text.text.barcode.image.f16b369048"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.barcode.images.3aa9674f8d"}}</p>
       </a>
       
-      <a href="/image/placeholder" class="category-card">
+      <a href="{{path .BaseURL "/image/placeholder"}}" class="category-card">
         <div class="category-icon">🖼️</div>
-        <h3 class="category-title">Placeholder</h3>
-        <p class="category-description">Generate placeholder images</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.placeholder.f4b24fed02"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.placeholder.images.feb3fb1121"}}</p>
       </a>
       
-      <a href="/image/avatar" class="category-card">
+      <a href="{{path .BaseURL "/image/avatar"}}" class="category-card">
         <div class="category-icon">👤</div>
-        <h3 class="category-title">Avatar</h3>
-        <p class="category-description">Generate avatar from initials</p>
+        <h3 class="category-title">{{t .Lang "users.profile.avatar"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.avatar.from.initials.bdffa92fca"}}</p>
       </a>
       
-      <a href="/image/identicon" class="category-card">
+      <a href="{{path .BaseURL "/image/identicon"}}" class="category-card">
         <div class="category-icon">🔷</div>
-        <h3 class="category-title">Identicon</h3>
-        <p class="category-description">Generate identicons</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.identicon.0f3e8a1bd5"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.generate.identicons.70eb85292b"}}</p>
       </a>
       
-      <a href="/image/metadata" class="category-card">
+      <a href="{{path .BaseURL "/image/metadata"}}" class="category-card">
         <div class="category-icon">📋</div>
-        <h3 class="category-title">Metadata Extract</h3>
-        <p class="category-description">Extract EXIF data</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.metadata.extract.28cfb08cec"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.extract.exif.data.eb89b3dd5f"}}</p>
       </a>
       
-      <a href="/image/optimize" class="category-card">
+      <a href="{{path .BaseURL "/image/optimize"}}" class="category-card">
         <div class="category-icon">⚡</div>
-        <h3 class="category-title">Optimize</h3>
-        <p class="category-description">Compress and optimize</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.optimize.aa5f530acb"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.compress.and.optimize.f90180c4bd"}}</p>
       </a>
       
-      <a href="/image/watermark" class="category-card">
+      <a href="{{path .BaseURL "/image/watermark"}}" class="category-card">
         <div class="category-icon">©️</div>
-        <h3 class="category-title">Watermark</h3>
-        <p class="category-description">Add watermarks</p>
+        <h3 class="category-title">{{t .Lang "page_text.text.watermark.3bebd4c4e3"}}</h3>
+        <p class="category-description">{{t .Lang "page_text.text.add.watermarks.08ea8b93f9"}}</p>
       </a>
     </div>
   </div>

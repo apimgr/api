@@ -1,0 +1,30 @@
+{{define "content"}}
+<article class="container container-sm">
+  <header class="page-header">
+    <h1 class="page-title">{{t .Lang "security.title"}}</h1>
+    <p class="page-lead">{{tf .Lang "security.lead" (dict "app_name" .SiteTitle)}}</p>
+  </header>
+
+  <section class="section-card" aria-labelledby="security-reporting">
+    <h2 id="security-reporting">{{t .Lang "security.report_title"}}</h2>
+    <p>{{t .Lang "security.repo_intro"}}</p>
+    {{if .SecurityReportURL}}<p><a href="{{.SecurityReportURL}}" rel="noopener">{{t .Lang "security.repo_link"}}</a></p>{{end}}
+    {{if .SecurityContactURL}}<p>{{t .Lang "security.instance_intro"}} <a href="{{.SecurityContactURL}}">{{t .Lang "security.instance_link"}}</a>.</p>{{end}}
+    {{if .SecurityEmail}}<p>{{t .Lang "security.contact_label"}} <a href="mailto:{{.SecurityEmail}}">{{.SecurityEmail}}</a></p>{{end}}
+    {{if .SecurityPGPURL}}<p><a href="{{.SecurityPGPURL}}">{{t .Lang "security.pgp_key"}}</a></p>{{end}}
+    <p>{{t .Lang "security.other_intro"}} <a href="{{path .BaseURL "/server/contact"}}">{{t .Lang "contact.title"}}</a>.</p>
+    <p><a href="{{path .BaseURL "/server/security/thanks"}}">{{t .Lang "security.thanks_title"}}</a></p>
+  </section>
+
+  <section class="section-card" aria-labelledby="security-disclosure">
+    <h2 id="security-disclosure">{{t .Lang "security.disclosure_title"}}</h2>
+    <p>{{t .Lang "security.disclosure_intro"}}</p>
+    <p>{{t .Lang "security.safe_harbor"}}</p>
+    <ul>
+      <li><a href="{{path .BaseURL "/server/security/policy"}}">{{t .Lang "security.policy_link"}}</a></li>
+      <li><a href="{{path .BaseURL "/.well-known/security.txt"}}">{{t .Lang "security.security_txt_link"}}</a></li>
+    </ul>
+    {{if .SecurityExpires}}<p>{{t .Lang "security.expires"}} <time>{{.SecurityExpires}}</time></p>{{end}}
+  </section>
+</article>
+{{end}}

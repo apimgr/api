@@ -4,44 +4,53 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/generate">Generators</a> / API Documentation
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/generate"}}">{{t .Lang "categories.generate.name"}}</a> {{t .Lang "tool_pages.text.api.documentation.729b7b4c2e"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">API Documentation</h1>
-        <button class="btn btn-icon" data-favorite="generate-api-docs" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "help.api_documentation"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="generate-api-docs" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Generate API documentation from the live OpenAPI spec, as Markdown or JSON.
+        {{t .Lang "tool_pages.text.generate.api.documentation.from.the.live.ope.7bcf1ad2be"}}
       </p>
 
-      <form id="api-docs-form" class="tool-form" data-template="{{.APIBasePath}}/generate/api-docs?format={format}&version={version}">
+      <form id="api-docs-form" class="tool-form" data-template="{{.APIBasePath}}/generate/api-docs?format={format}&version={version}" method="post" action="{{path .BaseURL "/generate/api-docs"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Format</label>
-          <select name="format" class="form-input">
-            <option value="markdown">Markdown</option>
+          <label class="form-label" for="api-docs-form-format">{{t .Lang "tool_pages.text.format.2f343666aa"}}</label>
+          <select name="format" class="form-input" id="api-docs-form-format">
+            <option value="markdown">{{t .Lang "tool_pages.text.markdown.0e52f6b9d0"}}</option>
             <option value="json">JSON</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Version</label>
-          <input type="text" name="version" class="form-input" placeholder="v1" value="v1">
+          <label class="form-label" for="api-docs-form-version">{{t .Lang "health.version"}}</label>
+          <input type="text" name="version" class="form-input" placeholder="{{t .Lang "tool_pages.text.v1.3bfc269594"}}" value="v1" id="api-docs-form-version">
         </div>
 
-        <button type="submit" class="btn btn-primary">Generate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "common.generate"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="api-docs-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">GET Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.get_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl "{{.BaseURL}}{{.APIBasePath}}/generate/api-docs?format=markdown&version=v1"</pre>

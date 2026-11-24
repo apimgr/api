@@ -58,13 +58,8 @@ func SetConfigValue(ctx context.Context, key, value string) error {
 	return nil
 }
 
-// PingServerDB verifies the server database connection is usable. It is the
-// connectivity probe used by health checks, so callers never need a raw
-// *sql.DB handle just to test liveness.
+// PingServerDB verifies both server database handles with the same probe used
+// by health checks and database-error notifications.
 func PingServerDB(ctx context.Context) error {
-	db := GetServerDB()
-	if db == nil {
-		return fmt.Errorf("database not initialized")
-	}
-	return db.PingContext(ctx)
+	return ProbeServerDB(ctx)
 }

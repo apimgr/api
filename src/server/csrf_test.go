@@ -150,6 +150,18 @@ func TestCSRFMiddleware_APIPathBypassesCheck(t *testing.T) {
 	}
 }
 
+func TestCSRFMiddleware_RootMCPAliasBypassesCheck(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	newCSRFTestHandler(csrfTestConfig(nil)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the root MCP alias is API-class and must reach bearer validation, got %d", rec.Code)
+	}
+}
+
 func TestCSRFMiddleware_MultipartFieldIsAccepted(t *testing.T) {
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
@@ -181,7 +193,7 @@ func TestCSRFMiddleware_MultipartFieldIsAccepted(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		w.WriteHeader(http.StatusOK)
 	}))
 	handler.ServeHTTP(rec, req)

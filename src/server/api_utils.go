@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -61,14 +62,43 @@ var (
 // consumed the body and the "body" form field stands in for it.
 func readRequestBody(r *http.Request) ([]byte, error) {
 	if body, ok := r.Context().Value(formBodyContextKey).(string); ok {
-		return []byte(body), nil
+		return []byte(strings.TrimSpace(body)), nil
 	}
-	return io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	limit := int64(1 << 20)
+	if cfg, ok := r.Context().Value(serverConfigKey).(*config.Config); ok && cfg != nil {
+		limit = cfg.Server.Limits.MaxBodySizeBytes()
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > limit {
+		return nil, errors.New("request body exceeds configured limit")
+	}
+	return []byte(strings.TrimSpace(string(body))), nil
 }
 
 // decodeJSONBody decodes the request body as JSON into dst.
 func decodeJSONBody(r *http.Request, dst interface{}) error {
-	return json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(dst)
+	raw, err := readRequestBody(r)
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	normalized, valid := normalizeJSONInputValue("", value)
+	if !valid {
+		return errors.New("password cannot start or end with whitespace")
+	}
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(encoded, dst)
 }
 
 // queryOrJSONField reads a string field first from the ?{queryKey}= query
@@ -98,7 +128,7 @@ type dockerVersionParams struct {
 // "version" is the parsed image tag.
 func apiDockerVersionHandler(w http.ResponseWriter, r *http.Request) {
 	params := dockerVersionParams{Image: r.URL.Query().Get("image")}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 	info := dockerService.ParseImageName(params.Image)
@@ -127,7 +157,7 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 	if action == "" {
 		action = "format"
 	}
-	if !validateStruct(w, dockerPortMappingParams{Action: action}) {
+	if !validateStruct(w, r, dockerPortMappingParams{Action: action}) {
 		return
 	}
 
@@ -135,24 +165,24 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 	case "format":
 		hostPort, err := strconv.Atoi(q.Get("host"))
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HOST_PORT", "host query parameter must be an integer", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HOST_PORT")
 			return
 		}
 		containerPort, err := strconv.Atoi(q.Get("container"))
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CONTAINER_PORT", "container query parameter must be an integer", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CONTAINER_PORT")
 			return
 		}
 		mapping := dockerService.FormatPortMapping(hostPort, containerPort, q.Get("protocol"))
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"mapping": mapping})
 	case "parse":
 		mapping := q.Get("mapping")
-		if !validateStruct(w, dockerPortMappingMappingParams{Mapping: mapping}) {
+		if !validateStruct(w, r, dockerPortMappingMappingParams{Mapping: mapping}) {
 			return
 		}
 		hostPort, containerPort, protocol, err := dockerService.ParsePortMapping(mapping)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MAPPING", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MAPPING")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -176,7 +206,7 @@ type dockerVolumeParams struct {
 func apiDockerVolumeHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	params := dockerVolumeParams{Host: q.Get("host"), Container: q.Get("container")}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 	readOnly := config.IsTruthy(q.Get("readonly"))
@@ -197,10 +227,10 @@ type dockerfileGenerateParams struct {
 func apiDockerfileGenerateHandler(w http.ResponseWriter, r *http.Request) {
 	var cfg docker.DockerfileConfig
 	if err := decodeJSONBody(r, &cfg); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, dockerfileGenerateParams{BaseImage: cfg.BaseImage}) {
+	if !validateStruct(w, r, dockerfileGenerateParams{BaseImage: cfg.BaseImage}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -219,11 +249,11 @@ type dockerLintParams struct {
 func apiDockerLintHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	body := strings.TrimSpace(string(raw))
-	if !validateStruct(w, dockerLintParams{Body: body}) {
+	if !validateStruct(w, r, dockerLintParams{Body: body}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, dockerService.LintDockerfile(body))
@@ -248,11 +278,11 @@ type dockerComposeValidateParams struct {
 func apiDockerComposeValidateHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	body := strings.TrimSpace(string(raw))
-	if !validateStruct(w, dockerComposeValidateParams{Body: body}) {
+	if !validateStruct(w, r, dockerComposeValidateParams{Body: body}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, dockerService.ValidateCompose(body))
@@ -271,16 +301,16 @@ type dockerComposeToRunParams struct {
 func apiDockerComposeToRunHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	body := strings.TrimSpace(string(raw))
-	if !validateStruct(w, dockerComposeToRunParams{Body: body}) {
+	if !validateStruct(w, r, dockerComposeToRunParams{Body: body}) {
 		return
 	}
 	cmd, err := dockerService.ComposeToRunCommand(body, r.URL.Query().Get("service"))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COMPOSE", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COMPOSE")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"command": cmd})
@@ -298,16 +328,16 @@ type dockerRunToComposeParams struct {
 func apiDockerRunToComposeHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	body := strings.TrimSpace(string(raw))
-	if !validateStruct(w, dockerRunToComposeParams{Body: body}) {
+	if !validateStruct(w, r, dockerRunToComposeParams{Body: body}) {
 		return
 	}
 	compose, err := dockerService.RunCommandToCompose(body)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COMMAND", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COMMAND")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"compose": compose})
@@ -325,11 +355,11 @@ type dockerEnvParserParams struct {
 func apiDockerEnvParserHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	body := strings.TrimSpace(string(raw))
-	if !validateStruct(w, dockerEnvParserParams{Body: body}) {
+	if !validateStruct(w, r, dockerEnvParserParams{Body: body}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, dockerService.ParseEnvFile(body))
@@ -349,7 +379,7 @@ func apiDockerNetworkHelperHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := dockerService.GenerateNetworkConfig(cfg)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_NETWORK_CONFIG", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_NETWORK_CONFIG")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, result)
@@ -367,11 +397,11 @@ type dockerSecurityScanParams struct {
 func apiDockerSecurityScanHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	body := strings.TrimSpace(string(raw))
-	if !validateStruct(w, dockerSecurityScanParams{Body: body}) {
+	if !validateStruct(w, r, dockerSecurityScanParams{Body: body}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, dockerService.ScanSecurity(body))
@@ -389,10 +419,10 @@ type dockerSizeOptimizerParams struct {
 func apiDockerSizeOptimizerHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, dockerSizeOptimizerParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, dockerSizeOptimizerParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, dockerService.OptimizeSize(string(raw)))
@@ -404,7 +434,7 @@ func apiWeatherCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	weatherData, err := weatherService.GetCurrentWeather(location)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, weatherData)
@@ -425,17 +455,17 @@ func apiWeatherForecastHandler(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("days"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DAYS", "days must be an integer between 1 and 16", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_DAYS")
 			return
 		}
 		days = parsed
 	}
-	if !validateStruct(w, weatherForecastParams{Days: days}) {
+	if !validateStruct(w, r, weatherForecastParams{Days: days}) {
 		return
 	}
 	forecast, err := weatherService.GetForecast(location, days)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -451,7 +481,7 @@ func apiWeatherAirQualityHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	data, err := weatherService.GetAirQuality(location)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, data)
@@ -464,7 +494,7 @@ func apiWeatherAlertsHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	alerts, err := weatherService.GetAlerts(location)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -479,7 +509,7 @@ func apiWeatherAstronomyHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	data, err := weatherService.GetAstronomy(location)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, data)
@@ -500,12 +530,12 @@ func apiWeatherHistoricalHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	start := r.URL.Query().Get("start")
 	end := r.URL.Query().Get("end")
-	if !validateStruct(w, weatherHistoricalParams{Start: start, End: end}) {
+	if !validateStruct(w, r, weatherHistoricalParams{Start: start, End: end}) {
 		return
 	}
 	data, err := weatherService.GetHistorical(location, start, end)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -531,17 +561,17 @@ func apiWeatherHourlyHandler(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("hours"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HOURS", "hours must be an integer between 1 and 48", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HOURS")
 			return
 		}
 		hours = parsed
 	}
-	if !validateStruct(w, weatherHourlyParams{Hours: hours}) {
+	if !validateStruct(w, r, weatherHourlyParams{Hours: hours}) {
 		return
 	}
 	data, err := weatherService.GetHourly(location, hours)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -554,7 +584,7 @@ func apiWeatherHourlyHandler(w http.ResponseWriter, r *http.Request) {
 // apiWeatherMapsHandler is a permanent gap: keyless weather tile/map
 // imagery has no free provider within IDEA.md's outbound-call boundary.
 func apiWeatherMapsHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "weather map tile imagery requires a keyed provider (e.g. RainViewer, OpenWeatherMap tiles); no free keyless provider exists within this project's declared outbound-call boundary; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiWeatherMarineHandler returns current marine/ocean conditions for the
@@ -564,7 +594,7 @@ func apiWeatherMarineHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	data, err := weatherService.GetMarine(location)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, data)
@@ -577,7 +607,7 @@ func apiWeatherPollenHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	data, err := weatherService.GetPollen(location)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, data)
@@ -586,7 +616,7 @@ func apiWeatherPollenHandler(w http.ResponseWriter, r *http.Request) {
 // apiWeatherRadarHandler is a permanent gap: keyless weather radar imagery
 // has no free provider within IDEA.md's outbound-call boundary.
 func apiWeatherRadarHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "weather radar imagery requires a keyed provider (e.g. RainViewer, NOAA radar mosaics); no free keyless provider exists within this project's declared outbound-call boundary; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiWeatherUVHandler returns the current UV index for the {location}
@@ -595,7 +625,7 @@ func apiWeatherUVHandler(w http.ResponseWriter, r *http.Request) {
 	location := paramValue(r, "location")
 	data, err := weatherService.GetUVIndex(location)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, data)
@@ -609,7 +639,7 @@ func apiWeatherUVHandler(w http.ResponseWriter, r *http.Request) {
 // handler so the three routes cannot diverge.
 func writeIPLookupError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, osint.ErrInvalidIP) || errors.Is(err, osint.ErrIPNotPermitted) {
-		writeEnvelopeError(w, http.StatusBadRequest, "IP_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IP_LOOKUP_FAILED")
 		return
 	}
 
@@ -620,7 +650,7 @@ func writeIPLookupError(w http.ResponseWriter, r *http.Request, err error) {
 			"http_status": http.StatusInternalServerError,
 		})
 	}
-	writeEnvelopeError(w, http.StatusInternalServerError, "IP_LOOKUP_FAILED", "IP lookup is temporarily unavailable", nil)
+	writeLocalizedAPIError(w, r, http.StatusInternalServerError, "IP_LOOKUP_FAILED")
 }
 
 // apiGeoIPHandler resolves geolocation for the {ip} path parameter. The
@@ -681,7 +711,7 @@ func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	lat1, lon1, lat2, lon2, err := parseGeoCoordinateParams(q)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 
@@ -689,7 +719,7 @@ func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
 	if unit == "" {
 		unit = "km"
 	}
-	if !validateStruct(w, geoDistanceParams{Unit: unit}) {
+	if !validateStruct(w, r, geoDistanceParams{Unit: unit}) {
 		return
 	}
 
@@ -712,7 +742,7 @@ func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
 func apiGeoBearingHandler(w http.ResponseWriter, r *http.Request) {
 	lat1, lon1, lat2, lon2, err := parseGeoCoordinateParams(r.URL.Query())
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]float64{
@@ -725,7 +755,7 @@ func apiGeoBearingHandler(w http.ResponseWriter, r *http.Request) {
 func apiGeoMidpointHandler(w http.ResponseWriter, r *http.Request) {
 	lat1, lon1, lat2, lon2, err := parseGeoCoordinateParams(r.URL.Query())
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, geoService.Midpoint(lat1, lon1, lat2, lon2))
@@ -767,13 +797,13 @@ type geoGeocodeParams struct {
 // using the free, keyless Nominatim (OpenStreetMap) search API.
 func apiGeoGeocodeHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
-	if !validateStruct(w, geoGeocodeParams{Query: query}) {
+	if !validateStruct(w, r, geoGeocodeParams{Query: query}) {
 		return
 	}
 
 	results, err := geoService.Geocode(query)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "UPSTREAM_ERROR", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "UPSTREAM_ERROR")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -787,13 +817,13 @@ func apiGeoGeocodeHandler(w http.ResponseWriter, r *http.Request) {
 func apiGeoReverseHandler(w http.ResponseWriter, r *http.Request) {
 	lat, lon, err := parseGeoSingleCoordinateParams(r.URL.Query())
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 
 	result, err := geoService.ReverseGeocode(lat, lon)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "UPSTREAM_ERROR", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "UPSTREAM_ERROR")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, result)
@@ -805,13 +835,13 @@ func apiGeoReverseHandler(w http.ResponseWriter, r *http.Request) {
 func apiGeoTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 	lat, lon, err := parseGeoSingleCoordinateParams(r.URL.Query())
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 
 	result, err := geoService.Timezone(lat, lon)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "UPSTREAM_ERROR", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "UPSTREAM_ERROR")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, result)
@@ -822,13 +852,13 @@ func apiGeoTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 // a country name, alpha-2 code, or alpha-3 code.
 func apiGeoCountryHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
-	if !validateStruct(w, geoGeocodeParams{Query: query}) {
+	if !validateStruct(w, r, geoGeocodeParams{Query: query}) {
 		return
 	}
 
 	info, err := geoService.Country(query)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "COUNTRY_NOT_FOUND", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "COUNTRY_NOT_FOUND")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, info)
@@ -843,7 +873,7 @@ func apiGeoGeohashHandler(w http.ResponseWriter, r *http.Request) {
 	if hash := q.Get("hash"); hash != "" {
 		coord, err := geoService.GeohashDecode(hash)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_GEOHASH", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_GEOHASH")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -855,7 +885,7 @@ func apiGeoGeohashHandler(w http.ResponseWriter, r *http.Request) {
 
 	lat, lon, err := parseGeoSingleCoordinateParams(q)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 
@@ -863,7 +893,7 @@ func apiGeoGeohashHandler(w http.ResponseWriter, r *http.Request) {
 	if raw := q.Get("precision"); raw != "" {
 		v, convErr := strconv.Atoi(raw)
 		if convErr != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PRECISION", "precision must be an integer", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PRECISION")
 			return
 		}
 		precision = v
@@ -871,7 +901,7 @@ func apiGeoGeohashHandler(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := geoService.GeohashEncode(lat, lon, precision)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PARAMETERS")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -888,7 +918,7 @@ func apiGeoH3Handler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	lat, lon, err := parseGeoSingleCoordinateParams(q)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 
@@ -896,7 +926,7 @@ func apiGeoH3Handler(w http.ResponseWriter, r *http.Request) {
 	if raw := q.Get("resolution"); raw != "" {
 		v, convErr := strconv.Atoi(raw)
 		if convErr != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_RESOLUTION", "resolution must be an integer", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_RESOLUTION")
 			return
 		}
 		resolution = v
@@ -904,7 +934,7 @@ func apiGeoH3Handler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := geoService.H3Encode(lat, lon, resolution)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PARAMETERS")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, result)
@@ -918,7 +948,7 @@ func apiGeoPlusCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if code := q.Get("code"); code != "" {
 		coord, err := geoService.PlusCodeDecode(code)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PLUS_CODE", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PLUS_CODE")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -930,13 +960,13 @@ func apiGeoPlusCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	lat, lon, err := parseGeoSingleCoordinateParams(q)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 
 	result, err := geoService.PlusCodeEncode(lat, lon)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PARAMETERS")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, result)
@@ -960,13 +990,13 @@ func apiGeoBBoxHandler(w http.ResponseWriter, r *http.Request) {
 		for _, pair := range pairs {
 			parts := strings.Split(pair, ",")
 			if len(parts) != 2 {
-				writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDS", "each coords entry must be lat,lon", nil)
+				writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDS")
 				return
 			}
 			lat, latErr := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
 			lon, lonErr := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
 			if latErr != nil || lonErr != nil {
-				writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDS", "each coords entry must be numeric lat,lon", nil)
+				writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDS")
 				return
 			}
 			coords = append(coords, geo.Coordinate{Latitude: lat, Longitude: lon})
@@ -974,7 +1004,7 @@ func apiGeoBBoxHandler(w http.ResponseWriter, r *http.Request) {
 
 		box, err := geoService.BoundingBoxFromCoordinates(coords)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PARAMETERS")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, box)
@@ -983,23 +1013,23 @@ func apiGeoBBoxHandler(w http.ResponseWriter, r *http.Request) {
 
 	lat, lon, err := parseGeoSingleCoordinateParams(q)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COORDINATES", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
 
 	radiusRaw := q.Get("radius")
-	if !validateStruct(w, geoBBoxParams{Radius: radiusRaw}) {
+	if !validateStruct(w, r, geoBBoxParams{Radius: radiusRaw}) {
 		return
 	}
 	radius, err := strconv.ParseFloat(radiusRaw, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_RADIUS", "radius must be a number", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_RADIUS")
 		return
 	}
 
 	box, err := geoService.BoundingBoxFromRadius(lat, lon, radius)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PARAMETERS", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PARAMETERS")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, box)
@@ -1018,7 +1048,7 @@ type mathCalculateParams struct {
 func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	operation := strings.ToLower(q.Get("operation"))
-	if !validateStruct(w, mathCalculateParams{Operation: operation}) {
+	if !validateStruct(w, r, mathCalculateParams{Operation: operation}) {
 		return
 	}
 
@@ -1044,7 +1074,7 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		a, aOK := parseFloatParam("a")
 		b, bOK := parseFloatParam("b")
 		if !aOK || !bOK {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_OPERANDS", "a and b query parameters are required", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "MISSING_OPERANDS")
 			return
 		}
 		switch operation {
@@ -1057,7 +1087,7 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		case "divide":
 			result, err := mathService.Divide(a, b)
 			if err != nil {
-				writeEnvelopeError(w, http.StatusBadRequest, "DIVISION_BY_ZERO", err.Error(), nil)
+				writeLocalizedAPIError(w, r, http.StatusBadRequest, "DIVISION_BY_ZERO")
 				return
 			}
 			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": result})
@@ -1072,14 +1102,14 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		a, aOK := parseIntParam("a")
 		b, bOK := parseIntParam("b")
 		if !aOK || !bOK {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_OPERANDS", "a and b query parameters are required", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "MISSING_OPERANDS")
 			return
 		}
 		switch operation {
 		case "modulo":
 			result, err := mathService.Modulo(a, b)
 			if err != nil {
-				writeEnvelopeError(w, http.StatusBadRequest, "MODULO_BY_ZERO", err.Error(), nil)
+				writeLocalizedAPIError(w, r, http.StatusBadRequest, "MODULO_BY_ZERO")
 				return
 			}
 			writeEnvelopeOK(w, http.StatusOK, map[string]int64{"result": result})
@@ -1091,14 +1121,14 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 	case "sqrt", "cbrt", "abs", "round", "floor", "ceil", "log", "log10", "log2", "exp", "sin", "cos", "tan":
 		n, nOK := parseFloatParam("n")
 		if !nOK {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_OPERAND", "n query parameter is required", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "MISSING_OPERAND")
 			return
 		}
 		switch operation {
 		case "sqrt":
 			result, err := mathService.SquareRoot(n)
 			if err != nil {
-				writeEnvelopeError(w, http.StatusBadRequest, "NEGATIVE_SQUARE_ROOT", err.Error(), nil)
+				writeLocalizedAPIError(w, r, http.StatusBadRequest, "NEGATIVE_SQUARE_ROOT")
 				return
 			}
 			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": result})
@@ -1130,7 +1160,7 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 	case "factorial":
 		n, nOK := parseIntParam("n")
 		if !nOK {
-			writeEnvelopeError(w, http.StatusBadRequest, "MISSING_OPERAND", "n query parameter is required", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "MISSING_OPERAND")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": mathService.Factorial(n).String()})
@@ -1143,7 +1173,7 @@ func apiMathPrimeHandler(w http.ResponseWriter, r *http.Request) {
 	nParam := paramValue(r, "n")
 	n, err := strconv.ParseInt(nParam, 10, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "n must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
@@ -1168,15 +1198,15 @@ func apiMathRandomHandler(w http.ResponseWriter, r *http.Request) {
 
 	minVal, err := strconv.ParseInt(minParam, 10, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "min must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 	maxVal, err := strconv.ParseInt(maxParam, 10, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "max must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
-	if !validateStruct(w, mathRandomParams{Min: minVal, Max: maxVal}) {
+	if !validateStruct(w, r, mathRandomParams{Min: minVal, Max: maxVal}) {
 		return
 	}
 
@@ -1198,7 +1228,7 @@ type mathStatsParams struct {
 // math.Service methods.
 func apiMathStatsHandler(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("numbers")
-	if !validateStruct(w, mathStatsParams{Numbers: raw}) {
+	if !validateStruct(w, r, mathStatsParams{Numbers: raw}) {
 		return
 	}
 
@@ -1211,13 +1241,13 @@ func apiMathStatsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		v, err := strconv.ParseFloat(trimmed, 64)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_NUMBER", "numbers must be a comma-separated list of numeric values", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_NUMBER")
 			return
 		}
 		numbers = append(numbers, v)
 	}
 	if len(numbers) == 0 {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_NUMBERS", "numbers query parameter is required (comma-separated)", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "MISSING_NUMBERS")
 		return
 	}
 
@@ -1243,21 +1273,21 @@ type mathFibonacciParams struct {
 func apiMathFibonacciHandler(w http.ResponseWriter, r *http.Request) {
 	countParam := r.URL.Query().Get("count")
 	if countParam == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "MISSING_COUNT", "count query parameter is required", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "MISSING_COUNT")
 		return
 	}
 	count, err := strconv.Atoi(countParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a non-negative integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COUNT")
 		return
 	}
-	if !validateStruct(w, mathFibonacciParams{Count: count}) {
+	if !validateStruct(w, r, mathFibonacciParams{Count: count}) {
 		return
 	}
 
 	values, err := mathService.Fibonacci(count)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COUNT")
 		return
 	}
 	sequence := make([]string, len(values))
@@ -1286,24 +1316,24 @@ func apiMathBaseHandler(w http.ResponseWriter, r *http.Request) {
 	number := q.Get("number")
 	fromBaseParam := q.Get("from_base")
 	toBaseParam := q.Get("to_base")
-	if !validateStruct(w, mathBaseParams{Number: number, FromBase: fromBaseParam, ToBase: toBaseParam}) {
+	if !validateStruct(w, r, mathBaseParams{Number: number, FromBase: fromBaseParam, ToBase: toBaseParam}) {
 		return
 	}
 
 	fromBase, err := strconv.Atoi(fromBaseParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "from_base must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 	toBase, err := strconv.Atoi(toBaseParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "to_base must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	result, err := mathService.BaseConvert(number, fromBase, toBase)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
@@ -1329,10 +1359,10 @@ type matrixRequest struct {
 func apiMathMatrixHandler(w http.ResponseWriter, r *http.Request) {
 	var req matrixRequest
 	if err := decodeJSONBody(r, &req); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", "request body must be JSON with operation, a, and (for add/multiply) b", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, req) {
+	if !validateStruct(w, r, req) {
 		return
 	}
 
@@ -1340,21 +1370,21 @@ func apiMathMatrixHandler(w http.ResponseWriter, r *http.Request) {
 	case "add":
 		result, err := mathService.MatrixAdd(req.A, req.B)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MATRIX", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MATRIX")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
 	case "multiply":
 		result, err := mathService.MatrixMultiply(req.A, req.B)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MATRIX", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MATRIX")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
 	case "determinant":
 		result, err := mathService.MatrixDeterminant(req.A)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MATRIX", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MATRIX")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
@@ -1379,32 +1409,32 @@ func apiMathSequenceHandler(w http.ResponseWriter, r *http.Request) {
 	startParam := q.Get("start")
 	stepParam := q.Get("step")
 	countParam := q.Get("count")
-	if !validateStruct(w, mathSequenceParams{Type: seqType, Start: startParam, Step: stepParam, Count: countParam}) {
+	if !validateStruct(w, r, mathSequenceParams{Type: seqType, Start: startParam, Step: stepParam, Count: countParam}) {
 		return
 	}
 
 	start, err := strconv.ParseFloat(startParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "start must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 	step, err := strconv.ParseFloat(stepParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "step must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 	count, err := strconv.Atoi(countParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COUNT", "count must be a non-negative integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COUNT")
 		return
 	}
-	if !validateStruct(w, mathFibonacciParams{Count: count}) {
+	if !validateStruct(w, r, mathFibonacciParams{Count: count}) {
 		return
 	}
 
 	values, err := mathService.Sequence(seqType, start, step, count)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
@@ -1442,13 +1472,13 @@ func apiConvertLengthHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := lengthConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1483,13 +1513,13 @@ func apiConvertTemperatureHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := temperatureConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1524,13 +1554,13 @@ func apiConvertWeightHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := weightConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1563,13 +1593,13 @@ func apiConvertVolumeHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := volumeConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1606,13 +1636,13 @@ func apiConvertTimeHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := timeConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1647,13 +1677,13 @@ func apiConvertAreaHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := areaConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1692,13 +1722,13 @@ func apiConvertDataHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := dataConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1733,13 +1763,13 @@ func apiConvertEnergyHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := energyConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1776,13 +1806,13 @@ func apiConvertPressureHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := pressureConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1819,13 +1849,13 @@ func apiConvertSpeedHandler(w http.ResponseWriter, r *http.Request) {
 
 	value, err := strconv.ParseFloat(valueParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_VALUE", "value must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VALUE")
 		return
 	}
 
 	fn, ok := speedConversions(convertService)[from+"-"+to]
 	if !ok {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_UNITS", "unsupported unit pair: "+from+"-"+to, nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_UNITS")
 		return
 	}
 
@@ -1853,19 +1883,19 @@ func apiConvertColorHandler(w http.ResponseWriter, r *http.Request) {
 	to := strings.ToLower(r.URL.Query().Get("to"))
 
 	params := convertColorParams{Value: value, From: from, To: to}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 
 	rgb, err := colorToRGB(convertService, value, from)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_COLOR", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COLOR")
 		return
 	}
 
 	result, err := rgbToColor(convertService, rgb, to)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNSUPPORTED_FORMAT", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNSUPPORTED_FORMAT")
 		return
 	}
 
@@ -1951,7 +1981,7 @@ func apiConvertCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 	to := r.URL.Query().Get("to")
 
 	params := convertCurrencyParams{From: from, To: to}
-	if !validateStruct(w, params) {
+	if !validateStruct(w, r, params) {
 		return
 	}
 
@@ -1960,14 +1990,14 @@ func apiConvertCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		amount, err = strconv.ParseFloat(amountParam, 64)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_AMOUNT", "amount must be numeric", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_AMOUNT")
 			return
 		}
 	}
 
 	result, err := convertService.ConvertCurrency(amount, from, to)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "CURRENCY_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "CURRENCY_LOOKUP_FAILED")
 		return
 	}
 
@@ -1983,13 +2013,13 @@ func apiDatetimeFormatHandler(w http.ResponseWriter, r *http.Request) {
 
 	timestamp, err := strconv.ParseInt(timestampParam, 10, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TIMESTAMP", "timestamp must be a unix integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_TIMESTAMP")
 		return
 	}
 
 	result, err := datetime.FormatDatetime(timestamp, format)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_FORMAT", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_FORMAT")
 		return
 	}
 
@@ -2003,7 +2033,7 @@ func apiDatetimeParseHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.ParseDateString(value)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "UNPARSEABLE_DATE", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "UNPARSEABLE_DATE")
 		return
 	}
 
@@ -2017,7 +2047,7 @@ func apiDatetimeCronHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.ParseCron(expression)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CRON", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CRON")
 		return
 	}
 
@@ -2032,19 +2062,19 @@ func apiDatetimeCalendarHandler(w http.ResponseWriter, r *http.Request) {
 
 	year, err := strconv.Atoi(yearParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_YEAR", "year must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_YEAR")
 		return
 	}
 
 	month, err := strconv.Atoi(monthParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MONTH", "month must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MONTH")
 		return
 	}
 
 	result, err := datetime.GenerateCalendar(year, month)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MONTH", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MONTH")
 		return
 	}
 
@@ -2059,7 +2089,7 @@ func apiDatetimeWorkdaysHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.WorkdaysBetween(start, end)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_DATE")
 		return
 	}
 
@@ -2076,19 +2106,19 @@ func apiDatetimeSunriseHandler(w http.ResponseWriter, r *http.Request) {
 
 	lat, err := strconv.ParseFloat(latParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LATITUDE", "lat must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_LATITUDE")
 		return
 	}
 
 	lon, err := strconv.ParseFloat(lonParam, 64)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LONGITUDE", "lon must be numeric", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_LONGITUDE")
 		return
 	}
 
 	result, err := datetime.SunriseSunset(lat, lon, date)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
 
@@ -2102,7 +2132,7 @@ func apiDatetimeMoonHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.MoonPhase(date)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_DATE")
 		return
 	}
 
@@ -2133,7 +2163,7 @@ func apiValidateEmailHandler(w http.ResponseWriter, r *http.Request) {
 			email = body.Email
 		}
 	}
-	if !validateStruct(w, validateEmailParams{Email: email}) {
+	if !validateStruct(w, r, validateEmailParams{Email: email}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2152,7 +2182,7 @@ type validateCreditCardParams struct {
 // supplied as ?number= or a JSON {"number":"..."} body.
 func apiValidateCreditCardHandler(w http.ResponseWriter, r *http.Request) {
 	number := queryOrJSONField(r, "number")
-	if !validateStruct(w, validateCreditCardParams{Number: number}) {
+	if !validateStruct(w, r, validateCreditCardParams{Number: number}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2171,7 +2201,7 @@ type validateDomainParams struct {
 // a JSON {"domain":"..."} body.
 func apiValidateDomainHandler(w http.ResponseWriter, r *http.Request) {
 	domain := queryOrJSONField(r, "domain")
-	if !validateStruct(w, validateDomainParams{Domain: domain}) {
+	if !validateStruct(w, r, validateDomainParams{Domain: domain}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2189,7 +2219,7 @@ type validateIPParams struct {
 // or a JSON {"ip":"..."} body.
 func apiValidateIPHandler(w http.ResponseWriter, r *http.Request) {
 	ip := queryOrJSONField(r, "ip")
-	if !validateStruct(w, validateIPParams{IP: ip}) {
+	if !validateStruct(w, r, validateIPParams{IP: ip}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2205,7 +2235,7 @@ func apiValidateIPHandler(w http.ResponseWriter, r *http.Request) {
 func apiValidateJSONHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "READ_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2223,7 +2253,7 @@ type validateMACParams struct {
 // JSON {"mac":"..."} body.
 func apiValidateMACHandler(w http.ResponseWriter, r *http.Request) {
 	mac := queryOrJSONField(r, "mac")
-	if !validateStruct(w, validateMACParams{MAC: mac}) {
+	if !validateStruct(w, r, validateMACParams{MAC: mac}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2242,7 +2272,7 @@ type validatePhoneParams struct {
 // a JSON {"phone":"..."} body.
 func apiValidatePhoneHandler(w http.ResponseWriter, r *http.Request) {
 	phone := queryOrJSONField(r, "phone")
-	if !validateStruct(w, validatePhoneParams{Phone: phone}) {
+	if !validateStruct(w, r, validatePhoneParams{Phone: phone}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2263,7 +2293,7 @@ type validateURLParams struct {
 // {"url":"..."} body.
 func apiValidateURLHandler(w http.ResponseWriter, r *http.Request) {
 	rawURL := queryOrJSONField(r, "url")
-	if !validateStruct(w, validateURLParams{URL: rawURL}) {
+	if !validateStruct(w, r, validateURLParams{URL: rawURL}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2282,7 +2312,7 @@ type validateUUIDParams struct {
 // {"uuid":"..."} body.
 func apiValidateUUIDHandler(w http.ResponseWriter, r *http.Request) {
 	uuidStr := queryOrJSONField(r, "uuid")
-	if !validateStruct(w, validateUUIDParams{UUID: uuidStr}) {
+	if !validateStruct(w, r, validateUUIDParams{UUID: uuidStr}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2301,7 +2331,7 @@ type validateIBANParams struct {
 // {"iban":"..."} body against the ISO 13616 mod-97 checksum.
 func apiValidateIBANHandler(w http.ResponseWriter, r *http.Request) {
 	iban := queryOrJSONField(r, "iban")
-	if !validateStruct(w, validateIBANParams{IBAN: iban}) {
+	if !validateStruct(w, r, validateIBANParams{IBAN: iban}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2320,7 +2350,7 @@ type validateISBNParams struct {
 // ?isbn= or a JSON {"isbn":"..."} body.
 func apiValidateISBNHandler(w http.ResponseWriter, r *http.Request) {
 	isbn := queryOrJSONField(r, "isbn")
-	if !validateStruct(w, validateISBNParams{ISBN: isbn}) {
+	if !validateStruct(w, r, validateISBNParams{ISBN: isbn}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2339,7 +2369,7 @@ type validateVATParams struct {
 // VAT registration number supplied as ?vat= or a JSON {"vat":"..."} body.
 func apiValidateVATHandler(w http.ResponseWriter, r *http.Request) {
 	vat := queryOrJSONField(r, "vat")
-	if !validateStruct(w, validateVATParams{VAT: vat}) {
+	if !validateStruct(w, r, validateVATParams{VAT: vat}) {
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -2353,12 +2383,12 @@ func apiValidateVATHandler(w http.ResponseWriter, r *http.Request) {
 func apiParseJSONHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	parsed, err := parseService.ParseJSON(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2375,15 +2405,15 @@ type parseXMLParams struct {
 func apiParseXMLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseXMLParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseXMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseXML(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_XML", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_XML")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2400,15 +2430,15 @@ type parseCSVParams struct {
 func apiParseCSVHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseCSVParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseCSVParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseCSV(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CSV", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CSV")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2425,15 +2455,15 @@ type parseEnvParams struct {
 func apiParseEnvHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseEnvParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseEnvParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseEnv(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ENV", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_ENV")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2450,15 +2480,15 @@ type parseHTMLParams struct {
 func apiParseHTMLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseHTMLParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseHTMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseHTML(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HTML", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HTML")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2475,15 +2505,15 @@ type parseINIParams struct {
 func apiParseINIHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseINIParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseINIParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseINI(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_INI", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_INI")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2500,15 +2530,15 @@ type parseLogParams struct {
 func apiParseLogHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseLogParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseLogParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseLogLines(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LOG", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_LOG")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2526,15 +2556,15 @@ type parseMarkdownParams struct {
 func apiParseMarkdownHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseMarkdownParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseMarkdownParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseMarkdownStructure(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_MARKDOWN", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MARKDOWN")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2552,15 +2582,15 @@ type parseSQLParams struct {
 func apiParseSQLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseSQLParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseSQLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseSQLStructure(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_SQL", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_SQL")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2577,15 +2607,15 @@ type parseTOMLParams struct {
 func apiParseTOMLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseTOMLParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseTOMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseTOML(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_TOML", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_TOML")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2602,15 +2632,15 @@ type parseYAMLParams struct {
 func apiParseYAMLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, parseYAMLParams{Body: strings.TrimSpace(string(raw))}) {
+	if !validateStruct(w, r, parseYAMLParams{Body: strings.TrimSpace(string(raw))}) {
 		return
 	}
 	parsed, err := parseService.ParseYAML(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_YAML", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_YAML")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, parsed)
@@ -2626,18 +2656,18 @@ func apiParseJWTHandler(w http.ResponseWriter, r *http.Request) {
 	token := paramValue(r, "token")
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT", "token must have three dot-separated segments (header.payload.signature)", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT")
 		return
 	}
 
 	header, err := decodeJWTSegment(parts[0])
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_HEADER", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT_HEADER")
 		return
 	}
 	payload, err := decodeJWTSegment(parts[1])
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_PAYLOAD", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT_PAYLOAD")
 		return
 	}
 
@@ -2653,7 +2683,7 @@ func apiParseJWTHandler(w http.ResponseWriter, r *http.Request) {
 // non-goal; src/service/language only offers code<->name lookup/listing,
 // which is not detection and would misrepresent the response if reused.
 func apiLanguageDetectHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "language auto-detection is a declared non-goal for this project; only language code/name lookup is supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // languageDictionaryParams validates the required word field for
@@ -2666,13 +2696,13 @@ type languageDictionaryParams struct {
 // free, keyless Free Dictionary API (dictionaryapi.dev).
 func apiLanguageDictionaryHandler(w http.ResponseWriter, r *http.Request) {
 	word := r.URL.Query().Get("word")
-	if !validateStruct(w, languageDictionaryParams{Word: strings.TrimSpace(word)}) {
+	if !validateStruct(w, r, languageDictionaryParams{Word: strings.TrimSpace(word)}) {
 		return
 	}
 
 	result, err := languageService.Dictionary(r.Context(), word)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusNotFound, "NOT_FOUND")
 		return
 	}
 
@@ -2689,13 +2719,13 @@ type languageThesaurusParams struct {
 // using the free, keyless Datamuse API.
 func apiLanguageThesaurusHandler(w http.ResponseWriter, r *http.Request) {
 	word := r.URL.Query().Get("word")
-	if !validateStruct(w, languageThesaurusParams{Word: strings.TrimSpace(word)}) {
+	if !validateStruct(w, r, languageThesaurusParams{Word: strings.TrimSpace(word)}) {
 		return
 	}
 
 	result, err := languageService.Thesaurus(r.Context(), word)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusNotFound, "NOT_FOUND")
 		return
 	}
 
@@ -2706,21 +2736,21 @@ func apiLanguageThesaurusHandler(w http.ResponseWriter, r *http.Request) {
 // supported. Not named in IDEA.md's declared Language scope of code/name
 // lookup, listing, dictionary, and thesaurus.
 func apiLanguageSpellCheckHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "spell-check is not named in this project's declared Language scope of code/name lookup, listing, dictionary, and thesaurus; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiLanguageGrammarHandler reports that grammar checking is not supported.
 // Not named in IDEA.md's declared Language scope of code/name lookup,
 // listing, dictionary, and thesaurus.
 func apiLanguageGrammarHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "grammar checking is not named in this project's declared Language scope of code/name lookup, listing, dictionary, and thesaurus; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiLanguageTranslateHandler reports that machine translation is not
 // supported. IDEA.md explicitly excludes "machine translation" as a
 // non-goal and forbids commercial translation among outbound integrations.
 func apiLanguageTranslateHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "machine translation is a declared non-goal for this project", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // languagePhoneticParams validates the required word field for
@@ -2733,7 +2763,7 @@ type languagePhoneticParams struct {
 // codes for a word supplied via ?word=.
 func apiLanguagePhoneticHandler(w http.ResponseWriter, r *http.Request) {
 	word := r.URL.Query().Get("word")
-	if !validateStruct(w, languagePhoneticParams{Word: strings.TrimSpace(word)}) {
+	if !validateStruct(w, r, languagePhoneticParams{Word: strings.TrimSpace(word)}) {
 		return
 	}
 
@@ -2757,12 +2787,12 @@ func apiLanguageWordCountHandler(w http.ResponseWriter, r *http.Request) {
 	if text == "" {
 		body, err := readRequestBody(r)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "TEXT_READ_FAILED")
 			return
 		}
 		text = string(body)
 	}
-	if !validateStruct(w, languageWordCountParams{Text: strings.TrimSpace(text)}) {
+	if !validateStruct(w, r, languageWordCountParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
@@ -2791,12 +2821,12 @@ func apiLanguageKeywordsHandler(w http.ResponseWriter, r *http.Request) {
 	if text == "" {
 		body, err := readRequestBody(r)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "TEXT_READ_FAILED")
 			return
 		}
 		text = string(body)
 	}
-	if !validateStruct(w, languageKeywordsParams{Text: strings.TrimSpace(text)}) {
+	if !validateStruct(w, r, languageKeywordsParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
@@ -2804,10 +2834,10 @@ func apiLanguageKeywordsHandler(w http.ResponseWriter, r *http.Request) {
 	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
 		parsed, err := strconv.Atoi(limitParam)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_LIMIT", "limit query parameter must be a positive integer", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_LIMIT")
 			return
 		}
-		if !validateStruct(w, languageKeywordsLimitParams{Limit: parsed}) {
+		if !validateStruct(w, r, languageKeywordsLimitParams{Limit: parsed}) {
 			return
 		}
 		limit = parsed
@@ -2832,12 +2862,12 @@ func apiLanguageReadabilityHandler(w http.ResponseWriter, r *http.Request) {
 	if text == "" {
 		body, err := readRequestBody(r)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "TEXT_READ_FAILED")
 			return
 		}
 		text = string(body)
 	}
-	if !validateStruct(w, languageReadabilityParams{Text: strings.TrimSpace(text)}) {
+	if !validateStruct(w, r, languageReadabilityParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
@@ -2866,12 +2896,12 @@ func apiLanguageReadingTimeHandler(w http.ResponseWriter, r *http.Request) {
 	if text == "" {
 		body, err := readRequestBody(r)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "TEXT_READ_FAILED")
 			return
 		}
 		text = string(body)
 	}
-	if !validateStruct(w, languageReadingTimeParams{Text: strings.TrimSpace(text)}) {
+	if !validateStruct(w, r, languageReadingTimeParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
@@ -2879,10 +2909,10 @@ func apiLanguageReadingTimeHandler(w http.ResponseWriter, r *http.Request) {
 	if wpmParam := r.URL.Query().Get("wpm"); wpmParam != "" {
 		parsed, err := strconv.Atoi(wpmParam)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WPM", "wpm query parameter must be a positive integer", nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_WPM")
 			return
 		}
-		if !validateStruct(w, languageReadingTimeWpmParams{Wpm: parsed}) {
+		if !validateStruct(w, r, languageReadingTimeWpmParams{Wpm: parsed}) {
 			return
 		}
 		wpm = parsed
@@ -2905,12 +2935,12 @@ func apiLanguageSentimentHandler(w http.ResponseWriter, r *http.Request) {
 	if text == "" {
 		body, err := readRequestBody(r)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "TEXT_READ_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "TEXT_READ_FAILED")
 			return
 		}
 		text = string(body)
 	}
-	if !validateStruct(w, languageSentimentParams{Text: strings.TrimSpace(text)}) {
+	if !validateStruct(w, r, languageSentimentParams{Text: strings.TrimSpace(text)}) {
 		return
 	}
 
@@ -2963,11 +2993,11 @@ type testAssertParams struct {
 func apiTestAssertHandler(w http.ResponseWriter, r *http.Request) {
 	var body testAssertRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	op := strings.ToLower(body.Op)
-	if !validateStruct(w, testAssertParams{Op: op, Haystack: body.Haystack}) {
+	if !validateStruct(w, r, testAssertParams{Op: op, Haystack: body.Haystack}) {
 		return
 	}
 
@@ -3002,7 +3032,7 @@ type testFixtureParams struct {
 // fixture shapes here.
 func apiTestFixtureHandler(w http.ResponseWriter, r *http.Request) {
 	fixtureType := paramValue(r, "type")
-	if !validateStruct(w, testFixtureParams{Type: fixtureType}) {
+	if !validateStruct(w, r, testFixtureParams{Type: fixtureType}) {
 		return
 	}
 
@@ -3029,7 +3059,7 @@ func apiTestFakeDataHandler(w http.ResponseWriter, r *http.Request) {
 	if prefix == "" {
 		prefix = "test"
 	}
-	if !validateStruct(w, testFakeDataParams{Type: dataType}) {
+	if !validateStruct(w, r, testFakeDataParams{Type: dataType}) {
 		return
 	}
 
@@ -3122,7 +3152,7 @@ func buildCurlCommand(spec testRequestSpec) string {
 func apiTestAPIClientHandler(w http.ResponseWriter, r *http.Request) {
 	spec, err := decodeTestRequestSpec(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 
@@ -3182,7 +3212,7 @@ func apiTestAPIClientHandler(w http.ResponseWriter, r *http.Request) {
 func apiTestCurlGeneratorHandler(w http.ResponseWriter, r *http.Request) {
 	spec, err := decodeTestRequestSpec(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -3229,7 +3259,7 @@ type postmanBody struct {
 func apiTestPostmanHandler(w http.ResponseWriter, r *http.Request) {
 	spec, err := decodeTestRequestSpec(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 
@@ -3336,7 +3366,7 @@ func apiTestStatusCodesHandler(w http.ResponseWriter, r *http.Request) {
 
 	code, err := strconv.Atoi(codeParam)
 	if err != nil || http.StatusText(code) == "" {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CODE", "code must be a known HTTP status code", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CODE")
 		return
 	}
 
@@ -3376,10 +3406,7 @@ func apiTestWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var parsedBody interface{}
-	jsonValid := false
-	if len(bodyBytes) > 0 && json.Unmarshal(bodyBytes, &parsedBody) == nil {
-		jsonValid = true
-	}
+	jsonValid := len(bodyBytes) > 0 && json.Unmarshal(bodyBytes, &parsedBody) == nil
 
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
 		"method":      r.Method,
@@ -3397,7 +3424,7 @@ func apiTestWebhookHandler(w http.ResponseWriter, r *http.Request) {
 // deliberately generating load against an arbitrary target is outside that
 // boundary and would turn this server into an abuse/DoS proxy.
 func apiTestLoadTestHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "load-test is a permanent gap: it would require firing outbound HTTP traffic at a caller-supplied target, outside IDEA.md's outbound-call boundary (OSINT and weather tool families only)", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiTestMockServerHandler is a permanent gap: a configurable mock HTTP
@@ -3408,7 +3435,7 @@ func apiTestLoadTestHandler(w http.ResponseWriter, r *http.Request) {
 // no-persistent-storage-of-user-submitted-data non-goal). Both readings
 // hit a declared non-goal.
 func apiTestMockServerHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "mock-server is a permanent gap: a configurable dynamic mock server requires either a runtime-managed listening socket or persisted caller-defined response rules, both outside this project's declared scope", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // osintEmailParams is the validated input to apiOsintEmailHandler.
@@ -3423,12 +3450,12 @@ type osintEmailParams struct {
 // exists in src/service/osint.
 func apiOsintEmailHandler(w http.ResponseWriter, r *http.Request) {
 	email := paramValue(r, "email")
-	if !validateStruct(w, osintEmailParams{Email: email}) {
+	if !validateStruct(w, r, osintEmailParams{Email: email}) {
 		return
 	}
 	parts, err := parseService.ParseEmail(email)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_EMAIL", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_EMAIL")
 		return
 	}
 	mxRecords, err := osintService.DNSLookup(parts.Domain, "MX")
@@ -3460,12 +3487,12 @@ type osintDomainParams struct {
 // {domain} path parameter via osint.WHOISLookup.
 func apiOsintDomainHandler(w http.ResponseWriter, r *http.Request) {
 	domain := paramValue(r, "domain")
-	if !validateStruct(w, osintDomainParams{Domain: domain}) {
+	if !validateStruct(w, r, osintDomainParams{Domain: domain}) {
 		return
 	}
 	info, err := osintService.WHOISLookup(domain)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "WHOIS_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "WHOIS_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, info)
@@ -3494,12 +3521,12 @@ type osintCertParams struct {
 // certificate's details via osint.SSLInfo.
 func apiOsintCertHandler(w http.ResponseWriter, r *http.Request) {
 	domain := paramValue(r, "domain")
-	if !validateStruct(w, osintCertParams{Domain: domain}) {
+	if !validateStruct(w, r, osintCertParams{Domain: domain}) {
 		return
 	}
 	info, err := osintService.SSLInfo(domain)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "CERT_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "CERT_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, info)
@@ -3516,12 +3543,12 @@ type osintSubdomainParams struct {
 // boundary already used by osint.DNSLookup.
 func apiOsintSubdomainHandler(w http.ResponseWriter, r *http.Request) {
 	domain := paramValue(r, "domain")
-	if !validateStruct(w, osintSubdomainParams{Domain: domain}) {
+	if !validateStruct(w, r, osintSubdomainParams{Domain: domain}) {
 		return
 	}
 	found, err := osintService.SubdomainEnum(domain)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "SUBDOMAIN_ENUM_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "SUBDOMAIN_ENUM_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -3542,12 +3569,12 @@ type osintTechStackParams struct {
 // connection only.
 func apiOsintTechStackHandler(w http.ResponseWriter, r *http.Request) {
 	target := strings.TrimSpace(r.URL.Query().Get("url"))
-	if !validateStruct(w, osintTechStackParams{URL: target}) {
+	if !validateStruct(w, r, osintTechStackParams{URL: target}) {
 		return
 	}
 	info, err := osintService.TechStack(target)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadGateway, "TECH_STACK_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadGateway, "TECH_STACK_LOOKUP_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, info)
@@ -3559,7 +3586,7 @@ func apiOsintTechStackHandler(w http.ResponseWriter, r *http.Request) {
 // free-and-keyless OSINT trust boundary (IDEA.md line 34: OSINT is scoped
 // to IP geolocation, WHOIS, DNS, and TLS certificate inspection only).
 func apiOsintBreachHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "breach-database checking requires a keyed third-party API, outside this project's declared free/keyless OSINT trust boundary; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiOsintCompanyHandler reports that company-data lookup is not supported.
@@ -3568,7 +3595,7 @@ func apiOsintBreachHandler(w http.ResponseWriter, r *http.Request) {
 // (IP geolocation, WHOIS, DNS, TLS cert only) and forbidden by the
 // non-goals list's ban on paid/keyed third-party APIs.
 func apiOsintCompanyHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "company-data lookup requires a commercial keyed API, outside this project's declared free/keyless OSINT trust boundary; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiOsintMetadataHandler reports that generic file-metadata extraction is
@@ -3578,7 +3605,7 @@ func apiOsintCompanyHandler(w http.ResponseWriter, r *http.Request) {
 // extraction already exists as its own tool (apiImageMetadataHandler);
 // duplicating it here would invent behavior IDEA.md does not scope to OSINT.
 func apiOsintMetadataHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "generic file-metadata extraction is outside this project's declared OSINT scope (IP geolocation, WHOIS, DNS, TLS cert only); see the image/metadata tool for file-metadata inspection", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiOsintPhoneHandler reports that phone-number intelligence lookup is not
@@ -3586,7 +3613,7 @@ func apiOsintMetadataHandler(w http.ResponseWriter, r *http.Request) {
 // and keyed — outside IDEA.md's declared free-and-keyless OSINT scope; basic
 // phone-number format validation is already covered by validate/phone.
 func apiOsintPhoneHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "phone-number intelligence requires a commercial keyed API, outside this project's declared free/keyless OSINT trust boundary; see validate/phone for format validation", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiOsintSocialHandler reports that social-media profile discovery is not
@@ -3596,7 +3623,7 @@ func apiOsintPhoneHandler(w http.ResponseWriter, r *http.Request) {
 // mechanisms (IP geolocation, WHOIS, DNS, TLS cert), and not user-directed
 // to a single target the caller names.
 func apiOsintSocialHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "social-media profile discovery requires probing many third-party platforms, outside this project's declared OSINT trust boundary; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiOsintUsernameHandler reports that cross-platform username enumeration
@@ -3604,7 +3631,7 @@ func apiOsintSocialHandler(w http.ResponseWriter, r *http.Request) {
 // a username against dozens of third-party sites is a much larger and
 // different outbound surface than IDEA.md's four declared OSINT mechanisms.
 func apiOsintUsernameHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "cross-platform username enumeration requires probing many third-party sites, outside this project's declared OSINT trust boundary; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // researchCitationRequest is the JSON body shape accepted by
@@ -3633,10 +3660,10 @@ type researchCitationParams struct {
 func apiResearchCitationHandler(w http.ResponseWriter, r *http.Request) {
 	var body researchCitationRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, researchCitationParams{Title: body.Title, Author: body.Author}) {
+	if !validateStruct(w, r, researchCitationParams{Title: body.Title, Author: body.Author}) {
 		return
 	}
 	if body.Style == "" {
@@ -3669,12 +3696,12 @@ func apiResearchDOIHandler(w http.ResponseWriter, r *http.Request) {
 	if doi == "" {
 		doi = paramValue(r, "doi")
 	}
-	if !validateStruct(w, researchDoiParams{Doi: doi}) {
+	if !validateStruct(w, r, researchDoiParams{Doi: doi}) {
 		return
 	}
 	valid := researchService.ValidateDOI(doi)
 	if !valid {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_DOI", "doi must start with \"10.\" and be at least 8 characters", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_DOI")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -3690,7 +3717,7 @@ func apiResearchDOIHandler(w http.ResponseWriter, r *http.Request) {
 // citation extraction from text") — only pre-structured citation
 // formatting (APA/MLA/Chicago) and DOI validation exist.
 func apiResearchExtractHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "citation/reference extraction from unstructured text is not implemented; only formatting of caller-supplied citation fields is supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // researchArxivParams is the validated input to apiResearchArxivHandler.
@@ -3703,13 +3730,13 @@ type researchArxivParams struct {
 // query API.
 func apiResearchArxivHandler(w http.ResponseWriter, r *http.Request) {
 	id := queryOrJSONField(r, "id")
-	if !validateStruct(w, researchArxivParams{ID: id}) {
+	if !validateStruct(w, r, researchArxivParams{ID: id}) {
 		return
 	}
 
 	result, err := researchService.ArxivLookup(r.Context(), id)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusNotFound, "NOT_FOUND")
 		return
 	}
 
@@ -3721,13 +3748,13 @@ func apiResearchArxivHandler(w http.ResponseWriter, r *http.Request) {
 // formatting (APA/MLA/Chicago), bibliography generation, and DOI
 // formatting/validation — BibTeX is a distinct format not named in scope.
 func apiResearchBibtexHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "BibTeX parsing/formatting is outside this project's declared Research scope (citation formatting, bibliography generation, DOI only); not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiResearchFootnotesHandler reports that footnote/endnote formatting is
 // not supported. Not named in IDEA.md's declared Research scope.
 func apiResearchFootnotesHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "footnote/endnote formatting is outside this project's declared Research scope (citation formatting, bibliography generation, DOI only); not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // researchIsbnParams is the validated input to apiResearchIsbnHandler.
@@ -3740,13 +3767,13 @@ type researchIsbnParams struct {
 // Library Books API.
 func apiResearchIsbnHandler(w http.ResponseWriter, r *http.Request) {
 	isbn := queryOrJSONField(r, "isbn")
-	if !validateStruct(w, researchIsbnParams{ISBN: isbn}) {
+	if !validateStruct(w, r, researchIsbnParams{ISBN: isbn}) {
 		return
 	}
 
 	result, err := researchService.ISBNLookup(r.Context(), isbn)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusNotFound, "NOT_FOUND")
 		return
 	}
 
@@ -3759,21 +3786,21 @@ func apiResearchIsbnHandler(w http.ResponseWriter, r *http.Request) {
 // fixed, trusted provider) is a broader SSRF surface than this project
 // takes on.
 func apiResearchMetadataHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "web-page metadata extraction is outside this project's declared Research scope and would require fetching arbitrary caller-supplied URLs rather than querying a single fixed, trusted provider; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiResearchOutlineHandler reports that document outline generation is not
 // supported. Not named in IDEA.md's declared Research scope; heading
 // extraction from Markdown is already covered by parse/markdown.
 func apiResearchOutlineHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "document outline generation is outside this project's declared Research scope; see parse/markdown for heading extraction from Markdown", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiResearchPdfExtractHandler reports that PDF text extraction is not
 // supported. It would require a new third-party PDF-parsing dependency,
 // and is not named in IDEA.md's declared Research scope.
 func apiResearchPdfExtractHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "PDF text extraction requires a new third-party dependency and is outside this project's declared Research scope; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiResearchReadabilityHandler reports that reader-mode article extraction
@@ -3782,7 +3809,7 @@ func apiResearchPdfExtractHandler(w http.ResponseWriter, r *http.Request) {
 // fixed, trusted provider) is a broader SSRF surface than this project
 // takes on.
 func apiResearchReadabilityHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "reader-mode article extraction is outside this project's declared Research scope and would require fetching arbitrary caller-supplied URLs rather than querying a single fixed, trusted provider; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiResearchScraperHandler reports that general web scraping is not
@@ -3790,7 +3817,7 @@ func apiResearchReadabilityHandler(w http.ResponseWriter, r *http.Request) {
 // broader SSRF surface than the narrow, mitigated outbound-call mechanisms
 // (fixed, trusted providers) this project uses elsewhere.
 func apiResearchScraperHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "general-purpose web scraping requires fetching arbitrary caller-supplied URLs rather than querying a single fixed, trusted provider; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiResearchSummarizeHandler reports that text summarization is not
@@ -3798,7 +3825,7 @@ func apiResearchScraperHandler(w http.ResponseWriter, r *http.Request) {
 // service, which IDEA.md excludes ("every outbound integration must be
 // free and keyless"); it is not named in IDEA.md's declared Research scope.
 func apiResearchSummarizeHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeError(w, http.StatusNotImplemented, "NOT_SUPPORTED", "text summarization would require an external or keyed NLP/LLM service, which this project's free/keyless integration policy excludes; not supported", nil)
+	writeLocalizedAPIError(w, r, http.StatusNotImplemented, "NOT_SUPPORTED")
 }
 
 // apiFunJokeHandler composes the existing joke-category selector with a
@@ -3808,12 +3835,12 @@ func apiResearchSummarizeHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunJokeHandler(w http.ResponseWriter, r *http.Request) {
 	jokeType, err := funService.RandomJokeType()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "JOKE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "JOKE_GENERATION_FAILED")
 		return
 	}
 	text, err := funService.Fortune()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "JOKE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "JOKE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -3827,7 +3854,7 @@ func apiFunJokeHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunFortuneHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.Fortune()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "FORTUNE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "FORTUNE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3838,7 +3865,7 @@ func apiFunFortuneHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunDadJokeHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.DadJoke()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "DAD_JOKE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "DAD_JOKE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3849,7 +3876,7 @@ func apiFunDadJokeHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunProgrammingJokeHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.ProgrammingJoke()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "PROGRAMMING_JOKE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "PROGRAMMING_JOKE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3860,7 +3887,7 @@ func apiFunProgrammingJokeHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunQuoteHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.Quote()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "QUOTE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "QUOTE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3871,7 +3898,7 @@ func apiFunQuoteHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunFactHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.Fact()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "FACT_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "FACT_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3882,7 +3909,7 @@ func apiFunFactHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunRiddleHandler(w http.ResponseWriter, r *http.Request) {
 	riddle, err := funService.Riddle()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "RIDDLE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "RIDDLE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, riddle)
@@ -3893,7 +3920,7 @@ func apiFunRiddleHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunTriviaHandler(w http.ResponseWriter, r *http.Request) {
 	fact, err := funService.Trivia()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "TRIVIA_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "TRIVIA_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, fact)
@@ -3904,7 +3931,7 @@ func apiFunTriviaHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunMotivationalHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.Motivational()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "MOTIVATIONAL_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "MOTIVATIONAL_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3915,7 +3942,7 @@ func apiFunMotivationalHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunInsultHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.Insult()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "INSULT_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "INSULT_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3926,7 +3953,7 @@ func apiFunInsultHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunComplimentHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.Compliment()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "COMPLIMENT_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "COMPLIMENT_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3937,7 +3964,7 @@ func apiFunComplimentHandler(w http.ResponseWriter, r *http.Request) {
 func apiFunMemeHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := funService.Meme()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "MEME_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "MEME_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
@@ -3947,7 +3974,7 @@ func apiFunMemeHandler(w http.ResponseWriter, r *http.Request) {
 func apiLoremPersonHandler(w http.ResponseWriter, r *http.Request) {
 	person, err := loremService.Person()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, person)
@@ -3957,7 +3984,7 @@ func apiLoremPersonHandler(w http.ResponseWriter, r *http.Request) {
 func apiLoremAddressHandler(w http.ResponseWriter, r *http.Request) {
 	address, err := loremService.Address()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, address)
@@ -3967,7 +3994,7 @@ func apiLoremAddressHandler(w http.ResponseWriter, r *http.Request) {
 func apiLoremCompanyHandler(w http.ResponseWriter, r *http.Request) {
 	company, err := loremService.Company()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, company)
@@ -3987,14 +4014,14 @@ type devBase64Params struct {
 func apiDevBase64Handler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	action := r.URL.Query().Get("action")
 	if action == "" {
 		action = "encode"
 	}
-	if !validateStruct(w, devBase64Params{Action: action}) {
+	if !validateStruct(w, r, devBase64Params{Action: action}) {
 		return
 	}
 	urlSafe := config.IsTruthy(r.URL.Query().Get("urlsafe"))
@@ -4017,7 +4044,7 @@ func apiDevBase64Handler(w http.ResponseWriter, r *http.Request) {
 			result, err = text.Base64Decode(string(raw))
 		}
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BASE64", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BASE64")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
@@ -4036,14 +4063,14 @@ type devURLEncodeParams struct {
 func apiDevURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	action := r.URL.Query().Get("action")
 	if action == "" {
 		action = "encode"
 	}
-	if !validateStruct(w, devURLEncodeParams{Action: action}) {
+	if !validateStruct(w, r, devURLEncodeParams{Action: action}) {
 		return
 	}
 
@@ -4053,7 +4080,7 @@ func apiDevURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	case "decode":
 		result, err := text.URLDecode(string(raw))
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_URL_ENCODING", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_URL_ENCODING")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
@@ -4063,12 +4090,12 @@ func apiDevURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 func apiDevFormatJSONHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	formatted, err := devService.FormatJSON(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
@@ -4080,7 +4107,7 @@ func apiDevCronHandler(w http.ResponseWriter, r *http.Request) {
 	expression := r.URL.Query().Get("expression")
 	result, err := datetime.ParseCron(expression)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CRON", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CRON")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, result)
@@ -4094,17 +4121,17 @@ func apiDevJWTHandler(w http.ResponseWriter, r *http.Request) {
 	token := paramValue(r, "token")
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT", "token must have three dot-separated segments (header.payload.signature)", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT")
 		return
 	}
 	header, err := decodeJWTSegment(parts[0])
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_HEADER", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT_HEADER")
 		return
 	}
 	payload, err := decodeJWTSegment(parts[1])
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_PAYLOAD", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT_PAYLOAD")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -4120,7 +4147,7 @@ func apiDevJWTHandler(w http.ResponseWriter, r *http.Request) {
 func apiDevEchoHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 
@@ -4149,7 +4176,7 @@ func apiDevEchoHandler(w http.ResponseWriter, r *http.Request) {
 func apiDevFormatCSSHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if config.IsTruthy(r.URL.Query().Get("minify")) {
@@ -4164,7 +4191,7 @@ func apiDevFormatCSSHandler(w http.ResponseWriter, r *http.Request) {
 func apiDevFormatHTMLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if config.IsTruthy(r.URL.Query().Get("minify")) {
@@ -4179,7 +4206,7 @@ func apiDevFormatHTMLHandler(w http.ResponseWriter, r *http.Request) {
 func apiDevFormatJSHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if config.IsTruthy(r.URL.Query().Get("minify")) {
@@ -4195,7 +4222,7 @@ func apiDevFormatJSHandler(w http.ResponseWriter, r *http.Request) {
 func apiDevFormatSQLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatSQL(string(raw))})
@@ -4206,13 +4233,13 @@ func apiDevFormatSQLHandler(w http.ResponseWriter, r *http.Request) {
 func apiDevFormatXMLHandler(w http.ResponseWriter, r *http.Request) {
 	raw, err := readRequestBody(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if config.IsTruthy(r.URL.Query().Get("minify")) {
 		formatted, err := devService.MinifyXML(string(raw))
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_XML", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_XML")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
@@ -4220,7 +4247,7 @@ func apiDevFormatXMLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	formatted, err := devService.FormatXML(string(raw))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_XML", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_XML")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
@@ -4243,15 +4270,15 @@ func apiImagePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 
 	width, err := strconv.Atoi(widthParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_WIDTH")
 		return
 	}
 	height, err := strconv.Atoi(heightParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HEIGHT")
 		return
 	}
-	if !validateStruct(w, imagePlaceholderParams{Width: width, Height: height}) {
+	if !validateStruct(w, r, imagePlaceholderParams{Width: width, Height: height}) {
 		return
 	}
 
@@ -4263,7 +4290,7 @@ func apiImagePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 
 	data, err := imageService.GeneratePlaceholder(width, height, format, bgColor)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_GENERATION_FAILED")
 		return
 	}
 
@@ -4276,7 +4303,7 @@ func apiImagePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // imageContentType maps a decoded/output format name to its MIME type,
@@ -4307,7 +4334,7 @@ func readUploadedImage(r *http.Request) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("image file is required")
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		return io.ReadAll(io.LimitReader(file, 1<<20))
 	}
 	return readRequestBody(r)
@@ -4325,44 +4352,44 @@ type imageResizeParams struct {
 func apiImageResizeHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_READ_FAILED")
 		return
 	}
 
 	width, err := strconv.Atoi(r.FormValue("width"))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_WIDTH")
 		return
 	}
 	height, err := strconv.Atoi(r.FormValue("height"))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HEIGHT")
 		return
 	}
-	if !validateStruct(w, imageResizeParams{Width: width, Height: height}) {
+	if !validateStruct(w, r, imageResizeParams{Width: width, Height: height}) {
 		return
 	}
 
 	svc := image.New()
 	if err := svc.Load(data); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_DECODE_FAILED")
 		return
 	}
 	if err := svc.Resize(width, height); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_RESIZE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_RESIZE_FAILED")
 		return
 	}
 
 	format := r.FormValue("format")
 	out, err := svc.Bytes(orDefaultOutputFormat(format))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_ENCODE_FAILED")
 		return
 	}
 
 	w.Header().Set("Content-Type", imageContentType(format))
 	w.WriteHeader(http.StatusOK)
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // apiImageCropHandler decodes an uploaded image and returns the
@@ -4379,54 +4406,54 @@ type imageCropParams struct {
 func apiImageCropHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_READ_FAILED")
 		return
 	}
 
 	x, err := strconv.Atoi(r.FormValue("x"))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_X", "x must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_X")
 		return
 	}
 	y, err := strconv.Atoi(r.FormValue("y"))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_Y", "y must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_Y")
 		return
 	}
 	width, err := strconv.Atoi(r.FormValue("width"))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_WIDTH")
 		return
 	}
 	height, err := strconv.Atoi(r.FormValue("height"))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be an integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HEIGHT")
 		return
 	}
-	if !validateStruct(w, imageCropParams{Width: width, Height: height}) {
+	if !validateStruct(w, r, imageCropParams{Width: width, Height: height}) {
 		return
 	}
 
 	svc := image.New()
 	if err := svc.Load(data); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_DECODE_FAILED")
 		return
 	}
 	if err := svc.Crop(x, y, width, height); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_CROP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_CROP_FAILED")
 		return
 	}
 
 	format := r.FormValue("format")
 	out, err := svc.Bytes(orDefaultOutputFormat(format))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_ENCODE_FAILED")
 		return
 	}
 
 	w.Header().Set("Content-Type", imageContentType(format))
 	w.WriteHeader(http.StatusOK)
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // apiImageMetadataHandler decodes an uploaded image and reports its
@@ -4434,13 +4461,13 @@ func apiImageCropHandler(w http.ResponseWriter, r *http.Request) {
 func apiImageMetadataHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_READ_FAILED")
 		return
 	}
 
 	svc := image.New()
 	if err := svc.Load(data); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_DECODE_FAILED")
 		return
 	}
 
@@ -4464,30 +4491,30 @@ type imageConvertParams struct {
 func apiImageConvertHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_READ_FAILED")
 		return
 	}
 
 	format := r.FormValue("format")
-	if !validateStruct(w, imageConvertParams{Format: format}) {
+	if !validateStruct(w, r, imageConvertParams{Format: format}) {
 		return
 	}
 
 	svc := image.New()
 	if err := svc.Load(data); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_DECODE_FAILED")
 		return
 	}
 
 	out, err := svc.Bytes(format)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_ENCODE_FAILED")
 		return
 	}
 
 	w.Header().Set("Content-Type", imageContentType(format))
 	w.WriteHeader(http.StatusOK)
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // orDefaultOutputFormat returns format unchanged when set, otherwise "png",
@@ -4512,7 +4539,7 @@ type imageAvatarParams struct {
 func apiImageAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	initials := q.Get("initials")
-	if !validateStruct(w, imageAvatarParams{Initials: initials}) {
+	if !validateStruct(w, r, imageAvatarParams{Initials: initials}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -4522,12 +4549,12 @@ func apiImageAvatarHandler(w http.ResponseWriter, r *http.Request) {
 
 	png, err := generateService.Avatar(initials, size)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "AVATAR_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "AVATAR_GENERATION_FAILED")
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	w.Write(png)
+	_, _ = w.Write(png)
 }
 
 // apiImageBarcodeHandler renders a 1D barcode (ean13, upca, code128, or
@@ -4544,7 +4571,7 @@ func apiImageBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	format := q.Get("format")
 	data := q.Get("data")
-	if !validateStruct(w, imageBarcodeParams{Data: data}) {
+	if !validateStruct(w, r, imageBarcodeParams{Data: data}) {
 		return
 	}
 	width, err := strconv.Atoi(q.Get("width"))
@@ -4558,12 +4585,12 @@ func apiImageBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	png, err := generateService.Barcode(format, data, width, height)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "BARCODE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "BARCODE_GENERATION_FAILED")
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	w.Write(png)
+	_, _ = w.Write(png)
 }
 
 // apiImageIdenticonHandler renders a deterministic sha256-derived
@@ -4579,7 +4606,7 @@ type imageIdenticonParams struct {
 func apiImageIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	seed := q.Get("seed")
-	if !validateStruct(w, imageIdenticonParams{Seed: seed}) {
+	if !validateStruct(w, r, imageIdenticonParams{Seed: seed}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -4589,12 +4616,12 @@ func apiImageIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 
 	png, err := generateService.Identicon(seed, size)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IDENTICON_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IDENTICON_GENERATION_FAILED")
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	w.Write(png)
+	_, _ = w.Write(png)
 }
 
 // apiImageQRHandler renders a QR code PNG for the given data, or for a
@@ -4620,7 +4647,7 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	data := q.Get("data")
 	ssid := q.Get("ssid")
-	if !validateStruct(w, qrRequestParams{Data: data, Ssid: ssid}) {
+	if !validateStruct(w, r, qrRequestParams{Data: data, Ssid: ssid}) {
 		return
 	}
 
@@ -4629,7 +4656,7 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request) {
 	case ssid != "":
 		payload, err := generate.BuildWifiQRPayload(ssid, q.Get("password"), q.Get("security"), config.IsTruthy(q.Get("hidden")))
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIFI_QR_PARAMS", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_WIFI_QR_PARAMS")
 			return
 		}
 		content = payload
@@ -4648,12 +4675,12 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request) {
 
 	png, err := generateService.QR(content, width, height)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "QR_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "QR_GENERATION_FAILED")
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	w.Write(png)
+	_, _ = w.Write(png)
 }
 
 // apiImageFilterHandler decodes an uploaded image and applies a named
@@ -4667,12 +4694,12 @@ type imageFilterParams struct {
 func apiImageFilterHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_READ_FAILED")
 		return
 	}
 
 	name := r.FormValue("name")
-	if !validateStruct(w, imageFilterParams{Name: name}) {
+	if !validateStruct(w, r, imageFilterParams{Name: name}) {
 		return
 	}
 	amount, err := strconv.ParseFloat(r.FormValue("amount"), 64)
@@ -4682,24 +4709,24 @@ func apiImageFilterHandler(w http.ResponseWriter, r *http.Request) {
 
 	svc := image.New()
 	if err := svc.Load(data); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_DECODE_FAILED")
 		return
 	}
 	if err := svc.ApplyFilter(name, amount); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_FILTER_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_FILTER_FAILED")
 		return
 	}
 
 	format := r.FormValue("format")
 	out, err := svc.Bytes(orDefaultOutputFormat(format))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_ENCODE_FAILED")
 		return
 	}
 
 	w.Header().Set("Content-Type", imageContentType(format))
 	w.WriteHeader(http.StatusOK)
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // apiImageOptimizeHandler decodes an uploaded image and re-encodes it in
@@ -4711,7 +4738,7 @@ func apiImageFilterHandler(w http.ResponseWriter, r *http.Request) {
 func apiImageOptimizeHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_READ_FAILED")
 		return
 	}
 
@@ -4722,14 +4749,14 @@ func apiImageOptimizeHandler(w http.ResponseWriter, r *http.Request) {
 
 	svc := image.New()
 	if err := svc.Load(data); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_DECODE_FAILED")
 		return
 	}
 
 	format := r.FormValue("format")
 	out, err := svc.Optimize(orDefaultOutputFormat(format), quality)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_OPTIMIZE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_OPTIMIZE_FAILED")
 		return
 	}
 
@@ -4737,7 +4764,7 @@ func apiImageOptimizeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Optimized-Size", strconv.Itoa(len(out)))
 	w.Header().Set("Content-Type", imageContentType(format))
 	w.WriteHeader(http.StatusOK)
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // apiImageWatermarkHandler decodes an uploaded image and tiles the given
@@ -4751,12 +4778,12 @@ type imageWatermarkParams struct {
 func apiImageWatermarkHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := readUploadedImage(r)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_READ_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_READ_FAILED")
 		return
 	}
 
 	text := r.FormValue("text")
-	if !validateStruct(w, imageWatermarkParams{Text: text}) {
+	if !validateStruct(w, r, imageWatermarkParams{Text: text}) {
 		return
 	}
 	opacity, err := strconv.ParseFloat(r.FormValue("opacity"), 64)
@@ -4766,24 +4793,24 @@ func apiImageWatermarkHandler(w http.ResponseWriter, r *http.Request) {
 
 	svc := image.New()
 	if err := svc.Load(data); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_DECODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_DECODE_FAILED")
 		return
 	}
 	if err := svc.Watermark(text, opacity); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_WATERMARK_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_WATERMARK_FAILED")
 		return
 	}
 
 	format := r.FormValue("format")
 	out, err := svc.Bytes(orDefaultOutputFormat(format))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_ENCODE_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_ENCODE_FAILED")
 		return
 	}
 
 	w.Header().Set("Content-Type", imageContentType(format))
 	w.WriteHeader(http.StatusOK)
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // decodeJWTSegment base64url-decodes a single JWT segment (header or
@@ -4812,18 +4839,18 @@ func apiCryptoJWTDecodeHandler(w http.ResponseWriter, r *http.Request) {
 	token := paramValue(r, "token")
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT", "token must have three dot-separated segments (header.payload.signature)", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT")
 		return
 	}
 
 	header, err := decodeJWTSegment(parts[0])
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_HEADER", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT_HEADER")
 		return
 	}
 	payload, err := decodeJWTSegment(parts[1])
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_JWT_PAYLOAD", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT_PAYLOAD")
 		return
 	}
 
@@ -4846,7 +4873,7 @@ func apiNetworkDNSHandler(w http.ResponseWriter, r *http.Request) {
 
 	records, err := osintService.DNSLookup(domain, recordType)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "DNS_LOOKUP_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "DNS_LOOKUP_FAILED")
 		return
 	}
 
@@ -4881,7 +4908,7 @@ type textCompressParams struct {
 func apiTextCompressHandler(w http.ResponseWriter, r *http.Request) {
 	var body textCompressRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if body.Algorithm == "" {
@@ -4890,7 +4917,7 @@ func apiTextCompressHandler(w http.ResponseWriter, r *http.Request) {
 	if body.Mode == "" {
 		body.Mode = "compress"
 	}
-	if !validateStruct(w, textCompressParams{Data: body.Data, Mode: body.Mode}) {
+	if !validateStruct(w, r, textCompressParams{Data: body.Data, Mode: body.Mode}) {
 		return
 	}
 
@@ -4903,7 +4930,7 @@ func apiTextCompressHandler(w http.ResponseWriter, r *http.Request) {
 		result, err = text.Decompress(body.Data, body.Algorithm)
 	}
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "COMPRESS_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "COMPRESS_FAILED")
 		return
 	}
 
@@ -4925,7 +4952,7 @@ type textDiffRequest struct {
 func apiTextDiffHandler(w http.ResponseWriter, r *http.Request) {
 	var body textDiffRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 
@@ -4953,13 +4980,13 @@ type textExtractParams struct {
 func apiTextExtractHandler(w http.ResponseWriter, r *http.Request) {
 	var body textExtractRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if body.Type == "" {
 		body.Type = "emails"
 	}
-	if !validateStruct(w, textExtractParams{Type: body.Type}) {
+	if !validateStruct(w, r, textExtractParams{Type: body.Type}) {
 		return
 	}
 
@@ -5018,13 +5045,13 @@ type textRegexParams struct {
 func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
 	var body textRegexRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if body.Mode == "" {
 		body.Mode = "match"
 	}
-	if !validateStruct(w, textRegexParams{Pattern: body.Pattern, Mode: body.Mode}) {
+	if !validateStruct(w, r, textRegexParams{Pattern: body.Pattern, Mode: body.Mode}) {
 		return
 	}
 
@@ -5032,7 +5059,7 @@ func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
 	case "match":
 		matches, err := text.RegexMatch(body.Pattern, body.Text)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PATTERN", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PATTERN")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5042,7 +5069,7 @@ func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
 	case "replace":
 		result, err := text.RegexReplace(body.Pattern, body.Text, body.Replacement)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_PATTERN", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PATTERN")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5078,16 +5105,16 @@ type cryptoEncryptParams struct {
 func apiCryptoEncryptHandler(w http.ResponseWriter, r *http.Request) {
 	var body cryptoEncryptRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, cryptoEncryptParams{Plaintext: body.Plaintext, Key: body.Key}) {
+	if !validateStruct(w, r, cryptoEncryptParams{Plaintext: body.Plaintext, Key: body.Key}) {
 		return
 	}
 
 	ciphertext, err := crypto.AESEncrypt(body.Plaintext, body.Key)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "ENCRYPT_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "ENCRYPT_FAILED")
 		return
 	}
 
@@ -5109,16 +5136,16 @@ type cryptoDecryptParams struct {
 func apiCryptoDecryptHandler(w http.ResponseWriter, r *http.Request) {
 	var body cryptoEncryptRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, cryptoDecryptParams{Ciphertext: body.Ciphertext, Key: body.Key}) {
+	if !validateStruct(w, r, cryptoDecryptParams{Ciphertext: body.Ciphertext, Key: body.Key}) {
 		return
 	}
 
 	plaintext, err := crypto.AESDecrypt(body.Ciphertext, body.Key)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "DECRYPT_FAILED")
 		return
 	}
 
@@ -5153,13 +5180,13 @@ type cryptoRSAParams struct {
 func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 	var body cryptoRSARequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if body.Mode == "" {
 		body.Mode = "generate"
 	}
-	if !validateStruct(w, cryptoRSAParams{
+	if !validateStruct(w, r, cryptoRSAParams{
 		Mode:       body.Mode,
 		Plaintext:  body.Plaintext,
 		PublicKey:  body.PublicKey,
@@ -5177,7 +5204,7 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		privateKey, publicKey, err := crypto.GenerateRSAKeys(bits)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusInternalServerError, "GENERATE_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATE_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5189,7 +5216,7 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 	case "encrypt":
 		ciphertext, err := crypto.RSAEncrypt(body.Plaintext, body.PublicKey)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "ENCRYPT_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "ENCRYPT_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5199,7 +5226,7 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 	case "decrypt":
 		plaintext, err := crypto.RSADecrypt(body.Ciphertext, body.PrivateKey)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "DECRYPT_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5228,10 +5255,10 @@ type cryptoHMACParams struct {
 func apiCryptoHMACHandler(w http.ResponseWriter, r *http.Request) {
 	var body cryptoHMACRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	if !validateStruct(w, cryptoHMACParams{Key: body.Key}) {
+	if !validateStruct(w, r, cryptoHMACParams{Key: body.Key}) {
 		return
 	}
 	if body.Algorithm == "" {
@@ -5240,7 +5267,7 @@ func apiCryptoHMACHandler(w http.ResponseWriter, r *http.Request) {
 
 	mac, err := crypto.HMACGenerate(body.Algorithm, body.Key, body.Message)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_ALGORITHM", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_ALGORITHM")
 		return
 	}
 
@@ -5273,13 +5300,13 @@ type cryptoCertificateParams struct {
 func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
 	var body cryptoCertificateRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if body.Mode == "" {
 		body.Mode = "generate"
 	}
-	if !validateStruct(w, cryptoCertificateParams{
+	if !validateStruct(w, r, cryptoCertificateParams{
 		Mode:        body.Mode,
 		CommonName:  body.CommonName,
 		Certificate: body.Certificate,
@@ -5291,7 +5318,7 @@ func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
 	case "generate":
 		certPEM, keyPEM, err := crypto.GenerateCertificate(body.CommonName, body.ValidDays)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "GENERATE_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "GENERATE_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5302,7 +5329,7 @@ func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
 	case "parse":
 		details, err := crypto.ParseCertificate(body.Certificate)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "PARSE_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "PARSE_FAILED")
 			return
 		}
 		details["mode"] = body.Mode
@@ -5338,13 +5365,13 @@ type cryptoEd25519Params struct {
 func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 	var body cryptoEd25519Request
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if body.Mode == "" {
 		body.Mode = "generate"
 	}
-	if !validateStruct(w, cryptoEd25519Params{
+	if !validateStruct(w, r, cryptoEd25519Params{
 		Mode:       body.Mode,
 		Message:    body.Message,
 		PrivateKey: body.PrivateKey,
@@ -5358,7 +5385,7 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 	case "generate":
 		privateKey, publicKey, err := crypto.GenerateEd25519Keys()
 		if err != nil {
-			writeEnvelopeError(w, http.StatusInternalServerError, "GENERATE_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATE_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5369,7 +5396,7 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 	case "sign":
 		signature, err := crypto.Ed25519Sign(body.Message, body.PrivateKey)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "SIGN_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "SIGN_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5379,7 +5406,7 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 	case "verify":
 		valid, err := crypto.Ed25519Verify(body.Message, body.Signature, body.PublicKey)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "VERIFY_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "VERIFY_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5418,13 +5445,13 @@ type cryptoPGPParams struct {
 func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 	var body cryptoPGPRequest
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 	if body.Mode == "" {
 		body.Mode = "generate"
 	}
-	if !validateStruct(w, cryptoPGPParams{
+	if !validateStruct(w, r, cryptoPGPParams{
 		Mode:       body.Mode,
 		Name:       body.Name,
 		Email:      body.Email,
@@ -5440,7 +5467,7 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 	case "generate":
 		publicKey, privateKey, err := crypto.GeneratePGPKeys(body.Name, body.Email)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "GENERATE_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "GENERATE_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5451,7 +5478,7 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 	case "encrypt":
 		ciphertext, err := crypto.PGPEncrypt(body.Plaintext, body.PublicKey)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "ENCRYPT_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "ENCRYPT_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5461,7 +5488,7 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 	case "decrypt":
 		plaintext, err := crypto.PGPDecrypt(body.Ciphertext, body.PrivateKey)
 		if err != nil {
-			writeEnvelopeError(w, http.StatusBadRequest, "DECRYPT_FAILED", err.Error(), nil)
+			writeLocalizedAPIError(w, r, http.StatusBadRequest, "DECRYPT_FAILED")
 			return
 		}
 		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
@@ -5481,7 +5508,7 @@ func apiGenerateBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	format := q.Get("format")
 	data := q.Get("data")
-	if !validateStruct(w, generateBarcodeParams{Data: data}) {
+	if !validateStruct(w, r, generateBarcodeParams{Data: data}) {
 		return
 	}
 	width, err := strconv.Atoi(q.Get("width"))
@@ -5495,12 +5522,12 @@ func apiGenerateBarcodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	png, err := generateService.Barcode(format, data, width, height)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "BARCODE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "BARCODE_GENERATION_FAILED")
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	w.Write(png)
+	_, _ = w.Write(png)
 }
 
 // apiGenerateAvatarHandler renders an initials-based avatar as a PNG image
@@ -5512,7 +5539,7 @@ type generateAvatarParams struct {
 func apiGenerateAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	initials := q.Get("initials")
-	if !validateStruct(w, generateAvatarParams{Initials: initials}) {
+	if !validateStruct(w, r, generateAvatarParams{Initials: initials}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -5522,12 +5549,12 @@ func apiGenerateAvatarHandler(w http.ResponseWriter, r *http.Request) {
 
 	png, err := generateService.Avatar(initials, size)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "AVATAR_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "AVATAR_GENERATION_FAILED")
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	w.Write(png)
+	_, _ = w.Write(png)
 }
 
 // apiGenerateIdenticonHandler renders a deterministic sha256-derived
@@ -5539,7 +5566,7 @@ type generateIdenticonParams struct {
 func apiGenerateIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	seed := q.Get("seed")
-	if !validateStruct(w, generateIdenticonParams{Seed: seed}) {
+	if !validateStruct(w, r, generateIdenticonParams{Seed: seed}) {
 		return
 	}
 	size, err := strconv.Atoi(q.Get("size"))
@@ -5549,12 +5576,12 @@ func apiGenerateIdenticonHandler(w http.ResponseWriter, r *http.Request) {
 
 	png, err := generateService.Identicon(seed, size)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IDENTICON_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IDENTICON_GENERATION_FAILED")
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	w.Write(png)
+	_, _ = w.Write(png)
 }
 
 // apiGenerateDockerfileHandler renders a minimal idiomatic multi-stage
@@ -5563,7 +5590,7 @@ func apiGenerateDockerfileHandler(w http.ResponseWriter, r *http.Request) {
 	lang := r.URL.Query().Get("lang")
 	dockerfile, err := generateService.Dockerfile(lang)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "DOCKERFILE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "DOCKERFILE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -5578,7 +5605,7 @@ func apiGenerateGitignoreHandler(w http.ResponseWriter, r *http.Request) {
 	langs := r.URL.Query().Get("lang")
 	gitignore, err := generateService.Gitignore(langs)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "GITIGNORE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "GITIGNORE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -5597,7 +5624,7 @@ func apiGenerateLicenseHandler(w http.ResponseWriter, r *http.Request) {
 
 	license, err := generateService.License(licenseType, author, year)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "LICENSE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "LICENSE_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -5623,7 +5650,7 @@ func apiGenerateConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	config, err := generateService.Config(format, values)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "CONFIG_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "CONFIG_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -5640,13 +5667,13 @@ func apiGenerateSQLHandler(w http.ResponseWriter, r *http.Request) {
 		Columns []generate.SQLColumn `json:"columns"`
 	}
 	if err := decodeJSONBody(r, &body); err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_BODY", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
 
 	sql, err := generateService.SQL(body.Table, body.Columns)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "SQL_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "SQL_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -5660,7 +5687,7 @@ func apiGenerateSQLHandler(w http.ResponseWriter, r *http.Request) {
 func apiGenerateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
 	keyPair, err := generateService.SSHKey()
 	if err != nil {
-		writeEnvelopeError(w, http.StatusInternalServerError, "SSH_KEY_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "SSH_KEY_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -5669,15 +5696,10 @@ func apiGenerateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// requestBaseURL builds a request-derived base URL ("scheme://host") using
-// the same TLS/X-Forwarded-Proto detection as securityHeadersMiddleware,
-// since api_utils.go handlers have no *config.Config to call getBaseURL with.
+// requestBaseURL builds the absolute public origin using BuildURL's
+// trust-gated request and configured-domain resolution.
 func requestBaseURL(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
-		scheme = "https"
-	}
-	return fmt.Sprintf("%s://%s", scheme, r.Host)
+	return BuildURL(r, "")
 }
 
 // apiGenerateAPIDocsHandler renders API documentation for ?format=
@@ -5694,7 +5716,7 @@ func apiGenerateAPIDocsHandler(w http.ResponseWriter, r *http.Request) {
 
 	docs, err := generateService.APIDocs(format, version, requestBaseURL(r))
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "API_DOCS_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "API_DOCS_GENERATION_FAILED")
 		return
 	}
 	writeEnvelopeOK(w, http.StatusOK, map[string]string{
@@ -5717,15 +5739,15 @@ func apiGeneratePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 
 	width, err := strconv.Atoi(widthParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_WIDTH", "width must be a positive integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_WIDTH")
 		return
 	}
 	height, err := strconv.Atoi(heightParam)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "INVALID_HEIGHT", "height must be a positive integer", nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HEIGHT")
 		return
 	}
-	if !validateStruct(w, generatePlaceholderParams{Width: width, Height: height}) {
+	if !validateStruct(w, r, generatePlaceholderParams{Width: width, Height: height}) {
 		return
 	}
 
@@ -5737,11 +5759,11 @@ func apiGeneratePlaceholderHandler(w http.ResponseWriter, r *http.Request) {
 
 	data, err := imageService.GeneratePlaceholder(width, height, format, bgColor)
 	if err != nil {
-		writeEnvelopeError(w, http.StatusBadRequest, "IMAGE_GENERATION_FAILED", err.Error(), nil)
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "IMAGE_GENERATION_FAILED")
 		return
 	}
 
 	w.Header().Set("Content-Type", imageContentType(format))
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	_, _ = w.Write(data)
 }

@@ -18,7 +18,7 @@ import (
 // parameterless route that a fallback would otherwise collide with.
 func newFormTestRouter() *chi.Mux {
 	router := chi.NewRouter()
-	router.Use(formInputMiddleware)
+	router.Use(func(next http.Handler) http.Handler { return formInputMiddleware(next) })
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Route("/text", func(r chi.Router) {
 			r.Get("/hash/{algorithm}/{input}", apiHashHandler)

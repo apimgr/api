@@ -8,14 +8,18 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/common/theme"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/graphql"
+	"github.com/apimgr/api/src/i2p"
 	"github.com/apimgr/api/src/metrics"
 	"github.com/apimgr/api/src/paths"
 	"github.com/apimgr/api/src/server/handler"
@@ -44,19 +48,26 @@ var (
 
 // New creates a new HTTP server
 func New(cfg *config.Config) *http.Server {
+	limits, _ := cfg.Server.Limits.Normalized()
 	// Initialize page templates
 	if err := initTemplates(); err != nil {
 		panic(fmt.Sprintf("Failed to parse templates: %v", err))
 	}
+	LogConfiguredPageContent(cfg)
 
 	r := chi.NewRouter()
 	apiRoutes := make([]swagger.Route, 0)
 
 	// Core middleware
+	r.Use(urlNormalizationMiddleware)
+	r.Use(serverConfigMiddleware(cfg))
+	r.Use(serverBodyLimitMiddleware(cfg))
 	r.Use(serverTimingMiddleware(cfg))
 	r.Use(realIPMiddleware(cfg))
 	r.Use(requestIDMiddleware)
+	r.Use(pathSecurityMiddleware)
 	r.Use(loggingMiddleware)
+	r.Use(debugMiddleware(cfg))
 	// HTTP metrics are recorded for every request, including ones later
 	// rejected by rate limiting or security headers, so the counters
 	// reflect real traffic rather than only the accepted subset.
@@ -64,16 +75,22 @@ func New(cfg *config.Config) *http.Server {
 	// The same traffic feeds the public healthz aggregates, which are counted
 	// alongside the Prometheus metrics so both see identical request volume.
 	r.Use(healthStatsMiddleware)
+	r.Use(offlinePublicCacheMiddleware)
 	// Language resolution runs after logging and before any handler so every
 	// handler and template can read the negotiated language from the request
-	// context (?lang= -> cookie -> Accept-Language -> "en").
-	r.Use(i18n.LanguageMiddleware)
+	// context (?lang= -> cookie -> Accept-Language -> configured default).
+	r.Use(i18n.LanguageMiddlewareFor(cfg.Server.I18N.AvailableLanguages))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
+	r.Use(frontendTextMiddleware(paths.ProjectName))
+	r.Use(apiTextMiddleware(paths.ProjectName, &apiRoutes))
 	r.Use(securityHeadersMiddleware(cfg))
 	r.Use(secFetchValidationMiddleware(cfg))
 	r.Use(csrfMiddleware(cfg))
-	r.Use(formInputMiddleware)
+	r.Use(func(next http.Handler) http.Handler { return inputNormalizationMiddleware(next, cfg) })
+	r.Use(func(next http.Handler) http.Handler { return formInputMiddleware(next, cfg) })
+	r.Use(allowlistMiddleware(cfg))
+	r.Use(blocklistMiddleware(cfg))
 	r.Use(RateLimitMiddleware(cfg))
 	r.Use(geoIPMiddleware(cfg))
 	r.Use(corsMiddleware(cfg))
@@ -81,6 +98,7 @@ func New(cfg *config.Config) *http.Server {
 
 	// Static files
 	r.Handle("/static/*", staticAssetHandler())
+	r.Get("/locales/{lang}.json", localeJSONHandler)
 
 	// Web routes
 	r.Get("/", homeHandler(cfg))
@@ -107,12 +125,11 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/validate", categoryPageHandler(cfg, "validate", "Validators", "Validating emails, phones, URLs, credit cards, and more"))
 	r.Get("/weather", categoryPageHandler(cfg, "weather", "Weather", "Current weather, forecasts, and air quality data"))
 
-	// Per-tool detail pages (see TODO.AI.md for remaining sub-tool wiring)
+	// Per-tool detail pages use the registry-backed server-rendered templates.
 	for _, tp := range toolPages() {
 		r.Get("/"+tp.category+"/"+tp.tool, toolPageHandler(cfg, tp.category, tp.tool, tp.title, tp.description))
+		r.Post("/"+tp.category+"/"+tp.tool, toolFormFallbackHandler(cfg, tp, r))
 	}
-
-	r.Get("/api", apiDocsHandler(cfg))
 
 	// Swagger/GraphQL docs UIs and API routes (PART 14 canonical paths).
 	// The old root paths (/openapi, /openapi.json, /openapi.yaml, /swagger,
@@ -130,30 +147,62 @@ func New(cfg *config.Config) *http.Server {
 	// Standard pages (/server/*)
 	r.Get("/server/about", aboutPageHandler(cfg))
 	r.Get("/server/privacy", privacyPageHandler(cfg))
-	r.Get("/server/contact", contactPageHandler(cfg))
+	r.Get("/server/contact", contactWorkflowHandler(cfg, r))
+	r.Post("/server/contact", contactWorkflowHandler(cfg, r))
 	r.Get("/server/help", helpPageHandler(cfg))
+	r.Get("/server/terms", termsPageHandler(cfg))
+	r.Get("/server/security", securityPageHandler(cfg))
+	r.Get("/server/security/policy", securityPolicyPageHandler(cfg))
+	r.Get("/server/security/thanks", securityThanksPageHandler(cfg))
+	r.Get("/server/security/report/{tracking_id}", securityReportStatusPageHandler(cfg))
+	r.Get("/server/help/mcp", helpMCPPageHandler(cfg, func() []swagger.Route { return apiRoutes }))
+	r.Get(APIBasePath(cfg)+"/server/help", helpAPIHandler(cfg))
+	r.Get(APIBasePath(cfg)+"/server/help/mcp", mcpHelpAPIHandler(cfg, func() []swagger.Route { return apiRoutes }))
+	r.Post("/server/ccpa", ccpaOptOutHandler(cfg))
 
 	// Guest preferences (PART 16). Theme and language live in cookies only;
 	// export/import carry the same two values to another device without any
 	// server-side record.
 	r.Get("/server/preferences", preferencesPageHandler(cfg))
-	r.Post("/server/preferences", preferencesSaveHandler)
-	r.Get("/server/preferences/export", preferencesExportPageHandler(cfg))
-	r.Get("/server/preferences/import", preferencesImportHandler)
+	r.Post("/server/preferences", preferencesSaveHandler(cfg))
+	r.Get("/server/preferences/sync", preferencesSyncPageHandler(cfg))
+	r.Post("/server/preferences/sync", preferencesSyncPostHandler)
+	r.Get("/server/preferences/sync/import", preferencesImportHandler)
 	r.Get(APIBasePath(cfg)+"/server/preferences", apiPreferencesHandler)
 	r.Post(APIBasePath(cfg)+"/server/preferences", apiPreferencesSaveHandler)
-	r.Get(APIBasePath(cfg)+"/server/preferences/export", apiPreferencesExportHandler)
-	r.Get(APIBasePath(cfg)+"/server/preferences/import", preferencesImportHandler)
+	r.Get(APIBasePath(cfg)+"/server/preferences/sync", preferencesSyncAPIHandler(cfg))
+	r.Get(APIBasePath(cfg)+"/server/preferences/sync/import", preferencesImportAPIHandler)
+
+	// Owner-token management is public HTML with credential-gated actions. The
+	// primary owner cookie is the project-specific identifier recorded in
+	// IDEA.md; API routes remain bearer-only.
+	ownerCookieSuffix := strings.TrimPrefix(paths.OwnerTokenCookieName, paths.ProjectName+"_owner_token_")
+	ownerCookieName, ownerCookieErr := ownerTokenCookieName(paths.ProjectName, ownerCookieSuffix)
+	if ownerCookieErr != nil || ownerCookieName != paths.OwnerTokenCookieName {
+		panic("invalid owner-token cookie name")
+	}
+	r.Get("/server/preferences/tokens", ownerTokensPageHandler(cfg, ownerCookieName, paths.ProjectName))
+	r.Post("/server/preferences/token/reveal", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "reveal"))
+	r.Post("/server/preferences/token/rotate", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "rotate"))
+	r.Post("/server/preferences/token/revoke", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "revoke"))
+	r.Post("/server/preferences/token/restore", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "restore"))
+	r.Post("/server/preferences/token/create", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "create"))
+	r.Post("/server/preferences/token/forget", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "forget"))
+	r.Post("/server/preferences/tokens", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "linked-create"))
+	r.Post("/server/preferences/tokens/{id}/reveal", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "linked-reveal"))
+	r.Post("/server/preferences/tokens/{id}/rotate", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "linked-rotate"))
+	r.Post("/server/preferences/tokens/{id}/update", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "linked-update"))
+	r.Post("/server/preferences/tokens/{id}/revoke", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "linked-revoke"))
 
 	// Health check (PART 13: frontend route, optional root alias, API
 	// route, and unversioned machine-friendly alias — all mount the same
 	// handler so content negotiation behaves identically)
-	r.Get("/server/healthz", handler.ServerHealthz(cfg, true))
+	r.Get("/server/healthz", handler.ServerHealthz(cfg, true, renderHealthPage(cfg)))
 	if cfg.Server.Healthz.Root.Enabled {
-		r.Get("/healthz", handler.ServerHealthz(cfg, true))
+		r.Get("/healthz", handler.ServerHealthz(cfg, true, renderHealthPage(cfg)))
 	}
-	r.Get(APIBasePath(cfg)+"/server/healthz", handler.ServerHealthz(cfg, false))
-	r.Get("/api/healthz", handler.ServerHealthz(cfg, false))
+	r.Get(APIBasePath(cfg)+"/server/healthz", handler.ServerHealthz(cfg, false, renderHealthPage(cfg)))
+	r.Get("/api/healthz", handler.ServerHealthz(cfg, false, renderHealthPage(cfg)))
 
 	// Metrics endpoints (PART 20 — INTERNAL only). Paths are fixed, not
 	// operator-configurable: /server/metrics[/{service}] plus the versioned
@@ -179,11 +228,27 @@ func New(cfg *config.Config) *http.Server {
 		r.Post("/vanity/apply", torVanityApplyHandler)
 		r.Post("/import-keys", torImportKeysHandler)
 	})
+	r.Route("/server/i2p", func(r chi.Router) {
+		r.Use(loopbackOnlyMiddleware)
+		r.Get("/status", i2pStatusHandler)
+	})
 
 	// Special files
 	r.Get("/robots.txt", robotsHandler(cfg))
-	r.Get("/security.txt", securityHandler(cfg))
+	r.Get("/llms.txt", llmsHandler(cfg, r))
+	r.Head("/llms.txt", llmsHandler(cfg, r))
+	r.Get("/.well-known/llms.txt", llmsHandler(cfg, r))
+	r.Head("/.well-known/llms.txt", llmsHandler(cfg, r))
+	r.Get("/sitemap.xml", sitemapHandler(cfg))
+	r.Head("/sitemap.xml", sitemapHandler(cfg))
+	r.Get("/feed.xml", feedHandler(cfg, false))
+	r.Head("/feed.xml", feedHandler(cfg, false))
+	r.Get("/rss.xml", feedHandler(cfg, true))
+	r.Head("/rss.xml", feedHandler(cfg, true))
 	r.Get("/.well-known/security.txt", securityHandler(cfg))
+	r.Head("/.well-known/security.txt", securityHandler(cfg))
+	r.Get("/.well-known/pgp-key.asc", securityPublicKeyHandler(cfg))
+	r.Head("/.well-known/pgp-key.asc", securityPublicKeyHandler(cfg))
 	r.Get("/manifest.json", manifestHandler(cfg))
 	r.Get("/favicon.ico", faviconHandler(cfg))
 	r.Get(brandingFaviconRoute, brandingImageHandler(cfg, func(c *config.Config) string { return c.Server.Branding.Favicon }))
@@ -191,10 +256,32 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/sw.js", serviceWorkerHandler())
 	r.Get("/offline.html", offlinePageHandler())
 
+	r.Get("/cli/binaries/{artifact}", cliBinaryDownloadHandler(cfg))
+
+	// Unversioned machine discovery endpoint. It is intentionally not an alias
+	// under the configured API version.
+	r.Get("/api/autodiscover", autodiscoverHandler(cfg))
+
 	// Versioned API routes
 	r.Route(APIBasePath(cfg), func(r chi.Router) {
 		// Version
 		r.Get("/version", handler.HandleVersion)
+		r.Get("/server/terms", termsAPIHandler(cfg))
+		r.Get("/server/contact", contactAPIHandler(cfg, r))
+		r.Post("/server/contact", contactAPIHandler(cfg, r))
+		r.Get("/server/security", securityAPIHandler(cfg))
+		r.Get("/server/security/policy", securityPolicyAPIHandler(cfg))
+		r.Get("/server/security/thanks", securityThanksAPIHandler)
+		r.Post("/server/preferences/tokens/primary", apiOwnerPrimaryIssueHandler(cfg))
+		r.Get("/server/preferences/tokens", apiOwnerTokensHandler(cfg))
+		r.Post("/server/preferences/tokens", apiOwnerTokensHandler(cfg))
+		r.Post("/server/preferences/tokens/primary/reveal", apiOwnerPrimaryHandler(cfg, "reveal"))
+		r.Post("/server/preferences/tokens/primary/rotate", apiOwnerPrimaryHandler(cfg, "rotate"))
+		r.Delete("/server/preferences/tokens/primary", apiOwnerPrimaryHandler(cfg, "revoke"))
+		r.Post("/server/preferences/tokens/{id}/reveal", apiOwnerTokensHandler(cfg))
+		r.Post("/server/preferences/tokens/{id}/rotate", apiOwnerTokensHandler(cfg))
+		r.Patch("/server/preferences/tokens/{id}", apiOwnerTokensHandler(cfg))
+		r.Delete("/server/preferences/tokens/{id}", apiOwnerTokensHandler(cfg))
 
 		// Browser-emitted reports (CSP violations, NEL, deprecation,
 		// intervention, crash, and the generic "default" group) — see
@@ -621,60 +708,107 @@ func New(cfg *config.Config) *http.Server {
 
 	// Give every parameterised route a parameterless variant so a plain HTML
 	// form can drive the same handler with zero JavaScript.
+	registerDebugRoutes(r, cfg)
 	registerFormFallbacks(r)
 	if err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		if strings.HasPrefix(route, "/api/") {
-			apiRoutes = append(apiRoutes, swagger.Route{Method: method, Path: route})
+			apiRoutes = append(apiRoutes, apiRouteDefinition(method, route))
 		}
 		return nil
 	}); err != nil {
 		panic(fmt.Sprintf("Failed to enumerate API routes: %v", err))
 	}
+	mcp := mcpHandler(cfg, r, r, configuredMCPAuthenticator(cfg))
+	r.Handle("/mcp", mcp)
+	r.Handle("/api/mcp", mcp)
+	r.Handle(APIBasePath(cfg)+"/server/mcp", mcp)
+	apiRoutes = append(apiRoutes,
+		apiRouteDefinition("POST", "/api/mcp"),
+		apiRouteDefinition("POST", APIBasePath(cfg)+"/server/mcp"),
+	)
+	r.NotFound(frontendNotFoundHandler(cfg))
+	r.MethodNotAllowed(frontendMethodNotAllowedHandler(cfg))
 
+	SetHTTPTimeouts(limits)
 	return &http.Server{
-		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Address, cfg.Server.Port),
-		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:      fmt.Sprintf("%s:%s", cfg.Server.Address, cfg.Server.Port),
+		Handler:   r,
+		ConnState: TimeoutConnState,
 	}
 }
 
 // Template data
 type PageData struct {
-	SiteTitle         string
-	SiteDescription   string
-	SiteIcon          string
-	BaseURL           string
-	APIBasePath       string
-	Theme             string
-	ThemeClass        string
-	Lang              string
-	LangDir           string
-	Languages         []i18n.LanguageInfo
-	PrefExportURL     string
-	PrefExportCode    string
-	Layout            string
-	ActivePage        string
-	PageTitle         string
-	PageDescription   string
-	Tagline           string
-	Version           string
-	CommitID          string
-	BuildDate         string
-	Mode              string
-	SecurityEmail     string
-	UpdatedAt         string
-	RateLimitRequests int
-	RateLimitWindow   int
-	Categories        []CategoryInfo
-	TorEnabled        bool
-	TorRunning        bool
-	OnionAddress      string
+	SiteTitle              string
+	SiteDescription        string
+	SiteIcon               string
+	BaseURL                string
+	APIBasePath            string
+	Theme                  string
+	ThemeClass             string
+	Lang                   string
+	LangDir                string
+	Languages              []i18n.LanguageInfo
+	PrefExportURL          string
+	PrefExportCode         string
+	PreferenceLanguage     string
+	ConsentPreferences     bool
+	ConsentAnalytics       bool
+	OwnerTokenCookieExists bool
+	CCPAOptOut             bool
+	CancelURL              string
+	Layout                 string
+	ActivePage             string
+	PageTitle              string
+	DocumentTitle          string
+	PageDescription        string
+	DocsEndpoint           string
+	DocsStylesheets        []string
+	DocsScripts            []string
+	ToolResult             string
+	ToolError              string
+	ToolImageURL           template.URL
+	ErrorCode              string
+	ErrorTitle             string
+	ErrorMessage           string
+	NoIndex                bool
+	Tagline                string
+	Version                string
+	CommitID               string
+	BuildDate              string
+	Mode                   string
+	SecurityEmail          string
+	ContactType            string
+	CaptchaID              string
+	CaptchaQuestion        string
+	SecurityReportURL      string
+	SecurityContactURL     string
+	SecurityExpires        string
+	SecurityPGPURL         string
+	SecurityPolicy         template.HTML
+	TermsContent           template.HTML
+	HeaderExtension        template.HTML
+	FooterExtension        template.HTML
+	AboutExtension         template.HTML
+	PrivacyExtension       template.HTML
+	UpdatedAt              string
+	RateLimitRequests      int
+	RateLimitWindow        int
+	Privacy                config.PrivacyConfig
+	PrivacyCollection      template.HTML
+	PrivacyUsage           template.HTML
+	PrivacySecurity        template.HTML
+	Categories             []CategoryInfo
+	HelpPages              []helpPageInfo
+	MCPHelp                *mcpHelpPageData
+	TotalTools             int
+	TotalCategories        int
+	TorEnabled             bool
+	TorRunning             bool
+	OnionAddress           string
 	// I2P fields mirror the Tor trio for the footer's second overlay row
-	// (PART 16 fixed row order: Tor -> I2P -> page links). No eepsite
-	// subsystem is wired yet, so they stay false/empty and the guarded row
-	// drops out entirely, exactly as it does for an unpublished onion.
+	// (PART 16 fixed row order: Tor -> I2P -> page links). The guarded row
+	// drops out until the configured eepsite has a running address.
 	I2PEnabled bool
 	I2PRunning bool
 	I2PAddress string
@@ -693,11 +827,13 @@ type PageData struct {
 
 // CategoryInfo describes one tool category shown on the /categories index page
 type CategoryInfo struct {
-	Path        string
-	Icon        string
-	Name        string
-	Description string
-	Count       int
+	Path           string
+	Icon           string
+	Name           string
+	NameKey        string
+	Description    string
+	DescriptionKey string
+	Count          int
 }
 
 // newPageData builds the common template data for a page render. Theme is
@@ -706,34 +842,49 @@ type CategoryInfo struct {
 // on <html> reflects the visitor's actual saved preference, never a global
 // config default.
 func newPageData(cfg *config.Config, r *http.Request, activePage string) PageData {
-	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
-	if cfg.Server.FQDN == "" || cfg.Server.FQDN == "localhost" {
-		baseURL = fmt.Sprintf("http://localhost:%s", cfg.Server.Port)
-	}
+	r = requestWithServerConfig(r, cfg)
+	baseURL := BuildURL(r, "")
+	categories := allCategories()
 	theme := GetTheme(r)
 	lang := i18n.LangFromRequest(r)
 	data := PageData{
 		// Title and description are operator branding (PART 16): the head
 		// partial reads them from here so no site identity is hardcoded in a
 		// template.
-		SiteTitle:       cfg.Server.Branding.Title,
-		SiteDescription: cfg.Server.Branding.Description,
-		SiteIcon:        "🛠️",
-		BaseURL:         baseURL,
-		APIBasePath:     APIBasePath(cfg),
-		Theme:           string(theme),
-		ThemeClass:      ThemeClass(theme),
-		Lang:            lang,
-		LangDir:         i18n.Dir(lang),
-		Languages:       i18n.AvailableLanguages(),
-		Layout:          "public",
-		ActivePage:      activePage,
-		Version:         Version,
-		CommitID:        CommitID,
-		BuildDate:       footerBuildDate(),
-		CSRFToken:       CSRFTokenFromContext(r.Context()),
-		FaviconURL:      brandingAssetURL(cfg.Server.Branding.Favicon, brandingFaviconRoute, brandingDefaultFavicon),
-		LogoURL:         brandingAssetURL(cfg.Server.Branding.Logo, brandingLogoRoute, brandingDefaultLogo),
+		SiteTitle:              cfg.Server.Branding.Title,
+		SiteDescription:        cfg.Server.Branding.Description,
+		SiteIcon:               "🛠️",
+		BaseURL:                baseURL,
+		APIBasePath:            APIBasePath(cfg),
+		Theme:                  string(theme),
+		ThemeClass:             ThemeClass(theme),
+		Lang:                   lang,
+		LangDir:                i18n.Dir(lang),
+		Languages:              i18n.AvailableLanguagesFor(cfg.Server.I18N.AvailableLanguages),
+		Layout:                 "public",
+		ActivePage:             activePage,
+		Version:                Version,
+		CommitID:               CommitID,
+		BuildDate:              footerBuildDate(),
+		CSRFToken:              CSRFTokenFromContext(r.Context()),
+		OwnerTokenCookieExists: requestHasOwnerTokenCookie(r),
+		Privacy:                cfg.Server.Privacy,
+		PrivacyCollection:      template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataCollectionContent())),
+		PrivacyUsage:           template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataUsageContent())),
+		PrivacySecurity:        template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataSecurityContent())),
+		HeaderExtension:        operatorHTML(r, "header"),
+		FooterExtension:        operatorHTML(r, "footer"),
+		Categories:             categories,
+		TotalTools:             len(toolPages()),
+		TotalCategories:        len(categories),
+		FaviconURL:             brandingAssetURL(cfg.Server.Branding.Favicon, brandingFaviconRoute, brandingDefaultFavicon),
+		LogoURL:                brandingAssetURL(cfg.Server.Branding.Logo, brandingLogoRoute, brandingDefaultLogo),
+	}
+	if activePage == "about" {
+		data.AboutExtension = operatorHTML(r, "about")
+	}
+	if activePage == "privacy" {
+		data.PrivacyExtension = operatorHTML(r, "privacy")
 	}
 	// The footer's overlay row is published only when Tor is actually
 	// running with an address, per PART 16's
@@ -743,7 +894,21 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		data.TorRunning = m.Running()
 		data.OnionAddress = m.OnionAddress()
 	}
+	if m := i2p.Get(); m != nil {
+		snapshot := m.Snapshot()
+		data.I2PEnabled = snapshot.Enabled
+		data.I2PRunning = snapshot.Running
+		data.I2PAddress = snapshot.Address
+	}
 	return data
+}
+
+func requestHasOwnerTokenCookie(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	cookie, err := r.Cookie(paths.OwnerTokenCookieName)
+	return err == nil && cookie.Value != ""
 }
 
 // APIBasePath returns the configured REST API prefix, defaulting to v1.
@@ -781,6 +946,28 @@ var pageTemplates map[string]*template.Template
 // form, and "dir" yields the text direction for the <html dir> attribute.
 func templateFuncs() template.FuncMap {
 	return template.FuncMap{
+		"repoURL": func() string { return "https://github.com/" + paths.OrgName + "/" + paths.ProjectName },
+		// "dict" builds placeholder arguments for tf from key/value pairs.
+		// It keeps template translations typed and avoids presentation-only
+		// maps on PageData.
+		"dict": func(values ...any) (map[string]string, error) {
+			if len(values)%2 != 0 {
+				return nil, fmt.Errorf("dict requires key/value pairs")
+			}
+			result := make(map[string]string, len(values)/2)
+			for i := 0; i < len(values); i += 2 {
+				key, ok := values[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict key %d must be a string", i/2)
+				}
+				value, ok := values[i+1].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict value for %q must be a string", key)
+				}
+				result[key] = value
+			}
+			return result, nil
+		},
 		"t": func(lang, key string) string {
 			return i18n.Translate(lang, key)
 		},
@@ -795,6 +982,8 @@ func templateFuncs() template.FuncMap {
 		// no template emits a bare, indefinitely cacheable /static/... URL
 		// (AI.md PART 9 "Asset Version-Busting").
 		"asset": assetURL,
+		// "path" derives the origin-relative prefix from request-aware BaseURL.
+		"path": sameOriginPath,
 		// "csrfField" renders the hidden double-submit input every
 		// server-rendered mutating form needs (AI.md PART 16).
 		"csrfField": csrfFieldHTML,
@@ -805,16 +994,25 @@ func templateFuncs() template.FuncMap {
 	}
 }
 
+func sameOriginPath(baseURL, value string) string {
+	base, err := url.Parse(baseURL)
+	prefix := ""
+	if err == nil {
+		prefix = validURLPrefix(base.Path)
+	}
+	if !strings.HasPrefix(value, "/") {
+		value = "/" + value
+	}
+	return prefix + value
+}
+
 // initTemplates initializes all page templates with their dependencies
 func initTemplates() error {
 	pageTemplates = make(map[string]*template.Template)
 
 	// Public pages use base layout
 	publicPages := []string{
-		// "healthz" is absent deliberately: the health page is rendered
-		// directly by src/server/handler/health.go so the HTML, JSON and
-		// plain-text variants all come from one HealthResponse.
-		"index", "text", "crypto", "datetime", "network", "openapi", "error", "about", "privacy", "contact", "help", "preferences", "preferences_export",
+		"index", "text", "crypto", "datetime", "network", "docs_swagger", "docs_graphql", "error", "about", "privacy", "contact", "help", "help_mcp", "terms", "security", "security_policy", "preferences", "preferences_sync", "healthz",
 		"categories", "convert", "dev", "docker", "fun", "generate", "geo", "image", "language", "lorem", "math",
 		"osint", "parse", "research", "system", "testing", "validate", "weather",
 	}
@@ -857,6 +1055,34 @@ type toolPage struct {
 	tool        string
 	title       string
 	description string
+}
+
+var toolMetadataKeyCache sync.Map
+var toolMetadataPattern = regexp.MustCompile(`(?s)<h1 class="tool-title">\s*\{\{t \.Lang "([^"]+)"\}\}.*?</h1>.*?<p class="tool-description">\s*\{\{tf? \.Lang "([^"]+)"`)
+
+func toolMetadataKeys(category, tool string) (string, string) {
+	cacheKey := category + "/" + tool
+	if cached, ok := toolMetadataKeyCache.Load(cacheKey); ok {
+		keys := cached.([2]string)
+		return keys[0], keys[1]
+	}
+	var keys [2]string
+	if contents, err := templatesFS.ReadFile("template/page/tools/" + category + "/" + tool + ".tmpl"); err == nil {
+		if matches := toolMetadataPattern.FindSubmatch(contents); len(matches) == 3 {
+			keys = [2]string{string(matches[1]), string(matches[2])}
+		}
+	}
+	toolMetadataKeyCache.Store(cacheKey, keys)
+	return keys[0], keys[1]
+}
+
+func categoryMetadata(lang, category string) (string, string) {
+	for _, item := range allCategories() {
+		if strings.TrimPrefix(item.Path, "/") == category {
+			return i18n.Translate(lang, item.NameKey), i18n.Translate(lang, item.DescriptionKey)
+		}
+	}
+	return "", ""
 }
 
 // toolPages lists the implemented tool pages and their category routes.
@@ -1086,21 +1312,90 @@ func toolPageHandler(cfg *config.Config, category, tool, title, description stri
 		data := newPageData(cfg, r, category)
 		data.PageTitle = title
 		data.PageDescription = description
+		if titleKey, descriptionKey := toolMetadataKeys(category, tool); titleKey != "" && descriptionKey != "" {
+			data.PageTitle = i18n.Translate(data.Lang, titleKey)
+			data.PageDescription = i18n.Translate(data.Lang, descriptionKey)
+		}
 		renderPage(w, category+"/"+tool, data)
 	}
 }
 
 // renderPage renders a page using the base layout.
 func renderPage(w http.ResponseWriter, page string, data PageData) {
+	renderPageWithFallback(w, page, data, data)
+}
+
+func renderPageWithFallback(w http.ResponseWriter, page string, data any, fallback PageData) {
 	tmpl, ok := pageTemplates[page]
 	if !ok {
-		http.Error(w, "Template not found: "+page, http.StatusInternalServerError)
+		renderServerError(w, fallback)
 		return
 	}
 
-	err := tmpl.ExecuteTemplate(w, "public.tmpl", data)
+	var rendered bytes.Buffer
+	started := time.Now()
+	err := tmpl.ExecuteTemplate(&rendered, "public.tmpl", data)
+	recordServerTiming(w, "render", time.Since(started))
 	if err != nil {
-		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+		renderServerError(w, fallback)
+		return
+	}
+	_, _ = w.Write(rendered.Bytes())
+}
+
+func renderServerError(w http.ResponseWriter, data PageData) {
+	tmpl, ok := pageTemplates["error"]
+	message := i18n.Translate(data.Lang, "errors.server_error")
+	if !ok {
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+	data.ErrorCode = "500"
+	data.ErrorTitle = message
+	data.ErrorMessage = message
+	data.PageTitle = message
+	var rendered bytes.Buffer
+	started := time.Now()
+	err := tmpl.ExecuteTemplate(&rendered, "public.tmpl", data)
+	recordServerTiming(w, "render", time.Since(started))
+	if err != nil {
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusInternalServerError)
+	_, _ = w.Write(rendered.Bytes())
+}
+
+func frontendNotFoundHandler(cfg *config.Config) http.HandlerFunc {
+	return frontendErrorHandler(cfg, http.StatusNotFound, "errors.not_found")
+}
+
+func frontendMethodNotAllowedHandler(cfg *config.Config) http.HandlerFunc {
+	return frontendErrorHandler(cfg, http.StatusMethodNotAllowed, "errors.method_not_allowed")
+}
+
+func frontendErrorHandler(cfg *config.Config, status int, messageKey string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			errorResponse(w, r, "", status)
+			return
+		}
+		data := newPageData(cfg, r, "error")
+		data.ErrorCode = strconv.Itoa(status)
+		data.ErrorTitle = i18n.Translate(data.Lang, messageKey)
+		data.ErrorMessage = data.ErrorTitle
+		data.PageTitle = data.ErrorTitle
+		data.PageDescription = data.ErrorMessage
+		var rendered bytes.Buffer
+		started := time.Now()
+		err := pageTemplates["error"].ExecuteTemplate(&rendered, "public.tmpl", data)
+		recordServerTiming(w, "render", time.Since(started))
+		if err != nil {
+			http.Error(w, i18n.Translate(data.Lang, "errors.server_error"), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write(rendered.Bytes())
 	}
 }
 
@@ -1109,7 +1404,8 @@ func homeHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "home")
 		data.PageTitle = ""
-		data.PageDescription = "Universal API Toolkit with text, crypto, datetime, and network utilities"
+		data.PageDescription = cfg.Server.Branding.Description
+		data.Categories = allCategories()
 		renderPage(w, "index", data)
 	}
 }
@@ -1117,8 +1413,7 @@ func homeHandler(cfg *config.Config) http.HandlerFunc {
 func textPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "text")
-		data.PageTitle = "Text Utilities"
-		data.PageDescription = "UUID generation, hashing, encoding, and text manipulation"
+		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, "text")
 		renderPage(w, "text", data)
 	}
 }
@@ -1126,8 +1421,7 @@ func textPageHandler(cfg *config.Config) http.HandlerFunc {
 func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "crypto")
-		data.PageTitle = "Cryptography Tools"
-		data.PageDescription = "Password hashing, TOTP generation, and secure passwords"
+		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, "crypto")
 		renderPage(w, "crypto", data)
 	}
 }
@@ -1135,8 +1429,10 @@ func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
 func categoryPageHandler(cfg *config.Config, category, title, description string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, category)
-		data.PageTitle = title
-		data.PageDescription = description
+		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, category)
+		if data.PageTitle == "" {
+			data.PageTitle, data.PageDescription = title, description
+		}
 		renderPage(w, category, data)
 	}
 }
@@ -1144,27 +1440,27 @@ func categoryPageHandler(cfg *config.Config, category, title, description string
 // allCategories lists the 21 tool categories shown on the /categories index page
 func allCategories() []CategoryInfo {
 	categories := []CategoryInfo{
-		{Path: "/text", Icon: "📝", Name: "Text Utilities", Description: "UUID generation, hashing, encoding, and text manipulation", Count: 89},
-		{Path: "/crypto", Icon: "🔐", Name: "Cryptography", Description: "Password hashing, TOTP generation, and secure passwords", Count: 147},
-		{Path: "/datetime", Icon: "🕐", Name: "Date & Time", Description: "Timestamp conversion, timezone handling, and date calculations", Count: 67},
-		{Path: "/network", Icon: "🌐", Name: "Network Tools", Description: "IP lookup, DNS, WHOIS, SSL, and network utilities", Count: 98},
-		{Path: "/convert", Icon: "🔄", Name: "Unit Conversion", Description: "Length, weight, temperature, currency, and color conversions", Count: 42},
-		{Path: "/dev", Icon: "🛠️", Name: "Developer Tools", Description: "HTTP echo, formatters, minifiers, and development utilities", Count: 94},
-		{Path: "/docker", Icon: "🐋", Name: "Docker Tools", Description: "Docker run/compose conversion, linting, and validation", Count: 24},
-		{Path: "/fun", Icon: "🎉", Name: "Fun & Content", Description: "Jokes, quotes, facts, and random entertainment", Count: 71},
-		{Path: "/generate", Icon: "✨", Name: "Generators", Description: "QR codes, barcodes, configs, avatars, and more", Count: 76},
-		{Path: "/geo", Icon: "🌍", Name: "Geolocation", Description: "IP lookup, geocoding, distance calculations, and geo encoding", Count: 52},
-		{Path: "/image", Icon: "🖼️", Name: "Images", Description: "Image resize, crop, filters, and manipulation", Count: 68},
-		{Path: "/language", Icon: "📖", Name: "Language Tools", Description: "Spell checking, dictionary, thesaurus, and language detection", Count: 48},
-		{Path: "/lorem", Icon: "🎭", Name: "Lorem & Fake Data", Description: "Generate realistic fake data for testing and development", Count: 3},
-		{Path: "/math", Icon: "🔢", Name: "Math & Numbers", Description: "Calculations, statistics, primes, and matrix operations", Count: 84},
-		{Path: "/osint", Icon: "🕵️", Name: "OSINT Tools", Description: "Email intelligence, domain research, and username searches", Count: 42},
-		{Path: "/parse", Icon: "🔍", Name: "Parsers", Description: "Parsing JSON, YAML, XML, CSV, and format conversions", Count: 72},
-		{Path: "/research", Icon: "📚", Name: "Research Tools", Description: "Content extraction, summarization, and citations", Count: 28},
-		{Path: "/system", Icon: "🩺", Name: "Health & System", Description: "Server health checks, system information, and version details", Count: 3},
-		{Path: "/testing", Icon: "🧪", Name: "Testing Tools", Description: "Mocks, fixtures, assertions, and API testing", Count: 45},
-		{Path: "/validate", Icon: "✅", Name: "Validators", Description: "Validating emails, phones, URLs, credit cards, and more", Count: 68},
-		{Path: "/weather", Icon: "⛅", Name: "Weather", Description: "Current weather, forecasts, and air quality data", Count: 27},
+		{Path: "/text", Icon: "📝", Name: "Text Utilities", NameKey: "categories.text.name", Description: "UUID generation, hashing, encoding, and text manipulation", DescriptionKey: "categories.text.description", Count: 89},
+		{Path: "/crypto", Icon: "🔐", Name: "Cryptography", NameKey: "categories.crypto.name", Description: "Password hashing, TOTP generation, and secure passwords", DescriptionKey: "categories.crypto.description", Count: 147},
+		{Path: "/datetime", Icon: "🕐", Name: "Date & Time", NameKey: "categories.datetime.name", Description: "Timestamp conversion, timezone handling, and date calculations", DescriptionKey: "categories.datetime.description", Count: 67},
+		{Path: "/network", Icon: "🌐", Name: "Network Tools", NameKey: "categories.network.name", Description: "IP lookup, DNS, WHOIS, SSL, and network utilities", DescriptionKey: "categories.network.description", Count: 98},
+		{Path: "/convert", Icon: "🔄", Name: "Unit Conversion", NameKey: "categories.convert.name", Description: "Length, weight, temperature, currency, and color conversions", DescriptionKey: "categories.convert.description", Count: 42},
+		{Path: "/dev", Icon: "🛠️", Name: "Developer Tools", NameKey: "categories.dev.name", Description: "HTTP echo, formatters, minifiers, and development utilities", DescriptionKey: "categories.dev.description", Count: 94},
+		{Path: "/docker", Icon: "🐋", Name: "Docker Tools", NameKey: "categories.docker.name", Description: "Docker run/compose conversion, linting, and validation", DescriptionKey: "categories.docker.description", Count: 24},
+		{Path: "/fun", Icon: "🎉", Name: "Fun & Content", NameKey: "categories.fun.name", Description: "Jokes, quotes, facts, and random entertainment", DescriptionKey: "categories.fun.description", Count: 71},
+		{Path: "/generate", Icon: "✨", Name: "Generators", NameKey: "categories.generate.name", Description: "QR codes, barcodes, configs, avatars, and more", DescriptionKey: "categories.generate.description", Count: 76},
+		{Path: "/geo", Icon: "🌍", Name: "Geolocation", NameKey: "categories.geo.name", Description: "IP lookup, geocoding, distance calculations, and geo encoding", DescriptionKey: "categories.geo.description", Count: 52},
+		{Path: "/image", Icon: "🖼️", Name: "Images", NameKey: "categories.image.name", Description: "Image resize, crop, filters, and manipulation", DescriptionKey: "categories.image.description", Count: 68},
+		{Path: "/language", Icon: "📖", Name: "Language Tools", NameKey: "categories.language.name", Description: "Spell checking, dictionary, thesaurus, and language detection", DescriptionKey: "categories.language.description", Count: 48},
+		{Path: "/lorem", Icon: "🎭", Name: "Lorem & Fake Data", NameKey: "categories.lorem.name", Description: "Generate realistic fake data for testing and development", DescriptionKey: "categories.lorem.description", Count: 3},
+		{Path: "/math", Icon: "🔢", Name: "Math & Numbers", NameKey: "categories.math.name", Description: "Calculations, statistics, primes, and matrix operations", DescriptionKey: "categories.math.description", Count: 84},
+		{Path: "/osint", Icon: "🕵️", Name: "OSINT Tools", NameKey: "categories.osint.name", Description: "Email intelligence, domain research, and username searches", DescriptionKey: "categories.osint.description", Count: 42},
+		{Path: "/parse", Icon: "🔍", Name: "Parsers", NameKey: "categories.parse.name", Description: "Parsing JSON, YAML, XML, CSV, and format conversions", DescriptionKey: "categories.parse.description", Count: 72},
+		{Path: "/research", Icon: "📚", Name: "Research Tools", NameKey: "categories.research.name", Description: "Content extraction, summarization, and citations", DescriptionKey: "categories.research.description", Count: 28},
+		{Path: "/system", Icon: "🩺", Name: "Health & System", NameKey: "categories.system.name", Description: "Server health checks, system information, and version details", DescriptionKey: "categories.system.description", Count: 3},
+		{Path: "/testing", Icon: "🧪", Name: "Testing Tools", NameKey: "categories.testing.name", Description: "Mocks, fixtures, assertions, and API testing", DescriptionKey: "categories.testing.description", Count: 45},
+		{Path: "/validate", Icon: "✅", Name: "Validators", NameKey: "categories.validate.name", Description: "Validating emails, phones, URLs, credit cards, and more", DescriptionKey: "categories.validate.description", Count: 68},
+		{Path: "/weather", Icon: "⛅", Name: "Weather", NameKey: "categories.weather.name", Description: "Current weather, forecasts, and air quality data", DescriptionKey: "categories.weather.description", Count: 27},
 	}
 	counts := make(map[string]int, len(categories))
 	for _, page := range toolPages() {
@@ -1179,8 +1475,8 @@ func allCategories() []CategoryInfo {
 func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "categories")
-		data.PageTitle = "Browse All Categories"
-		data.PageDescription = "All tool categories available in " + cfg.Server.Branding.Title
+		data.PageTitle = i18n.Translate(data.Lang, "nav.categories")
+		data.PageDescription = i18n.Translate(data.Lang, "help.features")
 		data.Categories = allCategories()
 		renderPage(w, "categories", data)
 	}
@@ -1189,8 +1485,7 @@ func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
 func datetimePageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "datetime")
-		data.PageTitle = "DateTime Tools"
-		data.PageDescription = "Timestamp conversion, timezone handling, and date calculations"
+		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, "datetime")
 		renderPage(w, "datetime", data)
 	}
 }
@@ -1198,8 +1493,9 @@ func datetimePageHandler(cfg *config.Config) http.HandlerFunc {
 func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "about")
-		data.PageTitle = "About"
-		data.PageDescription = "About " + cfg.Server.Branding.Title
+		data.PageTitle = i18n.Translate(data.Lang, "about.title")
+		data.PageDescription = cfg.Server.Branding.Description
+		data.Categories = allCategories()
 		data.Tagline = cfg.Server.Branding.Tagline
 		data.Version = Version
 		data.CommitID = CommitID
@@ -1212,82 +1508,66 @@ func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
 func privacyPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "privacy")
-		data.PageTitle = "Privacy Policy"
-		data.PageDescription = "Privacy policy for " + cfg.Server.Branding.Title
-		data.UpdatedAt = time.Now().Format("January 2006")
+		data.PageTitle = i18n.Translate(data.Lang, "privacy.title")
+		data.PageDescription = i18n.Translate(data.Lang, "privacy.summary")
+		data.UpdatedAt = footerBuildDate()
 		renderPage(w, "privacy", data)
-	}
-}
-
-func contactPageHandler(cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, r, "contact")
-		data.PageTitle = "Contact"
-		data.PageDescription = "Contact information"
-		data.SecurityEmail = cfg.Web.Security.Contact
-		renderPage(w, "contact", data)
 	}
 }
 
 func helpPageHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "help")
-		data.PageTitle = "Help"
-		data.PageDescription = "Getting started with " + cfg.Server.Branding.Title
+		data.PageTitle = i18n.Translate(data.Lang, "help.title")
+		data.PageDescription = i18n.Translate(data.Lang, "help.getting_started")
 		data.RateLimitRequests = cfg.Server.RateLimit.Read.Requests
 		data.RateLimitWindow = cfg.Server.RateLimit.Read.Window
+		data.HelpPages = helpPageRegistry(data.Lang)
 		renderPage(w, "help", data)
-	}
-}
-
-func apiDocsHandler(cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		data := newPageData(cfg, r, "api")
-		data.PageTitle = "API Documentation"
-		data.PageDescription = "REST API documentation for CasTools - Universal API Toolkit"
-		renderPage(w, "openapi", data)
 	}
 }
 
 // swaggerUIHandler serves the Swagger UI at the PART 14 canonical
 // /server/docs/swagger path; it fetches its spec from /api/swagger.
 func swaggerUIHandler(cfg *config.Config) http.HandlerFunc {
-	baseURL := getBaseURL(cfg)
-	return swagger.ServeUI(baseURL + "/api/swagger")
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, r, "api")
+		data.PageTitle = i18n.TranslateFormat(data.Lang, "swagger.title", map[string]string{"app_name": cfg.Server.Branding.Title})
+		data.PageDescription = i18n.Translate(data.Lang, "swagger.description")
+		data.DocsStylesheets = swagger.UIStylesheets()
+		data.DocsScripts = swagger.UIScripts()
+		data.DocsEndpoint = BuildURL(requestWithServerConfig(r, cfg), APIBasePath(cfg)+"/server/swagger")
+		renderPage(w, "docs_swagger", data)
+	}
 }
 
 // apiSwaggerSpecHandler serves the OpenAPI JSON spec. Mounted at both
 // /api/swagger (unversioned alias) and /api/{api_version}/server/swagger (versioned
 // canonical) — same handler, no redirect, per PART 14. JSON only, no YAML.
 func apiSwaggerSpecHandler(cfg *config.Config, routes *[]swagger.Route) http.HandlerFunc {
-	baseURL := getBaseURL(cfg)
 	apiVersion := strings.TrimPrefix(APIBasePath(cfg), "/api/")
 	return func(w http.ResponseWriter, r *http.Request) {
+		r = requestWithServerConfig(r, cfg)
 		var registered []swagger.Route
 		if routes != nil {
 			registered = *routes
 		}
-		swagger.ServeSpecWithRoutes(Version, baseURL, apiVersion, registered).ServeHTTP(w, r)
+		swagger.ServeSpecWithRoutes(Version, BuildURL(r, ""), apiVersion, registered).ServeHTTP(w, r)
 	}
-}
-
-// getBaseURL returns the base URL for the server
-func getBaseURL(cfg *config.Config) string {
-	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
-	if cfg.Server.FQDN == "" || cfg.Server.FQDN == "localhost" {
-		baseURL = fmt.Sprintf("http://localhost:%s", cfg.Server.Port)
-	}
-	if cfg.Server.SSL.Enabled {
-		baseURL = fmt.Sprintf("https://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
-	}
-	return baseURL
 }
 
 // graphqlUIHandler serves the GraphiQL UI at the PART 14 canonical
 // /server/docs/graphql path; it POSTs to /api/graphql.
 func graphqlUIHandler(cfg *config.Config) http.HandlerFunc {
-	baseURL := getBaseURL(cfg)
-	return graphql.ServeUI(baseURL + "/api/graphql")
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, r, "api")
+		data.PageTitle = i18n.TranslateFormat(data.Lang, "graphql.title", map[string]string{"app_name": cfg.Server.Branding.Title})
+		data.PageDescription = i18n.Translate(data.Lang, "graphql.description")
+		data.DocsStylesheets = graphql.UIStylesheets()
+		data.DocsScripts = graphql.UIScripts()
+		data.DocsEndpoint = BuildURL(requestWithServerConfig(r, cfg), APIBasePath(cfg)+"/server/graphql")
+		renderPage(w, "docs_graphql", data)
+	}
 }
 
 // mountMetrics registers the PART 20 metrics surface. The bare
@@ -1332,27 +1612,44 @@ func mountMetrics(r chi.Router, cfg *config.Config) {
 
 func robotsHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r = requestWithServerConfig(r, cfg)
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintln(w, "User-agent: *")
+		_, _ = fmt.Fprintln(w, "User-agent: *")
 		for _, path := range cfg.Web.Robots.Allow {
-			fmt.Fprintf(w, "Allow: %s\n", path)
+			_, _ = fmt.Fprintf(w, "Allow: %s\n", path)
 		}
 		for _, path := range cfg.Web.Robots.Deny {
-			fmt.Fprintf(w, "Disallow: %s\n", path)
+			_, _ = fmt.Fprintf(w, "Disallow: %s\n", path)
 		}
 		// Add sitemap reference
-		baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.FQDN, cfg.Server.Port)
-		fmt.Fprintf(w, "Sitemap: %s/sitemap.xml\n", baseURL)
+		if _, err := fmt.Fprintf(w, "Sitemap: %s\n", BuildURL(r, "/sitemap.xml")); err != nil {
+			return
+		}
 	}
 }
 
 func securityHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		// RFC 9116 compliant security.txt
-		fmt.Fprintf(w, "Contact: mailto:%s\n", cfg.Web.Security.Contact)
-		fmt.Fprintf(w, "Expires: %s\n", cfg.Web.Security.Expires.Format(time.RFC3339))
-		fmt.Fprintln(w, "Preferred-Languages: en")
+		r = requestWithServerConfig(r, cfg)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		lines := make([]string, 0, 7)
+		for _, contact := range securityContacts(cfg, r) {
+			lines = append(lines, "Contact: "+contact)
+		}
+		if cfg.Web.Security.PublishPGPKey {
+			if _, _, err := readSecurityPublicKey(); err == nil {
+				lines = append(lines, "Encryption: "+BuildURL(r, "/.well-known/pgp-key.asc"))
+			}
+		}
+		lines = append(lines,
+			"Expires: "+cfg.Web.Security.Expires.UTC().Format(time.RFC3339),
+			"Policy: "+BuildURL(r, "/server/security/policy"),
+			"Preferred-Languages: en",
+		)
+		if _, err := w.Write([]byte(strings.Join(lines, "\n") + "\n")); err != nil {
+			return
+		}
 	}
 }
 
@@ -1366,7 +1663,7 @@ func manifestHandler(cfg *config.Config) http.HandlerFunc {
 		// Manifest colors trace back to theme.ThemePaletteDark (the default
 		// theme) in src/common/theme/colors.go, rather than unrelated
 		// hardcoded hex values, so installed-PWA chrome matches the site.
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"name":             cfg.Server.Branding.Title,
 			"short_name":       cfg.Server.Branding.Title,
 			"description":      cfg.Server.Branding.Description,
@@ -1416,7 +1713,7 @@ func assetURL(path string) string {
 // bytes. The ETag is set before delegating so http.ServeContent answers a
 // matching If-None-Match with 304.
 func staticAssetHandler() http.Handler {
-	files := http.StripPrefix("/static/", http.FileServer(http.FS(staticFS)))
+	files := http.FileServer(http.FS(staticFS))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("v") == assetStamp() {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
@@ -1451,7 +1748,7 @@ func serviceWorkerHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("ETag", buildETag())
-		w.Write(data)
+		_, _ = w.Write(data)
 	}
 }
 
@@ -1466,25 +1763,36 @@ func offlinePageHandler() http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(data)
+		_, _ = w.Write(data)
 	}
 }
 
 // Response helpers
 func jsonResponse(w http.ResponseWriter, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	writeEnvelopeOK(w, http.StatusOK, data)
 }
 
 func textResponse(w http.ResponseWriter, text string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write([]byte(text))
+	_, _ = w.Write([]byte(text))
 }
 
-func errorResponse(w http.ResponseWriter, message string, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+func errorResponse(w http.ResponseWriter, r *http.Request, _ string, status int) {
+	code, key := "INTERNAL_ERROR", "errors.server_error"
+	if status < http.StatusInternalServerError {
+		code, key = "BAD_REQUEST", "errors.bad_request"
+		switch status {
+		case http.StatusNotFound:
+			code, key = "NOT_FOUND", "errors.not_found"
+		case http.StatusMethodNotAllowed:
+			code, key = "METHOD_NOT_ALLOWED", "errors.method_not_allowed"
+		case http.StatusTooManyRequests:
+			code, key = "RATE_LIMITED", "errors.rate_limited"
+		case http.StatusUnprocessableEntity:
+			code, key = "VALIDATION_FAILED", "errors.invalid_format"
+		}
+	}
+	writeEnvelopeError(w, status, code, i18n.Translate(i18n.LangFromRequest(r), key), nil)
 }
 
 // Text API handlers
@@ -1496,11 +1804,11 @@ func apiUUIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	uuid, err := text.UUID(version)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
 		"uuid":    uuid,
 		"version": version,
 	})
@@ -1514,7 +1822,7 @@ func apiUUIDTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	uuid, err := text.UUID(version)
 	if err != nil {
-		textResponse(w, "Error: "+err.Error())
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_VERSION")
 		return
 	}
 
@@ -1533,11 +1841,11 @@ func apiUUIDBatchHandler(w http.ResponseWriter, r *http.Request) {
 
 	uuids, err := text.UUIDs(version, count)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
+	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
 		"uuids":   uuids,
 		"version": version,
 		"count":   len(uuids),
@@ -1550,7 +1858,7 @@ func apiHashHandler(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := text.Hash(algorithm, input)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -1567,7 +1875,7 @@ func apiHashTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := text.Hash(algorithm, input)
 	if err != nil {
-		textResponse(w, "Error: "+err.Error())
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_INPUT")
 		return
 	}
 
@@ -1592,7 +1900,7 @@ func apiEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	encoding := strings.ToLower(paramValue(r, "encoding"))
 	input := paramValue(r, "input")
 
-	if !validateStruct(w, encodeParams{Encoding: encoding}) {
+	if !validateStruct(w, r, encodeParams{Encoding: encoding}) {
 		return
 	}
 
@@ -1613,7 +1921,7 @@ func apiEncodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -1642,7 +1950,7 @@ func apiEncodeTextHandler(w http.ResponseWriter, r *http.Request) {
 	case "url":
 		output = text.URLEncode(input)
 	default:
-		textResponse(w, "Error: unsupported encoding")
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_ENCODING")
 		return
 	}
 
@@ -1657,7 +1965,7 @@ func apiDecodeHandler(w http.ResponseWriter, r *http.Request) {
 	encoding := strings.ToLower(paramValue(r, "encoding"))
 	input := paramValue(r, "input")
 
-	if !validateStruct(w, decodeParams{Encoding: encoding}) {
+	if !validateStruct(w, r, decodeParams{Encoding: encoding}) {
 		return
 	}
 
@@ -1678,7 +1986,7 @@ func apiDecodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -1708,12 +2016,12 @@ func apiDecodeTextHandler(w http.ResponseWriter, r *http.Request) {
 	case "url":
 		output, err = text.URLDecode(input)
 	default:
-		textResponse(w, "Error: unsupported encoding")
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_ENCODING")
 		return
 	}
 
 	if err != nil {
-		textResponse(w, "Error: "+err.Error())
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_INPUT")
 		return
 	}
 
@@ -1728,7 +2036,7 @@ func apiCaseHandler(w http.ResponseWriter, r *http.Request) {
 	style := strings.ToLower(paramValue(r, "style"))
 	input := paramValue(r, "input")
 
-	if !validateStruct(w, caseParams{Style: style}) {
+	if !validateStruct(w, r, caseParams{Style: style}) {
 		return
 	}
 
@@ -1776,7 +2084,7 @@ func apiCaseTextHandler(w http.ResponseWriter, r *http.Request) {
 	case "kebab":
 		output = text.ToKebabCase(input)
 	default:
-		textResponse(w, "Error: unsupported style")
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_STYLE")
 		return
 	}
 
@@ -1846,7 +2154,7 @@ func apiTextStatsHandler(w http.ResponseWriter, r *http.Request) {
 		Text string `json:"text"`
 	}
 	if err := decodeJSONBody(r, &input); err != nil {
-		errorResponse(w, "invalid request body", http.StatusBadRequest)
+		errorResponse(w, r, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -1896,7 +2204,7 @@ func apiBcryptHandler(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := crypto.BcryptHash(password, cost)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1923,7 +2231,7 @@ func apiBcryptVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		Hash     string `json:"hash"`
 	}
 	if err := decodeJSONBody(r, &input); err != nil {
-		errorResponse(w, "invalid request body", http.StatusBadRequest)
+		errorResponse(w, r, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -1961,7 +2269,7 @@ func apiPasswordHandler(w http.ResponseWriter, r *http.Request) {
 
 	password, err := crypto.GeneratePassword(length, opts)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1979,7 +2287,7 @@ func apiPasswordTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	password, err := crypto.GeneratePassword(length, crypto.DefaultPasswordOptions())
 	if err != nil {
-		textResponse(w, "Error: "+err.Error())
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
 
@@ -1994,7 +2302,7 @@ func apiPINHandler(w http.ResponseWriter, r *http.Request) {
 
 	pin, err := crypto.GeneratePIN(length)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -2012,7 +2320,7 @@ func apiPINTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	pin, err := crypto.GeneratePIN(length)
 	if err != nil {
-		textResponse(w, "Error: "+err.Error())
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
 
@@ -2031,7 +2339,7 @@ func apiTOTPGenerateHandler(w http.ResponseWriter, r *http.Request) {
 
 	secret, err := crypto.GenerateTOTPSecret(20)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -2055,7 +2363,7 @@ func apiTOTPCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	code, err := crypto.GenerateTOTP(secret, 6, 30)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -2073,7 +2381,7 @@ func apiTOTPCodeTextHandler(w http.ResponseWriter, r *http.Request) {
 
 	code, err := crypto.GenerateTOTP(secret, 6, 30)
 	if err != nil {
-		textResponse(w, "Error: "+err.Error())
+		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_INPUT")
 		return
 	}
 
@@ -2099,7 +2407,7 @@ func apiRandomBytesHandler(w http.ResponseWriter, r *http.Request) {
 
 	bytes, err := crypto.RandomBytes(count)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -2118,7 +2426,7 @@ func apiRandomHexHandler(w http.ResponseWriter, r *http.Request) {
 
 	bytes, err := crypto.RandomBytes(count)
 	if err != nil {
-		textResponse(w, "Error: "+err.Error())
+		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
 
@@ -2135,7 +2443,7 @@ func apiPasswordStrengthPostHandler(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := decodeJSONBody(r, &input); err != nil {
-		errorResponse(w, "invalid request body", http.StatusBadRequest)
+		errorResponse(w, r, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -2151,7 +2459,7 @@ func apiDateTimeNowHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.Now(timezone)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -2177,7 +2485,7 @@ func apiTimestampTextHandler(w http.ResponseWriter, r *http.Request) {
 func apiConvertTimestampHandler(w http.ResponseWriter, r *http.Request) {
 	timestamp, err := strconv.ParseInt(paramValue(r, "timestamp"), 10, 64)
 	if err != nil {
-		errorResponse(w, "invalid timestamp", http.StatusBadRequest)
+		errorResponse(w, r, "invalid timestamp", http.StatusBadRequest)
 		return
 	}
 
@@ -2185,7 +2493,7 @@ func apiConvertTimestampHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.FromUnix(timestamp, timezone)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -2197,7 +2505,7 @@ func apiToUnixHandler(w http.ResponseWriter, r *http.Request) {
 
 	timestamp, err := datetime.ToUnix(dt)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -2210,7 +2518,7 @@ func apiToUnixHandler(w http.ResponseWriter, r *http.Request) {
 func apiAddDurationHandler(w http.ResponseWriter, r *http.Request) {
 	timestamp, err := strconv.ParseInt(paramValue(r, "timestamp"), 10, 64)
 	if err != nil {
-		errorResponse(w, "invalid timestamp", http.StatusBadRequest)
+		errorResponse(w, r, "invalid timestamp", http.StatusBadRequest)
 		return
 	}
 
@@ -2218,7 +2526,7 @@ func apiAddDurationHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.AddDuration(timestamp, duration)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -2228,13 +2536,13 @@ func apiAddDurationHandler(w http.ResponseWriter, r *http.Request) {
 func apiDiffHandler(w http.ResponseWriter, r *http.Request) {
 	timestamp1, err := strconv.ParseInt(paramValue(r, "timestamp1"), 10, 64)
 	if err != nil {
-		errorResponse(w, "invalid timestamp1", http.StatusBadRequest)
+		errorResponse(w, r, "invalid timestamp1", http.StatusBadRequest)
 		return
 	}
 
 	timestamp2, err := strconv.ParseInt(paramValue(r, "timestamp2"), 10, 64)
 	if err != nil {
-		errorResponse(w, "invalid timestamp2", http.StatusBadRequest)
+		errorResponse(w, r, "invalid timestamp2", http.StatusBadRequest)
 		return
 	}
 
@@ -2252,7 +2560,7 @@ func apiTimezoneInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.TimezoneInfo(timezone)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -2262,7 +2570,7 @@ func apiTimezoneInfoHandler(w http.ResponseWriter, r *http.Request) {
 func apiConvertTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 	timestamp, err := strconv.ParseInt(paramValue(r, "timestamp"), 10, 64)
 	if err != nil {
-		errorResponse(w, "invalid timestamp", http.StatusBadRequest)
+		errorResponse(w, r, "invalid timestamp", http.StatusBadRequest)
 		return
 	}
 
@@ -2271,7 +2579,7 @@ func apiConvertTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := datetime.ConvertTimezone(timestamp, from, to)
 	if err != nil {
-		errorResponse(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 

@@ -70,9 +70,6 @@ func installWindows() error {
 	}
 
 	fmt.Printf("Windows service '%s' installed (running as %s)\n", appName, windowsServiceAccount)
-	fmt.Println()
-	fmt.Println("To start the service:")
-	fmt.Printf("  sc.exe start %s\n", appName)
 
 	return nil
 }
@@ -82,7 +79,14 @@ func installWindows() error {
 // them by default. Missing directories are created first so the grant has a
 // target.
 func grantServiceAccountAccess() error {
-	for _, dir := range []string{paths.ConfigDir(), paths.DataDir(), paths.CacheDir(), paths.LogDir()} {
+	for _, dir := range []string{
+		paths.ConfigDir(),
+		paths.DataDir(),
+		paths.GetDatabaseDir(paths.DataDir()),
+		paths.CacheDir(),
+		paths.LogDir(),
+		paths.BackupDir(),
+	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
@@ -111,7 +115,11 @@ func disableWindows() error {
 	}
 	defer s.Close()
 
-	s.Control(svc.Stop)
+	if GetStatus().Running {
+		if _, err := s.Control(svc.Stop); err != nil {
+			return fmt.Errorf("failed to stop Windows service: %w", err)
+		}
+	}
 
 	config, err := s.Config()
 	if err != nil {
@@ -140,7 +148,11 @@ func uninstallWindows() error {
 	}
 	defer s.Close()
 
-	s.Control(svc.Stop)
+	if GetStatus().Running {
+		if _, err := s.Control(svc.Stop); err != nil {
+			return fmt.Errorf("failed to stop Windows service before uninstall: %w", err)
+		}
+	}
 
 	if err := s.Delete(); err != nil {
 		return fmt.Errorf("failed to delete Windows service: %w", err)

@@ -1,6 +1,6 @@
 {{/* layouts/public.tmpl - Public layout per PART 17 */}}
 <!DOCTYPE html>
-<html lang="{{.Lang}}" dir="{{.LangDir}}" class="{{.ThemeClass}}">
+<html lang="{{.Lang}}" dir="{{.LangDir}}" class="{{.ThemeClass}}" data-base-url="{{.BaseURL}}">
 <head>
   {{template "head" .}}
 </head>
@@ -10,9 +10,9 @@
   <a href="#main-content" class="skip-link">{{t .Lang "a11y.skip_to_content"}}</a>
   <a href="#navigation" class="skip-link">{{t .Lang "a11y.skip_to_navigation"}}</a>
 
-  {{/* The nav partial renders inside the header's single row (PART 16
-       "Header Layout"), so it is not templated separately here. */}}
+  {{template "nav-toggle" .}}
   {{template "header" .}}
+  {{template "nav-panel" .}}
 
   {{/* main is the skip-link target, so it takes tabindex="-1" to be
        programmatically focusable without entering the tab order. */}}
@@ -20,6 +20,7 @@
     {{template "content" .}}
   </main>
 
+  {{if .FooterExtension}}<div class="custom-footer-branding">{{.FooterExtension}}</div>{{end}}
   {{template "footer" .}}
 
   {{/* Live regions per PART 30. Rendered server-side and left empty so any

@@ -4,38 +4,46 @@
 <section>
   <div class="container container-sm">
     <nav class="mb-2 tool-note">
-      <a href="/">Home</a> / <a href="/math">Math &amp; Numbers</a> / Matrix Calculator
+      <a href="{{path .BaseURL "/"}}">{{t .Lang "nav.home"}}</a> / <a href="{{path .BaseURL "/math"}}">{{t .Lang "categories.math.name"}}</a> {{t .Lang "tool_pages.text.matrix.calculator.1f46e9238e"}}
     </nav>
 
     <div class="tool-card">
       <div class="tool-header">
-        <h1 class="tool-title">Matrix Calculator</h1>
-        <button class="btn btn-icon" data-favorite="math-matrix" title="Add to favorites">⭐</button>
+        <h1 class="tool-title">{{t .Lang "tool_pages.text.matrix.calculator.dd2abfedf3"}}</h1>
+        <button type="button" class="btn btn-icon" data-favorite="math-matrix" title="{{t .Lang "common.add_to_favorites"}}">⭐</button>
       </div>
 
       <p class="tool-description">
-        Add, multiply, or find the determinant of matrices. Submit a JSON body
-        with <code>operation</code> ("add", "multiply", or "determinant"),
-        <code>a</code>, and (for add/multiply) <code>b</code>.
+        {{t .Lang "tool_pages.text.add.multiply.or.find.the.determinant.of.matr.5be95839fa"}} <code>operation</code> {{t .Lang "tool_pages.text.add.multiply.or.determinant.bb41f9b027"}}
+        <code>a</code>{{t .Lang "tool_pages.text.and.for.add.multiply.2288c1cce0"}} <code>b</code>.
       </p>
 
-      <form id="matrix-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/math/matrix">
+      <form id="matrix-form" class="tool-form" data-body-endpoint="{{.APIBasePath}}/math/matrix" method="post" action="{{path .BaseURL "/math/matrix"}}">
+        {{csrfField .CSRFToken}}
         <div class="form-group">
-          <label class="form-label">Request Body (JSON)</label>
-          <textarea name="body" class="form-input" rows="8" required placeholder='{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}'>{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}</textarea>
+          <label class="form-label" for="matrix-form-body">{{t .Lang "tool_pages.text.request.body.json.54374517b4"}}</label>
+          <textarea name="body" class="form-input" rows="8" required placeholder='{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}' id="matrix-form-body">{{t .Lang "tool_pages.text.operation.add.a.1.2.3.4.b.5.6.7.8.591543f332"}}</textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Calculate</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "tool_pages.text.calculate.2121cc15af"}}</button>
       </form>
+
+      {{if or .ToolError .ToolResult .ToolImageURL}}
+      <div class="tool-server-result" role="status" aria-live="polite">
+        {{if .ToolError}}<p class="tool-server-result-error"><strong>{{t .Lang "common.error"}}:</strong> {{.ToolError}}</p>{{end}}
+        {{if .ToolResult}}<h2>{{t .Lang "common.success"}}</h2><pre class="tool-result">{{.ToolResult}}</pre>{{end}}
+        {{if .ToolImageURL}}<h2>{{t .Lang "common.success"}}</h2><img class="tool-result-image" src="{{.ToolImageURL}}" alt="{{.PageTitle}}">{{end}}
+      </div>
+      {{end}}
 
       <div id="matrix-form-result" class="tool-result" hidden></div>
 
       <div class="mt-3">
-        <h3>API Endpoint</h3>
+        <h3>{{t .Lang "common.api_endpoint"}}</h3>
         <div class="code-block">
           <div class="code-header">
-            <span class="code-lang">POST Request</span>
-            <button class="btn btn-sm" data-copy title="Copy">Copy</button>
+            <span class="code-lang">{{t .Lang "common.post_request"}}</span>
+            <button type="button" class="btn btn-sm" data-copy title="{{t .Lang "tool_pages.text.copy.e21f935f11"}}">{{t .Lang "common.copy"}}</button>
           </div>
           <div class="code-content">
             <pre>curl -X POST {{.BaseURL}}{{.APIBasePath}}/math/matrix -d '{"operation":"add","a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}'</pre>

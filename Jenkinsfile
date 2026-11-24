@@ -2,7 +2,7 @@ pipeline {
     agent none
 
     triggers {
-        // Daily build at 3am UTC (matches GitHub Actions daily.yml) and
+        // Devel build at 3am UTC (matches GitHub Actions devel.yml) and
         // daily devel image rebuild at 4am UTC (matches docker.yml build-devel job)
         cron('0 3 * * *\n0 4 * * *')
     }
@@ -60,9 +60,9 @@ pipeline {
                         env.BUILD_TYPE = 'beta'
                         env.VERSION = sh(script: 'date -u +"%Y%m%d%H%M%S"', returnStdout: true).trim() + '-beta'
                     } else if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
-                        // Daily build - matches daily.yml
+                        // Devel build - matches devel.yml
                         // Daily identity is the commit being built, not a timestamp
-                        env.BUILD_TYPE = 'daily'
+                        env.BUILD_TYPE = 'devel'
                         env.VERSION = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
                     } else {
                         // Other branches - dev build
@@ -93,8 +93,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -111,8 +111,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -130,8 +130,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -148,8 +148,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -167,8 +167,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -185,8 +185,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -204,8 +204,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -222,8 +222,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -249,8 +249,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -267,8 +267,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -285,8 +285,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -303,8 +303,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -321,8 +321,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -339,8 +339,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -357,8 +357,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -375,8 +375,8 @@ pipeline {
                             docker run --rm \
                                 --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                                 -v ${WORKSPACE}:/app \
-                                -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -396,12 +396,76 @@ pipeline {
                     docker run --rm \
                         --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
                         -v ${WORKSPACE}:/app \
-                        -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                        -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                        -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                        -v ${GO_BUILD}:/usr/local/share/go/cache \
                         -w /app \
+                        -e CGO_ENABLED=0 \
                         casjaysdev/go:latest \
                         go test -v -cover ./...
                 '''
+            }
+        }
+
+        stage('Security') {
+            parallel {
+                stage('Secret scan') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            if [ -n "${GIT_PREVIOUS_COMMIT:-}" ] && git cat-file -e "${GIT_PREVIOUS_COMMIT}^{commit}" 2>/dev/null; then
+                                docker run --rm -v "$WORKSPACE:/repo:ro" -w /repo trufflesecurity/trufflehog:3.95.9 \
+                                    git file://. --since-commit "$GIT_PREVIOUS_COMMIT" \
+                                    --results=verified,unknown \
+                                    --exclude-paths=.github/trufflehog-exclude.txt --fail
+                            else
+                                docker run --rm -v "$WORKSPACE:/repo:ro" -w /repo trufflesecurity/trufflehog:3.95.9 \
+                                    git file://. --results=verified \
+                                    --exclude-paths=.github/trufflehog-exclude.txt --fail
+                            fi
+                        '''
+                    }
+                }
+                stage('Workflow policy') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            bad=$(grep -RnE '^[[:space:]]*uses:' .github/ .gitea/ .forgejo/ 2>/dev/null | grep -vE '@[0-9a-f]{40}([[:space:]]|$)' || true)
+                            if [ -n "$bad" ]; then echo "unpinned actions found:"; echo "$bad"; exit 1; fi
+                        '''
+                    }
+                }
+                stage('Vulnerability scan') {
+                    when { expression { fileExists('go.sum') } }
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v "$WORKSPACE:/app" \
+                                -v "${GO_CACHE}:/usr/local/share/go/pkg/mod" \
+                                -v "${GO_BUILD}:/usr/local/share/go/cache" \
+                                -w /app \
+                                -e CGO_ENABLED=0 \
+                                casjaysdev/go:latest govulncheck ./...
+                        '''
+                    }
+                }
+                stage('Image scan') {
+                    when { expression { fileExists('docker/Dockerfile') } }
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker build -t local/scan-target:ci -f docker/Dockerfile .
+                            ./tests/check_image.sh local/scan-target:ci
+                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.70.0 \
+                                image --exit-code 1 --severity CRITICAL,HIGH local/scan-target:ci
+                        '''
+                    }
+                    post {
+                        always {
+                            sh 'docker rmi local/scan-target:ci || true'
+                        }
+                    }
+                }
             }
         }
 
@@ -482,11 +546,11 @@ pipeline {
             }
         }
 
-        // Daily Release - matches daily.yml (main/master + scheduled)
-        stage('Release: Daily') {
+        // Devel Release - matches devel.yml (main/master + scheduled)
+        stage('Release: Devel') {
             agent { label 'amd64' }
             when {
-                expression { env.BUILD_TYPE == 'daily' }
+                expression { env.BUILD_TYPE == 'devel' }
             }
             steps {
                 sh '''
@@ -559,6 +623,7 @@ pipeline {
                             --build-arg COMMIT_ID="${COMMIT_ID}" \
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
                             --build-arg BUILD_EPOCH="${BUILD_EPOCH}" \
+                            --build-arg OFFICIAL_SITE="${OFFICIAL_SITE}" \
                             --label "org.opencontainers.image.vendor=${PROJECT_ORG}" \
                             --label "org.opencontainers.image.authors=${PROJECT_ORG}" \
                             --label "org.opencontainers.image.title=${PROJECT_NAME}" \
@@ -568,9 +633,12 @@ pipeline {
                             --label "org.opencontainers.image.version=${VERSION}" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
                             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
+                            --label "org.opencontainers.image.schema-version=${VERSION}" \
                             --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
+                            --label "org.opencontainers.image.vcs-type=Git" \
+                            --label "com.github.containers.toolbox=false" \
                             --annotation "manifest:org.opencontainers.image.vendor=${PROJECT_ORG}" \
                             --annotation "manifest:org.opencontainers.image.authors=${PROJECT_ORG}" \
                             --annotation "manifest:org.opencontainers.image.title=${PROJECT_NAME}" \
@@ -580,13 +648,17 @@ pipeline {
                             --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
                             --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
+                            --annotation "manifest:org.opencontainers.image.schema-version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
+                            --annotation "manifest:org.opencontainers.image.vcs-type=Git" \
+                            --annotation "manifest:com.github.containers.toolbox=false" \
                             ${tags} \
                             --push \
                             .
                     """
+                    sh "docker pull ${REGISTRY}:${COMMIT_ID} && ./tests/check_image.sh ${REGISTRY}:${COMMIT_ID}"
                 }
             }
         }
@@ -609,35 +681,46 @@ pipeline {
                         docker buildx build \
                             -f docker/Dockerfile.dev \
                             --platform linux/amd64,linux/arm64 \
+                            --build-arg VERSION=devel \
                             --build-arg COMMIT_ID="${COMMIT_ID}" \
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
                             --build-arg BUILD_EPOCH="${BUILD_EPOCH}" \
+                            --build-arg OFFICIAL_SITE="${OFFICIAL_SITE}" \
                             --label "org.opencontainers.image.vendor=${PROJECT_ORG}" \
                             --label "org.opencontainers.image.authors=${PROJECT_ORG}" \
                             --label "org.opencontainers.image.title=${PROJECT_NAME}" \
                             --label "org.opencontainers.image.base.name=${PROJECT_NAME}" \
                             --label "org.opencontainers.image.description=${PROJECT_NAME} - development image (alpine, debug mode)" \
                             --label "org.opencontainers.image.licenses=MIT" \
+                            --label "org.opencontainers.image.version=devel" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
                             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
+                            --label "org.opencontainers.image.schema-version=devel" \
                             --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
+                            --label "org.opencontainers.image.vcs-type=Git" \
+                            --label "com.github.containers.toolbox=false" \
                             --annotation "manifest:org.opencontainers.image.vendor=${PROJECT_ORG}" \
                             --annotation "manifest:org.opencontainers.image.authors=${PROJECT_ORG}" \
                             --annotation "manifest:org.opencontainers.image.title=${PROJECT_NAME}" \
                             --annotation "manifest:org.opencontainers.image.base.name=${PROJECT_NAME}" \
                             --annotation "manifest:org.opencontainers.image.description=${PROJECT_NAME} - development image (alpine, debug mode)" \
                             --annotation "manifest:org.opencontainers.image.licenses=MIT" \
+                            --annotation "manifest:org.opencontainers.image.version=devel" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
                             --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
+                            --annotation "manifest:org.opencontainers.image.schema-version=devel" \
                             --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
                             --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
+                            --annotation "manifest:org.opencontainers.image.vcs-type=Git" \
+                            --annotation "manifest:com.github.containers.toolbox=false" \
                             -t ${REGISTRY}:devel \
                             --push \
                             .
                     """
+                    sh "docker pull ${REGISTRY}:devel && ./tests/check_image.sh ${REGISTRY}:devel"
                 }
             }
         }
