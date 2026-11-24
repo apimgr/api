@@ -18,8 +18,8 @@ steps independently; they do not shell out to `make`.
 
 ## CRITICAL - ALWAYS DO
 - Always run `clean` first in `build` and `local` targets.
-- Always use `release.txt` as the canonical version source when present (wins over `VERSION` env var and `devel` fallback).
-- Always embed `Version`, `CommitID`, `BuildDate` (ISO 8601 UTC), and `OfficialSite` via `-ldflags` in `build`, `local`, and `release` builds (not `dev`).
+- Always use a user-set `VERSION` override before a non-empty `release.txt`, then fall back to the short Git commit ID (`devel` outside a Git checkout).
+- Always embed `Version`, `CommitID`, `BuildEpoch`, and `OfficialSite` via `-ldflags` in `build`, `local`, and `release` builds (not `dev`); `BuildDate` is derived from `BuildEpoch` at runtime.
 - Always build for all 8 platforms in `build`/`release`: linux, darwin, windows, freebsd × amd64, arm64.
 - Always use `CGO_ENABLED=0` and `GOFLAGS=-buildvcs=false` for Docker Go builds.
 - Always output `make dev` builds to an isolated temp dir: `${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX/`.
@@ -39,9 +39,9 @@ steps independently; they do not shell out to `make`.
 | `docker` | build + push multi-arch image | `$REGISTRY` |
 
 ### Versioning
-- `release.txt`: single-line canonical version (SemVer `MAJOR.MINOR.PATCH`), wins over env/tag/derived.
+- `release.txt`: optional single-line local-build version; empty/missing falls back to the short commit ID, and an explicitly set `VERSION` overrides it.
 - `site.txt` (optional): single-line official hosted URL, wins over IDEA.md/README/env/CI secrets; never guess this value.
-- Version priority: `release.txt` > `VERSION` env var > `devel` fallback.
+- Version priority: user-set `VERSION` > non-empty `release.txt` > short Git commit ID (`devel` outside a Git checkout).
 - `v` prefix ONLY on numeric semver tags (`0.2.0`→`v0.2.0`); never on text (`dev`, `beta`, `daily`) or timestamps (`20251218060432`).
 
 ### Binary naming
@@ -66,10 +66,10 @@ All 8 server binaries, all 8 CLI binaries (if CLI exists), `version.txt`, `api-{
 |---|---|---|---|---|
 | Stable | semver tag push | `X.Y.Z` | yes | unlimited |
 | Beta | push to `beta` branch | `{YYYYMMDDHHMMSS}-beta` | no | unlimited |
-| Daily | 3am UTC schedule + push to main | `{YYYYMMDDHHMMSS}` | no | 1 (rolling, replaces previous) |
+| Devel | 3am UTC schedule + push to main/master | short commit ID | no | 1 (rolling, replaces previous) |
 
 - `make release` = manual local release only (uses `gh` CLI, deletes/recreates tag+release, marks `--latest`).
-- All automated releases (stable/beta/daily) run through CI/CD, not the Makefile.
+- All automated releases (stable/beta/devel) run through CI/CD, not the Makefile.
 
 ### Local development workflow order
 `make dev` (iterate) → run in Docker to debug → `make test` (pre-commit gate) → `./tests/run_tests.sh` (binary validation) → `make local` (prod-config test) → `./tests/incus.sh` (preferred full systemd test) → `make build` (cross-platform, before release).

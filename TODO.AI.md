@@ -9,6 +9,7 @@
 ## P1: Server, Client, and Infrastructure
 
 - [ ] Reconcile all required AI.md parts against implementation, including server configuration, security, persistence, services, scheduler, integrations, CLI client, and eight-platform builds.
+- [ ] Implement database_error notification triggering and repeat/recovery behavior after the coordinator resolves the missing trigger policy in AI.md PART 17.
 - [ ] Reconcile every server page and tool page with AI.md frontend, accessibility, localization, and no-JavaScript requirements.
 - [ ] Verify complete translated-key parity and Italian coverage under AI.md PART 30 after the current catalog changes.
 - [ ] Verify the coordinated-disclosure PGP lifecycle implementation under AI.md PART 11, including expiry, encrypted storage, report rotation, import/export/delete, retry persistence, metadata, and backup/restore.

@@ -23,9 +23,9 @@
 - Always use the strict temp dir structure `/tmp/{project_org}/{internal_name}-XXXXXX/` for any test scratch space
 - Always generate config files at runtime rather than committing them — tests must not rely on committed config artifacts
 - Always identify the exact PID or container name before any stop/kill operation, and prefer graceful shutdown (SIGTERM) before SIGKILL
-- Always keep `docs/` scoped strictly to ReadTheDocs/MkDocs content, with the required pages: `index.md`, `installation.md`, `configuration.md`, `api.md`, `cli.md`, `security.md`, `integrations.md`, `development.md`
+- Always keep `docs/` scoped strictly to ReadTheDocs/MkDocs content, with the required pages: `index.md`, `installation.md`, `configuration.md`, `api.md`, `cli.md`, `security.md`, `integrations.md`, `development.md`, `translating.md`
 - Always maintain both `docs/stylesheets/dark.css` and `docs/stylesheets/light.css` in sync, keeping WCAG AA contrast in both themes
-- Always support all 7 required languages: en, es, zh, fr, ar, de, ja
+- Always support all 8 shipped languages: en, es, fr, de, it, ar, zh, ja
 - Always resolve language via the fallback chain: `?lang=` query param → cookie → `Accept-Language` header → default `en`
 - Always embed translations via `go:embed` and share a single `src/common/i18n` package across all binaries
 - Always validate translation keys at build time
@@ -40,9 +40,9 @@
 - **Test scripts**: `tests/docker.sh`, `tests/incus.sh`, `tests/run_tests.sh` drive Phase 2 binary validation; these exercise every endpoint including content-negotiation variants
 - **Coverage enforcement**: `go test -cover ./...` must report ≥60%; this is a pre-commit and CI gate (Phase 1 only)
 - **ReadTheDocs stack**: `mkdocs.yml`, `.readthedocs.yaml`, `docs/requirements.txt` at repo root/docs; dark/light theme CSS under `docs/stylesheets/`; project-specific palette customization allowed but must preserve WCAG AA and be documented in the project's AI.md
-- **Required docs pages**: `docs/index.md` (overview/quick start/features/links), `docs/installation.md` (Docker/binary/systemd), `docs/configuration.md` (server.yml + env var overrides), `docs/api.md` (REST/Swagger/GraphQL), `docs/security.md` (rate limiting, public security endpoints, `/.well-known/security.txt`, `/server/security`, `/server/contact?security_id=`), `docs/integrations.md` (identity providers, discovery endpoints, platform integrations), `docs/development.md` (build/test/contribute), `docs/cli.md`
+- **Required docs pages**: `docs/index.md` (overview/quick start/features/links), `docs/installation.md` (Docker/binary/systemd), `docs/configuration.md` (all settings and environment-variable overrides), `docs/api.md` (REST/Swagger/GraphQL), `docs/security.md` (rate limiting, public security endpoints, `/.well-known/security.txt`, `/server/security`, `/server/contact?security_id=`), `docs/integrations.md` (identity providers, discovery endpoints, platform integrations), `docs/development.md` (build/test/contribute), `docs/translating.md` (translation workflow), `docs/cli.md`
 - **i18n architecture**: single shared `src/common/i18n` package, embedded via `go:embed`, covers Go templates, HTML, JS, API/Swagger/GraphQL, email, and CLI/agent/server text output
-- **i18n language list**: en, es, zh, fr, ar, de, ja — Arabic requires RTL support; CLDR plural rules govern all pluralized strings; date/time/number formatting is locale-aware
+- **i18n language list**: en, es, fr, de, it, ar, zh, ja — Arabic requires RTL support; CLDR plural rules govern all pluralized strings; date/time/number formatting is locale-aware
 - **Language resolution order**: `?lang=` query param → cookie → `Accept-Language` header → default `en`
 - **a11y core requirements**: skip-to-content links, ARIA live regions, modal dialog patterns, landmark roles, accessible forms, managed focus order, screen-reader announcements for dynamic content, keyboard shortcuts, `.sr-only` CSS class for visually-hidden screen-reader text, and documented a11y testing requirements
 - **Placeholders**: this project is `{project_name}=api`, `{project_org}=apimgr`, `{internal_name}=api`, `{internal_org}=apimgr`

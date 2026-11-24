@@ -6,8 +6,8 @@
 - Never use a Makefile inside CI/CD workflows — CI/CD build steps call `go build` explicitly with full flags
 - Never use host cache directories inside CI/CD — use CI-native caching (`actions/cache`, GitLab `cache:`, Jenkins workspace-scoped dirs)
 - Never omit `-buildvcs=false` from CI/CD `go build` invocations (mounted/checked-out `.git` UID mismatches break vcs stamping)
-- Never skip the LDFLAGS version-stamping vars (`main.Version`, `main.CommitID`, `main.BuildDate`, `main.OfficialSite`) on any release/daily/beta/docker build
-- Never build fewer than all 8 platform targets (linux/darwin/windows/freebsd × amd64/arm64) for release, beta, and daily workflows
+- Never skip the LDFLAGS version-stamping vars (`main.Version`, `main.CommitID`, `main.BuildEpoch`, `main.OfficialSite`) on any release/devel/beta build
+- Never build fewer than all 8 platform targets (linux/darwin/windows/freebsd × amd64/arm64) for release, beta, and devel workflows
 - Never append a `-musl` suffix to any binary name
 - Never tag the `latest` Docker tag on beta or devel builds — `latest` is release-tag only
 - Never skip OCI labels/annotations (`org.opencontainers.image.*`) on `docker buildx build`
@@ -20,18 +20,18 @@
 - Always keep CI/CD build patterns and local dev patterns strictly separate: CI/CD = explicit `go build` + CI-native cache; local dev = Makefile-first + host cache dirs + `casjaysdev/go:latest` in Docker
 - Always build the full 8-platform matrix: linux, darwin, windows, freebsd × amd64, arm64
 - Always build the CLI (`./src/client`) as 8 additional `-cli` suffixed binaries when `src/client/` exists (`HAS_CLI` gate)
-- Always stamp `LDFLAGS` with `main.Version`, `main.CommitID`, `main.BuildDate`, `main.OfficialSite`
-- Always run `go test -v -cover ./...` as a Test stage/step before Release/Docker stages
+- Always stamp `LDFLAGS` with `main.Version`, `main.CommitID`, `main.BuildEpoch`, `main.OfficialSite`
+- Always run `go test -cover ./...` as a Test stage/step before Release/Docker stages
 - Always tag Docker images per build type: release → `commit_id`, `version`, `latest`, `YYMM`; beta → `commit_id`, `beta`, `devel`; all other branches → `commit_id`, `devel`
 - Always set full OCI labels and buildx manifest annotations (vendor, authors, title, description, licenses=MIT, version, created, revision, url, source, documentation) on every Docker build
 - Always use `docker buildx build --platform linux/amd64,linux/arm64` for multi-arch Docker images
-- Always mirror workflow triggers/equivalence exactly across providers: `release.yml`/tag push ↔ `BUILD_TYPE=='release'`; `beta.yml`/beta branch ↔ `BUILD_TYPE=='beta'`; `daily.yml`/schedule+main ↔ `BUILD_TYPE=='daily'`; `docker.yml`/all branches ↔ Docker stage always runs
+- Always mirror workflow triggers/equivalence exactly across providers: `release.yml`/tag push ↔ stable release; `beta.yml`/beta branch ↔ beta release; `devel.yml`/daily schedule + main/master ↔ devel release; `docker.yml`/all branches ↔ Docker stage always runs
 - Always clean up the workspace/container after every build (`cleanWs()` in Jenkins post-always; `--rm` on every `docker run`)
 - Always give docker containers a unique random name: `--name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"`
 
 ## Key Rules Summary
-- **Providers supported**: GitHub Actions, Gitea Actions, Forgejo Actions, GitLab CI, Jenkins — all four must stay behaviorally equivalent (see Triggers/Feature comparison tables in AI.md PART 27)
-- **Workflow files**: `ci.yml` (test gate on push/PR), `release.yml` (tag push, stable), `beta.yml` (beta branch), `daily.yml` (schedule + main/master), `docker.yml` (all branches and tags)
+- **Providers supported**: GitHub Actions, Gitea Actions, Forgejo Actions, GitLab CI, Jenkins — all five must stay behaviorally equivalent (see Triggers/Feature comparison tables in AI.md PART 27)
+- **Workflow files**: `ci.yml` (test gate on push/PR), `release.yml` (tag push, stable), `beta.yml` (beta branch), `devel.yml` (daily schedule + main/master), `docker.yml` (all branches and tags)
 - **Toolchain image**: `casjaysdev/go:latest` for all Go builds in CI containers — `CGO_ENABLED=0`, `GOOS`/`GOARCH` set per target, `-trimpath -ldflags "${LDFLAGS}"`
 - **Go cache mounts (CI)**: `${GO_CACHE:-$HOME/go/pkg/mod}` → `/usr/local/share/go/pkg/mod`; `${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}` → `/usr/local/share/go/cache`
 - **Binary output naming**: `{project_name}-{os}-{arch}` (add `.exe` for windows); CLI variants: `{project_name}-cli-{os}-{arch}`
