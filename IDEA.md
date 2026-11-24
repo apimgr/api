@@ -59,7 +59,7 @@ owner_token: api_owner_token_suexgbvs
 
 ### Roles & permissions
 
-There are no user accounts, profiles, registration, or login. Anonymous owners are credential-only identities without profiles; they can manage resources associated with their credentials. Public utility operations are available to anonymous visitors and API clients. Operator-only actions use the credentials and access rules defined by AI.md. Server administration is performed through configuration files and the command-line interface.
+There are no user accounts, profiles, registration, or login. Anonymous owners are credential-only identities without profiles; they can manage resources associated with their credentials and manage primary/linked tokens at `/server/preferences/tokens` using JavaScript-free forms. Returning owners reach token management from the preferences menu after the secure owner cookie is restored. Public utility operations are available to anonymous visitors and API clients. Operator-only actions use the credentials and access rules defined by AI.md. Server administration is performed through configuration files and the command-line interface.
 
 ### Data model & sensitivity
 
