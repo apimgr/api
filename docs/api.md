@@ -8,6 +8,10 @@ Use the method shown in the route table. Path and query values are supplied in t
 
 ## Shared server endpoints
 
+- `GET /api/autodiscover` is the unversioned CLI discovery endpoint. It returns the running project/API version and checksum-verified operator-provisioned CLI artifacts; exposed Tor/I2P addresses appear only when the service is active and its `expose` setting is enabled. See [Integrations](integrations.md) for public discovery behavior.
+- `GET /cli/binaries/{api-cli-os-arch}` serves an operator-provisioned CLI release binary after verifying its published checksum. Downloads are public by default; `cli.binary_download.require_auth` requires a valid Bearer token.
+- `GET /server/i2p/status` is a loopback-only status endpoint for the server CLI and does not expose key material.
+
 - `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health.
 - `GET /server/about`, `/server/privacy`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
 - `GET`/`POST /api/{api_version}/server/contact` expose the public contact form contract and two-step submit/review flow. A valid `security_id` selects the coordinated-disclosure fields; the response includes a fresh CAPTCHA descriptor and form token.
@@ -359,7 +363,9 @@ The routes below are registered by the project and covered by the route contract
 | `POST` | `/api/{api_version}/validate/vat` | Public | Validates the structural format of an EU/UK/CH/NO VAT registration number supplied as ?vat= or a JSON {"vat":"..."} body. | Body fields: `JSON body`; query: `vat`; URL-encoded and multipart forms are also accepted. | JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `vat`, `valid`. Errors use `ok`, `error`, `message`, and optional `details`. |
 ## Content negotiation
 
-JSON is the default for API operations. Use `Accept: text/plain` or the `.txt` route where available for plain text. Image endpoints return `image/png`. Browser pages render HTML and provide forms that work without JavaScript.
+API routes default to JSON. `Accept: application/json` takes precedence over client detection; `Accept: text/plain`, non-interactive HTTP clients, and API paths ending in `.txt` select plain text. The text serializer emits a declared primary value by itself, formats structured results as `OK: {message}` followed by ordered `key: value` fields, and formats errors as `ERROR: {code}: {message}` while retaining the HTTP status. Scalar lists are printed one item per line; nested objects use dot-separated keys. Health has its own flat `key: value` layout. MCP is JSON-RPC and does not use this negotiation.
+
+Frontend pages default to HTML, explicit `Accept: text/plain` and curl-style HTTP tools receive formatted terminal text, and text browsers receive server-rendered HTML without scripts. Forms continue to work without JavaScript. Image operations return their documented image media type when the response is an image.
 
 ## Interactive references
 

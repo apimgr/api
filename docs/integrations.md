@@ -7,6 +7,8 @@ The API server exposes documented HTTP interfaces and standards-based discovery 
 | Interface | Endpoint |
 |-----------|----------|
 | REST | `/api/{api_version}/...` |
+| `/api/autodiscover` | Unversioned CLI/server discovery; overlay addresses are published only when their `expose` setting is enabled and the service is active |
+| `/cli/binaries/{api-cli-os-arch}` | Operator-provisioned CLI release binary, served only when its `sha256.txt` checksum matches; optionally requires a Bearer token |
 | OpenAPI JSON | `/api/{api_version}/server/swagger`; direct alias `/api/swagger` |
 | Swagger UI | `/server/docs/swagger` |
 | GraphQL | POST `/api/{api_version}/server/graphql`; direct alias `/api/graphql` |
@@ -35,6 +37,10 @@ MCP uses the same Bearer tokens, validation, authorization, rate limits, and aud
 | `/.well-known/openpgpkey/` | Optional Web Key Directory publication |
 
 The server allowlists well-known entries. Feature-gated endpoints are not served merely because a client requests them. Absolute URLs in discovery responses are resolved for the current request and honor only trusted proxy headers.
+
+## Overlay services
+
+Tor hidden services and the optional I2P eepsite use separate private loopback backends. I2P is enabled by default in the application container when an `i2pd` or SAM provider is available; configuration and status details are in [Configuration](configuration.md). Public autodiscovery omits overlay addresses unless the matching `expose` setting is enabled.
 
 ## Data providers
 

@@ -44,7 +44,8 @@ client_binary: api-cli
 - Full web frontend (dark/light/auto theme, mobile-first, installable as a PWA)
 - Interactive tool pages where users input data and receive processed output
 - Informational server pages (about, help, health, privacy, and contact)
-- CLI client (`api-cli`) for using all tools from the terminal
+- CLI client (`api-cli`) for using all tools from the terminal, with public operator-provisioned release downloads and server discovery
+- Optional I2P eepsite hosting: enabled by default in containers and opt-in on bare metal/VMs; Tor hidden-service support is also available
 - Machine-readable API documentation and a GraphQL endpoint alongside the REST API
 
 **Non-goals:**
@@ -61,7 +62,7 @@ There are no user accounts, profiles, registration, or login. Anonymous owners a
 
 ### Data model & sensitivity
 
-Utility inputs are processed transiently and are not retained as user-submitted content. Server state required by AI.md, including anonymous resource ownership, credentials, audit events, and security records, is persisted separately from tool inputs.
+Utility inputs are processed transiently and are not retained as user-submitted content. Server state required by AI.md, including anonymous resource ownership, credentials, audit events, security records, and the private persistent I2P destination key when enabled, is persisted separately from tool inputs. The I2P key identifies the eepsite and is not user-submitted content.
 
 **Sensitivity considerations:**
 - Users may submit sensitive values (passwords, tokens) to hashing/encoding tools. These are processed in memory and never logged or stored.
@@ -86,6 +87,7 @@ Utility inputs are processed transiently and are not retained as user-submitted 
 | Datamuse API (`language/thesaurus`) | Trusted provider, untrusted query | api.datamuse.com — free, no API key; only the looked-up word is sent. Note: Datamuse requires a key starting 2027-01-01 |
 | arXiv query API (`research/arxiv`) | Trusted provider, untrusted query | export.arxiv.org — free, no API key; only the arXiv ID is sent |
 | Open Library Books API (`research/isbn`) | Trusted provider, untrusted query | openlibrary.org — free, no API key; only the ISBN is sent, descriptive User-Agent per their low-volume guidance |
+| I2P router/provider (`i2pd` or an operator SAM bridge) | Operator-selected local service | The server owns its dedicated `i2pd` process or SAM session; the I2P destination key remains private and incoming stream headers are not trusted as client identity |
 | Incoming HTTP requests | **Untrusted** | All input validated and size-capped before processing |
 | All tool inputs | **Untrusted** | Inputs are processed as data, never evaluated or executed |
 
@@ -109,6 +111,7 @@ Failure mode for GeoIP: if databases unavailable, the geo/network tools return I
 - All tool inputs treated as opaque data — never executed (no `eval`, no `exec`, no `os.Open` on user input)
 - DNS/WHOIS/SSL/weather tool timeouts (hard deadline, not configurable by caller) and private/loopback/link-local target blocking before any outbound call
 - Outputs logged only at path level, never body content
+- I2P requests use a dedicated loopback backend, share a separate I2P rate-limit identity, and have proxy-identity headers stripped before processing
 
 **Non-threats (explicitly out of scope):**
 - Account enumeration — no accounts exist
@@ -118,10 +121,14 @@ Failure mode for GeoIP: if databases unavailable, the geo/network tools return I
 - **No user accounts or login**: intentional. Anonymous resource ownership and operator access follow the credential model defined by AI.md; public utility operations remain available without an account.
 - **GeoIP databases downloaded at runtime**: intentional for size and freshness. Integrity is checked against upstream SHA-256 checksum assets before replacement.
 - **MD5 and SHA-1 available in hash tool**: intentional. These are provided as utility tools for interoperability (legacy systems, checksum verification), not for password hashing. The API documentation explicitly notes they are cryptographically broken for security purposes.
+- **I2P eepsite lifecycle**: optional outside containers and enabled by the computed default inside containers. The operator can publish its address only by setting `server.i2p.expose`; private destination keys remain local.
 
 ### API routes
 
 Project-defined API routes are inventoried below. AI.md PART 14 defines the shared server-template routes; those are not repeated here.
+
+- GET /api/autodiscover: no authentication; Returns project/server/API version, checksum-verified CLI release metadata and minimum version, and active Tor/I2P addresses only when their exposure settings are enabled.
+- GET /cli/binaries/{api-cli-os-arch}: public by default; Streams an operator-provisioned CLI release binary only when its published checksum matches; requires a valid Bearer token when `cli.binary_download.require_auth` is true.
 
 - GET /api/{api_version}/convert/area: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
 - GET /api/{api_version}/convert/area/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.

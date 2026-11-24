@@ -13,7 +13,7 @@ Repository vulnerabilities should be reported through the configured private rep
 | Endpoint | Behavior |
 |----------|----------|
 | `/.well-known/security.txt` | Publishes configured repository reporting, instance report, and security email contacts in preference order, plus expiry and policy information. |
-| `/.well-known/pgp-key.asc` | Serves the configured project's ASCII-armored public key; returns `404` until a valid public key file exists. |
+| `/.well-known/pgp-key.asc` | Serves the project's ASCII-armored public key only when `web.security.publish_pgp_key` is enabled and a valid public key file exists; otherwise returns `404`. |
 | `/server/security` | Human-readable security contacts, reporting instructions, and links to the policy, acknowledgments, public key when configured, and `security.txt`. |
 | `/server/security/policy` | Displays the built-in disclosure policy or `web.security.policy` Markdown. |
 | `/server/security/thanks` | Lists disclosed researchers who opted into credit. |
@@ -23,17 +23,20 @@ Repository vulnerabilities should be reported through the configured private rep
 | `/api/{api_version}/server/security/thanks` | Returns the hall-of-fame entries. |
 | `/api/{api_version}/server/contact` | GET returns contact form fields and a CAPTCHA challenge; POST provides the review and confirm submission flow. A valid `security_id` selects the security-report fields. |
 
-Security reports are encrypted with the configured AES-256-GCM key. When SMTP is enabled, the maintainer notification contains encrypted report data, and the researcher acknowledgment contains only a tracking ID and status URL. Without SMTP, reports remain stored and the tracking ID is returned in the form response. The project PGP key workflow is not available yet; `/.well-known/pgp-key.asc` is therefore absent until a key is provisioned.
+Security report bodies are encrypted with the project's PGP public key when one is provisioned; otherwise they use AES-256-GCM with the configured server encryption key. Researcher contact details are encrypted separately with AES-256-GCM. When SMTP is enabled, the maintainer notification contains the encrypted report body (PGP encrypted when the project key exists, or as an AES-encrypted attachment otherwise). The researcher acknowledgment contains only a tracking ID and status URL. Without SMTP, reports remain stored and the tracking ID is returned in the form response.
 
-Maintainers can inspect report metadata and update status from the CLI:
+The public key route returns `404` until a valid key is provisioned. This project does not yet implement the `--maintenance pgp` key lifecycle (generate, rotate, import, export, publish, and delete); key provisioning must be handled operationally, and rotation and keyserver retry are not available.
+
+Maintainers can inspect report metadata, export encrypted report bytes, and update status from the CLI:
 
 ```text
 api --maintenance security list [--status STATUS]
 api --maintenance security show TRACKING_ID
+api --maintenance security export TRACKING_ID [--output FILE]
 api --maintenance security update TRACKING_ID [--status STATUS] [--comment TEXT] [--disclosure-date YYYY-MM-DD] [--severity LEVEL]
 ```
 
-The command never prints report body content. Closed reports are removed by the non-skippable daily `security_cleanup` task after `server.security.reports.retention_days` (default 365 days).
+The `show` command never prints report body content. `export` writes only encrypted bytes, using a mode `0600` file by default. Closed reports are removed by the non-skippable daily `security_cleanup` task after `server.security.reports.retention_days` (default 365 days).
 
 ## Other security endpoints
 
@@ -44,7 +47,7 @@ The command never prints report body content. Closed reports are removed by the 
 | `/api/{api_version}/server/mcp`, `/api/mcp`, `/mcp` | Streamable HTTP MCP endpoint using existing Bearer tokens and API authorization. Token-management routes are excluded from MCP tools. |
 | `/server/healthz` and `/api/{api_version}/server/healthz` | Return the server health response. |
 
-`web.security.report_url` configures the repository reporting contact. `server.contact.security.email` configures the security email contact. `web.security.expires` controls the `security.txt` expiry, and `web.security.policy` replaces the built-in disclosure policy with operator-supplied Markdown. Do not put secrets or report contents in public settings.
+`web.security.report_url` configures the repository reporting contact. `server.contact.security.email` configures the security email contact. `web.security.expires` controls the `security.txt` expiry, `web.security.policy` replaces the built-in disclosure policy with operator-supplied Markdown, and `web.security.publish_pgp_key` controls public key discovery. Do not put secrets or report contents in public settings.
 
 ## Further reading
 

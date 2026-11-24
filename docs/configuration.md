@@ -23,7 +23,7 @@ Use `yaml.d/` for optional area files such as networking, email, or logging when
 | `server.scheduler`, `server.backup`, `server.update` | Scheduled tasks, encrypted backups, retention, and release channel |
 | `server.notifications`, `server.contact`, `server.privacy`, `server.csrf` | Email delivery and contact/privacy protections |
 | `server.i18n` | Default interface language and the enabled locale set |
-| `server.metrics`, `server.geoip`, `server.tor` | Metrics, local GeoIP data, and Tor service behavior |
+| `server.metrics`, `server.geoip`, `server.tor`, `server.i2p` | Metrics, local GeoIP data, and Tor/I2P overlay services |
 | `server.compliance`, `server.tracking` | Compliance-driven defaults and privacy choices |
 | `web.robots`, `web.security`, `web.cors`, `web.hsts`, `web.csp`, `web.headers`, `web.reports` | Public web policy, security metadata, browser headers, and reporting endpoints |
 | `web.ui` | Public interface theme and branding assets |
@@ -43,6 +43,28 @@ server:
     default_language: en
     available_languages: [en, es, fr, de, it, ar, zh, ja]
 ```
+
+## I2P eepsite
+
+I2P is disabled by default outside containers and enabled by default inside the application container. `server.i2p` controls the private eepsite lifecycle; an installed `i2pd` is preferred, while an operator-provided SAM bridge is used when no local binary is available. If neither provider is available, the server continues without opening the I2P backend listener. Public autodiscovery includes the `.b32.i2p` address only when the service is active and `expose` is enabled.
+
+```yaml
+server:
+  i2p:
+    enabled: false
+    expose: false
+    binary: ""
+    sam_address: 127.0.0.1:7656
+    virtual_port: 80
+    inbound_length: 3
+    outbound_length: 3
+    inbound_quantity: 5
+    outbound_quantity: 5
+    signature_type: 7
+    bootstrap_timeout: 300
+```
+
+The server creates and protects the I2P destination key under `{data_dir}/i2p/site/site-keys.dat`. Do not copy, publish, or edit that key. `--i2p` enables the service for the current run; `I2P_ENABLED` provides the environment override. The status command and `/server/i2p/status` report lifecycle state without exposing private key material.
 
 ## Secrets and credentials
 
@@ -66,12 +88,13 @@ The following runtime variables are read by the server:
 | `CONFIG_DIR`, `DATA_DIR`, `LOG_DIR`, `DATABASE_DIR`, `BACKUP_DIR` | Directory overrides where supported |
 | `PORT`, `LISTEN`, `APPLICATION_NAME`, `APPLICATION_TAGLINE` | First-run initialization values |
 | `DATABASE_DRIVER`, `DATABASE_URL`, `CACHE_URL` | First-run database and cache connection values |
+| `I2P_ENABLED` | Override `server.i2p.enabled` for this process |
 
 First-run-only values are written to configuration and ignored on later starts. Credential-bearing connection strings are stored in the protected secrets file. Do not use an environment variable as a substitute for rotating an already-persisted secret.
 
 ## Security and public endpoints
 
-`web.security` configures the RFC 9116 repository report URL, expiry, and disclosure policy. The secondary security contact is configured under `server.contact.security`; security-report storage/encryption settings are under `server.security`. `web.well_known` controls optional standards endpoints; unknown well-known paths return `404`. Reverse-proxy-derived URLs and origins are trusted only when the immediate peer is allowed by `server.trusted_proxies`.
+`web.security` configures the RFC 9116 repository report URL, expiry, disclosure policy, and whether the project PGP public key is advertised. The secondary security contact is configured under `server.contact.security`; security-report storage/encryption settings are under `server.security`. `web.well_known` controls optional standards endpoints; unknown well-known paths return `404`. Reverse-proxy-derived URLs and origins are trusted only when the immediate peer is allowed by `server.trusted_proxies`.
 
 See [Security](security.md) for the public reporting endpoints and [Integrations](integrations.md) for discovery settings.
 

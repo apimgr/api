@@ -13,13 +13,16 @@ API is a self-hosted utility service with a server-rendered web interface, versi
 
 ## Quick start
 
-From a repository clone, start the production Docker Compose stack:
+From a repository clone, copy the production Compose file to a deployment directory so its relative volume mounts stay outside the source checkout:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+mkdir -p "$HOME/api-deployment"
+cp docker/docker-compose.yml "$HOME/api-deployment/compose.yml"
+cd "$HOME/api-deployment"
+docker compose -f compose.yml up -d
 ```
 
-The included Compose configuration publishes the web interface on `http://172.17.0.1:64580/`. For other installation methods, see [Installation](installation.md).
+The included Compose configuration publishes the web interface on `http://172.17.0.1:64580/` and keeps runtime data under `$HOME/api-deployment/volumes/`. For other installation methods, see [Installation](installation.md).
 
 ## Documentation
 
