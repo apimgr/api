@@ -27,7 +27,7 @@
 - Update IDEA.md when features change; keep README.md, Swagger, GraphQL, and docs/ in sync with code
 - Update TODO.AI.md / TODO.md as tasks progress; never delete/empty the human-owned TODO.md, only mark items done in place
 - Use `.claude/rules/*.md` as the fast-loading summary; consult AI.md directly for full detail when needed
-- Translate all new user-facing text (web, CLI, notifications, errors) — add keys to `en.json` and note other locales need the same key
+- Translate all new or changed user-facing text (web, CLI, notifications, errors) in the same change — add the English key and best-effort translations to every supported locale
 - Trim whitespace on all text input; reject (don't trim) passwords with leading/trailing whitespace
 - Use parameterized queries and name columns explicitly — never `SELECT *`, never string-concatenated SQL
 - Follow the intent-revealing naming rule — no bare `Mode`, `Type`, `Status`, `Config`, `Get()`, `Init()`, etc.; qualify every name
@@ -51,7 +51,7 @@
 - **Error responses**: users get minimal generic messages, logs get full detail with request IDs; never leak whether a resource/token exists.
 - **Naming conventions**: files `lowercase_snake.go`, packages lowercase, exported `PascalCase`, unexported `camelCase`, constants `PascalCase`/`SCREAMING_SNAKE`, interfaces end in `-er`.
 - **Full web app architecture**: every feature needs a web (HTML) route and a matching `/api/{api_version}/...` (JSON) route; api project's client (PART 32) is mandatory for every project.
-- **Config**: everything lives in `server.yml`, hot-reloads without restart (except listen address/port/DB driver changes); no runtime config-mutation API.
+- **Config**: settings live in `server.yml`, `yaml.d/` area files, and `secrets.yml`, merged and watched per PART 5; no runtime config-mutation API.
 - **Target audience**: assume self-hosted/SMB users are not tech-savvy — favor clarity, sane defaults, tooltips.
 
 For complete details, see AI.md PART 0, 1

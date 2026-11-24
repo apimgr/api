@@ -25,7 +25,9 @@ Repository vulnerabilities should be reported through the configured private rep
 
 Security report bodies are encrypted with the project's PGP public key when one is provisioned; otherwise they use AES-256-GCM with the configured server encryption key. Researcher contact details are encrypted separately with AES-256-GCM. When SMTP is enabled, the maintainer notification contains the encrypted report body (PGP encrypted when the project key exists, or as an AES-encrypted attachment otherwise). The researcher acknowledgment contains only a tracking ID and status URL. Without SMTP, reports remain stored and the tracking ID is returned in the form response.
 
-The public key route returns `404` until a valid key is provisioned. This project does not yet implement the `--maintenance pgp` key lifecycle (generate, rotate, import, export, publish, and delete); key provisioning must be handled operationally, and rotation and keyserver retry are not available.
+The report lifecycle is `Received`, `Triaged`, `Confirmed`, `Patching`, then `Disclosed` or `Won't Fix`. Maintainers can attach researcher-visible comments and an expected disclosure date. The status URL contains a one-use-per-UTC-day token; it expires 30 days after the report closes. The status page exposes triage state and approved comments, never the report body. The form issues a `sec_` tracking ID; ordinary logs and audit entries contain report metadata only, not submitted report content.
+
+The public key route returns `404` until a valid key is provisioned and publishing is enabled. Operators manage the disclosure keypair with `api --maintenance pgp`: `generate`, `rotate`, `publish`, `export public`, `export private`, `import`, `delete`, and `metadata`. The key uses Ed25519 signing and Curve25519 encryption; the private key is encrypted using a key derived from the installation secret. Rotation re-encrypts retained PGP-protected report bodies transactionally before activating the new key, keeps the retired private key encrypted for 30 days, and publishes a transition signed by the old key. Keyserver retries persist in `security/keyservers.state` and run through the built-in `keyserver_retry` task. Private-key export requires the sensitive-operation confirmation flow and writes mode `0600` output. Deleting the key makes reports encrypted to it unreadable.
 
 Maintainers can inspect report metadata, export encrypted report bytes, and update status from the CLI:
 
@@ -37,6 +39,18 @@ api --maintenance security update TRACKING_ID [--status STATUS] [--comment TEXT]
 ```
 
 The `show` command never prints report body content. `export` writes only encrypted bytes, using a mode `0600` file by default. Closed reports are removed by the non-skippable daily `security_cleanup` task after `server.security.reports.retention_days` (default 365 days).
+
+## Owner tokens
+
+The API has no user accounts or passwords. An owner is an anonymous identity identified by its primary `own_` token. The token page at `/server/preferences/tokens` lists masked values, supports restoring an identity by pasting its primary token, and can reveal or rotate tokens on explicit request. Primary-token rotation preserves the owner's resources and linked tokens. Revoking the primary token deletes the owner, all linked tokens, and all resources belonging to that owner.
+
+Linked tokens are independently revocable credentials for automation and MCP clients. They have a unique name per owner and an optional expiry (`never`, `7d`, `30d`, `90d`, `1y`, or a UTC date). A linked token can access its owner's resources but cannot reveal, rotate, create, update, or revoke tokens. API token management requires a primary Bearer token; API routes ignore cookies. The token value is stored as a SHA-256 lookup hash plus an AES-256-GCM encrypted copy so it can be explicitly revealed. Raw values are never included in list responses, logs, or backups in plaintext. See [API Reference](api.md#owner-and-linked-token-management) for the route table.
+
+## Backup archive and restore limits
+
+Backups are `.tar.gz` archives, or `.tar.gz.enc` when encryption is configured. Each archive includes `manifest.json` with snapshot metadata and SHA-256 checksums. Full backups contain the selected configuration and data files; daily and hourly incrementals contain changed files, their base-backup identity/checksum, and deleted paths. Restoring an incremental requires its full base from the same backup directory and applies both to reach the recorded snapshot.
+
+Restore is an operator CLI operation (`api --maintenance restore FILE`), not a public page or API endpoint. Encrypted backups prompt for the backup password; it is separate from `server.token`. Restore validates the archive, checksum, manifest, database integrity, and incremental base before applying changes. Configured `server.restore` limits cap the compressed archive at 1 GiB, total expanded contents at 4 GiB, file count at 10,000, individual file size at 512 MiB, and expansion ratio at 100:1 by default. Limits apply to the combined base and incremental archive. See [Configuration](configuration.md) for the limit keys.
 
 ## Other security endpoints
 

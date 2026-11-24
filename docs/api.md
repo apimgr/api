@@ -4,7 +4,7 @@ The REST API uses the version configured by `server.api_version` in `server.yml`
 
 ## Request and response format
 
-Use the method shown in the route table. Path and query values are supplied in the URL; POST operations accept JSON or form data as supported by the endpoint. Successful JSON responses return HTTP 200 with `{"ok": true, "data": ...}`. Errors use `{"ok": false, "error": "CODE", "message": "..."}` and the handler returns the corresponding HTTP error status. Health endpoints use their documented flat health response. Routes ending in `.txt` return `text/plain`. Image routes return raw image bytes with a format-specific image content type; generated QR codes, avatars, barcodes, and identicons return PNG.
+Use the method shown in the route table. Path and query values are supplied in the URL; POST operations accept JSON or form data as supported by the endpoint. Successful JSON responses return HTTP 200 with `{"ok": true, "data": ...}`. Errors use the canonical `{"ok": false, "error": "CODE", "message": "...", "details": {...}}` envelope; `details` is omitted when there is no structured context, and the HTTP status carries the status code. Health endpoints use their documented flat health response. Routes ending in `.txt` return `text/plain`. Image routes return raw image bytes with a format-specific image content type; generated QR codes, avatars, barcodes, and identicons return PNG.
 
 ## Shared server endpoints
 
@@ -15,6 +15,7 @@ Use the method shown in the route table. Path and query values are supplied in t
 - `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health.
 - `GET /server/about`, `/server/privacy`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
 - `GET`/`POST /api/{api_version}/server/contact` expose the public contact form contract and two-step submit/review flow. A valid `security_id` selects the coordinated-disclosure fields; the response includes a fresh CAPTCHA descriptor and form token.
+- The contact review response contains only `review.type`, `review.email`, and `review.subject`, plus the review token and delay. On confirmation, clients repeat the original submitted fields unchanged; the server resolves an HTTPS researcher-key URL only after validating the review token.
 - `GET /api/{api_version}/server/terms`, `/server/security`, and `/server/security/policy` return JSON mirrors of the public terms and security information.
 - `GET /server/preferences` and `POST /server/preferences` read and update guest preferences in browser cookies; `GET`/`POST /server/preferences/sync` and `GET /server/preferences/sync/import` transfer preferences between browsers without storing them server-side.
 - `GET`/`POST /api/{api_version}/server/preferences` read and partially update guest preferences; `GET /api/{api_version}/server/preferences/sync` exports them and `GET /api/{api_version}/server/preferences/sync/import` imports them.
@@ -23,6 +24,25 @@ Use the method shown in the route table. Path and query values are supplied in t
 - `POST /api/graphql` and `POST /api/{api_version}/server/graphql` serve GraphQL; `/server/docs/graphql` is the browser interface.
 - `/server/docs/swagger` is the browser interface for OpenAPI.
 - Metrics endpoints are internal and require their configured service credentials.
+
+### Owner and linked token management
+
+Owners are anonymous, credential-only identities. There are no user accounts or passwords. The primary owner token grants access to that owner's resources and manages linked tokens; linked tokens grant the same resource access but cannot manage credentials. API routes accept Bearer credentials only and ignore browser cookies. Token-management operations require the primary owner token, except issuing a new primary token, which requires no credential and returns `409` if a valid token is already supplied.
+
+| Method | API route | Credential | Behavior |
+|--------|-----------|------------|----------|
+| `POST` | `/api/{api_version}/server/preferences/tokens/primary` | None | Issues a new owner and primary token (`201`). |
+| `GET` | `/api/{api_version}/server/preferences/tokens` | Primary owner Bearer token | Lists the primary and linked tokens in masked form. |
+| `POST` | `/api/{api_version}/server/preferences/tokens/primary/reveal` | Primary owner Bearer token | Reveals the primary token in the response body. |
+| `POST` | `/api/{api_version}/server/preferences/tokens/primary/rotate` | Primary owner Bearer token | Replaces the primary token in place; linked tokens and resources remain valid. |
+| `DELETE` | `/api/{api_version}/server/preferences/tokens/primary` | Primary owner Bearer token | Deletes the owner, all its tokens, and all its resources. |
+| `POST` | `/api/{api_version}/server/preferences/tokens` | Primary owner Bearer token | Creates a linked token. Supply a name (1–64 characters) and optional expiry (`never`, `7d`, `30d`, `90d`, `1y`, or a future UTC date). |
+| `POST` | `/api/{api_version}/server/preferences/tokens/{id}/reveal` | Primary owner Bearer token | Reveals one linked token. |
+| `POST` | `/api/{api_version}/server/preferences/tokens/{id}/rotate` | Primary owner Bearer token | Rotates one linked token in place; the primary and other linked tokens remain valid. |
+| `PATCH` | `/api/{api_version}/server/preferences/tokens/{id}` | Primary owner Bearer token | Changes a linked token's name or expiry. |
+| `DELETE` | `/api/{api_version}/server/preferences/tokens/{id}` | Primary owner Bearer token | Revokes one linked token. |
+
+The API returns raw token values only from issue, reveal, and rotate operations. List responses contain masked values. Token-management routes are never exposed as MCP tools. Browser token management is available at `/server/preferences/tokens`; its POST forms use the owner cookie and CSRF protection. See [Security](security.md) for credential handling and the page's restore behavior.
 
 ## Project utility routes
 

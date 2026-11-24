@@ -65,12 +65,12 @@ There are no user accounts, profiles, registration, or login. Anonymous owners a
 Utility inputs are processed transiently and are not retained as user-submitted content. Server state required by AI.md, including anonymous resource ownership, credentials, audit events, security records, and the private persistent I2P destination key when enabled, is persisted separately from tool inputs. The I2P key identifies the eepsite and is not user-submitted content.
 
 **Sensitivity considerations:**
-- Users may submit sensitive values (passwords, tokens) to hashing/encoding tools. These are processed in memory and never logged or stored.
+- Users may submit sensitive values (passwords, tokens, and cryptographic keys) to utility tools. These are processed in memory and never stored. Request-body logging is off by default; when explicitly enabled for debugging, only bounded JSON previews are logged after credential-field redaction, while non-JSON bodies are omitted.
 - GeoIP lookup reveals the caller's IP to the server (standard HTTP behavior). Results are not stored.
 - JWT decode exposes payload content server-side; this is expected and intentional.
 
 **Logging rules:**
-- Never log request body contents
+- Never log unredacted request-body contents. Optional debug previews are bounded, redact credential fields, and omit non-JSON bodies; they are disabled by default.
 - Never log query parameter values for hashing or encoding endpoints
 - Log only: method, path, status code, response time, anonymized source IP
 

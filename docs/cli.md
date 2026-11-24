@@ -16,6 +16,8 @@ The project provides two binaries: `api` runs the server, and `api-cli` is the c
 | `--color auto\|yes\|no` | Select color behavior |
 | `--lang CODE` | Select the output language |
 | `--output json\|table\|plain` | Select output format; the flag overrides `output.format` in `cli.yml` |
+| `--update check` | Check the configured server for a newer client release |
+| `--update yes` | Install a server-advertised client release; non-interactive silent installs require `update.auto: true` |
 | `--shell completions [SHELL]` | Print shell completion code |
 | `--shell init [SHELL]` | Print the shell initialization line |
 | `--shell help` | Show shell integration help |
@@ -25,13 +27,15 @@ Supported shell names are `bash`, `zsh`, `fish`, `sh`, `dash`, `ksh`, `powershel
 Client examples:
 
 ```bash
-api-cli --server https://api.example.com system health
-api-cli --server https://api.example.com --output json text uuid
+api-cli --server https://YOUR_SERVER system health
+api-cli --server https://YOUR_SERVER --output json text uuid
 api-cli --token-file "$HOME/.config/apimgr/api/token" network ip
 api-cli --shell completions bash
 ```
 
 The token lookup order is `--token-file`, `--token`, `API_TOKEN`, `auth.token` in the CLI profile, then the profile's `auth.token_file`. Keep token files private. The client stores its configuration under the invoking user's config directory; it does not use the server's `server.yml`.
+
+When a configured server advertises a newer client binary, the CLI prompts on an interactive terminal. Use `api-cli --update check` to check explicitly. `api-cli --update yes` installs the release after verifying its SHA-256 checksum, then re-executes the original command. The CLI requires an HTTPS server for downloads; set `update.auto: true` in `cli.yml` for silent updates in non-interactive runs. The server must have operator-provisioned binaries in `{data_dir}/cli/`.
 
 Command groups currently include `crypto`, `datetime`, `network`, `raw`, `system`, and `text`. Run `api-cli GROUP` to list that group's commands; global `--help` lists every registered command.
 
@@ -90,6 +94,10 @@ Maintenance operations include setup, backup and restore, secret rotation, secur
 api --maintenance --help
 api --update --help
 ```
+
+`api --maintenance backup test [file]` verifies a backup without restoring it. If `file` is omitted, the newest archive by its manifest timestamp is checked. Encrypted archives use the configured backup password or prompt interactively. Verification includes the archive checksum, database integrity, and the backed-up PGP keypair when those files are present.
+
+Restore accepts only relative archive paths and enforces the configured `server.restore` size, file-count, and compression-ratio limits. Backups from older releases that stored absolute tar paths fail this safety check; restore those with the matching older release and create a current-format backup before moving to this release.
 
 Sensitive operations require operator authorization and are recorded in the audit log. Passwords for configuration and backup data are not accepted as command-line arguments; interactive flows prompt securely where required.
 

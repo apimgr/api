@@ -98,6 +98,8 @@ BSD-3-Clause: neither the names of the copyright holders nor the names of their 
 
 Full license texts available at: https://spdx.org/licenses/
 
+Apache-2.0 NOTICE files are preserved in `third_party_licenses/`.
+
 ## Third-Party Data Attribution
 
 GeoIP databases are downloaded at runtime from sapics/ip-location-db. The City

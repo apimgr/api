@@ -15,6 +15,10 @@
 - [ ] Bring Docker, Compose, CI/CD, release, and GitHub policy files into AI.md compliance.
 - [ ] Add and verify the required GitLab, Gitea, Forgejo, and Jenkins CI workflows plus Renovate configuration under AI.md PART 27.
 
+## Future External Provider Changes
+
+- [ ] [Datamuse's API page](https://datamuse.com/api/) says an API key becomes required on 2027-02-01. Before that date, confirm the provider policy and add an encrypted operator-configured key or replace the dependency; the current thesaurus client sends no key.
+
 ## P1: Documentation and Delivery
 
 - [ ] Update README.md, docs/, API specifications, and command help to describe current implemented behavior.

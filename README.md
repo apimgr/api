@@ -18,6 +18,8 @@ API is a self-hosted utility service with a server-rendered web interface, a ver
 - Eight interface locales: English, Spanish, French, German, Italian, Arabic, Chinese, and Japanese
 - Anonymous credential-based ownership for resources that need an owner; no user accounts or login
 - Configuration-driven health, security, localization, scheduling, backup, update, Tor support, and optional I2P eepsites
+- Backup restoration enforces configurable archive, expanded-size, file-count, per-file, compression-ratio, path, and permission limits
+- Explicitly enabled, operator-token-protected runtime diagnostics and profiling
 - The `api-cli` client for command-line and terminal use
 
 ## Production
@@ -109,6 +111,18 @@ make test
 `make dev` builds into a temporary directory; `make local` creates production-style local binaries; `make build` produces server and client binaries for Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. All Go builds and tests run in the project Docker toolchain. `make release` publishes a manually prepared stable `X.Y.Z` release, while beta and devel releases come from CI. See the [development guide](https://apimgr-api.readthedocs.io/en/latest/development/) before changing code or documentation.
 
 `make test` runs the Go test suite. Run `tests/run_tests.sh` for Docker-based binary, HTTP, owner-token, Tor, and I2P integration checks. `tests/incus.sh` and `tests/e2e.sh` are separate, explicit test tiers. The production image runtime-command and Tor health contract is checked after `make docker` and in CI.
+
+To scan Go dependencies for incompatible licenses and refresh the attribution files, run the repository script in the Go toolchain container:
+
+```bash
+docker run --rm --no-healthcheck \
+  --name "api-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+  -v "$PWD":/app -w /app \
+  -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+  casjaysdev/go:latest bash scripts/verify-licenses.sh
+```
+
+Review `licenses.csv` and `third_party_licenses/` before committing the report.
 
 ## Disclaimer
 
