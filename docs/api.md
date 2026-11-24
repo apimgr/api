@@ -4,7 +4,7 @@ The REST API uses the version configured by `server.api_version` in `server.yml`
 
 ## Request and response format
 
-Use the method shown in the route table. Path and query values are supplied in the URL; POST operations accept JSON or form data as supported by the endpoint. Successful JSON responses return HTTP 200 with `{"ok": true, "data": ...}`. Errors use the canonical `{"ok": false, "error": "CODE", "message": "...", "details": {...}}` envelope; `details` is omitted when there is no structured context, and the HTTP status carries the status code. Health endpoints use their documented flat health response. Routes ending in `.txt` return `text/plain`. Image routes return raw image bytes with a format-specific image content type; generated QR codes, avatars, barcodes, and identicons return PNG.
+Use the method shown in the route table. Path and query values are supplied in the URL; POST operations accept JSON or form data as supported by the endpoint. Successful JSON responses use the `{"ok": true, "data": ...}` envelope (HTTP 200 unless the route table specifies another success status). Errors use the canonical `{"ok": false, "error": "CODE", "message": "...", "details": {...}}` envelope; `details` is omitted when there is no structured context, and the HTTP status carries the status code. Health endpoints use their documented flat health response. Routes ending in `.txt` return `text/plain`. Image routes return raw image bytes with a format-specific image content type; generated QR codes, avatars, barcodes, and identicons return PNG.
 
 ## Shared server endpoints
 
@@ -27,6 +27,7 @@ Use the method shown in the route table. Path and query values are supplied in t
 - `/server/docs/swagger` is the browser interface for OpenAPI.
 - `POST /api/{api_version}/server/reports/{name}` accepts sanitized browser Reporting API reports. Supported report names include CSP, NEL, deprecation, intervention, crash, and `default`.
 - Metrics routes are mounted only when `server.metrics.enabled` is true. `/server/metrics[/{service}]`, `/api/{api_version}/server/metrics[/{service}]`, and `/api/metrics[/{service}]` are aliases; `/metrics[/{service}]` is also mounted when `server.metrics.root.enabled` is true. Services are `prometheus`, `grafana`, and `loki`; each requires its configured Bearer token unless unauthenticated access is explicitly enabled.
+- Prometheus includes `api_owner_tokens_active{kind="primary"|"linked"}` gauges for active, non-revoked, unexpired owner tokens. The Grafana dashboard covers scheduler, system, and owner-token metric categories alongside HTTP, database, and cache metrics.
 
 ### Owner and linked token management
 

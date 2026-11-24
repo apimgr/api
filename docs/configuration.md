@@ -251,9 +251,9 @@ First-run-only values are written to configuration and ignored on later starts. 
 
 See [Security](security.md) for the public reporting endpoints and [Integrations](integrations.md) for discovery settings.
 
-`server.notifications.disk_low` controls the scheduled disk-space warning. It defaults to enabled, an 85% used threshold, a five-minute check interval, and a 24-hour repeat interval. The check deduplicates the data, log, and backup paths by filesystem and only emails on a threshold crossing or after the repeat interval.
+`server.notifications.disk_low` controls the scheduled disk-space warning. It defaults to enabled, an 85% used threshold, a five-minute check interval, and a 24-hour repeat interval. The check deduplicates the data, log, and backup paths by filesystem and emails on a threshold crossing or after the repeat interval when SMTP is configured. Its `server.notifications.email.events.disk_low` toggle defaults to enabled.
 
-`server.notifications.database_error` controls the database-connection warning. It probes both read and write handles every minute by default and triggers after three consecutive failures; repeated alerts are limited to once per 24 hours while failures continue. The first successful probe logs recovery and resets the failure count without sending another email. Error text has credentials removed. The example settings are:
+`server.notifications.database_error` controls the database-connection warning. It probes both read and write handles every minute by default and triggers after three consecutive failures; repeated alerts are limited to once per 24 hours while failures continue. The first successful probe logs recovery and resets the failure count without sending another email. Error text has credentials removed. Its `server.notifications.email.events.database_error` toggle defaults to enabled. The example settings are:
 
 ```yaml
 server:
@@ -361,11 +361,7 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.debug.runtime_endpoints` | `bool` |
 | `server.fqdn` | `string` |
 | `server.geoip.allow_countries[*]` | `[]string` |
-| `server.geoip.databases.asn` | `bool` |
-| `server.geoip.databases.city` | `bool` |
-| `server.geoip.databases.country` | `bool` |
 | `server.geoip.deny_countries[*]` | `[]string` |
-| `server.geoip.dir` | `string` |
 | `server.geoip.enabled` | `bool` |
 | `server.geoip.presets.{key}` | `map value` |
 | `server.healthz.root.enabled` | `bool` |

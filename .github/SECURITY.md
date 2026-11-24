@@ -18,5 +18,11 @@ understand and reproduce the issue, coordinate a fix and release, and agree on
 public disclosure after users have had an opportunity to update. Public
 disclosure should avoid exposing exploit details before a fix is available.
 
+For a running instance, use its `/server/security` page for the policy and
+reporting workflow. The machine-readable contact details are at
+`/.well-known/security.txt`; the application's security contact form is
+`/server/contact?security_id=...` with the identifier supplied by the security
+page.
+
 Mirrors without private vulnerability reporting should direct reporters to the
 GitHub origin repository above.

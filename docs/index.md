@@ -34,6 +34,7 @@ The included Compose configuration publishes the web interface on `http://172.17
 - [Integrations](integrations.md)
 - [Development](development.md)
 - [Translating](translating.md)
+- [Vendored browser assets](vendor-assets.md)
 
 ## Project links
 

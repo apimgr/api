@@ -27,7 +27,6 @@ Supported shell names are `bash`, `zsh`, `fish`, `sh`, `dash`, `ksh`, `powershel
 Client examples:
 
 ```bash
-api-cli --server https://YOUR_SERVER system health
 api-cli --server https://YOUR_SERVER --output json text uuid
 api-cli --token-file "$HOME/.config/apimgr/api/token" network ip
 api-cli --shell completions bash
@@ -37,7 +36,7 @@ The token lookup order is `--token-file`, `--token`, `API_TOKEN`, `auth.token` i
 
 When a configured server advertises a newer client binary, the CLI prompts on an interactive terminal. Use `api-cli --update check` to check explicitly. `api-cli --update yes` installs the release after verifying its SHA-256 checksum, then re-executes the original command. The CLI requires an HTTPS server for downloads; set `update.auto: true` in `cli.yml` for silent updates in non-interactive runs. The server must have operator-provisioned binaries in `{data_dir}/cli/`.
 
-Command groups currently include `crypto`, `datetime`, `network`, `raw`, `system`, and `text`. Run `api-cli GROUP` to list that group's commands; global `--help` lists every registered command.
+Command groups currently include `crypto`, `datetime`, `network`, `raw`, and `text`. Run `api-cli GROUP` to list that group's commands; global `--help` lists every registered command.
 
 For scripting, the client's process exit codes distinguish general failures (`1`), configuration (`2`), connection (`3`), authentication (`4`), missing resources (`5`), and usage errors (`64`).
 
