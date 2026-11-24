@@ -49,7 +49,7 @@ Tor hidden services and the optional I2P eepsite use separate private loopback b
 
 ## Data providers
 
-Some utilities use external providers; provider calls and required configuration are documented with the affected feature and in the server configuration reference. GeoIP uses local database files when enabled. The service does not imply that every tool or provider is active on every installation.
+Some utilities use external providers; provider calls and required configuration are documented with the affected feature and in the server configuration reference. When enabled, GeoIP downloads and checksum-verifies the fixed ip-location-db datasets on first run into `{data_dir}/security/geoip`, then refreshes them weekly. Existing data remains usable when a download fails; missing or older-than-21-day data appears as degraded in health checks. The service does not imply that every tool or provider is active on every installation.
 
 ## Security reporting
 
