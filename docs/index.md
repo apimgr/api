@@ -8,7 +8,7 @@ API is a self-hosted utility service with a server-rendered web interface, versi
 - Parsing, networking, geolocation, weather, image, language, research, Docker, testing, and entertainment tools
 - Server-rendered forms that work without JavaScript
 - OpenAPI and GraphQL documentation interfaces
-- Seven interface locales: English, Arabic, German, Spanish, French, Japanese, and Chinese
+- Eight interface locales: English, Spanish, French, German, Italian, Arabic, Chinese, and Japanese
 - Anonymous credential-based resource ownership without user accounts or login
 
 ## Quick start

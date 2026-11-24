@@ -4,21 +4,24 @@ API runs as a self-hosted server. Its companion command-line client, `api-cli`, 
 
 ## Docker Compose
 
-The repository includes the production Compose stack. From a clone, start it with:
+The repository includes a production Compose stack. Run it from a deployment directory so its relative `./volumes/` mounts keep runtime data outside the source checkout:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+mkdir -p "$HOME/api-deployment"
+cp docker/docker-compose.yml "$HOME/api-deployment/compose.yml"
+cd "$HOME/api-deployment"
+docker compose -f compose.yml up -d
 ```
 
-The Compose file runs the API server with Valkey, maps host address `172.17.0.1:64580` to the container's HTTP port `80`, and persists configuration and data under `docker/volumes/`. Open `http://172.17.0.1:64580/` from the host.
+The Compose file runs the API server with Valkey, maps host address `172.17.0.1:64580` to the container's HTTP port `80`, and persists configuration and data under `$HOME/api-deployment/volumes/`. Set `HOST_PORT` to use another host port in the 64xxx range. Open `http://172.17.0.1:64580/` from the host.
 
 To stop the stack:
 
 ```bash
-docker compose -f docker/docker-compose.yml down
+docker compose -f compose.yml down
 ```
 
-Keep `docker/volumes/config` and `docker/volumes/data` when upgrading so the server configuration and application data remain available.
+Keep `$HOME/api-deployment/volumes/config` and `$HOME/api-deployment/volumes/data` when upgrading so the server configuration and application data remain available.
 
 ## Release binaries
 

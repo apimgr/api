@@ -24,13 +24,16 @@ API is a self-hosted utility service with a server-rendered web interface, a ver
 
 ### Docker Compose
 
-From a clone of this repository, start the production Compose stack:
+Copy the production Compose file into a deployment directory so its relative `./volumes/` mounts keep runtime data outside the source checkout:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+mkdir -p "$HOME/api-deployment"
+cp docker/docker-compose.yml "$HOME/api-deployment/compose.yml"
+cd "$HOME/api-deployment"
+docker compose -f compose.yml up -d
 ```
 
-The stack publishes HTTP on `172.17.0.1:64580`, persists configuration and data under `docker/volumes/`, and starts Valkey for caching. Open `http://172.17.0.1:64580/` from the host.
+The stack publishes HTTP on `172.17.0.1:64580`, persists configuration and data under `$HOME/api-deployment/volumes/`, and starts Valkey for caching. Open `http://172.17.0.1:64580/` from the host. See [Installation](https://apimgr-api.readthedocs.io/en/latest/installation/) for upgrades and other deployment options.
 
 ### Binary
 
@@ -97,13 +100,15 @@ Interactive API references are available at `/server/docs/swagger` and `/server/
 Build and test inside the project’s Docker-based Go toolchain:
 
 ```bash
+make dev
+make local
 make build
 make test
 ```
 
-`make build` produces server and client binaries for Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. See the [development guide](https://apimgr-api.readthedocs.io/en/latest/development/) before changing code or documentation.
+`make dev` builds into a temporary directory; `make local` creates production-style local binaries; `make build` produces server and client binaries for Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. All Go builds and tests run in the project Docker toolchain. `make release` publishes a manually prepared stable `X.Y.Z` release, while beta and devel releases come from CI. See the [development guide](https://apimgr-api.readthedocs.io/en/latest/development/) before changing code or documentation.
 
-`make test` runs the Go test suite. Run `tests/run_tests.sh` for binary and container integration checks, including the production image runtime-command and Tor health checks.
+`make test` runs the Go test suite. Run `tests/run_tests.sh` for Docker-based binary, HTTP, owner-token, Tor, and I2P integration checks. `tests/incus.sh` and `tests/e2e.sh` are separate, explicit test tiers. The production image runtime-command and Tor health contract is checked after `make docker` and in CI.
 
 ## Disclaimer
 

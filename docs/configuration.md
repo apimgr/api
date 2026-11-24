@@ -75,6 +75,8 @@ First-run-only values are written to configuration and ignored on later starts. 
 
 See [Security](security.md) for the public reporting endpoints and [Integrations](integrations.md) for discovery settings.
 
+`server.notifications.disk_low` controls the scheduled disk-space warning. It defaults to enabled, an 85% used threshold, a five-minute check interval, and a 24-hour repeat interval. The check deduplicates the data, log, and backup paths by filesystem and only emails on a threshold crossing or after the repeat interval.
+
 ## Configuration management
 
 The configuration is file-based; the watcher monitors `server.yml`, `yaml.d/`, `secrets.yml`, and the configured assets directory and re-merges changes. Restart the service only when an affected feature requires it. Sensitive operations such as secret rotation and backup restoration use the CLI maintenance flow and audit logging. The CLI uses its own configuration file and options; see [CLI reference](cli.md).

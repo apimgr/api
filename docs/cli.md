@@ -53,6 +53,16 @@ api --update --help
 
 Sensitive operations require operator authorization and are recorded in the audit log. Passwords for configuration and backup data are not accepted as command-line arguments; interactive flows prompt securely where required.
 
+Security report maintenance supports metadata listing, review, and status updates:
+
+```text
+api --maintenance security list [--status STATUS]
+api --maintenance security show TRACKING_ID
+api --maintenance security update TRACKING_ID [--status STATUS] [--comment TEXT] [--disclosure-date YYYY-MM-DD] [--severity LEVEL]
+```
+
+The `show` command omits report bodies. Closed reports are purged by the daily security cleanup task after the configured retention period.
+
 ## Client
 
 `api-cli` is the companion API client. Its options, commands, output formats, and configuration are documented by its own help output:

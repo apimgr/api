@@ -1,37 +1,50 @@
 # Security
 
-This page describes security controls that are currently implemented.
+This page describes the security controls and reporting routes currently available in API.
 
 ## Request handling
 
-The server applies configured security headers, rate limits and request-size limits. Forwarded host and protocol information is used only according to the trusted-proxy configuration. Browser Reporting API requests are accepted at `/api/{api_version}/server/reports/{name}`; bodies are size-capped, parsed as JSON, and reduced to an allowlisted set of fields before security logging. The endpoint returns no report data.
+The server applies configured security headers, request-size limits, rate limits, origin checks for browser form posts, and trusted-proxy rules. Browser Reporting API requests are accepted at `/api/{api_version}/server/reports/{name}`. Bodies are size-capped, parsed as JSON, and reduced to an allowlist before security logging; report bodies are not returned.
 
-## Current public security endpoints
+## Coordinated disclosure
 
-| Endpoint | Current behavior |
-|----------|------------------|
-| `/.well-known/security.txt` | Emits configured repository contact and security email contacts, expiry, policy URL, and preferred language. |
-| `/.well-known/llms.txt` and `/llms.txt` | Generate a route-derived API discovery document. |
-| `/server/security` | Displays the repository reporting link, security email, expiry and disclosure-policy link. |
-| `/server/security/policy` | Displays the built-in coordinated-disclosure policy or the configured `web.security.policy` Markdown. |
-| `/api/{api_version}/server/security` | Returns the security contacts, expiry and policy URL. |
-| `/api/{api_version}/server/security/policy` | Returns the policy as Markdown. |
+Repository vulnerabilities should be reported through the configured private repository reporting URL. Vulnerabilities in a deployed instance can be submitted from `/server/security`, which links to `/server/contact?security_id=…`. The rotating security ID is required to reveal the security-report form. The form uses a review and confirm step, CAPTCHA, request limits, and encrypted storage. Report content is not written to plaintext storage or included in ordinary logs.
 
-The GitHub private vulnerability reporting URL is the available private channel for repository vulnerabilities. `/server/contact` is a general contact form; it does not currently provide a validated security-report mode. Do not send vulnerability details through that general form.
+| Endpoint | Behavior |
+|----------|----------|
+| `/.well-known/security.txt` | Publishes configured repository reporting, instance report, and security email contacts in preference order, plus expiry and policy information. |
+| `/.well-known/pgp-key.asc` | Serves the configured project's ASCII-armored public key; returns `404` until a valid public key file exists. |
+| `/server/security` | Human-readable security contacts, reporting instructions, and links to the policy, acknowledgments, public key when configured, and `security.txt`. |
+| `/server/security/policy` | Displays the built-in disclosure policy or `web.security.policy` Markdown. |
+| `/server/security/thanks` | Lists disclosed researchers who opted into credit. |
+| `/server/security/report/{tracking_id}` | Shows report status and researcher-visible comments using the token in the emailed link. |
+| `/api/{api_version}/server/security` | JSON mirror of the security overview. |
+| `/api/{api_version}/server/security/policy` | Returns the disclosure policy as Markdown. |
+| `/api/{api_version}/server/security/thanks` | Returns the hall-of-fame entries. |
+| `/api/{api_version}/server/contact` | GET returns contact form fields and a CAPTCHA challenge; POST provides the review and confirm submission flow. A valid `security_id` selects the security-report fields. |
 
-## Features not yet implemented
+Security reports are encrypted with the configured AES-256-GCM key. When SMTP is enabled, the maintainer notification contains encrypted report data, and the researcher acknowledgment contains only a tracking ID and status URL. Without SMTP, reports remain stored and the tracking ID is returned in the form response. The project PGP key workflow is not available yet; `/.well-known/pgp-key.asc` is therefore absent until a key is provisioned.
 
-The coordinated-disclosure workflow described by AI.md is not yet available. The server does not currently persist or encrypt instance vulnerability reports, issue researcher status tokens, send report acknowledgments or encrypted maintainer notifications, provide status or acknowledgments pages, or expose security-report maintenance commands. It also does not currently serve a project PGP key. The generated security page and `security.txt` therefore expose only the repository reporting URL and configured security email; they do not publish an instance report link.
+Maintainers can inspect report metadata and update status from the CLI:
 
-Owner and linked API tokens can be issued and managed through the API token endpoints. The stateless MCP endpoint is available at `/api/{api_version}/server/mcp`, with `/api/mcp` and `/mcp` aliases. It requires an existing bearer token and reuses the API token validator. MCP tool calls are dispatched through the server router; token management routes are excluded from the tool list. See `/server/help/mcp` for client setup and current tool availability.
+```text
+api --maintenance security list [--status STATUS]
+api --maintenance security show TRACKING_ID
+api --maintenance security update TRACKING_ID [--status STATUS] [--comment TEXT] [--disclosure-date YYYY-MM-DD] [--severity LEVEL]
+```
 
-## Security contact configuration
+The command never prints report body content. Closed reports are removed by the non-skippable daily `security_cleanup` task after `server.security.reports.retention_days` (default 365 days).
 
-`web.security.report_url` configures the repository reporting contact. The security email is resolved from `server.contact.security.email` and its configured fallback. `web.security.expires` controls the expiry emitted by `security.txt`; `web.security.policy` replaces the built-in disclosure policy with operator-supplied Markdown. Do not include secrets or report contents in these public settings.
+## Other security endpoints
 
-## Health endpoints
+| Endpoint | Behavior |
+|----------|----------|
+| `/.well-known/llms.txt` and `/llms.txt` | Generate route-derived API discovery documents. |
+| `/api/{api_version}/server/reports/{name}` | Accepts sanitized browser Reporting API reports. |
+| `/api/{api_version}/server/mcp`, `/api/mcp`, `/mcp` | Streamable HTTP MCP endpoint using existing Bearer tokens and API authorization. Token-management routes are excluded from MCP tools. |
+| `/server/healthz` and `/api/{api_version}/server/healthz` | Return the server health response. |
 
-`/server/healthz` and `/api/{api_version}/server/healthz` return health information. See [API reference](api.md) for the current response contract.
+`web.security.report_url` configures the repository reporting contact. `server.contact.security.email` configures the security email contact. `web.security.expires` controls the `security.txt` expiry, and `web.security.policy` replaces the built-in disclosure policy with operator-supplied Markdown. Do not put secrets or report contents in public settings.
 
 ## Further reading
 

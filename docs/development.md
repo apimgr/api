@@ -7,16 +7,23 @@ The server is Go software and the companion client is part of the same repositor
 Go builds and tests run in the project's Docker toolchain with `CGO_ENABLED=0`. Use the Makefile targets for normal development and release builds; the Makefile invokes the required containerized Go toolchain.
 
 ```bash
+make dev
+make local
 make build
+make test
 ```
 
-The release build targets Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. Build products are written to the ignored `binaries/` directory.
+`make dev` builds the server and client into an isolated temporary directory for quick iteration. `make local` creates production-style local binaries, and `make build` builds the local pair plus all eight server and client platform targets. Build products are written to the ignored `binaries/` directory. All builds run in one bounded Docker toolchain container with `CGO_ENABLED=0`.
+
+`make test` runs the complete Go package suite with coverage in Docker. `make release` is for manual, local stable releases only: set the version in `release.txt` to a stable `X.Y.Z`; it rejects devel and prerelease versions, builds all targets, prepares checksums and a source archive, and publishes the `vX.Y.Z` GitHub release. Beta and devel releases are produced by CI. `make docker` builds and pushes the multi-architecture container; set `REGISTRY` for the destination before running it.
 
 ## Tests and lint
 
 Run the repository's documented test and lint targets through the project validation workflow before submitting changes. Go commands must run in Docker and use `CGO_ENABLED=0`. The tests cover API behavior, server-rendered pages, generated API descriptions, clients, and platform-specific behavior where applicable. Do not rely on a documentation-only edit to justify claims about runtime behavior; compare the relevant requirement in `AI.md` and implementation first.
 
-`make test` runs the Go test suite. For binary and container integration coverage, run `tests/run_tests.sh`; it prefers Incus when available and otherwise uses Docker. The Docker path builds the server and client into a temporary directory, exercises their command-line and HTTP behavior, builds the production image, checks its required runtime commands, and waits for Tor health. If outbound networking is unavailable, the Tor health check may be skipped unless `REQUIRE_OVERLAY=1` is set.
+`make test` runs the Go test suite. For the basic binary-validation tier, run `tests/run_tests.sh`; it requires Docker and runs `tests/docker.sh` without falling back to Incus. That script uses `make build` to place server and client binaries in `binaries/`, then runs command-line, HTTP, owner-token, Tor, and I2P checks in an Alpine container. All runtime data stays in a project-prefixed OS temporary directory inside that container. Overlay bootstrap checks may print `SKIP` when outbound networking is unavailable; `REQUIRE_OVERLAY=1` makes healthy overlay services mandatory.
+
+Run `tests/incus.sh` explicitly for the full service lifecycle under systemd and OpenRC. `tests/e2e.sh` is also an explicit, on-demand browser suite. The production image command-presence and Tor bootstrap contract is checked after `make docker` and in CI, not by the basic binary-validation runner.
 
 ## Server-rendered pages
 
