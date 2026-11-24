@@ -3,8 +3,8 @@
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
 **The Makefile is for LOCAL DEVELOPMENT ONLY — it is NOT used by CI/CD.** CI/CD pipelines
-(GitHub Actions, Gitea Actions, GitLab CI) implement their own build/test/release/docker
-steps independently; they do not shell out to `make`.
+(GitHub Actions, Gitea Actions, Forgejo Actions, GitLab CI, and Jenkins) implement their own
+build/test/release/docker steps independently; they do not shell out to `make`.
 
 ## CRITICAL - NEVER DO
 - Never add targets beyond the six core ones: `dev`, `local`, `build`, `test`, `release`, `docker`.

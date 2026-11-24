@@ -84,7 +84,7 @@ Utility inputs are processed transiently and are not retained as user-submitted 
 | Direct TLS handshake (OSINT `SSLInfo`) | **Untrusted target** | Connects to user-supplied `host:443` only to read the certificate; no data sent beyond the TLS handshake |
 | Keyless weather/geocoding provider (`weather` tools) | Trusted provider, untrusted query | e.g. Open-Meteo — free, no API key; only location text/coordinates are sent |
 | Free Dictionary API (`language/dictionary`) | Trusted provider, untrusted query | api.dictionaryapi.dev — free, no API key; only the looked-up word is sent |
-| Datamuse API (`language/thesaurus`) | Trusted provider, untrusted query | api.datamuse.com — free, no API key; only the looked-up word is sent. Note: Datamuse requires a key starting 2027-01-01 |
+| Datamuse API (`language/thesaurus`) | Trusted provider, untrusted query | api.datamuse.com — free, no API key; only the looked-up word is sent. Note: Datamuse requires a key starting 2027-02-01 |
 | arXiv query API (`research/arxiv`) | Trusted provider, untrusted query | export.arxiv.org — free, no API key; only the arXiv ID is sent |
 | Open Library Books API (`research/isbn`) | Trusted provider, untrusted query | openlibrary.org — free, no API key; only the ISBN is sent, descriptive User-Agent per their low-volume guidance |
 | I2P router/provider (`i2pd` or an operator SAM bridge) | Operator-selected local service | The server owns its dedicated `i2pd` process or SAM session; the I2P destination key remains private and incoming stream headers are not trusted as client identity |

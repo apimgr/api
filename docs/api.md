@@ -12,18 +12,21 @@ Use the method shown in the route table. Path and query values are supplied in t
 - `GET /cli/binaries/{api-cli-os-arch}` serves an operator-provisioned CLI release binary after verifying its published checksum. Downloads are public by default; `cli.binary_download.require_auth` requires a valid Bearer token.
 - `GET /server/i2p/status` is a loopback-only status endpoint for the server CLI and does not expose key material.
 
-- `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health.
+- `GET /api/{api_version}/version` returns version/build metadata.
+- `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health. `/healthz` is an optional HTML health alias controlled by `server.healthz.root.enabled`; `/api/healthz` is the unversioned API alias.
 - `GET /server/about`, `/server/privacy`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
+- `GET /api/{api_version}/server/help` and `/api/{api_version}/server/help/mcp` return JSON help documents; `/server/help/mcp` is the corresponding HTML page.
 - `GET`/`POST /api/{api_version}/server/contact` expose the public contact form contract and two-step submit/review flow. A valid `security_id` selects the coordinated-disclosure fields; the response includes a fresh CAPTCHA descriptor and form token.
 - The contact review response contains only `review.type`, `review.email`, and `review.subject`, plus the review token and delay. On confirmation, clients repeat the original submitted fields unchanged; the server resolves an HTTPS researcher-key URL only after validating the review token.
-- `GET /api/{api_version}/server/terms`, `/server/security`, and `/server/security/policy` return JSON mirrors of the public terms and security information.
+- `GET /api/{api_version}/server/terms`, `GET /api/{api_version}/server/security`, and `GET /api/{api_version}/server/security/policy` return JSON mirrors of the public terms and security information.
 - `GET /server/preferences` and `POST /server/preferences` read and update guest preferences in browser cookies; `GET`/`POST /server/preferences/sync` and `GET /server/preferences/sync/import` transfer preferences between browsers without storing them server-side.
 - `GET`/`POST /api/{api_version}/server/preferences` read and partially update guest preferences; `GET /api/{api_version}/server/preferences/sync` exports them and `GET /api/{api_version}/server/preferences/sync/import` imports them.
 - `GET /api/healthz` is the direct unversioned health alias.
 - `GET /api/swagger` serves the generated OpenAPI JSON; the versioned server route is `/api/{api_version}/server/swagger`.
 - `POST /api/graphql` and `POST /api/{api_version}/server/graphql` serve GraphQL; `/server/docs/graphql` is the browser interface.
 - `/server/docs/swagger` is the browser interface for OpenAPI.
-- Metrics endpoints are internal and require their configured service credentials.
+- `POST /api/{api_version}/server/reports/{name}` accepts sanitized browser Reporting API reports. Supported report names include CSP, NEL, deprecation, intervention, crash, and `default`.
+- Metrics routes are mounted only when `server.metrics.enabled` is true. `/server/metrics[/{service}]`, `/api/{api_version}/server/metrics[/{service}]`, and `/api/metrics[/{service}]` are aliases; `/metrics[/{service}]` is also mounted when `server.metrics.root.enabled` is true. Services are `prometheus`, `grafana`, and `loki`; each requires its configured Bearer token unless unauthenticated access is explicitly enabled.
 
 ### Owner and linked token management
 

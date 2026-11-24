@@ -22,25 +22,30 @@ MCP uses the same Bearer tokens, validation, authorization, rate limits, and aud
 | Endpoint | Purpose and availability |
 |----------|--------------------------|
 | `/robots.txt` | Configured crawler rules and sitemap reference |
+| `/sitemap.xml` | Always-on sitemap containing indexable public pages allowed by `robots.txt` |
+| `/feed.xml` | Always-on Atom 1.0 feed |
+| `/rss.xml` | Always-on RSS 2.0 feed containing the same items as the Atom feed |
+| `/manifest.json` | Web application manifest for installable browser clients |
 | `/llms.txt` and `/.well-known/llms.txt` | Always-on application and API discovery for machine clients |
 | `/.well-known/security.txt` | RFC 9116 contacts, expiry, and policy |
 | `/.well-known/pgp-key.asc` | Security public key when generated and enabled |
-| `/.well-known/webfinger` | Optional; enabled only when the instance publishes account identities or federation |
-| `/.well-known/openid-configuration` | Optional; enabled only when the server operates as an OIDC provider |
-| `/.well-known/oauth-protected-resource` | Optional; enabled only when OAuth is enabled for MCP or the API |
-| `/.well-known/oauth-authorization-server` | Optional; enabled only when this server is an OAuth authorization server |
-| `/.well-known/assetlinks.json` | Optional Android app association |
-| `/.well-known/apple-app-site-association` | Optional Apple app association |
-| `/.well-known/mta-sts.txt` | Optional; enabled only when this host owns inbound mail policy |
-| `/.well-known/gpc.json` | Optional; enabled only when Global Privacy Control is honored |
-| `/.well-known/nodeinfo` | Optional; enabled with WebFinger for federation |
-| `/.well-known/openpgpkey/` | Optional Web Key Directory publication |
+| `/.well-known/acme-challenge/{token}` | HTTP-01 ACME challenge response while a challenge is active; answered on the existing HTTP listener |
 
-The server allowlists well-known entries. Feature-gated endpoints are not served merely because a client requests them. Absolute URLs in discovery responses are resolved for the current request and honor only trusted proxy headers.
+The current project implements only the entries listed above; feature-gated entries are served only while their matching feature is active, and unknown or unsupported `/.well-known/*` paths return `404`. Absolute URLs in discovery responses are resolved for the current request and honor only trusted proxy headers. See [Security](security.md#other-security-endpoints) for the complete enabled-path summary.
+
+## Identity and federation
+
+The project has no user accounts, account profiles, OAuth/OIDC provider, or federation identity service. Anonymous owners are credential-only identities, and API access uses operator, owner, or linked Bearer tokens. There are no native app association or federation discovery endpoints enabled.
+
+## Outbound webhooks
+
+Contact destinations support the built-in `telegram`, `discord`, `slack`, `mattermost`, `pushover`, `gotify`, and `generic` adapters. Configure a role's URL under `server.contact.{role}.webhooks.{transport}`; fallback between roles and secret handling are described in [Configuration](configuration.md#contact-destinations-and-webhooks).
+
+Every webhook request carries `X-Webhook-ID` for retry deduplication, `X-Webhook-Timestamp` as Unix seconds, the event name in `X-Webhook-Event`, and `X-Webhook-Signature` in `sha256=<hex_hmac>` form. The signing secret is stored in protected `secrets.yml`. The `generic` adapter sends JSON with `role`, `event`, `subject`, `body`, `severity`, `timestamp`, `project_name`, `project_version`, `app_url`, and optional `tracking_id`. Non-2xx responses are retried with exponential backoff at 1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours, and 24 hours; after the final attempt, the delivery is dropped and logged.
 
 ## Overlay services
 
-Tor hidden services and the optional I2P eepsite use separate private loopback backends. I2P is enabled by default in the application container when an `i2pd` or SAM provider is available; configuration and status details are in [Configuration](configuration.md). Public autodiscovery omits overlay addresses unless the matching `expose` setting is enabled.
+Tor hidden services and the optional I2P eepsite use separate private loopback backends. I2P is enabled by default in the application container and opt-in elsewhere. If neither a local `i2pd` binary nor an operator-provided SAM bridge is available, the server continues without an active I2P backend. Configuration and status details are in [Configuration](configuration.md). Public autodiscovery omits overlay addresses unless the matching `expose` setting is enabled.
 
 ## Data providers
 

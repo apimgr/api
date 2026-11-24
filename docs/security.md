@@ -52,9 +52,13 @@ Linked tokens are independently revocable credentials for automation and MCP cli
 
 Backups are `.tar.gz` archives, or `.tar.gz.enc` when encryption is configured. Each archive includes `manifest.json` with snapshot metadata and SHA-256 checksums. Full backups contain the selected configuration and data files; daily and hourly incrementals contain changed files, their base-backup identity/checksum, and deleted paths. Restoring an incremental requires its full base from the same backup directory and applies both to reach the recorded snapshot.
 
+With the libSQL/Turso driver, backups never include the remote database. When the local SQLite cache is enabled and present, its snapshot is archived as `server.db`; restore seeds the configured remote database from that snapshot only when the remote database is empty. A populated remote database is left unchanged.
+
 Restore is an operator CLI operation (`api --maintenance restore FILE`), not a public page or API endpoint. Encrypted backups prompt for the backup password; it is separate from `server.token`. Restore validates the archive, checksum, manifest, database integrity, and incremental base before applying changes. Configured `server.restore` limits cap the compressed archive at 1 GiB, total expanded contents at 4 GiB, file count at 10,000, individual file size at 512 MiB, and expansion ratio at 100:1 by default. Limits apply to the combined base and incremental archive. See [Configuration](configuration.md) for the limit keys.
 
 ## Other security endpoints
+
+The server currently exposes these public discovery paths: `/.well-known/security.txt` and `/.well-known/llms.txt` are always available; `/.well-known/pgp-key.asc` is available only when a valid public key is provisioned and publishing is enabled; and `/.well-known/acme-challenge/{token}` is available only while an HTTP-01 ACME challenge is active. `/llms.txt` is an additional alias, and `/robots.txt` serves the configured crawler rules. Other `/.well-known/*` paths, including feature-gated standards not implemented by this project, return `404`.
 
 | Endpoint | Behavior |
 |----------|----------|

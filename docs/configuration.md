@@ -14,21 +14,25 @@ Use `yaml.d/` for optional area files such as networking, email, or logging when
 |------------|---------|
 | `server.address`, `server.port`, `server.fqdn`, `server.api_version`, `server.baseurl` | Listener, public host, API version, and base URL resolution |
 | `server.mode`, `server.branding` | Runtime mode and application identity |
+| `server.limits` | HTTP request body and connection timeouts |
 | `server.database`, `server.cache` | Database and optional cache connections |
 | `server.debug` | Explicitly enabled diagnostics, profiling, and verbose request/query/cache logging |
 | `server.ssl` | TLS and certificate automation |
 | `server.trusted_proxies` | Peers allowed to supply trusted reverse-proxy headers |
 | `server.rate_limit`, `server.healthz` | Request limits and health aliases |
 | `server.security`, `server.token` | Security controls and operator credential |
+| `server.tokens` | Anonymous owner-token limits and lifecycle settings |
 | `server.logs` | Access, application, audit, and security logging |
 | `server.scheduler`, `server.backup`, `server.restore`, `server.update` | Scheduled tasks, encrypted backups, restore size limits, retention, and release channel |
 | `server.notifications`, `server.contact`, `server.privacy`, `server.csrf` | Email delivery and contact/privacy protections |
+| `server.pages` | Project-defined page/help content settings |
 | `server.i18n` | Default interface language and the enabled locale set |
 | `server.metrics`, `server.geoip`, `server.tor`, `server.i2p` | Metrics, local GeoIP data, and Tor/I2P overlay services |
 | `server.compliance`, `server.tracking` | Compliance-driven defaults and privacy choices |
-| `web.robots`, `web.security`, `web.cors`, `web.hsts`, `web.csp`, `web.headers`, `web.reports` | Public web policy, security metadata, browser headers, and reporting endpoints |
+| `web.robots`, `web.llms`, `web.security`, `web.cors`, `web.hsts`, `web.csp`, `web.headers`, `web.reports` | Public discovery documents, security metadata, browser headers, and reporting endpoints |
 | `web.ui` | Public interface theme and branding assets |
 | `output.color`, `output.emoji` | CLI output preferences |
+| `cli.binary_download` | Operator-provisioned CLI download directory and authentication policy |
 | `data.security_dir`, `data.cve`, `data.trivy` | External security-database storage, NVD CVE API updates, and optional Trivy OCI data |
 
 Configuration is validated per setting. Consult the matching sections of `AI.md` for field-specific accepted values, defaults, and interactions; this table names the complete configuration areas, not a substitute for those detailed constraints.
@@ -75,6 +79,23 @@ server:
       extra_sources: []
 ```
 
+## Local cache for remote libSQL
+
+`server.database.cache` configures an optional local SQLite cache for a remote libSQL/Turso database. It is disabled by default. When enabled, reads check the local cache first, writes go to the remote database and then update the cache, and background synchronization keeps cached data fresh. The local cache is a separate SQLite file; SQLite itself does not use this cache option.
+
+```yaml
+server:
+  database:
+    cache:
+      enabled: true
+      path: "${DATA_DIR}/db/cache.db"
+      sync_interval: 30s
+      offline_mode: true
+      max_age: 1h
+```
+
+The example follows AI.md PART 10; only `enabled: false` is explicitly identified there as the default, so the cache remains opt-in.
+
 ## Debug diagnostics
 
 Debug endpoints and detailed diagnostics require the explicit `--debug` flag or `DEBUG=true`. The selected `debug` mode enables the debug flag by default, while an explicit `--debug=false` or `DEBUG=false` keeps the endpoints off. Every `/debug/*` route also requires `Authorization: Bearer <server.token>`; the debug flag never bypasses authentication.
@@ -116,6 +137,23 @@ server:
 ```
 
 `header` is appended inside the public header, `about` and `privacy` extend their built-in pages, `terms` replaces the built-in terms, and `footer` replaces the optional branding block above the standard footer. Scripts, forms, frames, unsafe URLs, and links to `/server/contact` are removed. The terms API returns the configured source text and its format.
+
+## Contact destinations and webhooks
+
+Contact destinations include `admin`, `security`, `abuse`, `general`, and `dpo`. The `admin` destination is the internal notification recipient; the other roles serve their documented public or submission workflows. Supported recipient roles accept named webhook URLs; DPO additionally accepts a `name`. Empty role destinations follow the fallback rules in AI.md PART 12; the admin address is never exposed publicly.
+
+Built-in webhook transport names are `telegram`, `discord`, `slack`, `mattermost`, `pushover`, `gotify`, and `generic`. The open map also accepts project-added adapters. URLs and generated per-webhook signing secrets are sensitive and belong in `secrets.yml`; never publish them in ordinary config examples.
+
+```yaml
+server:
+  contact:
+    admin:
+      email: operator@example.com
+      webhooks:
+        generic: "https://hooks.example.net/replace-me"
+    security:
+      email: security@example.com
+```
 
 ## Restore limits
 
@@ -176,38 +214,63 @@ Generated secrets are stored in `secrets.yml` or in the database secret store ac
 
 ## Environment variables
 
-The following runtime variables are read by the server:
+The server reads the runtime and directory variables below. Database/cache connection variables and initialization variables are described separately because they seed configuration only on first run.
 
 | Variable | Purpose |
 |----------|---------|
 | `NO_COLOR` | Disable ANSI color output when set to a non-empty value |
 | `TERM` | Detect terminal capabilities; `dumb` disables ANSI output |
 | `DOMAIN` | Highest-priority public hostname override |
+| `HOSTNAME` | Hostname candidate after `os.Hostname()` during public URL resolution |
 | `MODE` | Select `production` (default) or `development`; aliases are documented in the CLI help |
 | `DEBUG` | Enable debug behavior when set to a truthy value; `--debug` takes precedence |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | SMTP connection overrides |
 | `SMTP_FROM_NAME`, `SMTP_FROM_EMAIL`, `SMTP_TLS` | SMTP sender and TLS mode overrides |
-| `CONFIG_DIR`, `DATA_DIR`, `LOG_DIR`, `DATABASE_DIR`, `BACKUP_DIR` | Directory overrides where supported |
-| `PORT`, `LISTEN`, `APPLICATION_NAME`, `APPLICATION_TAGLINE` | First-run initialization values |
-| `DATABASE_DRIVER`, `DATABASE_URL`, `CACHE_URL` | First-run database and cache connection values |
+| `CONFIG_DIR`, `DATA_DIR`, `LOG_DIR`, `DATABASE_DIR`, `BACKUP_DIR` | Directory overrides applied at every startup where supported |
 | `I2P_ENABLED` | Override `server.i2p.enabled` for this process |
+| `LC_ALL`, `LANG` | Select the CLI language when no explicit language flag or CLI config value is set |
+| `API_TOKEN` | Client token fallback, after `--token` and before `cli.yml` |
+
+Directory variables are applied on every startup; command-line directory flags take precedence over them. The following values initialize configuration only on the first run.
+
+| Variable | Purpose |
+|----------|---------|
+| `PORT` | Initial server port |
+| `LISTEN` | Initial listen address |
+| `APPLICATION_NAME` | Initial application title |
+| `APPLICATION_TAGLINE` | Initial application description |
+| `DATABASE_DRIVER` | Initial database driver when `DATABASE_URL` is not set (`sqlite` or `libsql`, including documented aliases) |
+| `DATABASE_URL` | First-run database connection string; saved to `secrets.yml` when it contains credentials, otherwise `server.yml` |
+| `CACHE_URL` | First-run Valkey/Redis connection string; saved to `secrets.yml` when it contains credentials, otherwise `server.yml` |
 
 First-run-only values are written to configuration and ignored on later starts. Credential-bearing connection strings are stored in the protected secrets file. Do not use an environment variable as a substitute for rotating an already-persisted secret.
 
 ## Security and public endpoints
 
-`web.security` configures the RFC 9116 repository report URL, expiry, disclosure policy, and whether the project PGP public key is advertised. The secondary security contact is configured under `server.contact.security`; security-report storage/encryption settings are under `server.security`. `web.well_known` controls optional standards endpoints; unknown well-known paths return `404`. Reverse-proxy-derived URLs and origins are trusted only when the immediate peer is allowed by `server.trusted_proxies`.
+`web.security` configures the RFC 9116 repository report URL, expiry, disclosure policy, and whether the project PGP public key is advertised. The secondary security contact is configured under `server.contact.security`; security-report storage/encryption settings are under `server.security`. The root-owned well-known namespace serves the implemented security, LLM-discovery, PGP-key, and active ACME challenge entries; unknown paths return `404`. Reverse-proxy-derived URLs and origins are trusted only when the immediate peer is allowed by `server.trusted_proxies`.
 
 See [Security](security.md) for the public reporting endpoints and [Integrations](integrations.md) for discovery settings.
 
 `server.notifications.disk_low` controls the scheduled disk-space warning. It defaults to enabled, an 85% used threshold, a five-minute check interval, and a 24-hour repeat interval. The check deduplicates the data, log, and backup paths by filesystem and only emails on a threshold crossing or after the repeat interval.
+
+`server.notifications.database_error` controls the database-connection warning. It probes both read and write handles every minute by default and triggers after three consecutive failures; repeated alerts are limited to once per 24 hours while failures continue. The first successful probe logs recovery and resets the failure count without sending another email. Error text has credentials removed. The example settings are:
+
+```yaml
+server:
+  notifications:
+    database_error:
+      enabled: true
+      failures: 3
+      check_interval: 1m
+      repeat: 24h
+```
 
 ## Configuration management
 
 The configuration is file-based; the watcher monitors `server.yml`, `yaml.d/`, `secrets.yml`, and the configured assets directory and re-merges changes. Restart the service only when an affected feature requires it. Sensitive operations such as secret rotation and backup restoration use the CLI maintenance flow and audit logging. The CLI uses its own configuration file and options; see [CLI reference](cli.md).
 ## Complete setting key index
 
-This index lists the stable YAML keys exposed by the server configuration model. It excludes user-account settings because this product has no accounts. Map keys use `{key}` and list items use `[*]`; replace those markers with the application-defined map key or list item. The `data` and `server.pages` maps also accept the project-specific entries described above.
+This index lists the stable YAML keys exposed by the server configuration model. It excludes user-account settings because this product has no accounts. Map keys use `{key}` and list items use `[*]`; replace those markers with the application-defined map key or list item. The `data` and `server.pages` maps also accept the project-specific entries described above. Webhook transport names are open maps; built-in names are listed in [Contact destinations and webhooks](#contact-destinations-and-webhooks).
 
 The first-run configuration is generated with the effective built-in defaults for the current platform and environment. That generated value is the default for each setting; runtime-derived values (such as the hostname, random port, or container-dependent service defaults) vary by installation. Invalid or unsupported values warn and fall back to the generated default. The preceding sections document the accepted values and behavior for constrained settings. Secret-valued keys are kept in `secrets.yml`, not ordinary `server.yml`.
 
@@ -261,21 +324,26 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.cache.username` | `string` |
 | `server.compliance.enabled` | `bool` |
 | `server.contact.abuse.email` | `string` |
-| `server.contact.abuse.webhooks` | `ContactWebhooksConfig` |
+| `server.contact.abuse.webhooks.{transport}` | `string` |
 | `server.contact.admin.email` | `string` |
-| `server.contact.admin.webhooks` | `ContactWebhooksConfig` |
+| `server.contact.admin.webhooks.{transport}` | `string` |
 | `server.contact.dpo.email` | `string` |
-| `server.contact.dpo.webhooks` | `ContactWebhooksConfig` |
+| `server.contact.dpo.webhooks.{transport}` | `string` |
 | `server.contact.general.email` | `string` |
-| `server.contact.general.webhooks` | `ContactWebhooksConfig` |
+| `server.contact.general.webhooks.{transport}` | `string` |
 | `server.contact.security.email` | `string` |
-| `server.contact.security.webhooks` | `ContactWebhooksConfig` |
+| `server.contact.security.webhooks.{transport}` | `string` |
 | `server.csrf.cookie_name` | `string` |
 | `server.csrf.enabled` | `bool` |
 | `server.csrf.exempt_paths[*]` | `[]string` |
 | `server.csrf.header_name` | `string` |
 | `server.csrf.secure` | `string` |
 | `server.csrf.token_length` | `int` |
+| `server.database.cache.enabled` | `bool` |
+| `server.database.cache.max_age` | `string` |
+| `server.database.cache.offline_mode` | `bool` |
+| `server.database.cache.path` | `string` |
+| `server.database.cache.sync_interval` | `string` |
 | `server.database.driver` | `string` |
 | `server.database.pool.max_idle` | `int` |
 | `server.database.pool.max_idle_time` | `string` |
@@ -374,12 +442,18 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.metrics.root.enabled` | `bool` |
 | `server.metrics.size_buckets[*]` | `[]float64` |
 | `server.mode` | `string` |
+| `server.notifications.database_error.check_interval` | `string` |
+| `server.notifications.database_error.enabled` | `bool` |
+| `server.notifications.database_error.failures` | `int` |
+| `server.notifications.database_error.repeat` | `string` |
 | `server.notifications.disk_low.check_interval` | `string` |
 | `server.notifications.disk_low.enabled` | `bool` |
 | `server.notifications.disk_low.repeat` | `string` |
 | `server.notifications.disk_low.threshold_percent` | `int` |
 | `server.notifications.email.events.backup_complete` | `bool` |
 | `server.notifications.email.events.backup_failed` | `bool` |
+| `server.notifications.email.events.database_error` | `bool` |
+| `server.notifications.email.events.disk_low` | `bool` |
 | `server.notifications.email.events.scheduler_error` | `bool` |
 | `server.notifications.email.events.security_alert` | `bool` |
 | `server.notifications.email.events.shutdown` | `bool` |
