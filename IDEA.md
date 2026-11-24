@@ -13,6 +13,7 @@ repo: https://github.com/apimgr/api
 license: MIT
 binary: api
 client_binary: api-cli
+owner_token: api_owner_token_suexgbvs
 
 ## Business logic
 

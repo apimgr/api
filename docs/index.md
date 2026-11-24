@@ -10,6 +10,7 @@ API is a self-hosted utility service with a server-rendered web interface, versi
 - OpenAPI and GraphQL documentation interfaces
 - Eight interface locales: English, Spanish, French, German, Italian, Arabic, Chinese, and Japanese
 - Anonymous credential-based resource ownership without user accounts or login
+- Browser owner-token management at `/server/preferences/tokens`; its forms work without JavaScript. See [Security](security.md#owner-tokens).
 
 ## Quick start
 

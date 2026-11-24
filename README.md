@@ -17,6 +17,7 @@ API is a self-hosted utility service with a server-rendered web interface, a ver
 - Machine-readable REST, OpenAPI, and GraphQL interfaces
 - Eight interface locales: English, Spanish, French, German, Italian, Arabic, Chinese, and Japanese
 - Anonymous credential-based ownership for resources that need an owner; no user accounts or login
+- Browser owner-token management at `/server/preferences/tokens`, with an HttpOnly cookie and JavaScript-free forms
 - Configuration-driven health, security, localization, scheduling, backup, update, Tor support, and optional I2P eepsites
 - Backup restoration enforces configurable archive, expanded-size, file-count, per-file, compression-ratio, path, and permission limits
 - Explicitly enabled, operator-token-protected runtime diagnostics and profiling
