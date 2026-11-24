@@ -72,7 +72,7 @@ The CLI configuration supports an API version setting; its default is `v1`. The 
 
 ## Configuration
 
-The server reads `server.yml` from its platform-specific configuration directory. Use `api --help` to see supported flags and `api --config DIR` to select a configuration directory. Server settings include the listen address and port, API version, database and cache, security controls, logging, integrations, and scheduled services.
+The server reads `server.yml` from its platform-specific configuration directory. Use `api --help` to see supported flags and `api --config DIR` to select a configuration directory. SQLite is the default database; remote libSQL/Turso can use an optional local SQLite cache for local-first reads, remote writes with cache refresh, and read-only operation from a fresh cache while offline. Other server settings include the listen address and port, API version, security controls, logging, integrations, and scheduled services.
 
 The client has a separate `cli.yml` file. See the [server configuration reference](https://apimgr-api.readthedocs.io/en/latest/configuration/) and [CLI reference](https://apimgr-api.readthedocs.io/en/latest/cli/).
 
