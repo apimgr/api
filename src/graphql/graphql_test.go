@@ -149,6 +149,11 @@ func TestHandleQuery(t *testing.T) {
 		rec := httptest.NewRecorder()
 		HandleQuery(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var response map[string]interface{}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, false, response["ok"])
+		assert.Equal(t, "INVALID_JSON", response["error"])
+		assert.NotEmpty(t, response["message"])
 	})
 
 	t.Run("health query returns health data", func(t *testing.T) {
@@ -188,6 +193,22 @@ func TestHandleQuery(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 		require.NotEmpty(t, resp.Errors)
 		assert.Contains(t, resp.Errors[0].Message, "unknownField")
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Nil(t, resp.Data)
+		assert.Equal(t, "GRAPHQL_VALIDATION_FAILED", resp.Errors[0].Extensions["code"])
+	})
+
+	t.Run("parse errors use the GraphQL response map", func(t *testing.T) {
+		body, _ := json.Marshal(Request{Query: "{ health"})
+		req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		HandleQuery(rec, req)
+
+		var resp Response
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotEmpty(t, resp.Errors)
+		assert.Equal(t, "GRAPHQL_PARSE_FAILED", resp.Errors[0].Extensions["code"])
 	})
 
 	t.Run("empty body decodes to empty query and gets default response", func(t *testing.T) {

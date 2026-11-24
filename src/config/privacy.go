@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // PrivacyConfig holds the server-wide privacy and cookie-consent settings
 // from AI.md PART 12. Data.Sold drives the dynamic messaging used by the
 // consent banner, the cookie descriptions, and the privacy page.
@@ -34,9 +36,32 @@ type PrivacySharingConfig struct {
 // PrivacyRetentionConfig describes how long data is kept and which user
 // rights are available.
 type PrivacyRetentionConfig struct {
-	Period            string `yaml:"period"`
-	ExportAvailable   bool   `yaml:"export_available"`
-	DeletionAvailable bool   `yaml:"deletion_available"`
+	Period            any  `yaml:"period"`
+	ExportAvailable   bool `yaml:"export_available"`
+	DeletionAvailable bool `yaml:"deletion_available"`
+}
+
+// PeriodFor returns an operator-supplied retention statement for the request
+// language, falling back to the configured default. An empty result selects
+// the built-in translated statement.
+func (p PrivacyRetentionConfig) PeriodFor(language string) string {
+	switch period := p.Period.(type) {
+	case string:
+		return period
+	case map[string]any:
+		if value, ok := period[strings.ToLower(language)].(string); ok && value != "" {
+			return value
+		}
+		if value, ok := period["default"].(string); ok {
+			return value
+		}
+	case map[string]string:
+		if value := period[strings.ToLower(language)]; value != "" {
+			return value
+		}
+		return period["default"]
+	}
+	return ""
 }
 
 // PrivacyConsentConfig configures the cookie consent banner.
@@ -167,7 +192,7 @@ func defaultPrivacyConfig() PrivacyConfig {
 			},
 		},
 		Retention: PrivacyRetentionConfig{
-			Period:            "User-submitted utility inputs are processed to provide a response and are not retained as user records. Operational logs follow the deployment operator's configured retention policy.",
+			Period:            "",
 			ExportAvailable:   false,
 			DeletionAvailable: false,
 		},

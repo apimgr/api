@@ -98,7 +98,8 @@
     "status": "Stato",
     "skip_to_content": "Passi al contenuto principale",
     "skip_to_navigation": "Passi alla navigazione",
-    "main_navigation": "Navigazione principale"
+    "main_navigation": "Navigazione principale",
+    "toggle_navigation": "Attiva/disattiva la navigazione"
   },
   "health": {
     "title": "Stato del server",
@@ -389,6 +390,9 @@
     "all_data_stored": "Tutti i dati vengono archiviati sui nostri server.",
     "when_shared": "Quando i dati possono essere condivisi",
     "data_retention": "Conservazione dei dati",
+    "retention": {
+      "period": "Le risorse che crei vengono conservate fino alla scadenza o finché non le elimini con il tuo token proprietario. Le preferenze sono salvate solo nei cookie del browser. I registri operativi sono conservati per un massimo di 30 giorni. I dati analitici anonimizzati possono essere conservati per un massimo di 12 mesi."
+    },
     "your_rights": "Diritti dell’utente",
     "right_access": "Accesso",
     "right_export": "Esportazione",

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -23,6 +24,28 @@ func TestSafePath(t *testing.T) {
 		got, err := SafePath(test.input)
 		if !errors.Is(err, test.err) || got != test.want {
 			t.Errorf("SafePath(%q) = %q, %v; want %q, %v", test.input, got, err, test.want, test.err)
+		}
+	}
+}
+
+func TestSafeResourcePathPreservesFileNames(t *testing.T) {
+	for input, want := range map[string]string{
+		"/static/css/main.css": "static/css/main.css",
+		"/robots.txt":          "robots.txt",
+		"Report_2024.PDF":      "Report_2024.PDF",
+		"//assets//logo.svg//": "assets/logo.svg",
+	} {
+		got, err := SafeResourcePath(input)
+		if err != nil || got != want {
+			t.Errorf("SafeResourcePath(%q) = %q, %v; want %q", input, got, err, want)
+		}
+	}
+}
+
+func TestSafeResourcePathRejectsUnsafeNames(t *testing.T) {
+	for _, input := range []string{"", ".secret", "../secret", "reports..old/file", `assets\\logo.svg`, "bad name.txt", strings.Repeat("a", 256)} {
+		if _, err := SafeResourcePath(input); err == nil {
+			t.Errorf("SafeResourcePath(%q) unexpectedly succeeded", input)
 		}
 	}
 }
@@ -57,6 +80,18 @@ func TestSafeFilePathKeepsPathWithinBase(t *testing.T) {
 	}
 	if _, err := SafeFilePath(base, "../secret"); !errors.Is(err, ErrPathTraversal) {
 		t.Fatalf("SafeFilePath traversal error = %v, want %v", err, ErrPathTraversal)
+	}
+}
+
+func TestSafeFilePathAcceptsExtensionsAndCase(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "data")
+	got, err := SafeFilePath(base, "Reports/Report_2024.PDF")
+	if err != nil {
+		t.Fatalf("SafeFilePath returned error: %v", err)
+	}
+	want := filepath.Join(base, "Reports", "Report_2024.PDF")
+	if got != want {
+		t.Fatalf("SafeFilePath = %q, want %q", got, want)
 	}
 }
 

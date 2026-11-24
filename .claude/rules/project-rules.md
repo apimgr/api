@@ -66,4 +66,8 @@
 - Every OS follows the same subdirectory shape under the app root: config file is always `server.yml`; SSL under `ssl/` (`letsencrypt/`, `local/`); security DBs under `security/` (`geoip/`, `blocklists/`, `cve/`, `trivy/`); SQLite DB under `db/server.db`
 - Runtime directory purpose: `{config_dir}` = user-editable, `{data_dir}` = app-managed, `{log_dir}` = logs, `{backup_dir}` = backup archives
 
+### Raw Protocol Listeners (PART 2)
+- Each raw-protocol listener has independent `{proto}.enabled`, `{proto}.address`, and `{proto}.port` settings plus a `{PROTO}_PORT` environment override; listeners are disabled by default unless they are the project's core function.
+- Read these listener settings during the early config peek so privileged ports bind on the configured address before dropping privileges. Raw protocols must not be routed through HTTP reverse-proxy vhosts.
+
 For complete details, see AI.md PART 2, 3, 4

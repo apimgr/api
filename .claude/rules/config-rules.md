@@ -19,7 +19,7 @@
 - Never introduce flat aliases or migration shims for the canonical `server.contact.*` keys
 
 ## CRITICAL - ALWAYS DO
-- Always normalize and validate every path (config values, HTTP paths, file paths, API params) via `SafePath`/`normalizePath`/`validatePath` — reject `..`, disallow uppercase/invalid chars, cap segment length at 64 and full path at 2048
+- Always use the correct path contract: `SafePath` for configured identifiers and URL prefixes (lowercase `[a-z0-9_-]` segments); `SafeResourcePath` for relative file/resource names (preserve dots and case, reject traversal, backslashes and hidden filenames), followed by `SafeFilePath`'s base-directory check. HTTP path middleware checks traversal and encoding separately
 - Always run `PathSecurityMiddleware` at execution position #3 (after URL normalize + request-ID, before auth/routing) per the fixed 10-step middleware order
 - Always persist the selected port (random or explicit) to `server.yml` on first run so it survives restarts — no runtime API for changing it
 - Always drop privileges after privileged setup on Unix (root → bind ports → create dirs/user → drop to `{project_name}` service user) unless a documented permanent-root exception applies
@@ -31,6 +31,8 @@
 - Always adjust privacy/consent messaging dynamically based on `server.privacy.data.sold` (never-sold vs may-be-sold copy)
 
 ## Key Rules Summary
+
+**Markdown & HTML.** Use Goldmark as the CommonMark renderer for every Markdown surface, with raw HTML passthrough disabled. Sanitize rendered Markdown and operator-supplied HTML with the bluemonday policy before serving.
 
 **Config storage & precedence.** `server.yml` is the sole source of truth for settings; database (SQLite local or libsql/Turso remote) stores resource state, hashed tokens, audit log — never accounts/config. Location: `/etc/apimgr/api/server.yml` (root) or `~/.config/apimgr/api/server.yml` (user). Config format rules: clean/intuitive, everything configurable, sane built-in defaults, single-line comments under 140 chars above the setting.
 
@@ -55,6 +57,10 @@
 **Analytics tracking.** `server.tracking.{type,id,url}` supports google, matomo, piwik, owa, fathom, plausible, umami, simple, cloudflare — each with its own ID/URL validation rules and self-hosted vs cloud URL requirement.
 
 **Privacy & consent.** `server.privacy.data.sold` (default false) drives dynamic messaging across the consent banner, cookie descriptions, and privacy-page content (never-sold copy vs may-be-sold/CCPA copy). Three cookie categories: essential (always on), preferences, analytics (opt-out model, default enabled, `Decline` disables non-essential).
+
+`server.privacy.retention.period` accepts one string for every language or a language map. Resolve the request language first, then the map's `default`; an empty or unset value uses translated `privacy.retention.period` text.
+
+**Early configuration read.** Before binding privileged sockets, read the HTTP listener settings and each raw-protocol listener's `{proto}.enabled`, `{proto}.address`, `{proto}.port` (including its `{PROTO}_PORT` override) from the merged config. Do not open `secrets.yml` during this peek.
 
 **Cache.** Optional, defaults to in-process `memory`; `valkey`/`redis` supported via `url` or discrete `host/port/password` fields (url wins if both set). Used for sessions, rate-limit counters, optional response caching. Key prefix defaults to `api:`.
 

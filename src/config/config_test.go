@@ -213,12 +213,28 @@ func TestPrivacyDefaultsMatchProjectDataHandling(t *testing.T) {
 
 	assert.False(t, privacy.Retention.ExportAvailable)
 	assert.False(t, privacy.Retention.DeletionAvailable)
-	assert.Contains(t, privacy.Retention.Period, "not retained as user records")
+	assert.Empty(t, privacy.Retention.PeriodFor("en"))
 	assert.Contains(t, privacy.DataCollectionContent(), "not retained as user records")
 	assert.Contains(t, privacy.DataUsageContent(), "does not create user accounts")
 
 	privacy.Data.Sold = true
 	assert.Contains(t, privacy.DataUsageContent(), "may be shared or sold")
+}
+
+func TestPrivacyRetentionPeriodSupportsLanguageMapAndFallback(t *testing.T) {
+	period := PrivacyRetentionConfig{Period: map[string]any{
+		"en":      "English retention text",
+		"fr":      "Texte de conservation",
+		"default": "Fallback retention text",
+	}}
+	assert.Equal(t, "English retention text", period.PeriodFor("en"))
+	assert.Equal(t, "Texte de conservation", period.PeriodFor("fr"))
+	assert.Equal(t, "Fallback retention text", period.PeriodFor("ja"))
+	assert.Equal(t, "Same in every language", (PrivacyRetentionConfig{Period: "Same in every language"}).PeriodFor("ja"))
+	var fromYAML PrivacyRetentionConfig
+	require.NoError(t, yaml.Unmarshal([]byte("period:\n  fr: Texte configure\n  default: Fallback\n"), &fromYAML))
+	assert.Equal(t, "Texte configure", fromYAML.PeriodFor("fr"))
+	assert.Equal(t, "Fallback", fromYAML.PeriodFor("de"))
 }
 
 func TestI18NConfigKeepsRequiredLanguagesAndAllowsOptionalNarrowing(t *testing.T) {

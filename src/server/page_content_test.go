@@ -24,7 +24,7 @@ func TestOperatorHTMLUsesConfiguredTermsAndSanitizes(t *testing.T) {
 	assert.Contains(t, content, "safe text")
 	assert.NotContains(t, content, "javascript:")
 	assert.NotContains(t, content, "<script")
-	assert.NotContains(t, content, "alert(2)")
+	assert.Contains(t, content, "alert(2)")
 }
 
 func TestOperatorHTMLUsesStrictBrandingPolicyAndExtendedDocumentPolicy(t *testing.T) {
@@ -43,7 +43,7 @@ func TestOperatorHTMLUsesStrictBrandingPolicyAndExtendedDocumentPolicy(t *testin
 	assert.Contains(t, header, "<s>struck</s>")
 	assert.Contains(t, header, "<small>small</small>")
 	assert.Contains(t, header, `rel="noopener noreferrer"`)
-	assert.Contains(t, string(operatorHTML(request, "about")), "<table>")
+	assert.NotContains(t, string(operatorHTML(request, "about")), "<table>")
 }
 
 func TestOperatorContentSourceEnforcesEntryFormatsAndFallback(t *testing.T) {

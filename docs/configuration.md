@@ -117,7 +117,7 @@ server:
 
 ## Branding and page content
 
-Branding and public-page extensions belong in `{config_dir}/yaml.d/branding.yml`. The server sanitizes every configured fragment before rendering it. `header` and `footer` accept HTML only; `about`, `privacy`, and `terms` accept Markdown, HTML, or plain text. Language maps use the request language, then `default`. Oversized or invalid entries are ignored and the built-in content is used.
+Branding and public-page extensions belong in `{config_dir}/yaml.d/branding.yml`. The server sanitizes every configured fragment before rendering it. `header` and `footer` accept HTML only; `about`, `privacy`, and `terms` accept Markdown, HTML, or plain text. Language maps use the request language, then `default`. Oversized or invalid entries are ignored and the built-in content is used. `server.privacy.retention.period` accepts one string for all languages or a language map with an optional `default` value; an empty or unset value uses the translated built-in statement.
 
 ```yaml
 server:
@@ -499,7 +499,7 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.privacy.data.stored_on_server` | `bool` |
 | `server.privacy.retention.deletion_available` | `bool` |
 | `server.privacy.retention.export_available` | `bool` |
-| `server.privacy.retention.period` | `string` |
+| `server.privacy.retention.period` | `string` or language map (`en`, `es`, `fr`, `de`, `it`, `ar`, `zh`, `ja`, optional `default`) |
 | `server.privacy.third_party.services.data_sent` | `string` |
 | `server.privacy.third_party.services.name` | `string` |
 | `server.privacy.third_party.services.policy_url` | `string` |

@@ -215,6 +215,10 @@
 }
 
 @media (min-width: 768px) {
+  .nav-checkbox {
+    display: none;
+  }
+
   .nav-toggle {
     display: none;
   }

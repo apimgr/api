@@ -20,6 +20,8 @@
 - Never invent a different error shape per endpoint; never put status code in the
   body; never use bare `{"error": "..."}` with no `ok`/code; never add ad-hoc
   top-level fields like `reason`/`retry_after` (use `details` or HTTP headers).
+  The GraphQL endpoint is the specified exception and uses the standard GraphQL
+  response map, with execution error codes in `errors[].extensions.code`.
 - Never manually edit generated OpenAPI JSON or GraphQL schema files, and never
   place swagger/graphql files outside `src/swagger/` / `src/graphql/`.
 - Never serve OpenAPI as YAML or add a `.json` suffix route — JSON only, fixed path.
@@ -53,7 +55,8 @@
   for CLI tools, no-JS HTML for text browsers, JSON for our own CLI client).
 - Always wrap success responses as `{"ok": true, "data": {...}}` and errors as
   `{"ok": false, "error": "CODE", "message": "...", "details": {}}` — identical
-  shape everywhere, HTTP status carries the status code.
+  shape everywhere, HTTP status carries the status code, except GraphQL which
+  follows the response rules below.
 - Always paginate list responses with `{"data": [...], "pagination": {"page",
   "limit" (default 250), "total", "pages"}}`.
 - Always keep Swagger and GraphQL specs generated from code at build time and in
@@ -118,5 +121,7 @@
 - **Startup banner:** responsive to terminal width (full ASCII+icons ≥80 cols,
   icons+text 60-79, minimal 40-59, single line <40, plain text under NO_COLOR/
   TERM=dumb); logs themselves are always raw plain text regardless of banner mode.
+
+**GraphQL response exception (PART 13/14).** Success uses `{"data": {...}}`; execution errors use `{"data": null or partial, "errors": [{"message": ..., "extensions": {"code": ...}}]}` with HTTP 200. Pre-execution failures such as authentication, rate limiting, or malformed JSON retain the canonical error envelope and HTTP status.
 
 For complete details, see AI.md PART 13, 14, 15

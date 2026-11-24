@@ -31,6 +31,8 @@ import (
 	"unicode"
 
 	"github.com/google/uuid"
+	"github.com/microcosm-cc/bluemonday"
+	"github.com/yuin/goldmark"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -1071,55 +1073,39 @@ func RegexExplain(pattern string) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
+var markdownSanitizer = func() *bluemonday.Policy {
+	policy := bluemonday.NewPolicy()
+	policy.AllowElements("p", "br", "hr", "span", "div", "strong", "b", "em", "i", "u", "s", "small", "a", "img", "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table", "thead", "tbody", "tr", "th", "td", "pre", "code", "blockquote", "dl", "dt", "dd", "sup", "sub")
+	policy.AllowAttrs("href", "target", "rel").OnElements("a")
+	policy.AllowAttrs("src", "alt").OnElements("img")
+	policy.AllowAttrs("class").OnElements("code")
+	policy.AllowRelativeURLs(true)
+	policy.AllowURLSchemes("http", "https", "mailto")
+	return policy
+}()
+
 var (
 	mdHeaderRe = regexp.MustCompile(`(?m)^(#{1,6})\s+(.+)$`)
 	mdBoldRe   = regexp.MustCompile(`\*\*(.+?)\*\*`)
 	mdItalicRe = regexp.MustCompile(`\*(.+?)\*`)
 	mdCodeRe   = regexp.MustCompile("`([^`]+)`")
-	mdLinkRe   = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
 	mdQuoteRe  = regexp.MustCompile(`(?m)^>\s?`)
 	mdListRe   = regexp.MustCompile(`(?m)^[-*+]\s+`)
 )
 
-// MarkdownToHTML converts a common subset of Markdown (headers, bold,
-// italic, inline code, links and unordered lists) to HTML.
+// MarkdownToHTML renders CommonMark without raw HTML passthrough and sanitizes
+// the result before it can be served as trusted template content.
 func MarkdownToHTML(md string) string {
-	out := md
-
-	out = mdHeaderRe.ReplaceAllStringFunc(out, func(m string) string {
-		parts := mdHeaderRe.FindStringSubmatch(m)
-		level := len(parts[1])
-		return fmt.Sprintf("<h%d>%s</h%d>", level, parts[2], level)
-	})
-	out = mdBoldRe.ReplaceAllString(out, "<strong>$1</strong>")
-	out = mdItalicRe.ReplaceAllString(out, "<em>$1</em>")
-	out = mdCodeRe.ReplaceAllString(out, "<code>$1</code>")
-	out = mdLinkRe.ReplaceAllString(out, `<a href="$2">$1</a>`)
-
-	lines := strings.Split(out, "\n")
-	var result []string
-	inList := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "- ") {
-			if !inList {
-				result = append(result, "<ul>")
-				inList = true
-			}
-			result = append(result, "<li>"+strings.TrimPrefix(trimmed, "- ")+"</li>")
-			continue
-		}
-		if inList {
-			result = append(result, "</ul>")
-			inList = false
-		}
-		result = append(result, line)
+	var rendered bytes.Buffer
+	if err := goldmark.New().Convert([]byte(md), &rendered); err != nil {
+		return SanitizeHTML(html.EscapeString(md))
 	}
-	if inList {
-		result = append(result, "</ul>")
-	}
+	return SanitizeHTML(rendered.String())
+}
 
-	return strings.Join(result, "\n")
+// SanitizeHTML applies the shared allow-list policy to operator-supplied HTML.
+func SanitizeHTML(value string) string {
+	return markdownSanitizer.Sanitize(value)
 }
 
 // MarkdownTOC builds a nested table-of-contents list from Markdown headers.

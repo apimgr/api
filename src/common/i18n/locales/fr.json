@@ -98,7 +98,8 @@
     "status": "État",
     "skip_to_content": "Aller au contenu principal",
     "skip_to_navigation": "Aller à la navigation",
-    "main_navigation": "Navigation principale"
+    "main_navigation": "Navigation principale",
+    "toggle_navigation": "Basculer la navigation"
   },
   "health": {
     "title": "État du serveur",
@@ -389,6 +390,9 @@
     "all_data_stored": "Toutes vos données sont stockées sur nos serveurs.",
     "when_shared": "Quand les données peuvent être partagées",
     "data_retention": "Conservation des données",
+    "retention": {
+      "period": "Les ressources que vous créez sont conservées jusqu’à leur expiration ou jusqu’à leur suppression avec votre jeton de propriétaire. Les préférences sont stockées uniquement dans les cookies de votre navigateur. Les journaux opérationnels sont conservés jusqu’à 30 jours. Les données analytiques anonymisées peuvent être conservées jusqu’à 12 mois."
+    },
     "your_rights": "Vos droits",
     "right_access": "Accès",
     "right_export": "Exportation",

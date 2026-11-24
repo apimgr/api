@@ -58,7 +58,7 @@
 - Content for `/server/about`, `/server/help`, etc. MUST be sourced from IDEA.md — never generic placeholders
 - Cookie consent banner always shown (server-rendered, visible with zero JS) until a valid `cookie_consent` cookie exists; granular categories (essential/preferences/analytics)
 - CSRF: stateless double-submit cookie pattern (`csrf_token` cookie `SameSite=Strict`, not HttpOnly, matched against header/form field in constant time) for all mutating browser (non-Bearer) requests
-- Sanitize any operator-supplied custom HTML (footer branding) with a strict allow-list (bluemonday-style) — strip scripts, event handlers, `style` attr, iframes, forms
+- Render every Markdown surface with Goldmark CommonMark with raw HTML passthrough disabled, then sanitize its output with bluemonday. Apply the bluemonday allow-list to operator-supplied HTML too.
 
 ## Key Rules Summary
 - **Route structure**: `/api/{v}/{resource}` maps to `/{resource}` frontend equivalents; route priority: API > healthz > static > `/server/*` > reserved names > project catch-all/slug routes
@@ -68,7 +68,7 @@
 - **Container**: 100% width/1rem padding mobile → 90% width, max-width 1400px, centered at 768px+
 - **Responsive table pattern**: wrap in `.table-wrapper` with horizontal scroll on mobile, `min-width` forcing scroll until 768px
 - **Definition lists** (`<dl>`) stack on mobile, become 2-column (`auto 1fr`) at 768px+
-- **Mobile nav**: CSS-only hamburger via hidden checkbox + `:checked ~` selectors, no JS; menu slides in from right; theme toggle always stays in header, never inside the menu; only show hamburger if links overflow
+- **Mobile nav**: CSS-only hamburger via a visually hidden but focusable checkbox + `:checked ~` selectors, no JS; give it an ARIA label and draw its visible focus ring on the hamburger. Hide the checkbox from desktop focus order; menu slides in from right; theme toggle stays in the header; show hamburger when links overflow.
 - **No fixed/sticky elements**: header/nav/footer scroll with page; footer always at bottom via flex `min-height:100vh` + `main{flex:1}`
 - **Print styles**: hide nav/header/footer/buttons/toasts/modals; reset to white background/black text; show URL after external links; avoid page breaks inside `pre`/tables/images
 - **Templates**: layout (`layout/public.tmpl`) → partials (`head`, `header`, `nav`, `footer`, `scripts`) → page content; mandatory partials must exist; app-specific partials only when reused 2+ places
@@ -88,7 +88,7 @@
 - **Branding**: cosmetic only (title, logo, footer, SEO tags) — never changes system paths/binary/service names; remote image fetch requires HTTPS-only, SSRF-safe (no private/loopback/internal IPs), size/type/timeout limits, redirect re-validation
 - **Announcements**: config-driven (`web.announcements`), rendered via Site Banner, multiple stack in config order, per-item `start`/`end` ISO 8601 window, dismissal by cookie keyed on announcement `id`
 - **Standard pages required**: `/server/about`, `/server/privacy`, `/server/contact`, `/server/help`, `/server/terms`, `/server/healthz`, plus matching JSON API equivalents under `/api/{v}/server/*`
-- **Privacy page**: auto-generated sections from `server.privacy` config (cookies, data collection/usage/security/storage/retention, third parties, rights); CCPA "Do Not Sell" section only rendered when `data.sold=true`
+- **Privacy page**: auto-generated sections from `server.privacy` config (cookies, data collection/usage/security/storage/retention, third parties, rights); CCPA "Do Not Sell" section only rendered when `data.sold=true`. `retention.period` may be a single string or per-language map (resolved language, then `default`); empty/unset uses translated `privacy.retention.period`.
 - **Contact page**: submits to `server.contact.general.email` (fallback `admin.email`); must render fixed Security Issues and Abuse Reports sections as specified
 - **i18n**: `lang` cookie (BCP 47 tag) drives `<html lang>`/`dir`, falls back to `Accept-Language` header, default `en`
 

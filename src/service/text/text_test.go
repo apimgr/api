@@ -180,6 +180,21 @@ func TestMarkdownToHTML(t *testing.T) {
 	}
 }
 
+func TestMarkdownToHTMLRendersCommonMarkAndSanitizesOutput(t *testing.T) {
+	input := "# Title\n\n- one\n- two\n\n```go\nfmt.Println(1)\n```\n\n<a href=\"javascript:alert(1)\" onclick=\"alert(1)\">raw</a><script>alert(1)</script>"
+	out := MarkdownToHTML(input)
+	for _, want := range []string{"<ul>", "<li>one</li>", "<pre><code class=\"language-go\">", "fmt.Println(1)", "rawalert(1)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("MarkdownToHTML() = %q, missing %q", out, want)
+		}
+	}
+	for _, forbidden := range []string{"<script", "onclick=", "javascript:"} {
+		if strings.Contains(out, forbidden) {
+			t.Errorf("MarkdownToHTML() retained unsafe content %q: %s", forbidden, out)
+		}
+	}
+}
+
 func TestBBCodeToHTML(t *testing.T) {
 	out := BBCodeToHTML("[b]bold[/b] [i]italic[/i]")
 	if !strings.Contains(out, "<strong>bold</strong>") || !strings.Contains(out, "<em>italic</em>") {

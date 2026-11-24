@@ -17,6 +17,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.5
 	github.com/google/open-location-code/go v0.0.0-20250620134813-83986da0156b
 	github.com/google/uuid v1.6.0
+	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/miekg/dns v1.1.73
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pires/go-proxyproto v0.16.0
@@ -25,6 +26,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/stretchr/testify v1.12.1
 	github.com/tursodatabase/libsql-client-go v0.0.0-20260528064733-9d5d30a29a60
+	github.com/yuin/goldmark v1.8.7
 	github.com/ziprecruiter/h3-go v0.5.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
@@ -76,6 +78,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.6 // indirect
 	github.com/aws/smithy-go v1.28.7 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/aziontech/azionapi-go-sdk v0.148.0 // indirect
 	github.com/baidubce/bce-sdk-go v0.9.277 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
@@ -137,6 +140,7 @@ require (
 	github.com/gophercloud/gophercloud v1.14.1 // indirect
 	github.com/gophercloud/gophercloud/v2 v2.15.0 // indirect
 	github.com/gophercloud/utils/v2 v2.0.0-20260922174841-b4759ea0529b // indirect
+	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect

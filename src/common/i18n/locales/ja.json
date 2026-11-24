@@ -98,7 +98,8 @@
     "status": "ステータス",
     "skip_to_content": "コンテンツへスキップ",
     "skip_to_navigation": "ナビゲーションへスキップ",
-    "main_navigation": "メインナビゲーション"
+    "main_navigation": "メインナビゲーション",
+    "toggle_navigation": "ナビゲーションを切り替え"
   },
   "health": {
     "title": "サーバーの状態",
@@ -389,6 +390,9 @@
     "all_data_stored": "お客様のすべてのデータは当社のサーバーに保存されます。",
     "when_shared": "データが共有される場合",
     "data_retention": "データ保持期間",
+    "retention": {
+      "period": "作成したリソースは、有効期限が切れるか、所有者トークンで削除するまで保持されます。設定はブラウザーの Cookie のみに保存されます。運用ログは最大 30 日間保持されます。匿名化された分析データは最大 12 か月間保持される場合があります。"
+    },
     "your_rights": "お客様の権利",
     "right_access": "アクセス権",
     "right_export": "エクスポート権",

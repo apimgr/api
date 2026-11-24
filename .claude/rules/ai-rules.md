@@ -37,7 +37,7 @@
 
 ## Key Rules Summary
 - **Session start**: read existing CLAUDE.md/.claude/rules, migrate stray content into IDEA.md, create/update the 13 `.claude/rules/*.md` files if missing or stale, check TODO.AI.md/TODO.md.
-- **File hierarchy**: SPEC.md > AI.md > global CLAUDE.md. AI.md = HOW (read-only), IDEA.md = WHAT (editable, must follow AI.md), SPEC.md = optional project-specific override.
+- **File hierarchy**: SPEC.md > AI.md > global CLAUDE.md. AI.md = HOW (read-only), IDEA.md = WHAT (editable, must follow AI.md), SPEC.md = optional project-specific override. Every project ships its companion CLI client; PART 32 is mandatory.
 - **Mandatory workflow**: identify relevant PARTs → read them fully → implement exactly → re-check every 3-5 changes for drift.
 - **Verification checklist before "done"**: read files, searched patterns, tested changes, verified output, no guessing, no rushing.
 - **Red flags** ("this is probably what they meant", "I'll just assume", "let me quickly...") mean STOP and ask/test/slow down.

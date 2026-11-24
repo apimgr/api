@@ -51,14 +51,15 @@ type Request struct {
 
 // Response represents a GraphQL response
 type Response struct {
-	Data   interface{} `json:"data,omitempty"`
+	Data   interface{} `json:"data"`
 	Errors []Error     `json:"errors,omitempty"`
 }
 
 // Error represents a GraphQL error
 type Error struct {
-	Message string   `json:"message"`
-	Path    []string `json:"path,omitempty"`
+	Message    string            `json:"message"`
+	Path       []string          `json:"path,omitempty"`
+	Extensions map[string]string `json:"extensions"`
 }
 
 // BuildSchema creates the GraphQL schema for the API
@@ -346,13 +347,13 @@ type DateTimeResult {
 // HandleQuery handles GraphQL queries
 func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeTransportError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
 		return
 	}
 
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		writeTransportError(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON")
 		return
 	}
 
@@ -361,7 +362,7 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	body, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
 		slog.Error("graphql: failed to marshal response", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeTransportError(w, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "Internal server error")
 		return
 	}
 	body = append(body, '\n')
@@ -372,13 +373,24 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func writeTransportError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":      false,
+		"error":   code,
+		"message": message,
+		"details": map[string]interface{}{},
+	})
+}
+
 // executeQuery parses and resolves a GraphQL query/mutation against the
 // schema built by BuildSchema(), returning real resolver output rather than
 // pattern-matched placeholders.
 func executeQuery(query string, variables map[string]interface{}) Response {
 	op, err := newDocParser(query).parseDocument()
 	if err != nil {
-		return Response{Errors: []Error{{Message: err.Error()}}}
+		return Response{Errors: []Error{{Message: err.Error(), Extensions: map[string]string{"code": "GRAPHQL_PARSE_FAILED"}}}}
 	}
 
 	schema := BuildSchema()
@@ -400,8 +412,9 @@ func executeQuery(query string, variables map[string]interface{}) Response {
 		field, ok := root.Fields[sel.Name]
 		if !ok {
 			errs = append(errs, Error{
-				Message: fmt.Sprintf("Cannot query field %q on type %q.", sel.Name, rootName),
-				Path:    []string{sel.Name},
+				Message:    fmt.Sprintf("Cannot query field %q on type %q.", sel.Name, rootName),
+				Path:       []string{sel.Name},
+				Extensions: map[string]string{"code": "GRAPHQL_VALIDATION_FAILED"},
 			})
 			continue
 		}
@@ -413,7 +426,7 @@ func executeQuery(query string, variables map[string]interface{}) Response {
 
 		result, err := field.Resolve(args)
 		if err != nil {
-			errs = append(errs, Error{Message: err.Error(), Path: []string{sel.Name}})
+			errs = append(errs, Error{Message: err.Error(), Path: []string{sel.Name}, Extensions: map[string]string{"code": "INTERNAL_SERVER_ERROR"}})
 			continue
 		}
 

@@ -795,6 +795,7 @@ type PageData struct {
 	RateLimitRequests      int
 	RateLimitWindow        int
 	Privacy                config.PrivacyConfig
+	PrivacyRetentionPeriod string
 	PrivacyCollection      template.HTML
 	PrivacyUsage           template.HTML
 	PrivacySecurity        template.HTML
@@ -869,6 +870,7 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		CSRFToken:              CSRFTokenFromContext(r.Context()),
 		OwnerTokenCookieExists: requestHasOwnerTokenCookie(r),
 		Privacy:                cfg.Server.Privacy,
+		PrivacyRetentionPeriod: cfg.Server.Privacy.Retention.PeriodFor(lang),
 		PrivacyCollection:      template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataCollectionContent())),
 		PrivacyUsage:           template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataUsageContent())),
 		PrivacySecurity:        template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataSecurityContent())),

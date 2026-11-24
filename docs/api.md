@@ -393,6 +393,14 @@ Frontend pages default to HTML, explicit `Accept: text/plain` and curl-style HTT
 
 ## Interactive references
 
+The GraphQL endpoint follows the GraphQL response format rather than the REST
+`ok` envelope. Successful requests return `{"data": ...}`. Parse, validation,
+and execution errors return HTTP 200 with `data` set to `null` or partial data
+and an `errors` array whose entries include `extensions.code`. Requests rejected
+before GraphQL execution, such as malformed JSON or transport/authentication
+failures, use the standard API error envelope and their corresponding HTTP
+status.
+
 - OpenAPI UI: `/server/docs/swagger`
 - OpenAPI JSON: `/api/swagger`
 - GraphQL UI: `/server/docs/graphql`

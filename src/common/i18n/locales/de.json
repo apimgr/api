@@ -98,7 +98,8 @@
     "status": "Status",
     "skip_to_content": "Zum Hauptinhalt springen",
     "skip_to_navigation": "Zur Navigation springen",
-    "main_navigation": "Hauptnavigation"
+    "main_navigation": "Hauptnavigation",
+    "toggle_navigation": "Navigation umschalten"
   },
   "health": {
     "title": "Serverstatus",
@@ -389,6 +390,9 @@
     "all_data_stored": "Alle Ihre Daten werden auf unseren Servern gespeichert.",
     "when_shared": "Wann Daten weitergegeben werden können",
     "data_retention": "Datenspeicherfrist",
+    "retention": {
+      "period": "Von Ihnen erstellte Ressourcen bleiben gespeichert, bis sie ablaufen oder mit Ihrem Eigentümer-Token gelöscht werden. Einstellungen werden nur in Cookies in Ihrem Browser gespeichert. Betriebsprotokolle werden bis zu 30 Tage aufbewahrt. Anonymisierte Analysedaten können bis zu 12 Monate aufbewahrt werden."
+    },
     "your_rights": "Ihre Rechte",
     "right_access": "Auskunft",
     "right_export": "Export",

@@ -98,7 +98,8 @@
     "status": "Status",
     "skip_to_content": "Skip to main content",
     "skip_to_navigation": "Skip to navigation",
-    "main_navigation": "Main navigation"
+    "main_navigation": "Main navigation",
+    "toggle_navigation": "Toggle navigation"
   },
   "health": {
     "title": "Health Status",
@@ -389,6 +390,9 @@
     "all_data_stored": "All of your data is stored on our servers.",
     "when_shared": "When Data May Be Shared",
     "data_retention": "Data Retention",
+    "retention": {
+      "period": "Resources you create are kept until they expire or you delete them with your owner token. Preferences are stored only in cookies in your browser. Operational logs are kept for up to 30 days. Anonymized analytics data may be retained for up to 12 months."
+    },
     "your_rights": "Your Rights",
     "right_access": "Access",
     "right_export": "Export",

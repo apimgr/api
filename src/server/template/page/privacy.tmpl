@@ -68,7 +68,7 @@
 
   <section id="data-retention" class="section-card" aria-labelledby="privacy-retention">
     <h2 id="privacy-retention">{{t .Lang "privacy.data_retention"}}</h2>
-    <p>{{.Privacy.Retention.Period}}</p>
+    <p>{{if .PrivacyRetentionPeriod}}{{.PrivacyRetentionPeriod}}{{else}}{{t .Lang "privacy.retention.period"}}{{end}}</p>
   </section>
 
   <section id="your-rights" class="section-card" aria-labelledby="privacy-rights">

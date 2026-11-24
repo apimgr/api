@@ -67,7 +67,7 @@
 - Timezone default `America/New_York`, configurable via `server.scheduler.timezone`
 - CLI: `scheduler list`, `scheduler show <id>`, `scheduler run <id>`, `scheduler enable/disable <id>`, `scheduler history <id>`
 - Implementation: Go's time/ticker (no external cron libs), database-backed state, graceful shutdown, audit logging of every execution, notifications on failure
-- Backup retention settings live under `scheduler.tasks.backup_daily.retention` (max_backups, keep_weekly/monthly/yearly, max_total_size) — see Backup & Restore
+- Backup retention settings live only under `server.backup.retention` (max_backups, keep_weekly/monthly/yearly, max_total_size); retention is not a scheduler task key — see Backup & Restore
 
 ### GeoIP
 - Built-in support required, using `sapics/ip-location-db` MMDB databases — never embedded in binary, downloaded on first run, updated via scheduler (weekly default)

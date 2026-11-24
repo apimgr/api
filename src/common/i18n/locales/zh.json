@@ -98,7 +98,8 @@
     "status": "状态",
     "skip_to_content": "跳转到主要内容",
     "skip_to_navigation": "跳转到导航",
-    "main_navigation": "主导航"
+    "main_navigation": "主导航",
+    "toggle_navigation": "切换导航"
   },
   "health": {
     "title": "服务器状态",
@@ -389,6 +390,9 @@
     "all_data_stored": "您的所有数据都存储在我们的服务器上。",
     "when_shared": "数据在何种情况下可能被共享",
     "data_retention": "数据保留",
+    "retention": {
+      "period": "您创建的资源会保留到期，或直到您使用所有者令牌将其删除。偏好设置仅存储在您浏览器的 Cookie 中。运行日志最多保留 30 天。匿名分析数据最多可保留 12 个月。"
+    },
     "your_rights": "您的权利",
     "right_access": "访问权",
     "right_export": "导出权",

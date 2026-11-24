@@ -31,6 +31,7 @@ This software includes the following third-party libraries:
 | github.com/ProtonMail/go-crypto | v1.5.2 | BSD-3-Clause | 2009 The Go Authors |
 | github.com/antlr4-go/antlr/v4 | v4.13.0 | BSD-3-Clause | 2012-2023 The ANTLR Project. All rights reserved |
 | github.com/atotto/clipboard | v0.1.4 | BSD-3-Clause | 2013 Ato Araki. All rights reserved |
+| github.com/aymerick/douceur | v0.2.0 | MIT | 2015 Aymerick JEHANNE |
 | github.com/aymanbagabas/go-osc52/v2 | v2.0.1 | MIT | 2022 Ayman Bagabas |
 | github.com/beorn7/perks | v1.0.1 | MIT | 2013 Blake Mizerany |
 | github.com/biter777/countries | v1.7.5 | BSD-2-Clause | 2019 Biter, biter2004@yandex.ru |
@@ -51,6 +52,7 @@ This software includes the following third-party libraries:
 | github.com/cretz/bine | v0.2.0 | MIT | 2018 Chad Retz |
 | github.com/dustin/go-humanize | v1.0.1 | MIT | 2005-2008  Dustin Sallings <dustin@spy.net> |
 | github.com/gabriel-vasile/mimetype | v1.4.16 | MIT | 2018 Gabriel Vasile |
+| github.com/gorilla/css | v1.0.1 | BSD-3-Clause | 2023 The Gorilla Authors. All rights reserved |
 | github.com/gorilla/websocket | v1.5.4-0.20240701034025-d67f41855da4 | BSD-2-Clause | 2013 The Gorilla WebSocket Authors. All rights reserved |
 | github.com/go-chi/chi/v5 | v5.1.0 | MIT | 2015-present Peter Kieltyka, Google Inc. |
 | github.com/go-playground/locales | v0.14.2 | MIT | 2016 Go Playground |
@@ -62,6 +64,7 @@ This software includes the following third-party libraries:
 | github.com/lucasb-eyer/go-colorful | v1.3.0 | MIT | 2013 Lucas Beyer |
 | github.com/mattn/go-isatty | v0.0.24 | MIT | Yasuhiro MATSUMOTO |
 | github.com/mattn/go-runewidth | v0.0.19 | MIT | 2016 Yasuhiro Matsumoto |
+| github.com/microcosm-cc/bluemonday | v1.0.27 | BSD-3-Clause | 2014 David Kitchen |
 | github.com/muesli/ansi | v0.0.0-20230316100256-276c6243b2f6 | MIT | 2021 Christian Muehlhaeuser |
 | github.com/muesli/cancelreader | v0.2.2 | MIT | 2022 Erik Geiser and Christian Muehlhaeuser |
 | github.com/muesli/termenv | v0.16.0 | MIT | 2019 Christian Muehlhaeuser |
@@ -80,6 +83,7 @@ This software includes the following third-party libraries:
 | github.com/tklauser/numcpus | v0.6.1 | Apache-2.0 | 2018 Tobias Klauser |
 | github.com/tursodatabase/libsql-client-go | v0.0.0-20260528064733-9d5d30a29a60 | MIT | 2023 Turso / ChiselStrike, Inc. |
 | github.com/xo/terminfo | v0.0.0-20220910002029-abceb7e1c41e | MIT | 2016 Anmol Sethi |
+| github.com/yuin/goldmark | v1.8.7 | MIT | 2019 Yusuke Inuzuka |
 | github.com/ziprecruiter/h3-go | v0.5.0 | Apache-2.0 | ZipRecruiter, Inc. |
 | go.opentelemetry.io/auto/sdk | v1.2.1 | Apache-2.0 | 2019 The OpenTelemetry Authors |
 | go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp | v0.69.0 | Apache-2.0 | 2019 The OpenTelemetry Authors |

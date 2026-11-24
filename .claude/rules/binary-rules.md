@@ -47,7 +47,7 @@
 
 **PID files (PART 8):** Enabled by default, skipped entirely in containers. Stale/PID-reuse detection required via exact binary-name match (`/proc/{pid}/exe` on Linux, `ps`/Windows API elsewhere).
 
-**Startup sequence (PART 8):** Immediate-exit flags → service/maintenance/update subcommands → root setup (create user/dirs/chown/perms, determine ports, bind privileged ports) → drop privileges → user-mode directory setup → logging → PID file → load config (first-run generates `server.yml`) → DB init → scheduler start → Tor start (optional) → HTTP listeners → signal handlers → ready.
+**Startup sequence (PART 8):** Immediate-exit flags → service/maintenance/update subcommands → root setup (create user/dirs/chown/perms, determine ports, bind privileged ports) → drop privileges → user-mode directory setup → logging → PID file → load config (first-run generates `server.yml`) → DB init → scheduler start → Tor start (optional) → HTTP and raw-protocol listeners → signal handlers → ready. The early config peek reads HTTP listener settings and each raw listener's `{proto}.enabled`, `{proto}.address`, and `{proto}.port` plus `{PROTO}_PORT`; it never opens `secrets.yml`.
 
 **Daemonization (PART 8):** Foreground by default. `--service start` always auto-detects the manager (systemd/launchd/runit/s6/container/docker → foreground; sysv/rcd → daemonize) and ignores the `daemonize` config. Manual `--daemon` forks+`setsid()` on Unix; unsupported on Windows (use Windows Service instead).
 

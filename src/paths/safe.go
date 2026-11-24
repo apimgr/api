@@ -19,6 +19,7 @@ var (
 	// ErrPathTooLong is returned when a path exceeds the supported limit.
 	ErrPathTooLong   = errors.New("path exceeds maximum length")
 	validPathSegment = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	validFileSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 )
 
 // SafePath validates and normalizes an application-relative URL or route path.
@@ -49,6 +50,28 @@ func SafePath(input string) (string, error) {
 	return strings.Trim(path.Clean(input), "/"), nil
 }
 
+// SafeResourcePath validates relative file and resource names without
+// lowercasing or rewriting their case and extensions.
+func SafeResourcePath(input string) (string, error) {
+	if len(input) > 2048 || strings.Contains(input, "..") || strings.Contains(input, `\`) {
+		return "", ErrPathTraversal
+	}
+	var kept []string
+	for _, segment := range strings.Split(strings.Trim(input, "/"), "/") {
+		if segment == "" {
+			continue
+		}
+		if len(segment) > 255 || !validFileSegment.MatchString(segment) {
+			return "", ErrInvalidPath
+		}
+		kept = append(kept, segment)
+	}
+	if len(kept) == 0 {
+		return "", ErrInvalidPath
+	}
+	return strings.Join(kept, "/"), nil
+}
+
 // SafeDirPath validates a filesystem directory override without applying URL
 // segment restrictions. Relative paths are resolved against the current
 // working directory so startup uses one stable absolute path.
@@ -77,7 +100,7 @@ func SafeDirPath(input string) (string, error) {
 // SafeFilePath joins a validated relative path to baseDir and verifies that
 // the resulting absolute path remains inside the base directory.
 func SafeFilePath(baseDir, userPath string) (string, error) {
-	safe, err := SafePath(userPath)
+	safe, err := SafeResourcePath(userPath)
 	if err != nil {
 		return "", err
 	}

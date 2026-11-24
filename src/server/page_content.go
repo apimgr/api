@@ -60,7 +60,7 @@ func operatorHTML(r *http.Request, name string) template.HTML {
 	}
 	strict := name == "header" || name == "footer"
 	rendered := replacePageContentVariables(body, cfg)
-	sanitized := sanitizeOperatorContent(rendered, strict)
+	sanitized := text.SanitizeHTML(sanitizeOperatorContent(rendered, strict))
 	logPageContentPreview(name, raw, rendered, sanitized)
 	return template.HTML(sanitized)
 }
