@@ -9,6 +9,10 @@ Use the method shown in the route table. Path and query values are supplied in t
 ## Shared server endpoints
 
 - `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health.
+- `GET /server/about`, `/server/privacy`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
+- `GET /api/{api_version}/server/terms`, `/server/security`, and `/server/security/policy` return JSON mirrors of the public terms and security information.
+- `GET /server/preferences` and `POST /server/preferences` read and update guest preferences in browser cookies; `GET`/`POST /server/preferences/sync` and `GET /server/preferences/sync/import` transfer preferences between browsers without storing them server-side.
+- `GET`/`POST /api/{api_version}/server/preferences` read and partially update guest preferences; `GET /api/{api_version}/server/preferences/sync` exports them and `GET /api/{api_version}/server/preferences/sync/import` imports them.
 - `GET /api/healthz` is the direct unversioned health alias.
 - `GET /api/swagger` serves the generated OpenAPI JSON; the versioned server route is `/api/{api_version}/server/swagger`.
 - `POST /api/graphql` and `POST /api/{api_version}/server/graphql` serve GraphQL; `/server/docs/graphql` is the browser interface.

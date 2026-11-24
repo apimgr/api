@@ -71,7 +71,7 @@ First-run-only values are written to configuration and ignored on later starts. 
 
 ## Security and public endpoints
 
-`web.security` configures the RFC 9116 `security.txt` contact channels, expiry, and disclosure policy. Security-report storage/encryption settings are under `server.security`. `web.well_known` controls optional standards endpoints; unknown well-known paths return `404`. Reverse-proxy-derived URLs and origins are trusted only when the immediate peer is allowed by `server.trusted_proxies`.
+`web.security` configures the RFC 9116 repository report URL, expiry, and disclosure policy. The secondary security contact is configured under `server.contact.security`; security-report storage/encryption settings are under `server.security`. `web.well_known` controls optional standards endpoints; unknown well-known paths return `404`. Reverse-proxy-derived URLs and origins are trusted only when the immediate peer is allowed by `server.trusted_proxies`.
 
 See [Security](security.md) for the public reporting endpoints and [Integrations](integrations.md) for discovery settings.
 

@@ -59,17 +59,15 @@ Full license texts available at: https://spdx.org/licenses/
 
 ## Third-Party Data Attribution
 
-The GeoIP databases downloaded at runtime are licensed CC BY 4.0. Attribution
-is a license condition.
+GeoIP databases are downloaded at runtime from sapics/ip-location-db. The City
+database is licensed CC BY 4.0; ASN and Country databases are PDDL.
 
 | Database | License | Underlying Source(s) |
 | --- | --- | --- |
-| ASN | CC BY 4.0 | RouteViews, NRO, DB-IP (merged) |
-| Country | CC BY 4.0 | NRO (RIR whois + geofeed + ASN data, merged) |
+| ASN | PDDL | iptoasn.com (RouteViews / RIR data) |
+| Country | PDDL | iptoasn.com (RIR data) |
 | City | CC BY 4.0 | DB-IP |
 
 <a href="https://db-ip.com/">IP Geolocation by DB-IP</a>
-
-Country and ASN data licensed CC BY 4.0 by the Number Resource Organization (NRO).
 
 ---

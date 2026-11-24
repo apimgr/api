@@ -77,7 +77,7 @@ Utility inputs are processed transiently and are not retained as user-submitted 
 
 | Boundary | Trust level | Notes |
 |----------|-------------|-------|
-| sapics/ip-location-db, CC BY 4.0 (downloaded at first run) | Trusted — HTTPS + checksum verified | Used for caller/target GeoIP lookup (`geo`/`osint` tools); no per-request outbound call |
+| sapics/ip-location-db, ASN/Country PDDL and City CC BY 4.0 (downloaded at first run) | Trusted — HTTPS + checksum verified | Used for caller/target GeoIP lookup (`geo`/`osint` tools); no per-request outbound call |
 | System DNS resolver (OSINT `DNSLookup`) | **Untrusted target, trusted resolver** | User-supplied domain resolved via the system resolver only; hard timeout; no credential forwarding |
 | Public WHOIS protocol (OSINT `WHOISLookup`) | **Untrusted target** | Free, keyless TCP/43 protocol query to the domain's registrar-designated WHOIS server; hard timeout |
 | Direct TLS handshake (OSINT `SSLInfo`) | **Untrusted target** | Connects to user-supplied `host:443` only to read the certificate; no data sent beyond the TLS handshake |
@@ -116,7 +116,7 @@ Failure mode for GeoIP: if databases unavailable, the geo/network tools return I
 ### Security decisions & exceptions
 
 - **No user accounts or login**: intentional. Anonymous resource ownership and operator access follow the credential model defined by AI.md; public utility operations remain available without an account.
-- **GeoIP databases downloaded at runtime**: intentional for size and freshness. Integrity checked via HTTPS.
+- **GeoIP databases downloaded at runtime**: intentional for size and freshness. Integrity is checked against upstream SHA-256 checksum assets before replacement.
 - **MD5 and SHA-1 available in hash tool**: intentional. These are provided as utility tools for interoperability (legacy systems, checksum verification), not for password hashing. The API documentation explicitly notes they are cryptographically broken for security purposes.
 
 ### API routes

@@ -17,6 +17,9 @@ Run the relevant checks after changing code, and update tests and documentation
 with behavior changes. Do not add credentials, tokens, passwords, or private
 keys to commits.
 
+See the [translation guide](../docs/translating.md) for locale rules and review
+requirements.
+
 ## Changes and pull requests
 
 Create a focused branch from `main`, describe the user-visible behavior and
