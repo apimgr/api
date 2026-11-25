@@ -15,6 +15,8 @@ import (
 // RuntimeDirs must cover every directory the running service writes to,
 // including the PID file's parent, which is written after the drop.
 func TestRuntimeDirsCoversEveryWritableLocation(t *testing.T) {
+	databaseDir := filepath.Join(t.TempDir(), "sqlite")
+	t.Setenv("DATABASE_DIR", databaseDir)
 	dirs := RuntimeDirs()
 
 	for _, want := range []string{
@@ -23,6 +25,7 @@ func TestRuntimeDirsCoversEveryWritableLocation(t *testing.T) {
 		paths.CacheDir(),
 		paths.LogDir(),
 		paths.BackupDir(),
+		databaseDir,
 		filepath.Dir(paths.DefaultPIDPath()),
 	} {
 		assert.Contains(t, dirs, want)

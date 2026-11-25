@@ -75,6 +75,18 @@ func init() {
 	BuildDate = (commonversion.BuildInfo{Version: Version, CommitID: CommitID, BuildEpoch: buildEpoch()}).BuildDate()
 }
 
+func listenTCP(address, port string) (net.Listener, string, error) {
+	listenAddress := strings.TrimSuffix(strings.TrimPrefix(address, "["), "]")
+	listener, err := net.Listen("tcp", net.JoinHostPort(listenAddress, port))
+	if err == nil || listenAddress != "::" || !strings.Contains(strings.ToLower(err.Error()), "address family not supported") {
+		return listener, listenAddress, err
+	}
+
+	log.Printf("IPv6 is unavailable; listening on 0.0.0.0 instead")
+	listener, err = net.Listen("tcp", net.JoinHostPort("0.0.0.0", port))
+	return listener, "0.0.0.0", err
+}
+
 // Sysexits-style exit codes (BSD sysexits.h); the stdlib does not export
 // these, so they are defined locally per go_conventions.md.
 const (
@@ -382,18 +394,19 @@ func main() {
 	// Binding has to happen after daemonize(), which re-execs the process
 	// and would otherwise lose the sockets.
 	httpPort, httpsPort := resolvePorts(cfg)
+	listenAddress := cfg.Server.Address
 	var httpLn, httpsLn net.Listener
 	if httpPort != "" {
-		httpLn, err = net.Listen("tcp", net.JoinHostPort(cfg.Server.Address, httpPort))
+		httpLn, listenAddress, err = listenTCP(listenAddress, httpPort)
 		if err != nil {
-			log.Printf("Failed to bind %s:%s: %v", cfg.Server.Address, httpPort, err)
+			log.Printf("Failed to bind %s:%s: %v", listenAddress, httpPort, err)
 			os.Exit(exUnavailable)
 		}
 	}
 	if httpsPort != "" {
-		httpsLn, err = net.Listen("tcp", net.JoinHostPort(cfg.Server.Address, httpsPort))
+		httpsLn, listenAddress, err = listenTCP(listenAddress, httpsPort)
 		if err != nil {
-			log.Printf("Failed to bind %s:%s: %v", cfg.Server.Address, httpsPort, err)
+			log.Printf("Failed to bind %s:%s: %v", listenAddress, httpsPort, err)
 			os.Exit(exUnavailable)
 		}
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +15,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
+
+func TestListenTCPAcceptsBracketedIPv6Wildcard(t *testing.T) {
+	listener, address, err := listenTCP("[::]", "0")
+	require.NoError(t, err)
+	require.NotNil(t, listener)
+	t.Cleanup(func() { require.NoError(t, listener.Close()) })
+	require.Contains(t, []string{"::", "0.0.0.0"}, address)
+	_, ok := listener.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+}
 
 func TestResumeEncryptionKeyRotationRecoversBeforeConfigSwitch(t *testing.T) {
 	configDir := t.TempDir()

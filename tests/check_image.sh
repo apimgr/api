@@ -10,6 +10,10 @@ if [ -z "$IMAGE" ]; then
   echo "usage: tests/check_image.sh <image>" >&2
   exit 64
 fi
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq is required to parse the image health response" >&2
+  exit 69
+fi
 
 new_container_name() {
   printf '%s-%04x%04x' "$PROJECT_NAME" "$RANDOM" "$RANDOM"
@@ -39,13 +43,17 @@ TOR_STATUS=""
 TOR_ELAPSED=0
 while [ "$TOR_ELAPSED" -lt "$TOR_BOOTSTRAP_TIMEOUT" ]; do
   RESPONSE="$(docker exec "$RUNTIME_CONTAINER" curl -q -LsS --max-time 5 -H 'Accept: application/json' http://127.0.0.1/server/healthz 2>/dev/null || true)"
-  TOR_STATUS="$(sed -n 's/.*"tor":{[^}]*"status":"\([^"]*\)".*/\1/p' <<<"$RESPONSE")"
+  TOR_STATUS="$(jq -r '.features.tor.status // empty' <<<"$RESPONSE" 2>/dev/null || true)"
   case "$TOR_STATUS" in
     healthy)
       echo "PASS: Tor hidden service is healthy"
       break
       ;;
-    starting|unavailable)
+    starting|unavailable|disabled)
+      if [ "$TOR_STATUS" = disabled ]; then
+        echo "FAIL: Tor is disabled in the final image" >&2
+        exit 1
+      fi
       ;;
     error)
       echo "FAIL: Tor reported error during image health check" >&2
@@ -69,7 +77,7 @@ if [ "$TOR_STATUS" != healthy ]; then
   fi
   case "$TOR_STATUS" in
     starting|unavailable)
-      echo "SKIP: no outbound network (Tor status: $TOR_STATUS)" >&2
+      echo "SKIP: Tor did not become healthy (status: $TOR_STATUS)" >&2
       ;;
     "")
       echo "FAIL: unable to read Tor status from /server/healthz" >&2

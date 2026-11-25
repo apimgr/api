@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/apimgr/api/src/paths"
 )
@@ -24,6 +25,11 @@ func RuntimeDirs() []string {
 		paths.CacheDir(),
 		paths.LogDir(),
 		paths.BackupDir(),
+	}
+	databaseDir := paths.GetDatabaseDir(paths.DataDir())
+	relativeDatabaseDir, err := filepath.Rel(paths.DataDir(), databaseDir)
+	if err != nil || relativeDatabaseDir == ".." || strings.HasPrefix(relativeDatabaseDir, ".."+string(filepath.Separator)) {
+		dirs = append(dirs, databaseDir)
 	}
 
 	if pidDir := filepath.Dir(paths.DefaultPIDPath()); pidDir != "" && pidDir != "." {
