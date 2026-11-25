@@ -14,10 +14,11 @@ Use the method shown in the route table. Path and query values are supplied in t
 
 - `GET /api/{api_version}/version` returns version/build metadata.
 - `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health. `/healthz` is an optional HTML health alias controlled by `server.healthz.root.enabled`; `/api/healthz` is the unversioned API alias.
-- `GET /server/about`, `/server/privacy`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
+- `GET /server/about`, `/server/privacy`, `/server/dpo`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
 - `GET /api/{api_version}/server/help` and `/api/{api_version}/server/help/mcp` return JSON help documents; `/server/help/mcp` is the corresponding HTML page.
 - `GET`/`POST /api/{api_version}/server/contact` expose the public contact form contract and two-step submit/review flow. A valid `security_id` selects the coordinated-disclosure fields; the response includes a fresh CAPTCHA descriptor and form token.
 - The contact review response contains only `review.type`, `review.email`, and `review.subject`, plus the review token and delay. On confirmation, clients repeat the original submitted fields unchanged; the server resolves an HTTPS researcher-key URL only after validating the review token.
+- `GET /api/{api_version}/server/dpo` returns the configured DPO name and public contact email, plus the request-resolved absolute privacy URL. The email falls back from `server.contact.dpo.email` to `server.contact.general.email`; it never exposes the admin address.
 - `GET /api/{api_version}/server/terms`, `GET /api/{api_version}/server/security`, and `GET /api/{api_version}/server/security/policy` return JSON mirrors of the public terms and security information.
 - `GET /server/preferences` and `POST /server/preferences` read and update guest preferences in browser cookies; `GET`/`POST /server/preferences/sync` and `GET /server/preferences/sync/import` transfer preferences between browsers without storing them server-side.
 - `GET`/`POST /api/{api_version}/server/preferences` read and partially update guest preferences; `GET /api/{api_version}/server/preferences/sync` exports them and `GET /api/{api_version}/server/preferences/sync/import` imports them.

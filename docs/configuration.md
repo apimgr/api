@@ -327,6 +327,7 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.contact.abuse.webhooks.{transport}` | `string` |
 | `server.contact.admin.email` | `string` |
 | `server.contact.admin.webhooks.{transport}` | `string` |
+| `server.contact.dpo.name` | `string` |
 | `server.contact.dpo.email` | `string` |
 | `server.contact.dpo.webhooks.{transport}` | `string` |
 | `server.contact.general.email` | `string` |
