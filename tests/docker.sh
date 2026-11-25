@@ -25,12 +25,29 @@ DOCKER_MEM="${DOCKER_MEM:-4g}"
 DOCKER_CPUS="${DOCKER_CPUS:-2}"
 DOCKER_CPU_SHARES="${DOCKER_CPU_SHARES:-256}"
 DOCKER_TIMEOUT="${DOCKER_TIMEOUT:-3600}"
+NETWORK_NAME="${PROJECT_NAME}-test-${RUN_ID}"
+NETWORK_CREATED=0
+
+__cleanup() {
+  local status=$?
+  if [ "$NETWORK_CREATED" -eq 1 ]; then
+    timeout "$DOCKER_TIMEOUT" docker network rm "$NETWORK_NAME" >/dev/null || status=1
+  fi
+  exit "$status"
+}
+trap '__cleanup' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 echo "Building server and companion client with make build..."
 make build BINDIR="$BIN_DIR"
 
 echo "Testing binaries and services in Alpine..."
+timeout "$DOCKER_TIMEOUT" docker network create --driver bridge "$NETWORK_NAME" >/dev/null
+NETWORK_CREATED=1
 timeout -k 30 "$DOCKER_TIMEOUT" docker run --rm --no-healthcheck \
   --name "${PROJECT_NAME}-${RUN_ID}" \
+  --network "$NETWORK_NAME" \
   --memory="$DOCKER_MEM" --cpus="$DOCKER_CPUS" --cpu-shares="$DOCKER_CPU_SHARES" \
   -v "$PROJECT_ROOT/$BIN_DIR:/app:ro" \
   -e PROJECT_NAME="$PROJECT_NAME" \
