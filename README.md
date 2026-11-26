@@ -110,7 +110,7 @@ make build
 make test
 ```
 
-`make dev` builds into a temporary directory; `make local` creates production-style local binaries; `make build` produces server and client binaries for Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. All Go builds and tests run in the project Docker toolchain. `make release` publishes a manually prepared stable `X.Y.Z` release, while beta and devel releases come from CI. See the [development guide](https://apimgr-api.readthedocs.io/en/latest/development/) before changing code or documentation.
+`make dev` builds into a temporary directory; `make local` creates production-style local binaries; `make build` produces server and client binaries for Linux, macOS, Windows, and FreeBSD on AMD64 and ARM64. All Go builds and tests run in the project Docker toolchain. `make release` publishes a manually prepared stable `X.Y.Z` release; `make beta` tags a clean `main` commit for CI to publish; devel releases come from CI. See the [development guide](https://apimgr-api.readthedocs.io/en/latest/development/) before changing code or documentation.
 
 `make test` runs the Go test suite. Run `tests/run_tests.sh` for Docker-based binary, HTTP, owner-token, Tor, and I2P integration checks. `tests/incus.sh` and `tests/e2e.sh` are separate, explicit test tiers. The production image runtime-command and Tor health contract is checked after `make docker` and in CI.
 
