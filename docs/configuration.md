@@ -29,6 +29,7 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 | `server.i18n` | Default interface language and the enabled locale set |
 | `server.metrics`, `server.geoip`, `server.tor`, `server.i2p` | Metrics, local GeoIP data, and Tor/I2P overlay services |
 | `server.compliance`, `server.tracking` | Compliance-driven defaults and privacy choices |
+| `web.announcements` | Scheduled public site banners and visitor dismissal controls |
 | `web.robots`, `web.llms`, `web.security`, `web.cors`, `web.hsts`, `web.csp`, `web.headers`, `web.reports` | Public discovery documents, security metadata, browser headers, and reporting endpoints |
 | `web.ui` | Public interface theme and branding assets |
 | `output.color`, `output.emoji` | CLI output preferences |
@@ -36,6 +37,26 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 | `data.security_dir`, `data.cve`, `data.trivy` | External security-database storage, NVD CVE API updates, and optional Trivy OCI data |
 
 Configuration is validated per setting. Consult the matching sections of `AI.md` for field-specific accepted values, defaults, and interactions; this table names the complete configuration areas, not a substitute for those detailed constraints.
+
+## Consent and announcements
+
+The first-visit consent banner is rendered by the server and its Accept and Decline forms work without JavaScript. Choices are stored in the browser's `cookie_consent` cookie; the `/server/preferences` form provides the granular preference controls. The banner is omitted from that page so its single-form contract remains intact. The configured policy link defaults to `/server/privacy`.
+
+Announcements are rendered before the page header from `web.announcements`. Only enabled messages with a supported type and an active RFC 3339 start/end window are shown. Dismissible messages store their IDs in the `dismissed_announcements` cookie, and Reset on the preferences page clears it.
+
+```yaml
+web:
+  announcements:
+    enabled: true
+    messages:
+      - id: scheduled-maintenance-2026
+        type: warning
+        title: Scheduled maintenance
+        message: Service may be unavailable during the maintenance window.
+        start: "2026-12-01T02:00:00Z"
+        end: "2026-12-01T04:00:00Z"
+        dismissible: true
+```
 
 ## TLS and Let's Encrypt
 
@@ -513,6 +534,13 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.privacy.consent.preferences_text` | `string` |
 | `server.privacy.consent.show_preferences` | `bool` |
 | `server.privacy.consent.show_until_acknowledged` | `bool` |
+| `web.announcements.enabled` | `bool` |
+| `web.announcements.messages[].id` | `string` (1–64 letters, digits, underscores, or hyphens) |
+| `web.announcements.messages[].type` | `info`, `warning`, `error`, or `success` |
+| `web.announcements.messages[].title` | `string` |
+| `web.announcements.messages[].message` | `string` |
+| `web.announcements.messages[].start`, `web.announcements.messages[].end` | RFC 3339 timestamp, optional |
+| `web.announcements.messages[].dismissible` | `bool` |
 | `server.privacy.cookies.analytics.description` | `string` |
 | `server.privacy.cookies.analytics.description_suffix_not_sold` | `string` |
 | `server.privacy.cookies.analytics.description_suffix_sold` | `string` |
