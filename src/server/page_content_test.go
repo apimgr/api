@@ -92,3 +92,13 @@ func TestDefaultTermsNameUSLawAndSubstituteApplicationName(t *testing.T) {
 	assert.NotContains(t, content, "{app_name}")
 	assert.True(t, strings.Contains(content, "security policy at /server/security/policy"))
 }
+
+func TestCardContentHeadingsStayBelowSharedCardHeading(t *testing.T) {
+	content := cardContentHeadings(`<h2>Section</h2><h3>Detail</h3><h4>Subdetail</h4><h1>Page title</h1>`)
+	assert.NotContains(t, string(content), "<h1")
+	assert.NotContains(t, string(content), "<h2")
+	assert.Contains(t, string(content), "<h3>Section</h3>")
+	assert.Contains(t, string(content), "<h4>Detail</h4>")
+	assert.Contains(t, string(content), "<h5>Subdetail</h5>")
+	assert.Contains(t, string(content), "<h3>Page title</h3>")
+}

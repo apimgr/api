@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -64,6 +65,7 @@ type ServerConfig struct {
 	// cached in memory at startup.
 	Token          string                 `yaml:"token"`
 	Branding       BrandingConfig         `yaml:"branding"`
+	SEO            SEOConfig              `yaml:"seo"`
 	SSL            SSLConfig              `yaml:"ssl"`
 	Scheduler      SchedulerConfig        `yaml:"scheduler"`
 	TrustedProxies TrustedProxiesConfig   `yaml:"trusted_proxies"`
@@ -564,6 +566,101 @@ type BrandingConfig struct {
 	Content map[string]PageContentConfig `yaml:"content"`
 }
 
+// SEOConfig controls route metadata and search-engine verification tags.
+type SEOConfig struct {
+	Keywords       []string           `yaml:"keywords"`
+	Author         string             `yaml:"author"`
+	OGImage        string             `yaml:"og_image"`
+	TwitterHandle  string             `yaml:"twitter_handle"`
+	TitleSeparator string             `yaml:"title_separator"`
+	MetaTags       map[string]string  `yaml:"meta_tags"`
+	Canonical      string             `yaml:"canonical"`
+	NoIndex        bool               `yaml:"noindex"`
+	OpenGraph      OpenGraphConfig    `yaml:"opengraph"`
+	Twitter        TwitterConfig      `yaml:"twitter"`
+	Verification   VerificationConfig `yaml:"verification"`
+	Sitemap        SitemapConfig      `yaml:"sitemap"`
+	Feed           FeedConfig         `yaml:"feed"`
+}
+
+type OpenGraphConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Type     string `yaml:"type"`
+	SiteName string `yaml:"site_name"`
+}
+
+type TwitterConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Card    string `yaml:"card"`
+	Creator string `yaml:"creator"`
+}
+
+type VerificationConfig struct {
+	Google    string                  `yaml:"google"`
+	Bing      string                  `yaml:"bing"`
+	Yandex    string                  `yaml:"yandex"`
+	Baidu     string                  `yaml:"baidu"`
+	Pinterest string                  `yaml:"pinterest"`
+	Facebook  string                  `yaml:"facebook"`
+	Custom    []CustomVerificationTag `yaml:"custom"`
+}
+
+type CustomVerificationTag struct {
+	Name     string `yaml:"name"`
+	Property string `yaml:"property"`
+	Content  string `yaml:"content"`
+}
+
+type SitemapConfig struct {
+	MaxURLs       int  `yaml:"max_urls"`
+	IncludeImages bool `yaml:"include_images"`
+}
+
+type FeedConfig struct {
+	MaxItems int    `yaml:"max_items"`
+	Title    string `yaml:"title"`
+}
+
+func (c SEOConfig) Normalized() (SEOConfig, []string) {
+	var warnings []string
+	if c.TitleSeparator == "" {
+		c.TitleSeparator = " - "
+	} else if len(c.TitleSeparator) > 8 {
+		c.TitleSeparator = " - "
+		warnings = append(warnings, "server.seo.title_separator is longer than 8 characters; using the default")
+	}
+	if c.OpenGraph.Type == "" {
+		c.OpenGraph.Type = "website"
+	}
+	if c.OpenGraph.Type != "website" && c.OpenGraph.Type != "article" && c.OpenGraph.Type != "profile" && c.OpenGraph.Type != "book" {
+		c.OpenGraph.Type = "website"
+		warnings = append(warnings, "server.seo.opengraph.type is invalid; using website")
+	}
+	if c.Twitter.Card == "" {
+		c.Twitter.Card = "summary_large_image"
+	}
+	if c.Twitter.Card != "summary" && c.Twitter.Card != "summary_large_image" {
+		c.Twitter.Card = "summary_large_image"
+		warnings = append(warnings, "server.seo.twitter.card is invalid; using summary_large_image")
+	}
+	if c.Canonical != "" {
+		parsed, err := url.Parse(c.Canonical)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			c.Canonical = ""
+			warnings = append(warnings, "server.seo.canonical is invalid; using the request origin")
+		}
+	}
+	if c.Sitemap.MaxURLs <= 0 || c.Sitemap.MaxURLs > 50000 {
+		c.Sitemap.MaxURLs = 50000
+		warnings = append(warnings, "server.seo.sitemap.max_urls is outside 1..50000; using 50000")
+	}
+	if c.Feed.MaxItems < 1 || c.Feed.MaxItems > 200 {
+		c.Feed.MaxItems = 50
+		warnings = append(warnings, "server.seo.feed.max_items is outside 1..200; using 50")
+	}
+	return c, warnings
+}
+
 // PageContentConfig stores operator-authored public-page content.
 type PageContentConfig struct {
 	Format string      `yaml:"format"`
@@ -834,6 +931,7 @@ type DebugLogConfig struct {
 
 // WebConfig holds web-related settings
 type WebConfig struct {
+	Announcements     AnnouncementsConfig     `yaml:"announcements"`
 	LLMS              LLMSConfig              `yaml:"llms"`
 	UI                UIConfig                `yaml:"ui"`
 	Robots            RobotsConfig            `yaml:"robots"`
@@ -1115,6 +1213,13 @@ func defaultConfig() *Config {
 				Tagline:     "Universal API Toolkit",
 				Description: "Universal API toolkit for text, crypto, network, and system utilities",
 			},
+			SEO: SEOConfig{
+				TitleSeparator: " - ",
+				OpenGraph:      OpenGraphConfig{Enabled: true, Type: "website"},
+				Twitter:        TwitterConfig{Enabled: true, Card: "summary_large_image"},
+				Sitemap:        SitemapConfig{MaxURLs: 50000},
+				Feed:           FeedConfig{MaxItems: 50},
+			},
 			SSL: SSLConfig{
 				Enabled:  false,
 				CertPath: "",
@@ -1316,7 +1421,8 @@ func defaultConfig() *Config {
 			},
 		},
 		Web: WebConfig{
-			LLMS: LLMSConfig{IncludeEndpoints: true, IncludeSchemas: false, CustomSections: []any{}},
+			Announcements: AnnouncementsConfig{Enabled: true, Messages: []AnnouncementMessage{}},
+			LLMS:          LLMSConfig{IncludeEndpoints: true, IncludeSchemas: false, CustomSections: []any{}},
 			UI: UIConfig{
 				Theme:   "dark",
 				Logo:    "",
@@ -1422,6 +1528,10 @@ func Load() (*Config, error) {
 	applySMTPEnvOverrides(cfg)
 	applyI2PEnvOverrides(cfg)
 	var languageWarnings []string
+	cfg.Server.SEO, languageWarnings = cfg.Server.SEO.Normalized()
+	for _, warning := range languageWarnings {
+		log.Printf("Warning: %s", warning)
+	}
 	cfg.Server.I18N, languageWarnings = cfg.Server.I18N.Normalized()
 	for _, warning := range languageWarnings {
 		log.Printf("Warning: %s", warning)

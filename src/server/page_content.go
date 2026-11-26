@@ -405,3 +405,47 @@ func safeRelTokens(value string) bool {
 	}
 	return true
 }
+
+// cardContentHeadings keeps configured section headings below the shared
+// card heading when the content is rendered inside a page card.
+func cardContentHeadings(content template.HTML) template.HTML {
+	contextNode := &html.Node{Type: html.ElementNode, Data: "div", DataAtom: atom.Div}
+	nodes, err := html.ParseFragment(strings.NewReader(string(content)), contextNode)
+	if err != nil {
+		return content
+	}
+	var rendered strings.Builder
+	for _, node := range nodes {
+		cardContentHeadingNodes(node)
+		if err := html.Render(&rendered, node); err != nil {
+			return content
+		}
+	}
+	return template.HTML(rendered.String())
+}
+
+func cardContentHeadingNodes(node *html.Node) {
+	if node.Type == html.ElementNode {
+		var heading atom.Atom
+		switch node.Data {
+		case "h1", "h2":
+			node.Data = "h3"
+			heading = atom.H3
+		case "h3":
+			node.Data = "h4"
+			heading = atom.H4
+		case "h4":
+			node.Data = "h5"
+			heading = atom.H5
+		case "h5", "h6":
+			node.Data = "h6"
+			heading = atom.H6
+		}
+		if heading != 0 {
+			node.DataAtom = heading
+		}
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		cardContentHeadingNodes(child)
+	}
+}

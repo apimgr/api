@@ -79,8 +79,8 @@ func ownerTokensPageHandler(cfg *config.Config, cookieName, projectName string) 
 				var revealErr error
 				if card == "primary" {
 					data.RevealedToken, revealErr = database.RevealOwnerToken(r.Context(), database.GetServerDB(), credential.OwnerID, credential.TokenID, ownerEncryptionKeys(cfg)...)
-				} else if id, parseErr := strconv.ParseInt(card, 10, 64); parseErr == nil {
-					data.RevealedToken, revealErr = database.RevealLinkedOwnerToken(r.Context(), database.GetServerDB(), credential.OwnerID, id, ownerEncryptionKeys(cfg)...)
+				} else if card != "" {
+					data.RevealedToken, revealErr = database.RevealLinkedOwnerToken(r.Context(), database.GetServerDB(), credential.OwnerID, card, ownerEncryptionKeys(cfg)...)
 				}
 				if revealErr == nil {
 					data.RevealedCard = card
@@ -173,7 +173,7 @@ func ownerTokensActionHandler(cfg *config.Config, cookieName, projectName, actio
 			setOwnerTokenCookie(w, r, cfg, cookieName, cookie.Value)
 		}
 		db := database.GetServerDB()
-		id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		id := chi.URLParam(r, "id")
 		status, revealCard := "", ""
 		switch action {
 		case "reveal":
@@ -206,18 +206,18 @@ func ownerTokensActionHandler(cfg *config.Config, cookieName, projectName, actio
 			if err != nil {
 				status = "error"
 			} else {
-				revealCard = strconv.FormatInt(item.ID, 10)
+				revealCard = item.ID
 				_ = raw
 				status = "created"
 			}
 		case "linked-reveal":
-			revealCard = strconv.FormatInt(id, 10)
+			revealCard = id
 		case "linked-rotate":
 			raw, err := database.RotateLinkedOwnerToken(r.Context(), db, ownerEncryptionKey(cfg), credential.OwnerID, id)
 			if err != nil {
 				status = "error"
 			} else {
-				revealCard = strconv.FormatInt(id, 10)
+				revealCard = id
 				_ = raw
 				status = "rotated"
 			}

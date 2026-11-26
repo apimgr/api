@@ -352,14 +352,8 @@ func TestTier1SpecialFiles(t *testing.T) {
 			}
 		})
 	}
-	resp, body := getHTML(t, "/offline.html")
-	requireStatus(t, resp, "/offline.html", http.StatusOK)
-	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/html") {
-		t.Errorf("/offline.html: Content-Type %q is not HTML", ct)
-	}
-	if !strings.Contains(strings.ToLower(body), "offline") {
-		t.Error("/offline.html: response is missing offline content")
-	}
+	resp, _ := fetch(t, "/offline.html", nil, nil)
+	requireStatus(t, resp, "/offline.html", http.StatusNotFound)
 }
 
 // TestTier1StaticAssets asserts every asset referenced by the layout loads.

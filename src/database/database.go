@@ -15,6 +15,7 @@ import (
 
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/paths"
+	"github.com/google/uuid"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
 )
@@ -495,7 +496,7 @@ func createServerSchema(db interface {
 
 	-- Owner and linked credentials. The operator server.token is never stored here.
 	CREATE TABLE IF NOT EXISTS api_tokens (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id TEXT PRIMARY KEY,
 		owner_id TEXT NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
 		kind TEXT NOT NULL CHECK (kind IN ('primary', 'linked')),
 		name TEXT,
@@ -662,6 +663,7 @@ func migrateOwnerTokenSchema(ctx context.Context, db interface {
 		return err
 	}
 	columns := make(map[string]bool)
+	columnTypes := make(map[string]string)
 	for rows.Next() {
 		var cid, notNull, primaryKey int
 		var name, columnType string
@@ -670,6 +672,7 @@ func migrateOwnerTokenSchema(ctx context.Context, db interface {
 			return errors.Join(err, rows.Close())
 		}
 		columns[name] = true
+		columnTypes[name] = columnType
 	}
 	if err := rows.Err(); err != nil {
 		return errors.Join(err, rows.Close())
@@ -689,7 +692,7 @@ func migrateOwnerTokenSchema(ctx context.Context, db interface {
 			return err
 		}
 		if _, err := execContext(ctx, db, `CREATE TABLE `+tokensTable+` (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			id TEXT PRIMARY KEY,
 			owner_id TEXT NOT NULL REFERENCES `+ownersTable+`(id) ON DELETE CASCADE,
 			kind TEXT NOT NULL CHECK (kind IN ('primary', 'linked')),
 			name TEXT,
@@ -706,7 +709,8 @@ func migrateOwnerTokenSchema(ctx context.Context, db interface {
 		)`); err != nil {
 			return err
 		}
-		columns = map[string]bool{"owner_id": true, "kind": true, "name": true, "token_last4": true, "token_enc": true, "rotated_at": true}
+		columns = map[string]bool{"owner_id": true, "kind": true, "name": true, "token_last4": true, "token_enc": true, "rotated_at": true, "revoked_reason": true}
+		columnTypes["id"] = "TEXT"
 	}
 	additions := []struct{ name, definition string }{
 		{"kind", "TEXT NOT NULL DEFAULT 'primary'"},
@@ -714,12 +718,18 @@ func migrateOwnerTokenSchema(ctx context.Context, db interface {
 		{"token_last4", "TEXT NOT NULL DEFAULT ''"},
 		{"token_enc", "TEXT NOT NULL DEFAULT ''"},
 		{"rotated_at", "INTEGER"},
+		{"revoked_reason", "TEXT"},
 	}
 	for _, column := range additions {
 		if columns[column.name] {
 			continue
 		}
 		if _, err := execContext(ctx, db, "ALTER TABLE "+tokensTable+" ADD COLUMN "+column.name+" "+column.definition); err != nil {
+			return err
+		}
+	}
+	if !strings.EqualFold(strings.TrimSpace(columnTypes["id"]), "TEXT") {
+		if err := migrateOwnerTokenIDs(ctx, db, tokensTable, ownersTable); err != nil {
 			return err
 		}
 	}
@@ -738,6 +748,100 @@ func migrateOwnerTokenSchema(ctx context.Context, db interface {
 		if _, err := execContext(ctx, db, statement); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func migrateOwnerTokenIDs(ctx context.Context, db interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, tokensTable, ownersTable string) error {
+	if beginner, ok := db.(interface {
+		BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
+	}); ok {
+		tx, err := beginner.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		if err := migrateOwnerTokenIDsDirect(ctx, tx, tokensTable, ownersTable); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		return tx.Commit()
+	}
+	return migrateOwnerTokenIDsDirect(ctx, db, tokensTable, ownersTable)
+}
+
+func migrateOwnerTokenIDsDirect(ctx context.Context, db interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, tokensTable, ownersTable string) error {
+	type legacyToken struct {
+		ownerID, kind, tokenHash, tokenPrefix, tokenLast4, tokenEnc string
+		name, revokedReason                                         sql.NullString
+		createdAt                                                   int64
+		rotatedAt, expiresAt, lastUsedAt, revokedAt                 sql.NullInt64
+	}
+	tempTable := tokensTable + "_uuidv7_migration"
+	if _, err := execContext(ctx, db, `DROP TABLE IF EXISTS `+tempTable); err != nil {
+		return err
+	}
+	rows, err := queryContext(ctx, db, `SELECT owner_id, kind, token_hash, token_prefix, token_last4, token_enc,
+		name, created_at, rotated_at, expires_at, last_used_at, revoked_at, revoked_reason FROM `+tokensTable+` ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	var legacy []legacyToken
+	for rows.Next() {
+		var token legacyToken
+		if err := rows.Scan(&token.ownerID, &token.kind, &token.tokenHash, &token.tokenPrefix, &token.tokenLast4, &token.tokenEnc,
+			&token.name, &token.createdAt, &token.rotatedAt, &token.expiresAt, &token.lastUsedAt, &token.revokedAt, &token.revokedReason); err != nil {
+			return errors.Join(err, rows.Close())
+		}
+		legacy = append(legacy, token)
+	}
+	if err := rows.Err(); err != nil {
+		return errors.Join(err, rows.Close())
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if _, err := execContext(ctx, db, `CREATE TABLE `+tempTable+` (
+		id TEXT PRIMARY KEY,
+		owner_id TEXT NOT NULL REFERENCES `+ownersTable+`(id) ON DELETE CASCADE,
+		kind TEXT NOT NULL CHECK (kind IN ('primary', 'linked')),
+		name TEXT,
+		token_hash TEXT NOT NULL UNIQUE,
+		token_prefix TEXT NOT NULL,
+		token_last4 TEXT NOT NULL DEFAULT '',
+		token_enc TEXT NOT NULL DEFAULT '',
+		created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+		rotated_at INTEGER,
+		expires_at INTEGER,
+		last_used_at INTEGER,
+		revoked_at INTEGER,
+		revoked_reason TEXT
+	)`); err != nil {
+		return err
+	}
+	for _, token := range legacy {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		if _, err := execContext(ctx, db, `INSERT INTO `+tempTable+`
+			(id, owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc, created_at, rotated_at, expires_at, last_used_at, revoked_at, revoked_reason)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id.String(), token.ownerID, token.kind, token.name,
+			token.tokenHash, token.tokenPrefix, token.tokenLast4, token.tokenEnc, token.createdAt, token.rotatedAt,
+			token.expiresAt, token.lastUsedAt, token.revokedAt, token.revokedReason); err != nil {
+			return err
+		}
+	}
+	if _, err := execContext(ctx, db, `DROP TABLE `+tokensTable); err != nil {
+		return err
+	}
+	if _, err := execContext(ctx, db, `ALTER TABLE `+tempTable+` RENAME TO `+tokensTable); err != nil {
+		return err
 	}
 	return nil
 }

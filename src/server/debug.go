@@ -68,7 +68,7 @@ func registerDebugRoutes(router chi.Router, cfg *config.Config) {
 	router.Route("/debug", func(debugRouter chi.Router) {
 		debugRouter.Use(requireDebugOperatorToken(cfg))
 		if cfg.Server.Debug.Pprof {
-			debugRouter.HandleFunc("/pprof/", pprof.Index)
+			debugRouter.HandleFunc("/pprof", pprof.Index)
 			debugRouter.HandleFunc("/pprof/cmdline", pprof.Cmdline)
 			debugRouter.HandleFunc("/pprof/profile", pprof.Profile)
 			debugRouter.HandleFunc("/pprof/symbol", pprof.Symbol)
@@ -110,6 +110,10 @@ func requireDebugOperatorToken(cfg *config.Config) func(http.Handler) http.Handl
 			}
 			got := sha256.Sum256([]byte(provided))
 			if cfg.Server.Token == "" || subtle.ConstantTimeCompare(got[:], expected[:]) != 1 {
+				if credential, err := validateConfiguredOwnerToken(r.Context(), cfg, provided); err == nil && credential.Kind != "operator" {
+					writeEnvelopeError(w, http.StatusForbidden, "FORBIDDEN", i18n.Translate(i18n.LangFromRequest(r), "errors.forbidden"), nil)
+					return
+				}
 				count, reset, _ := recordAuthenticationFailure(r)
 				if limit := cfg.Server.RateLimit.AuthFailures.Requests; limit > 0 && count >= limit && !reset.IsZero() {
 					writeRateLimitExceeded(w, r, limit, reset)

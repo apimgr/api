@@ -416,6 +416,13 @@
     "ccpa_opted_out": "Ha optado por no participar en la venta de datos.",
     "ccpa_opt_back_in": "Optar por participar nuevamente"
   },
+  "dpo": {
+    "title": "Delegado de protección de datos",
+    "description": "Información de contacto para asuntos de privacidad y protección de datos.",
+    "contact": "Delegado de protección de datos",
+    "privacy_policy": "Política de privacidad",
+    "security_contact": "Contactar con el equipo de seguridad"
+  },
   "terms": {
     "title": "Términos de servicio",
     "acceptance": "Aceptación",
@@ -472,13 +479,16 @@
   },
   "cookie_consent": {
     "message": "De acuerdo con la ley GDPR de la UE, se muestra este mensaje.",
+    "message_if_sold": "De acuerdo con el RGPD de la UE, se muestra este mensaje. Usamos cookies para funciones esenciales del sitio y, con su consentimiento, para preferencias y análisis. Sus datos pueden compartirse o venderse a terceros, tal como se describe en nuestra Política de privacidad.",
     "accept": "Acepto",
     "decline": "Rechazar",
     "manage_preferences": "Gestionar preferencias",
     "blocked_content": "Contenido externo bloqueado debido a las preferencias de cookies.",
     "essential_description": "Necesarias para el funcionamiento del sitio. No se pueden desactivar.",
     "preference_description": "Recordar su configuración como tema (claro/oscuro), idioma y preferencias de interfaz. Desactivarlas restablecerá los valores predeterminados en cada visita.",
-    "analytics_description": "Nos ayudan a entender cómo se utiliza el sitio."
+    "analytics_description": "Nos ayudan a entender cómo se utiliza el sitio.",
+    "analytics_suffix_not_sold": "Los datos analíticos se anonimizan y nunca se venden.",
+    "analytics_suffix_sold": "Los datos analíticos pueden compartirse con terceros."
   },
   "about": {
     "title": "Acerca de",
@@ -979,6 +989,9 @@
         }
       },
       "raw": {
+        "request": {
+          "description": "Llamar a cualquier endpoint API del servidor con GET, POST, PUT, PATCH o DELETE"
+        },
         "get": {
           "description": "Llamar directamente a cualquier endpoint GET del servidor, incluso sin comando dedicado"
         },
@@ -2881,5 +2894,15 @@
     "fallback_heading": "Acceso directo a la API",
     "graphql_endpoint": "Punto de acceso GraphQL",
     "openapi_json": "OpenAPI JSON"
+  },
+  "offline": {
+    "title": "Sin conexión",
+    "heading": "No tienes conexión",
+    "message": "No se pudo cargar esta página y no hay una copia en caché disponible. Comprueba tu conexión e inténtalo de nuevo."
+  },
+  "page_sections": {
+    "terms": "Términos y condiciones",
+    "about_extension": "Información adicional",
+    "privacy_extension": "Información adicional sobre privacidad"
   }
 }

@@ -416,6 +416,13 @@
     "ccpa_opted_out": "データの販売をオプトアウトしました。",
     "ccpa_opt_back_in": "販売を再度許可する"
   },
+  "dpo": {
+    "title": "データ保護責任者",
+    "description": "プライバシーとデータ保護に関するお問い合わせ先です。",
+    "contact": "データ保護責任者",
+    "privacy_policy": "プライバシーポリシー",
+    "security_contact": "セキュリティチームに連絡"
+  },
   "terms": {
     "title": "利用規約",
     "acceptance": "同意",
@@ -472,13 +479,16 @@
   },
   "cookie_consent": {
     "message": "EU一般データ保護規則(GDPR)に基づき、この通知が表示されています。",
+    "message_if_sold": "EU一般データ保護規則（GDPR）に基づき、この通知が表示されています。サイトの基本機能に必要なCookieを使用し、お客様の同意を得た場合は設定と分析にも使用します。プライバシーポリシーに記載のとおり、お客様のデータが第三者と共有または販売される場合があります。",
     "accept": "同意する",
     "decline": "拒否する",
     "manage_preferences": "設定を管理",
     "blocked_content": "Cookie設定により外部コンテンツがブロックされました。",
     "essential_description": "サイトの運営に必要です。無効にすることはできません。",
     "preference_description": "テーマ(ライト/ダーク)、言語、インターフェース設定などのお客様の設定を保存します。無効にすると、訪問のたびに既定値に戻ります。",
-    "analytics_description": "サイトの利用状況を把握するのに役立ちます。"
+    "analytics_description": "サイトの利用状況を把握するのに役立ちます。",
+    "analytics_suffix_not_sold": "分析データは匿名化され、販売されることはありません。",
+    "analytics_suffix_sold": "分析データが第三者と共有される場合があります。"
   },
   "about": {
     "title": "概要",
@@ -968,6 +978,9 @@
         }
       },
       "raw": {
+        "request": {
+          "description": "GET、POST、PUT、PATCH、DELETE でサーバーの任意の API エンドポイントを呼び出します"
+        },
         "get": {
           "description": "専用コマンドがないものも含め、任意のサーバー GET エンドポイントを直接呼び出す"
         },
@@ -2870,5 +2883,15 @@
     "fallback_heading": "API への直接アクセス",
     "graphql_endpoint": "GraphQL エンドポイント",
     "openapi_json": "OpenAPI JSON"
+  },
+  "offline": {
+    "title": "オフライン",
+    "heading": "オフラインです",
+    "message": "このページを読み込めず、利用できるキャッシュもありません。接続を確認して、もう一度お試しください。"
+  },
+  "page_sections": {
+    "terms": "利用規約",
+    "about_extension": "追加情報",
+    "privacy_extension": "プライバシーに関する追加情報"
   }
 }

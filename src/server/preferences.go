@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/database"
 )
 
 // prefCookieMaxAge is the lifetime of every preference cookie: one year, per
@@ -213,18 +216,37 @@ func requestCookieValue(r *http.Request, name string) string {
 }
 
 func readCookieConsent(r *http.Request) consentCookie {
-	var consent consentCookie
-	if raw := requestCookieValue(r, "cookie_consent"); raw != "" {
-		if decoded, err := url.QueryUnescape(raw); err == nil {
-			raw = decoded
-		}
-		_ = json.Unmarshal([]byte(raw), &consent)
-	}
+	consent, _ := decodeCookieConsent(requestCookieValue(r, "cookie_consent"))
 	return consent
 }
 
 func hasValidCookieConsent(r *http.Request) bool {
-	return requestCookieValue(r, "cookie_consent") != "" && readCookieConsent(r).Essential
+	_, valid := decodeCookieConsent(requestCookieValue(r, "cookie_consent"))
+	return valid
+}
+
+func decodeCookieConsent(raw string) (consentCookie, bool) {
+	var consent consentCookie
+	if raw == "" {
+		return consent, false
+	}
+	decoded, err := url.PathUnescape(raw)
+	if err != nil {
+		return consent, false
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(decoded), &fields); err != nil || fields == nil {
+		return consent, false
+	}
+	for _, key := range []string{"essential", "preferences", "analytics", "timestamp"} {
+		if _, ok := fields[key]; !ok {
+			return consent, false
+		}
+	}
+	if err := json.Unmarshal([]byte(decoded), &consent); err != nil || !consent.Essential || consent.Timestamp <= 0 {
+		return consentCookie{}, false
+	}
+	return consent, true
 }
 
 func preferenceCookieConsent(r *http.Request) bool {
@@ -268,9 +290,11 @@ func applyCookieConsent(w http.ResponseWriter, r *http.Request, cfg *config.Conf
 	if !cfg.Server.Privacy.Cookies.Analytics.Enabled {
 		consent.Analytics = false
 	}
+	auditConsentChange(r, cfg, "preferences", consent.Preferences)
+	auditConsentChange(r, cfg, "analytics", consent.Analytics)
 	raw, err := json.Marshal(consent)
 	if err == nil {
-		setPreferenceCookie(w, r, "cookie_consent", url.QueryEscape(string(raw)))
+		setPreferenceCookie(w, r, "cookie_consent", url.PathEscape(string(raw)))
 	}
 	if !consent.Preferences {
 		deletePreferenceCookie(w, r, "theme")
@@ -279,10 +303,62 @@ func applyCookieConsent(w http.ResponseWriter, r *http.Request, cfg *config.Conf
 	if cfg.Server.Privacy.Data.Sold {
 		if values.Get("ccpa_opt_out") == "on" || values.Get("ccpa_opt_out") == "true" {
 			setPreferenceCookie(w, r, "ccpa_opt_out", "true")
+			auditConsentChange(r, cfg, "ccpa_opt_out", true)
 		} else {
 			deletePreferenceCookie(w, r, "ccpa_opt_out")
+			auditConsentChange(r, cfg, "ccpa_opt_out", false)
 		}
 	}
+}
+
+func auditConsentChange(r *http.Request, cfg *config.Config, consentType string, value bool) {
+	actorType := "anonymous"
+	actor := "anonymous"
+	details := map[string]any{
+		"actor.type":     actorType,
+		"consent_type":   consentType,
+		"new_value":      value,
+		"policy_version": cfg.Server.Privacy.Consent.Policy.Version,
+		"result":         "success",
+	}
+	if credential, ok := ownerCookieCredential(r, cfg); ok {
+		actorType = "owner"
+		actor = credential.OwnerID
+		details["actor.type"] = actorType
+		details["actor.id"] = credential.OwnerID
+	}
+	ip := anonymizedConsentIP(r)
+	details["actor.ip"] = ip
+	if err := database.WriteAuditEvent(r.Context(), "compliance.consent_updated", actor, ip, details); err != nil {
+		slog.Warn("privacy: failed to write consent audit event", "error", err)
+	}
+}
+
+func anonymizedConsentIP(r *http.Request) string {
+	if IsTorRequest(r) {
+		if circuitID, ok := r.Context().Value(torCircuitContextKey).(string); ok && circuitID != "" {
+			return circuitID
+		}
+		return "tor"
+	}
+	if isI2PBackendRequest(r) {
+		return "i2p"
+	}
+	ip := net.ParseIP(getClientIP(r))
+	if ip == nil {
+		return ""
+	}
+	if ipv4 := ip.To4(); ipv4 != nil {
+		return net.IPv4(ipv4[0], ipv4[1], ipv4[2], 0).String()
+	}
+	ipv6 := ip.To16()
+	if ipv6 == nil {
+		return ""
+	}
+	for i := 6; i < len(ipv6); i++ {
+		ipv6[i] = 0
+	}
+	return ipv6.String()
 }
 
 func deletePreferenceCookie(w http.ResponseWriter, r *http.Request, name string) {
@@ -291,7 +367,7 @@ func deletePreferenceCookie(w http.ResponseWriter, r *http.Request, name string)
 }
 
 func resetGuestPreferences(w http.ResponseWriter, r *http.Request) {
-	deleteNames := map[string]bool{"theme": true, i18n.CookieName: true, "cookie_consent": true, "ccpa_opt_out": true, buildCookieName: true}
+	deleteNames := map[string]bool{"theme": true, i18n.CookieName: true, "cookie_consent": true, "dismissed_announcements": true, "ccpa_opt_out": true, buildCookieName: true}
 	for _, cookie := range r.Cookies() {
 		name := cookie.Name
 		lower := strings.ToLower(name)
@@ -458,10 +534,6 @@ func preferencesPageHandler(cfg *config.Config) http.HandlerFunc {
 		consent := readCookieConsent(r)
 		data.ConsentPreferences = consent.Preferences
 		data.ConsentAnalytics = consent.Analytics
-		if requestCookieValue(r, "cookie_consent") == "" {
-			data.ConsentPreferences = cfg.Server.Privacy.Consent.DefaultEnabled && cfg.Server.Privacy.Cookies.Preferences.Enabled
-			data.ConsentAnalytics = cfg.Server.Privacy.Consent.DefaultEnabled && cfg.Server.Privacy.Cookies.Analytics.Enabled
-		}
 		data.CCPAOptOut = requestCookieValue(r, "ccpa_opt_out") == "true"
 		data.CancelURL = preferenceRedirectTarget(r)
 		w.Header().Set("Cache-Control", "no-store")
@@ -501,8 +573,10 @@ func ccpaOptOutHandler(cfg *config.Config) http.HandlerFunc {
 		if cfg.Server.Privacy.Data.Sold {
 			if r.PostForm.Get("ccpa_opt_out") == "true" || r.PostForm.Get("ccpa_opt_out") == "on" {
 				setPreferenceCookie(w, r, "ccpa_opt_out", "true")
+				auditConsentChange(r, cfg, "ccpa_opt_out", true)
 			} else {
 				deletePreferenceCookie(w, r, "ccpa_opt_out")
+				auditConsentChange(r, cfg, "ccpa_opt_out", false)
 			}
 		}
 		w.Header().Set("Cache-Control", "no-store")

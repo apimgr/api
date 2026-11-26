@@ -10,9 +10,7 @@ import (
 	"github.com/apimgr/api/src/service/text"
 )
 
-const securityPolicyMarkdown = `# Security Policy
-
-## Scope
+const securityPolicyMarkdown = `## Scope
 
 This policy covers the application served at {fqdn}, its API, and its published Tor or I2P addresses.
 
@@ -78,6 +76,7 @@ func termsPageHandler(cfg *config.Config) http.HandlerFunc {
 		if configured := operatorHTML(r, "terms"); configured != "" {
 			data.TermsContent = configured
 		}
+		data.TermsContent = cardContentHeadings(data.TermsContent)
 		renderPage(w, "terms", data)
 	}
 }
@@ -112,7 +111,7 @@ func securityPolicyPageHandler(cfg *config.Config) http.HandlerFunc {
 		data := newPageData(cfg, r, "security-policy")
 		data.PageTitle = i18n.Translate(data.Lang, "security.policy_link")
 		data.PageDescription = i18n.TranslateFormat(data.Lang, "security.lead", map[string]string{"app_name": data.SiteTitle})
-		data.SecurityPolicy = template.HTML(text.MarkdownToHTML(securityPolicyContent(cfg, r)))
+		data.SecurityPolicy = cardContentHeadings(template.HTML(text.MarkdownToHTML(securityPolicyContent(cfg, r))))
 		renderPage(w, "security_policy", data)
 	}
 }

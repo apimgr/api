@@ -44,7 +44,7 @@ owner_token: api_owner_token_suexgbvs
 - **System**: health, liveness/readiness probes, system info, version info
 - Full web frontend (dark/light/auto theme, mobile-first, installable as a PWA)
 - Interactive tool pages where users input data and receive processed output
-- Informational server pages (about, help, health, privacy, and contact)
+- Informational server pages (about, help, health, privacy, data protection, and contact)
 - CLI client (`api-cli`) for using all tools from the terminal, with public operator-provisioned release downloads and server discovery
 - Optional I2P eepsite hosting: enabled by default in containers and opt-in on bare metal/VMs; Tor hidden-service support is also available
 - Machine-readable API documentation and a GraphQL endpoint alongside the REST API
@@ -59,7 +59,7 @@ owner_token: api_owner_token_suexgbvs
 
 ### Roles & permissions
 
-There are no user accounts, profiles, registration, or login. Anonymous owners are credential-only identities without profiles; they can manage resources associated with their credentials and manage primary/linked tokens at `/server/preferences/tokens` using JavaScript-free forms. Returning owners reach token management from the preferences menu after the secure owner cookie is restored. Public utility operations are available to anonymous visitors and API clients. Operator-only actions use the credentials and access rules defined by AI.md. Server administration is performed through configuration files and the command-line interface.
+There are no user accounts, profiles, registration, or login. Anonymous owners are credential-only identities without profiles; they can manage resources associated with their credentials and manage primary/linked tokens at `/server/preferences/tokens` using JavaScript-free forms. Returning owners reach token management from the preferences menu after the secure owner cookie is restored. Visitors manage cookie consent and guest preferences through browser cookies; non-essential preference and analytics cookies remain opt-in. The public data-protection page provides the configured DPO contact, falling back to the general contact when no DPO email is set. Public utility operations are available to anonymous visitors and API clients. Operator-only actions use the credentials and access rules defined by AI.md. Server administration is performed through configuration files and the command-line interface.
 
 ### Data model & sensitivity
 

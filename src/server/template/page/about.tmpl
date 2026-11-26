@@ -6,7 +6,7 @@
   </header>
 
   <section class="section-card" aria-labelledby="about-description">
-    <h2 id="about-description">{{t .Lang "about.title"}} {{.SiteTitle}}</h2>
+    <h2 id="about-description">{{t .Lang "about.title"}}</h2>
     <p>{{.SiteDescription}}</p>
   </section>
 
@@ -43,6 +43,6 @@
     <p><a href="https://db-ip.com/">IP Geolocation by DB-IP</a></p>
     <p>{{t .Lang "page_text.text.asn.and.country.data.use.pddl.data.from.d9f3da2aa5"}} <a href="https://iptoasn.com/">{{t .Lang "page_text.text.iptoasn.com.6aaec00fd6"}}</a>.</p>
   </section>
-  {{if .AboutExtension}}<section class="section-card prose">{{.AboutExtension}}</section>{{end}}
+  {{if .AboutExtension}}<section class="section-card prose" aria-labelledby="about-extension-heading"><h2 id="about-extension-heading">{{t .Lang "page_sections.about_extension"}}</h2>{{.AboutExtension}}</section>{{end}}
 </article>
 {{end}}

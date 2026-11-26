@@ -73,7 +73,7 @@ test:
 secret-scan:
   stage: security
   image:
-    name: trufflesecurity/trufflehog:3.95.9
+    name: trufflesecurity/trufflehog:3.95.9@sha256:59b244249d1a1aef4baa24fe73d3c931616264482580d806d77f6c74d26b3e42
     entrypoint: [""]
   script:
     - |
@@ -125,9 +125,9 @@ vuln-scan:
 
 image-scan:
   stage: security
-  image: docker:cli
+  image: docker:cli@sha256:4e60c31615e83523afbb59773b25d055c0da9edcd5f80a4c6a6eebad49de1a25
   services:
-    - name: docker:dind
+    - name: docker:dind@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
       command: ["--tls=false"]
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -138,7 +138,7 @@ image-scan:
     - docker build -f docker/Dockerfile -t api:ci-scan .
     - ./tests/check_image.sh api:ci-scan
     - docker save api:ci-scan -o "$SCAN_DIR/image.tar"
-    - docker run --rm -v /tmp:/tmp aquasec/trivy:0.70.0 image --input "$SCAN_DIR/image.tar" --exit-code 1 --severity CRITICAL,HIGH
+    - docker run --rm -v /tmp:/tmp aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e image --input "$SCAN_DIR/image.tar" --exit-code 1 --severity CRITICAL,HIGH
   rules:
     - exists:
         - docker/Dockerfile
@@ -147,9 +147,9 @@ image-scan:
 
 docker:build:
   stage: docker
-  image: docker:cli
+  image: docker:cli@sha256:4e60c31615e83523afbb59773b25d055c0da9edcd5f80a4c6a6eebad49de1a25
   services:
-    - name: docker:dind
+    - name: docker:dind@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
       command: ["--tls=false"]
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -223,9 +223,9 @@ docker:build:
 
 docker:devel:
   stage: docker
-  image: docker:cli
+  image: docker:cli@sha256:4e60c31615e83523afbb59773b25d055c0da9edcd5f80a4c6a6eebad49de1a25
   services:
-    - name: docker:dind
+    - name: docker:dind@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
       command: ["--tls=false"]
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -324,7 +324,7 @@ release-build:
 
 release:
   stage: release
-  image: curlimages/curl:8.12.1
+  image: curlimages/curl:8.12.1@sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6
   needs:
     - job: release-build
       artifacts: true

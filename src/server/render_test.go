@@ -23,14 +23,17 @@ func renderTestPage(t *testing.T, page string) string {
 	require.True(t, ok, "template %q not registered", page)
 
 	data := PageData{
-		SiteTitle:  "api",
-		Lang:       "en",
-		LangDir:    "ltr",
-		Theme:      "dark",
-		ThemeClass: "theme-dark",
-		Layout:     "public",
-		CSRFToken:  "test-token",
-		FaviconURL: "/static/images/favicon.ico",
+		SiteTitle:          "api",
+		Lang:               "en",
+		LangDir:            "ltr",
+		Theme:              "dark",
+		ThemeClass:         "theme-dark",
+		Layout:             "public",
+		CSRFToken:          "test-token",
+		HelpHubPath:        "/server/help",
+		PreferencesHubPath: "/server/preferences",
+		OwnerTokensPath:    "/server/preferences/tokens",
+		FaviconURL:         "/static/images/favicon.ico",
 	}
 
 	var buf bytes.Buffer

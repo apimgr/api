@@ -5,10 +5,33 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"path"
 	"strings"
 
 	commonhttp "github.com/apimgr/api/src/common/httputil"
+	"github.com/apimgr/api/src/config"
 )
+
+// frontendJSONMiddleware maps explicit JSON requests to the paired API route.
+// The downstream API handler owns the response contract, so frontend
+// negotiation cannot drift from the documented endpoint.
+func frontendJSONMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			accept := strings.ToLower(r.Header.Get("Accept"))
+			if !strings.Contains(accept, "application/json") || strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/locales/") || strings.HasPrefix(r.URL.Path, "/mcp") || strings.HasPrefix(r.URL.Path, "/metrics/") || (r.URL.Path == "/metrics" && cfg.Server.Metrics.Root.Enabled) || (r.URL.Path == "/healthz" && cfg.Server.Healthz.Root.Enabled) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			w.Header().Add("Vary", "Accept")
+			apiRequest := r.Clone(r.Context())
+			urlCopy := *r.URL
+			apiRequest.URL = &urlCopy
+			apiRequest.URL.Path = path.Join(APIBasePath(cfg), r.URL.Path)
+			next.ServeHTTP(w, apiRequest)
+		})
+	}
+}
 
 type bufferedResponse struct {
 	header http.Header

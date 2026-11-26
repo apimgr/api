@@ -107,11 +107,16 @@
     {{end}}
   </section>
 
-  {{if .PrivacyExtension}}<section class="section-card prose">{{.PrivacyExtension}}</section>{{end}}
+  {{if .PrivacyExtension}}<section class="section-card prose" aria-labelledby="privacy-extension-heading"><h2 id="privacy-extension-heading">{{t .Lang "page_sections.privacy_extension"}}</h2>{{.PrivacyExtension}}</section>{{end}}
 
   <section id="privacy-contact" class="section-card" aria-labelledby="privacy-requests">
     <h2 id="privacy-requests">{{t .Lang "page_text.text.privacy.requests.d005c92e32"}}</h2>
-    <p>{{t .Lang "page_text.text.for.privacy.and.data.protection.reporting.se.3dfe914e57"}} <a href="{{path .BaseURL "/server/security/policy"}}">{{t .Lang "page_text.text.security.disclosure.policy.ecf9118024"}}</a>.</p>
+    {{if .DPOEmail}}
+    {{if .DPOName}}<p>{{.DPOName}}</p>{{end}}
+    <p><a href="mailto:{{.DPOEmail}}">{{.DPOEmail}}</a></p>
+    {{else}}
+    <p><a href="{{path .BaseURL "/server/security"}}">{{t .Lang "dpo.security_contact"}}</a></p>
+    {{end}}
   </section>
 </article>
 {{end}}

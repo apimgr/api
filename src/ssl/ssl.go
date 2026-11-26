@@ -212,16 +212,30 @@ func (m *Manager) getLetsEncryptTLSConfig(domains []string) (*tls.Config, error)
 	// Preserve the existing HTTP-01/TLS-ALPN behavior when autocert cannot
 	// complete issuance.
 	tlsConfig.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		domain := hello.ServerName
+		if domain == "" && len(domains) > 0 {
+			domain = domains[0]
+		}
+		if domain != "" {
+			certificateDirectory := filepath.Join(m.config.CertPath, "letsencrypt", dnsCertificateDirectoryName(domain))
+			certPath := filepath.Join(certificateDirectory, "fullchain.pem")
+			keyPath := filepath.Join(certificateDirectory, "privkey.pem")
+			if _, certErr := os.Stat(certPath); certErr == nil {
+				if _, keyErr := os.Stat(keyPath); keyErr == nil {
+					certificate, loadErr := loadValidatedCertificate(certPath, keyPath, domains)
+					if loadErr == nil {
+						return &certificate, nil
+					}
+					log.Printf("SSL: app-managed certificate for %s is unusable: %v", domain, loadErr)
+				}
+			}
+		}
 		cert, err := acmeGetCertificate(hello)
 		if err == nil {
 			return cert, nil
 		}
 
 		log.Printf("SSL: ACME issuance failed for %s, falling back to self-signed: %v", hello.ServerName, err)
-		domain := hello.ServerName
-		if domain == "" && len(domains) > 0 {
-			domain = domains[0]
-		}
 		certPath, keyPath, sErr := GenerateSelfSigned(m.config.CertPath, domain)
 		if sErr != nil {
 			return nil, fmt.Errorf("ACME issuance failed and self-signed fallback failed: %w", sErr)

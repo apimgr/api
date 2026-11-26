@@ -88,15 +88,15 @@ build: clean
 	@echo "Building version $(VERSION)..."
 
 	# Tidy, download, local build and every platform in ONE container (one sh -c loop, never a container per platform)
-	@$(GO_DOCKER_RUN) -e BUILD_LDFLAGS="$(LDFLAGS)" casjaysdev/go:latest sh -c ' \
+	@$(GO_DOCKER_RUN) -v $(abspath $(BINDIR)):/build -e BUILD_LDFLAGS="$(LDFLAGS)" casjaysdev/go:latest sh -c ' \
 		set -e; \
 		go mod tidy; \
 		go mod download; \
 		echo "Building $(PROJECT_NAME) (local platform)..."; \
-		GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR)/$(PROJECT_NAME) ./src; \
+		GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o /build/$(PROJECT_NAME) ./src; \
 		if [ -d src/client ]; then \
 			echo "Building $(PROJECT_NAME)-cli (local platform)..."; \
-			GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR)/$(PROJECT_NAME)-cli ./src/client; \
+			GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o /build/$(PROJECT_NAME)-cli ./src/client; \
 		fi; \
 		for platform in $$(echo "$(PLATFORMS)" | tr "," " "); do \
 			OS=$${platform%/*}; \
@@ -104,10 +104,10 @@ build: clean
 			EXT=""; \
 			if [ "$$OS" = "windows" ]; then EXT=".exe"; fi; \
 			echo "Building server $$OS/$$ARCH..."; \
-			GOOS=$$OS GOARCH=$$ARCH go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR)/$(PROJECT_NAME)-$$OS-$$ARCH$$EXT ./src; \
+			GOOS=$$OS GOARCH=$$ARCH go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o /build/$(PROJECT_NAME)-$$OS-$$ARCH$$EXT ./src; \
 			if [ -d src/client ]; then \
 				echo "Building CLI $$OS/$$ARCH..."; \
-				GOOS=$$OS GOARCH=$$ARCH go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR)/$(PROJECT_NAME)-cli-$$OS-$$ARCH$$EXT ./src/client; \
+				GOOS=$$OS GOARCH=$$ARCH go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o /build/$(PROJECT_NAME)-cli-$$OS-$$ARCH$$EXT ./src/client; \
 			fi; \
 		done'
 
@@ -140,6 +140,13 @@ local: clean
 # Stable SemVer only: a devel version (short commit id or "devel") and any prerelease (-beta, -rc) are published by CI, never by this target
 release-check:
 	@echo "$(VERSION)" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$$' >/dev/null || { echo "ERROR: make release needs a stable SemVer X.Y.Z in release.txt (got '$(VERSION)')" >&2; exit 78; }
+
+# beta tags the current main commit YYYYMMDDHHMMSS-beta and pushes the tag; CI builds and publishes the beta. It never creates a branch
+# and is run by the maintainer, like release (gitcommit has no tag operation)
+beta:
+	@[ "$$(git branch --show-current)" = main ] || { echo "beta: run it on main"; exit 1; }
+	@[ -z "$$(git status --porcelain)" ] || { echo "beta: the working tree is not clean"; exit 1; }
+	@TAG=$$(date -u +%Y%m%d%H%M%S)-beta; git tag "$$TAG" && git push origin "refs/tags/$$TAG" && echo "Pushed $$TAG"
 
 release: release-check build
 	@mkdir -p $(RELDIR)

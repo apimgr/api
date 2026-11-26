@@ -24,8 +24,8 @@ type ownerTokenUsageItem struct {
 type ownerTokenUsageCache struct {
 	mu       sync.Mutex
 	flushMu  sync.Mutex
-	last     map[int64]time.Time
-	pending  map[int64]ownerTokenUsageItem
+	last     map[string]time.Time
+	pending  map[string]ownerTokenUsageItem
 	db       *sql.DB
 	progress chan struct{}
 	stop     chan struct{}
@@ -35,8 +35,8 @@ type ownerTokenUsageCache struct {
 }
 
 var ownerTokenUsage = ownerTokenUsageCache{
-	last:     make(map[int64]time.Time),
-	pending:  make(map[int64]ownerTokenUsageItem),
+	last:     make(map[string]time.Time),
+	pending:  make(map[string]ownerTokenUsageItem),
 	progress: make(chan struct{}, 1),
 }
 
@@ -101,8 +101,8 @@ func stopOwnerTokenUsageFlusher() error {
 }
 
 // recordOwnerTokenUsage coalesces successful validations without writing per request.
-func recordOwnerTokenUsage(ctx context.Context, db *sql.DB, tokenID int64, ownerID string, now time.Time, lastUsed sql.NullInt64) error {
-	if tokenID <= 0 || ownerID == "" {
+func recordOwnerTokenUsage(ctx context.Context, db *sql.DB, tokenID, ownerID string, now time.Time, lastUsed sql.NullInt64) error {
+	if tokenID == "" || ownerID == "" {
 		return errors.New("invalid owner token usage identity")
 	}
 	ownerTokenUsage.mu.Lock()
@@ -154,7 +154,7 @@ func (usage *ownerTokenUsageCache) pruneLocked(now time.Time) {
 		}
 	}
 	for len(usage.last) > ownerTokenUsageMaxEntries {
-		var oldestID int64
+		var oldestID string
 		var oldest time.Time
 		for id, last := range usage.last {
 			if oldest.IsZero() || last.Before(oldest) {
@@ -171,7 +171,7 @@ func (usage *ownerTokenUsageCache) flush(ctx context.Context) error {
 
 	usage.mu.Lock()
 	db := usage.db
-	batch := make(map[int64]ownerTokenUsageItem, len(usage.pending))
+	batch := make(map[string]ownerTokenUsageItem, len(usage.pending))
 	for id, item := range usage.pending {
 		batch[id] = item
 	}

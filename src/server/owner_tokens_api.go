@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // apiOwnerPrimaryIssueHandler issues an owner token only when the caller has
@@ -54,20 +54,30 @@ func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
 				writeTokenAPIError(w, r, "INTERNAL_ERROR", "errors.server_error", http.StatusInternalServerError)
 				return
 			}
-			writeEnvelopeOK(w, http.StatusOK, map[string]any{"tokens": tokens})
+			policy, _ := cfg.Server.Tokens.Normalized()
+			data := map[string]any{"primary": nil, "linked": []ownerTokenAPIItem{}, "max_linked": policy.MaxLinked}
+			for _, token := range tokens {
+				item := ownerTokenAPIItemFrom(token)
+				if token.Kind == "primary" {
+					data["primary"] = item
+				} else {
+					data["linked"] = append(data["linked"].([]ownerTokenAPIItem), item)
+				}
+			}
+			writeEnvelopeOK(w, http.StatusOK, data)
 			return
 		}
 		if r.Method == http.MethodPost && chi.URLParam(r, "id") == "" {
 			apiOwnerLinkedCreate(w, r, cfg, credential)
 			return
 		}
-		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-		if err != nil || id < 1 {
+		id := chi.URLParam(r, "id")
+		if _, err := uuid.Parse(id); err != nil {
 			writeTokenNotFound(w, r)
 			return
 		}
 		action := strings.Trim(strings.TrimPrefix(r.URL.Path, APIBasePath(cfg)+"/server/preferences/tokens/"), "/")
-		action = strings.TrimPrefix(action, strconv.FormatInt(id, 10))
+		action = strings.TrimPrefix(action, id)
 		action = strings.Trim(action, "/")
 		switch {
 		case r.Method == http.MethodPost && action == "reveal":
@@ -77,7 +87,13 @@ func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
 				return
 			}
 			writeTokenAudit(r, "token.revealed", credential, map[string]any{"token_id": id, "token_prefix": ownerTokenPrefix(token)})
-			writeEnvelopeOK(w, http.StatusOK, map[string]string{"owner_token": token})
+			item, ok := findLinkedToken(r.Context(), credential.OwnerID, id)
+			if !ok {
+				writeTokenNotFound(w, r)
+				return
+			}
+			item.LinkedToken = token
+			writeEnvelopeOK(w, http.StatusOK, item)
 		case r.Method == http.MethodPost && action == "rotate":
 			token, err := database.RotateLinkedOwnerToken(r.Context(), database.GetServerDB(), ownerEncryptionKey(cfg), credential.OwnerID, id)
 			if err != nil {
@@ -85,25 +101,42 @@ func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
 				return
 			}
 			writeTokenAudit(r, "token.rotated", credential, map[string]any{"token_id": id, "token_prefix": ownerTokenPrefix(token)})
-			writeEnvelopeOK(w, http.StatusOK, map[string]string{"owner_token": token})
-		case r.Method == http.MethodPatch:
-			var request struct {
-				Name   string `json:"name"`
-				Expiry string `json:"expiry"`
+			item, ok := findLinkedToken(r.Context(), credential.OwnerID, id)
+			if !ok {
+				writeTokenNotFound(w, r)
+				return
 			}
+			item.LinkedToken = token
+			writeEnvelopeOK(w, http.StatusOK, item)
+		case r.Method == http.MethodPatch:
+			var request ownerTokenExpiryRequest
 			if err := decodeOwnerTokenBody(w, r, &request); err != nil {
 				return
 			}
-			expires, err := parseOwnerTokenExpiry(request.Expiry)
-			if err != nil {
+			expiryProvided := request.Expires != nil || request.ExpiresOn != nil
+			if request.Name == nil && !expiryProvided {
 				writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
 				return
 			}
-			if err := database.UpdateLinkedOwnerToken(r.Context(), database.GetServerDB(), credential.OwnerID, id, request.Name, expires); err != nil {
-				writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
+			var expires *time.Time
+			if expiryProvided {
+				var err error
+				expires, err = request.parseExpiry()
+				if err != nil {
+					writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
+					return
+				}
+			}
+			if err := database.PatchLinkedOwnerToken(r.Context(), database.GetServerDB(), credential.OwnerID, id, request.Name, expires, expiryProvided); err != nil {
+				writeLinkedTokenMutationError(w, r, err)
 				return
 			}
-			writeEnvelopeOK(w, http.StatusOK, map[string]bool{"updated": true})
+			item, ok := findLinkedToken(r.Context(), credential.OwnerID, id)
+			if !ok {
+				writeTokenNotFound(w, r)
+				return
+			}
+			writeEnvelopeOK(w, http.StatusOK, item)
 		case r.Method == http.MethodDelete && action == "":
 			items, listErr := database.ListOwnerTokens(r.Context(), database.GetServerDB(), credential.OwnerID)
 			if listErr != nil {
@@ -122,11 +155,45 @@ func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
 				return
 			}
 			writeTokenAudit(r, "token.revoked", credential, map[string]any{"token_id": id, "token_prefix": targetPrefix})
-			writeEnvelopeOK(w, http.StatusOK, map[string]bool{"revoked": true})
+			writeEnvelopeOK(w, http.StatusOK, map[string]string{"id": id, "status": "revoked"})
 		default:
 			writeTokenAPIError(w, r, "METHOD_NOT_ALLOWED", "errors.method_not_allowed", http.StatusMethodNotAllowed)
 		}
 	}
+}
+
+type ownerTokenAPIItem struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name,omitempty"`
+	Kind        string     `json:"kind"`
+	TokenMasked string     `json:"token_masked"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	ExpiresAt   *time.Time `json:"expires_at"`
+	Status      string     `json:"status"`
+	LinkedToken string     `json:"linked_token,omitempty"`
+}
+
+func ownerTokenAPIItemFrom(token database.OwnerToken) ownerTokenAPIItem {
+	return ownerTokenAPIItem{
+		ID: token.ID, Name: token.Name, Kind: token.Kind,
+		TokenMasked: "own_" + strings.Repeat("•", 28) + token.Last4,
+		CreatedAt:   token.CreatedAt, LastUsedAt: token.LastUsed,
+		ExpiresAt: token.ExpiresAt, Status: token.Status,
+	}
+}
+
+func findLinkedToken(ctx context.Context, ownerID, id string) (ownerTokenAPIItem, bool) {
+	tokens, err := database.ListOwnerTokens(ctx, database.GetServerDB(), ownerID)
+	if err != nil {
+		return ownerTokenAPIItem{}, false
+	}
+	for _, token := range tokens {
+		if token.ID == id && token.Kind == "linked" {
+			return ownerTokenAPIItemFrom(token), true
+		}
+	}
+	return ownerTokenAPIItem{}, false
 }
 
 // apiOwnerPrimaryHandler serves reveal, rotate, and delete of the primary.
@@ -168,26 +235,66 @@ func apiOwnerPrimaryHandler(cfg *config.Config, action string) http.HandlerFunc 
 }
 
 func apiOwnerLinkedCreate(w http.ResponseWriter, r *http.Request, cfg *config.Config, credential database.OwnerCredential) {
-	var request struct {
-		Name   string `json:"name"`
-		Expiry string `json:"expiry"`
-	}
+	var request ownerTokenExpiryRequest
 	if err := decodeOwnerTokenBody(w, r, &request); err != nil {
 		return
 	}
-	expires, err := parseOwnerTokenExpiry(request.Expiry)
+	if request.Name == nil {
+		writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
+		return
+	}
+	expires, err := request.parseExpiry()
 	if err != nil {
 		writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
 		return
 	}
 	policy, _ := cfg.Server.Tokens.Normalized()
-	token, item, err := database.CreateLinkedOwnerToken(r.Context(), database.GetServerDB(), ownerEncryptionKey(cfg), credential.OwnerID, request.Name, expires, policy.MaxLinked)
+	token, item, err := database.CreateLinkedOwnerToken(r.Context(), database.GetServerDB(), ownerEncryptionKey(cfg), credential.OwnerID, *request.Name, expires, policy.MaxLinked)
 	if err != nil {
-		writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
+		writeLinkedTokenMutationError(w, r, err)
 		return
 	}
 	writeTokenAudit(r, "token.created", credential, map[string]any{"token_id": item.ID, "source": "linked", "token_prefix": item.Prefix})
-	writeEnvelopeOK(w, http.StatusCreated, map[string]any{"owner_token": token, "token": item})
+	response := ownerTokenAPIItemFrom(item)
+	response.LinkedToken = token
+	writeEnvelopeOK(w, http.StatusCreated, response)
+}
+
+func writeLinkedTokenMutationError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, database.ErrLinkedTokenNameConflict), errors.Is(err, database.ErrLinkedTokenLimit):
+		writeTokenAPIError(w, r, "CONFLICT", "errors.conflict", http.StatusConflict)
+	case errors.Is(err, database.ErrInvalidOwnerToken):
+		writeTokenNotFound(w, r)
+	case errors.Is(err, database.ErrLinkedTokenValidation):
+		writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
+	default:
+		writeTokenAPIError(w, r, "INTERNAL_ERROR", "errors.server_error", http.StatusInternalServerError)
+	}
+}
+
+type ownerTokenExpiryRequest struct {
+	Name      *string `json:"name"`
+	Expires   *string `json:"expires"`
+	ExpiresOn *string `json:"expires_on"`
+}
+
+func (request ownerTokenExpiryRequest) parseExpiry() (*time.Time, error) {
+	if request.Expires != nil && request.ExpiresOn != nil {
+		return nil, errors.New("expires and expires_on cannot both be set")
+	}
+	if request.ExpiresOn != nil {
+		return parseOwnerTokenExpiry(*request.ExpiresOn)
+	}
+	if request.Expires == nil {
+		return parseOwnerTokenExpiry("")
+	}
+	switch strings.TrimSpace(*request.Expires) {
+	case "", "never", "7d", "30d", "90d", "1y":
+	default:
+		return nil, errors.New("expires must be never, 7d, 30d, 90d, or 1y")
+	}
+	return parseOwnerTokenExpiry(*request.Expires)
 }
 
 func primaryOwnerCredential(w http.ResponseWriter, r *http.Request, cfg *config.Config) (database.OwnerCredential, bool) {
@@ -281,10 +388,11 @@ func parseOwnerTokenExpiry(value string) (*time.Time, error) {
 		return &out, nil
 	default:
 		out, err := time.ParseInLocation("2006-01-02", value, time.UTC)
-		if err != nil || !out.After(now) {
-			return nil, errors.New("expiry must be never, 7d, 30d, 90d, 1y, or a future date")
+		if err != nil || out.Format("2006-01-02") < now.Format("2006-01-02") {
+			return nil, errors.New("expiry must be never, 7d, 30d, 90d, 1y, or today or a future UTC date")
 		}
-		return &out, nil
+		endOfDate := out.AddDate(0, 0, 1)
+		return &endOfDate, nil
 	}
 }
 

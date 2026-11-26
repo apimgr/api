@@ -1,0 +1,40 @@
+{{define "site-banners"}}
+{{if and .ConsentVisible (ne .CurrentPath "/server/preferences")}}
+<section class="cookie-banner" role="region" aria-label="{{t .Lang "cookie_consent.manage_preferences"}}">
+  <div class="cookie-banner-content">
+    <p class="cookie-message">{{.ConsentMessage}} - <a class="policy-link" href="{{path .BaseURL .ConsentPolicyURL}}">{{.ConsentPolicyText}}</a></p>
+    {{if .ConsentShowPreferences}}
+    <a class="cookie-preferences-link" href="{{path .BaseURL .PreferencesHubPath}}">{{.ConsentPreferencesText}}</a>
+    {{end}}
+    <div class="cookie-buttons">
+      <form method="post" action="{{path .BaseURL "/server/consent"}}">
+        {{csrfField .CSRFToken}}
+        <input type="hidden" name="choice" value="decline">
+        <input type="hidden" name="return_to" value="{{.CurrentPath}}">
+        <button class="btn-decline" type="submit">{{.ConsentDeclineText}}</button>
+      </form>
+      <form method="post" action="{{path .BaseURL "/server/consent"}}">
+        {{csrfField .CSRFToken}}
+        <input type="hidden" name="choice" value="accept">
+        <input type="hidden" name="return_to" value="{{.CurrentPath}}">
+        <button class="btn-accept" type="submit">{{.ConsentAcceptText}}</button>
+      </form>
+    </div>
+  </div>
+</section>
+{{end}}
+{{range .Announcements}}
+<section class="site-banner site-banner-{{.Type}}" role="{{.Role}}" data-announcement-id="{{.ID}}">
+  <span class="site-banner-icon" aria-hidden="true">{{.Icon}}</span>
+  <span class="site-banner-text">{{if .Title}}<strong>{{.Title}}</strong>{{end}}{{if .Title}}: {{end}}{{.Message}}</span>
+  {{if and .Dismissible (ne $.CurrentPath "/server/preferences")}}
+  <form method="post" action="{{path $.BaseURL "/announcements/dismiss"}}" class="site-banner-dismiss">
+    {{csrfField $.CSRFToken}}
+    <input type="hidden" name="id" value="{{.ID}}">
+    <input type="hidden" name="return_to" value="{{$.CurrentPath}}">
+    <button type="submit" class="site-banner-close" aria-label="{{t $.Lang "common.close"}}">&times;</button>
+  </form>
+  {{end}}
+</section>
+{{end}}
+{{end}}

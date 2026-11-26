@@ -1,10 +1,19 @@
 {{define "head"}}
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="app-name" content="{{.AppName}}">
+<meta name="build-stamp" content="{{.Version}}-{{.CommitID}}">
+<meta name="offline-title" content="{{.OfflineTitle}}">
+<meta name="offline-heading" content="{{.OfflineHeading}}">
+<meta name="offline-message" content="{{.OfflineMessage}}">
 <meta name="description" content="{{if .PageDescription}}{{.PageDescription}}{{else}}{{.SiteDescription}}{{end}}">
-{{if .NoIndex}}<meta name="robots" content="noindex, nofollow">{{end}}
-<meta name="keywords" content="developer tools, api utilities, text tools, crypto tools, converters, validators">
-{{if .DocumentTitle}}<title>{{.DocumentTitle}}</title>{{else}}<title>{{if .PageTitle}}{{.PageTitle}} - {{end}}{{.SiteTitle}}</title>{{end}}
+<meta name="robots" content="{{if .NoIndex}}noindex, nofollow{{else}}index, follow{{end}}">
+{{if .SEOKeywords}}<meta name="keywords" content="{{.SEOKeywords}}">{{end}}
+{{if .SEOAuthor}}<meta name="author" content="{{.SEOAuthor}}">{{end}}
+<link rel="canonical" href="{{.SEOCanonical}}">
+{{range $name, $content := .SEOMetaTags}}<meta name="{{$name}}" content="{{$content}}">{{end}}
+{{range .SEOVerification}}{{if .Name}}<meta name="{{.Name}}" content="{{.Content}}">{{else}}<meta property="{{.Property}}" content="{{.Content}}">{{end}}{{end}}
+{{if .DocumentTitle}}<title>{{.DocumentTitle}}</title>{{else}}<title>{{if .PageTitle}}{{.PageTitle}}{{.SEOTitleSeparator}}{{end}}{{.SiteTitle}}{{if .Tagline}}{{.SEOTitleSeparator}}{{.Tagline}}{{end}}</title>{{end}}
 
 {{/* Every static asset is requested through the "asset" func so the URL carries
      the running build stamp: a matching stamp is served immutable for a year,
@@ -39,10 +48,23 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="{{.SiteTitle}}">
 
+{{if .SEOOpenGraphEnabled}}
 <meta property="og:title" content="{{if .DocumentTitle}}{{.DocumentTitle}}{{else if .PageTitle}}{{.PageTitle}}{{else}}{{.SiteTitle}}{{end}}">
 <meta property="og:description" content="{{if .PageDescription}}{{.PageDescription}}{{else}}{{.SiteDescription}}{{end}}">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="{{.SiteTitle}}">
+{{if .SEOImage}}<meta property="og:image" content="{{.SEOImage}}">{{end}}
+<meta property="og:type" content="{{if .SEOOpenGraphType}}{{.SEOOpenGraphType}}{{else}}website{{end}}">
+<meta property="og:url" content="{{.SEOCanonical}}">
+<meta property="og:site_name" content="{{if .SEOOpenGraphSiteName}}{{.SEOOpenGraphSiteName}}{{else}}{{.SiteTitle}}{{end}}">
+{{end}}
+{{if .SEOTwitterEnabled}}
+<meta name="twitter:card" content="{{if .SEOTwitterCard}}{{.SEOTwitterCard}}{{else}}summary_large_image{{end}}">
+<meta name="twitter:title" content="{{if .DocumentTitle}}{{.DocumentTitle}}{{else if .PageTitle}}{{.PageTitle}}{{else}}{{.SiteTitle}}{{end}}">
+<meta name="twitter:description" content="{{if .PageDescription}}{{.PageDescription}}{{else}}{{.SiteDescription}}{{end}}">
+{{if .SEOImage}}<meta name="twitter:image" content="{{.SEOImage}}">{{end}}
+{{if .SEOTwitterHandle}}<meta name="twitter:site" content="{{.SEOTwitterHandle}}">{{end}}
+{{if .SEOTwitterCreator}}<meta name="twitter:creator" content="{{.SEOTwitterCreator}}">{{end}}
+{{end}}
+<script type="application/ld+json">{{.SEOJSONLD}}</script>
 
 {{block "head-extra" .}}{{end}}
 {{end}}

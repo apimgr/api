@@ -10,6 +10,10 @@
   <a href="#main-content" class="skip-link">{{t .Lang "a11y.skip_to_content"}}</a>
   <a href="#navigation" class="skip-link">{{t .Lang "a11y.skip_to_navigation"}}</a>
 
+  <div id="site-banners" class="site-banners">
+    {{template "site-banners" .}}
+  </div>
+
   {{template "nav-toggle" .}}
   {{template "header" .}}
   {{template "nav-panel" .}}

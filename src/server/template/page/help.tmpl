@@ -32,7 +32,7 @@
     <h2 id="help-more">{{t .Lang "help.more_help"}}</h2>
     <ul class="hub-list">
       {{range .HelpPages}}
-      <li class="hub-item"><a class="hub-link" href="{{.Path}}"><span class="hub-title">{{.Title}}</span><span class="hub-desc">{{.Description}}</span></a></li>
+      <li class="hub-item"><a class="hub-link" href="{{path $.BaseURL .Path}}"><span class="hub-title">{{.Title}}</span><span class="hub-desc">{{.Description}}</span></a></li>
       {{end}}
     </ul>
   </section>

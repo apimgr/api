@@ -9,7 +9,8 @@ type ContactConfig struct {
 	// Security receives vulnerability reports and is surfaced publicly in
 	// security.txt. Defaults to security@{fqdn} per RFC 2142.
 	Security ContactRoleConfig `yaml:"security"`
-	// DPO receives privacy requests before falling back to General and Admin.
+	// DPO contact details are public; the name is optional and the email falls
+	// back to General on the privacy pages.
 	DPO ContactRoleConfig `yaml:"dpo"`
 	// Abuse receives abuse reports. Defaults empty — the server never
 	// auto-advertises an unprovisioned abuse@ mailbox.
@@ -20,6 +21,7 @@ type ContactConfig struct {
 
 // ContactRoleConfig is one role's delivery configuration.
 type ContactRoleConfig struct {
+	Name     string                `yaml:"name"`
 	Email    string                `yaml:"email"`
 	Webhooks ContactWebhooksConfig `yaml:"webhooks"`
 }
@@ -88,10 +90,13 @@ func (c ContactConfig) ResolveAbuse() ContactRoleConfig {
 	return c.ResolveGeneral()
 }
 
-// ResolveDPO applies the privacy contact fallback: DPO, General, then Admin.
+// ResolveDPO applies the privacy contact fallback: DPO, then General.
 func (c ContactConfig) ResolveDPO() ContactRoleConfig {
-	if !c.DPO.IsEmpty() {
+	if c.DPO.Email != "" {
 		return c.DPO
 	}
-	return c.ResolveGeneral()
+	if c.General.Email != "" {
+		return c.General
+	}
+	return ContactRoleConfig{}
 }

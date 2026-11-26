@@ -144,6 +144,32 @@ func TestPostJSON(t *testing.T) {
 	assert.Equal(t, "widget", gotBody["name"])
 }
 
+func TestRequestJSONSupportsMutationMethods(t *testing.T) {
+	for _, method := range []string{http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			var gotMethod string
+			var gotBody map[string]string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotMethod = r.Method
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&gotBody))
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			client := New(srv.URL, "")
+			_, err := client.RequestJSON(method, "/api/v1/server/preferences/tokens/abc", nil, map[string]string{"name": "renamed"})
+			require.NoError(t, err)
+			assert.Equal(t, method, gotMethod)
+			assert.Equal(t, "renamed", gotBody["name"])
+		})
+	}
+}
+
+func TestRequestJSONRejectsUnsupportedMethod(t *testing.T) {
+	_, err := New("https://example.test", "").RequestJSON(http.MethodTrace, "/server/healthz", nil, nil)
+	require.EqualError(t, err, "unsupported HTTP method: TRACE")
+}
+
 // TestErrorStatusCodes verifies 401, 404, and other non-2xx statuses all
 // surface as *Error with the response body preserved, per the do()
 // status handling branches.

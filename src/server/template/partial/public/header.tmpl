@@ -20,20 +20,20 @@
     <div class="header-actions">
       {{if .OwnerTokenCookieExists}}
       <details class="header-preferences">
-        <summary class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><span aria-hidden="true">⚙</span></summary>
+        <summary class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2m9-9h-2M5 12H3m15.36-6.36-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0-1.42-1.42M7.06 7.06 5.64 5.64" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></summary>
         <div class="header-preferences-menu">
-          <a href="{{path .BaseURL "/server/preferences/tokens"}}">{{t .Lang "page_text.text.owner.tokens.a5dc2b2bfe"}}</a>
-          <a href="{{path .BaseURL "/server/preferences"}}">{{t .Lang "common.preferences"}}</a>
+          <a href="{{path .BaseURL .OwnerTokensPath}}">{{t .Lang "page_text.text.owner.tokens.a5dc2b2bfe"}}</a>
+          <a href="{{path .BaseURL .PreferencesHubPath}}">{{t .Lang "common.preferences"}}</a>
         </div>
       </details>
       {{else}}
-      <a href="{{path .BaseURL "/server/preferences"}}" class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><span aria-hidden="true">⚙</span></a>
+      <a href="{{path .BaseURL .PreferencesHubPath}}" class="header-link" aria-label="{{t .Lang "common.preferences"}}" title="{{t .Lang "common.preferences"}}"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2m9-9h-2M5 12H3m15.36-6.36-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0-1.42-1.42M7.06 7.06 5.64 5.64" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></a>
       {{end}}
 
       {{/* A real form submit, so switching themes works with JavaScript
-           disabled; static/js/theme.js only adds instant preview. The target is
-           nextTheme of the theme actually in effect, never a fixed value. */}}
-      <form action="{{path .BaseURL "/server/preferences"}}" method="POST" class="theme-toggle-form">
+           disabled; app.js only adds instant preview. The target is nextTheme
+           of the theme actually in effect, never a fixed value. */}}
+      <form action="{{path .BaseURL .PreferencesHubPath}}" method="POST" class="theme-toggle-form">
         {{csrfField .CSRFToken}}
         <input type="hidden" name="theme" value="{{nextTheme .Theme}}">
         <button type="submit" class="theme-button" aria-label="{{t .Lang "theme.toggle"}}" title="{{t .Lang "theme.toggle"}}">

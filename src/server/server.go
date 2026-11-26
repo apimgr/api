@@ -68,6 +68,8 @@ func New(cfg *config.Config) *http.Server {
 	r.Use(pathSecurityMiddleware)
 	r.Use(loggingMiddleware)
 	r.Use(debugMiddleware(cfg))
+	r.Use(buildStampMiddleware)
+	r.Use(robotsTagMiddleware(cfg))
 	// HTTP metrics are recorded for every request, including ones later
 	// rejected by rate limiting or security headers, so the counters
 	// reflect real traffic rather than only the accepted subset.
@@ -82,6 +84,7 @@ func New(cfg *config.Config) *http.Server {
 	r.Use(i18n.LanguageMiddlewareFor(cfg.Server.I18N.AvailableLanguages))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
+	r.Use(frontendJSONMiddleware(cfg))
 	r.Use(frontendTextMiddleware(paths.ProjectName))
 	r.Use(apiTextMiddleware(paths.ProjectName, &apiRoutes))
 	r.Use(securityHeadersMiddleware(cfg))
@@ -150,25 +153,26 @@ func New(cfg *config.Config) *http.Server {
 	// Standard pages (/server/*)
 	r.Get("/server/about", aboutPageHandler(cfg))
 	r.Get("/server/privacy", privacyPageHandler(cfg))
+	r.Get("/server/dpo", dpoPageHandler(cfg))
 	r.Get("/server/contact", contactWorkflowHandler(cfg, r))
 	r.Post("/server/contact", contactWorkflowHandler(cfg, r))
-	r.Get("/server/help", helpPageHandler(cfg))
+	r.Get(helpHubPath, helpPageHandler(cfg))
 	r.Get("/server/terms", termsPageHandler(cfg))
 	r.Get("/server/security", securityPageHandler(cfg))
 	r.Get("/server/security/policy", securityPolicyPageHandler(cfg))
 	r.Get("/server/security/thanks", securityThanksPageHandler(cfg))
 	r.Get("/server/security/report/{tracking_id}", securityReportStatusPageHandler(cfg))
-	r.Get("/server/help/mcp", helpMCPPageHandler(cfg, func() []swagger.Route { return apiRoutes }))
 	r.Get(APIBasePath(cfg)+"/server/help", helpAPIHandler(cfg))
 	r.Get(APIBasePath(cfg)+"/server/help/mcp", mcpHelpAPIHandler(cfg, func() []swagger.Route { return apiRoutes }))
 	r.Post("/server/ccpa", ccpaOptOutHandler(cfg))
+	r.Post("/server/consent", consentHandler(cfg))
+	r.Post("/announcements/dismiss", announcementDismissHandler(cfg))
 
 	// Guest preferences (PART 16). Theme and language live in cookies only;
 	// export/import carry the same two values to another device without any
 	// server-side record.
-	r.Get("/server/preferences", preferencesPageHandler(cfg))
-	r.Post("/server/preferences", preferencesSaveHandler(cfg))
-	r.Get("/server/preferences/sync", preferencesSyncPageHandler(cfg))
+	r.Get(preferencesHubPath, preferencesPageHandler(cfg))
+	r.Post(preferencesHubPath, preferencesSaveHandler(cfg))
 	r.Post("/server/preferences/sync", preferencesSyncPostHandler)
 	r.Get("/server/preferences/sync/import", preferencesImportHandler)
 	r.Get(APIBasePath(cfg)+"/server/preferences", apiPreferencesHandler)
@@ -184,7 +188,7 @@ func New(cfg *config.Config) *http.Server {
 	if ownerCookieErr != nil || ownerCookieName != paths.OwnerTokenCookieName {
 		panic("invalid owner-token cookie name")
 	}
-	r.Get("/server/preferences/tokens", ownerTokensPageHandler(cfg, ownerCookieName, paths.ProjectName))
+	registerServerPageRoutes(cfg, ownerCookieName, func() []swagger.Route { return apiRoutes }, r.Get)
 	r.Post("/server/preferences/token/reveal", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "reveal"))
 	r.Post("/server/preferences/token/rotate", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "rotate"))
 	r.Post("/server/preferences/token/revoke", ownerTokensActionHandler(cfg, ownerCookieName, paths.ProjectName, "revoke"))
@@ -256,8 +260,8 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/favicon.ico", faviconHandler(cfg))
 	r.Get(brandingFaviconRoute, brandingImageHandler(cfg, func(c *config.Config) string { return c.Server.Branding.Favicon }))
 	r.Get(brandingLogoRoute, brandingImageHandler(cfg, func(c *config.Config) string { return c.Server.Branding.Logo }))
+	r.Get(brandingOGImageRoute, brandingImageHandler(cfg, func(c *config.Config) string { return c.Server.SEO.OGImage }))
 	r.Get("/sw.js", serviceWorkerHandler())
-	r.Get("/offline.html", offlinePageHandler())
 
 	r.Get("/cli/binaries/{artifact}", cliBinaryDownloadHandler(cfg))
 
@@ -270,6 +274,7 @@ func New(cfg *config.Config) *http.Server {
 		// Version
 		r.Get("/version", handler.HandleVersion)
 		r.Get("/server/terms", termsAPIHandler(cfg))
+		r.Get("/server/dpo", dpoAPIHandler(cfg))
 		r.Get("/server/contact", contactAPIHandler(cfg, r))
 		r.Post("/server/contact", contactAPIHandler(cfg, r))
 		r.Get("/server/security", securityAPIHandler(cfg))
@@ -742,6 +747,7 @@ func New(cfg *config.Config) *http.Server {
 
 // Template data
 type PageData struct {
+	AppName                string
 	SiteTitle              string
 	SiteDescription        string
 	SiteIcon               string
@@ -758,6 +764,16 @@ type PageData struct {
 	ConsentPreferences     bool
 	ConsentAnalytics       bool
 	OwnerTokenCookieExists bool
+	ConsentVisible         bool
+	ConsentMessage         string
+	ConsentPolicyURL       string
+	ConsentPolicyText      string
+	ConsentShowPreferences bool
+	ConsentPreferencesText string
+	ConsentDeclineText     string
+	ConsentAcceptText      string
+	Announcements          []siteAnnouncement
+	CurrentPath            string
 	CCPAOptOut             bool
 	CancelURL              string
 	Layout                 string
@@ -765,6 +781,24 @@ type PageData struct {
 	PageTitle              string
 	DocumentTitle          string
 	PageDescription        string
+	OfflineTitle           string
+	OfflineHeading         string
+	OfflineMessage         string
+	SEOKeywords            string
+	SEOAuthor              string
+	SEOImage               string
+	SEOTwitterHandle       string
+	SEOCanonical           string
+	SEOOpenGraphType       string
+	SEOOpenGraphSiteName   string
+	SEOTwitterCard         string
+	SEOTwitterCreator      string
+	SEOTitleSeparator      string
+	SEOMetaTags            map[string]string
+	SEOVerification        []verificationMetaTag
+	SEOJSONLD              template.HTML
+	SEOOpenGraphEnabled    bool
+	SEOTwitterEnabled      bool
 	DocsEndpoint           string
 	DocsStylesheets        []string
 	DocsScripts            []string
@@ -781,6 +815,8 @@ type PageData struct {
 	BuildDate              string
 	Mode                   string
 	SecurityEmail          string
+	DPOName                string
+	DPOEmail               string
 	ContactType            string
 	CaptchaID              string
 	CaptchaQuestion        string
@@ -804,6 +840,10 @@ type PageData struct {
 	PrivacySecurity        template.HTML
 	Categories             []CategoryInfo
 	HelpPages              []helpPageInfo
+	PreferencePages        []helpPageInfo
+	HelpHubPath            string
+	PreferencesHubPath     string
+	OwnerTokensPath        string
 	MCPHelp                *mcpHelpPageData
 	TotalTools             int
 	TotalCategories        int
@@ -851,12 +891,15 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 	categories := allCategories()
 	theme := GetTheme(r)
 	lang := i18n.LangFromRequest(r)
+	pageRegistry := registeredServerPages(lang)
 	data := PageData{
+		AppName: paths.ProjectName,
 		// Title and description are operator branding (PART 16): the head
 		// partial reads them from here so no site identity is hardcoded in a
 		// template.
 		SiteTitle:              cfg.Server.Branding.Title,
 		SiteDescription:        cfg.Server.Branding.Description,
+		Tagline:                cfg.Server.Branding.Tagline,
 		SiteIcon:               "🛠️",
 		BaseURL:                baseURL,
 		APIBasePath:            APIBasePath(cfg),
@@ -864,6 +907,24 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		ThemeClass:             ThemeClass(theme),
 		Lang:                   lang,
 		LangDir:                i18n.Dir(lang),
+		OfflineTitle:           i18n.Translate(lang, "offline.title"),
+		OfflineHeading:         i18n.Translate(lang, "offline.heading"),
+		OfflineMessage:         i18n.Translate(lang, "offline.message"),
+		NoIndex:                cfg.Server.SEO.NoIndex || !publicIndexableRoute(r.URL.Path),
+		SEOKeywords:            strings.Join(cfg.Server.SEO.Keywords, ", "),
+		SEOAuthor:              cfg.Server.SEO.Author,
+		SEOImage:               absoluteAssetURL(r, brandingAssetURL(cfg.Server.SEO.OGImage, brandingOGImageRoute, "")),
+		SEOTwitterHandle:       cfg.Server.SEO.TwitterHandle,
+		SEOCanonical:           canonicalPageURL(r, cfg.Server.SEO.Canonical),
+		SEOOpenGraphType:       cfg.Server.SEO.OpenGraph.Type,
+		SEOOpenGraphSiteName:   cfg.Server.SEO.OpenGraph.SiteName,
+		SEOTwitterCard:         cfg.Server.SEO.Twitter.Card,
+		SEOTwitterCreator:      cfg.Server.SEO.Twitter.Creator,
+		SEOTitleSeparator:      normalizedTitleSeparator(cfg.Server.SEO.TitleSeparator),
+		SEOMetaTags:            validSEOMetaTags(cfg.Server.SEO.MetaTags),
+		SEOVerification:        validSEOVerification(cfg.Server.SEO.Verification),
+		SEOOpenGraphEnabled:    cfg.Server.SEO.OpenGraph.Enabled,
+		SEOTwitterEnabled:      cfg.Server.SEO.Twitter.Enabled,
 		Languages:              i18n.AvailableLanguagesFor(cfg.Server.I18N.AvailableLanguages),
 		Layout:                 "public",
 		ActivePage:             activePage,
@@ -872,7 +933,10 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		BuildDate:              footerBuildDate(),
 		CSRFToken:              CSRFTokenFromContext(r.Context()),
 		OwnerTokenCookieExists: requestHasOwnerTokenCookie(r),
+		CurrentPath:            r.URL.Path,
 		Privacy:                cfg.Server.Privacy,
+		ConsentShowPreferences: cfg.Server.Privacy.Consent.ShowPreferences,
+		ConsentPreferencesText: cfg.Server.Privacy.Consent.PreferencesText,
 		PrivacyRetentionPeriod: cfg.Server.Privacy.Retention.PeriodFor(lang),
 		PrivacyCollection:      template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataCollectionContent())),
 		PrivacyUsage:           template.HTML(text.MarkdownToHTML(cfg.Server.Privacy.DataUsageContent())),
@@ -880,16 +944,33 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		HeaderExtension:        operatorHTML(r, "header"),
 		FooterExtension:        operatorHTML(r, "footer"),
 		Categories:             categories,
+		HelpPages:              pageRegistry.Help,
+		PreferencePages:        pageRegistry.Preferences,
+		HelpHubPath:            pageRegistry.HelpHubPath,
+		PreferencesHubPath:     pageRegistry.PreferencesHubPath,
+		OwnerTokensPath:        pageRegistry.OwnerTokensPath,
 		TotalTools:             len(toolPages()),
 		TotalCategories:        len(categories),
 		FaviconURL:             brandingAssetURL(cfg.Server.Branding.Favicon, brandingFaviconRoute, brandingDefaultFavicon),
 		LogoURL:                brandingAssetURL(cfg.Server.Branding.Logo, brandingLogoRoute, brandingDefaultLogo),
 	}
+	data.ConsentPreferencesText = localizedConfigText(data.ConsentPreferencesText, config.DefaultPrivacyConsentPreferencesText, lang, "cookie_consent.manage_preferences")
+	data.Privacy.Cookies.Essential.Description = localizedConfigText(data.Privacy.Cookies.Essential.Description, config.DefaultPrivacyEssentialCookieDescription, lang, "cookie_consent.essential_description")
+	data.Privacy.Cookies.Preferences.Description = localizedConfigText(data.Privacy.Cookies.Preferences.Description, config.DefaultPrivacyPreferencesCookieDescription, lang, "cookie_consent.preference_description")
+	data.Privacy.Cookies.Analytics.Description = localizedConfigText(data.Privacy.Cookies.Analytics.Description, config.DefaultPrivacyAnalyticsCookieDescription, lang, "cookie_consent.analytics_description")
+	data.Privacy.Cookies.Analytics.DescriptionSuffixNotSold = localizedConfigText(data.Privacy.Cookies.Analytics.DescriptionSuffixNotSold, config.DefaultPrivacyAnalyticsSuffixNotSold, lang, "cookie_consent.analytics_suffix_not_sold")
+	data.Privacy.Cookies.Analytics.DescriptionSuffixSold = localizedConfigText(data.Privacy.Cookies.Analytics.DescriptionSuffixSold, config.DefaultPrivacyAnalyticsSuffixSold, lang, "cookie_consent.analytics_suffix_sold")
+	data.ConsentVisible, data.ConsentMessage, data.ConsentPolicyURL, data.ConsentPolicyText, data.ConsentDeclineText, data.ConsentAcceptText, data.Announcements = siteBannerData(cfg, r)
+	description := data.PageDescription
+	if description == "" {
+		description = data.SiteDescription
+	}
+	data.SEOJSONLD = websiteJSONLD(data.SiteTitle, description, canonicalPageURL(r, cfg.Server.SEO.Canonical))
 	if activePage == "about" {
-		data.AboutExtension = operatorHTML(r, "about")
+		data.AboutExtension = cardContentHeadings(operatorHTML(r, "about"))
 	}
 	if activePage == "privacy" {
-		data.PrivacyExtension = operatorHTML(r, "privacy")
+		data.PrivacyExtension = cardContentHeadings(operatorHTML(r, "privacy"))
 	}
 	// The footer's overlay row is published only when Tor is actually
 	// running with an address, per PART 16's
@@ -1017,7 +1098,7 @@ func initTemplates() error {
 
 	// Public pages use base layout
 	publicPages := []string{
-		"index", "text", "crypto", "datetime", "network", "docs_swagger", "docs_graphql", "error", "about", "privacy", "contact", "help", "help_mcp", "terms", "security", "security_policy", "preferences", "preferences_sync", "healthz",
+		"index", "text", "crypto", "datetime", "network", "docs_swagger", "docs_graphql", "error", "about", "privacy", "dpo", "contact", "help", "help_mcp", "terms", "security", "security_policy", "preferences", "preferences_sync", "healthz",
 		"categories", "convert", "dev", "docker", "fun", "generate", "geo", "image", "language", "lorem", "math",
 		"osint", "parse", "research", "system", "testing", "validate", "weather",
 	}
@@ -1516,8 +1597,44 @@ func privacyPageHandler(cfg *config.Config) http.HandlerFunc {
 		data.PageTitle = i18n.Translate(data.Lang, "privacy.title")
 		data.PageDescription = i18n.Translate(data.Lang, "privacy.summary")
 		data.UpdatedAt = footerBuildDate()
+		data.DPOName, data.DPOEmail = publicDPOContact(cfg)
 		renderPage(w, "privacy", data)
 	}
+}
+
+func dpoPageHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := newPageData(cfg, r, "dpo")
+		data.PageTitle = i18n.Translate(data.Lang, "dpo.title")
+		data.PageDescription = i18n.Translate(data.Lang, "dpo.description")
+		data.DPOName, data.DPOEmail = publicDPOContact(cfg)
+		renderPage(w, "dpo", data)
+	}
+}
+
+func dpoAPIHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name, email := publicDPOContact(cfg)
+		privacyURL := BuildURL(requestWithServerConfig(r, cfg), "/server/privacy")
+		writeEnvelopeOK(w, http.StatusOK, map[string]string{
+			"name":        name,
+			"email":       email,
+			"privacy_url": privacyURL,
+		})
+	}
+}
+
+func publicDPOContact(cfg *config.Config) (name, email string) {
+	if cfg == nil {
+		return "", ""
+	}
+	contact := cfg.Server.Contact
+	name = strings.TrimSpace(contact.DPO.Name)
+	email = strings.TrimSpace(contact.DPO.Email)
+	if email == "" {
+		email = strings.TrimSpace(contact.General.Email)
+	}
+	return name, email
 }
 
 func helpPageHandler(cfg *config.Config) http.HandlerFunc {
@@ -1527,7 +1644,6 @@ func helpPageHandler(cfg *config.Config) http.HandlerFunc {
 		data.PageDescription = i18n.Translate(data.Lang, "help.getting_started")
 		data.RateLimitRequests = cfg.Server.RateLimit.Read.Requests
 		data.RateLimitWindow = cfg.Server.RateLimit.Read.Window
-		data.HelpPages = helpPageRegistry(data.Lang)
 		renderPage(w, "help", data)
 	}
 }
@@ -1734,6 +1850,8 @@ func staticAssetHandler() http.Handler {
 // place of the build version; serviceWorkerHandler substitutes it at serve
 // time so a single embedded asset always advertises the running version.
 const serviceWorkerVersionToken = "__SERVER_VERSION__"
+const serviceWorkerAppNameToken = "__APP_NAME__"
+const serviceWorkerAssetStampToken = "__ASSET_STAMP__"
 
 // serviceWorkerHandler serves the embedded /sw.js at the required root
 // scope with no-cache so browsers always see a new service worker promptly
@@ -1749,25 +1867,12 @@ func serviceWorkerHandler() http.HandlerFunc {
 		// app's semver (api-cache-v{major}.{minor}.{patch}). The embedded
 		// source carries a placeholder so the version is stamped from the
 		// running build rather than drifting as a hardcoded literal.
+		data = bytes.ReplaceAll(data, []byte(serviceWorkerAppNameToken), []byte(paths.ProjectName))
+		data = bytes.ReplaceAll(data, []byte(serviceWorkerAssetStampToken), []byte(assetStamp()))
 		data = bytes.Replace(data, []byte(serviceWorkerVersionToken), []byte(Version), 1)
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("ETag", buildETag())
-		_, _ = w.Write(data)
-	}
-}
-
-// offlinePageHandler serves the embedded /offline.html fallback page that
-// the service worker returns when a navigation request fails offline and
-// no cached copy of the requested page exists.
-func offlinePageHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		data, err := staticFS.ReadFile("static/offline.html")
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(data)
 	}
 }

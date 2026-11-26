@@ -1,12 +1,34 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/apimgr/api/src/client/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRawRequestUsesMutationMethodAndJSONBody(t *testing.T) {
+	srv, rec := newRecordingServer(t, 200, `{"ok":true}`)
+	client := api.New(srv.URL, "")
+
+	_, err := runCommand(t, client, "raw", "request", []string{"patch", "/api/v1/server/preferences/tokens/abc", "name=renamed"})
+	require.NoError(t, err)
+	assert.Equal(t, "PATCH", rec.Method)
+	assert.Equal(t, "/api/v1/server/preferences/tokens/abc", rec.Path)
+	assert.True(t, strings.Contains(string(rec.Body), `"name":"renamed"`))
+}
+
+func TestRawRequestRequiresMethodAndPath(t *testing.T) {
+	srv, rec := newRecordingServer(t, 200, `{}`)
+	client := api.New(srv.URL, "")
+
+	_, err := runCommand(t, client, "raw", "request", []string{"GET"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required argument")
+	assert.Empty(t, rec.Method)
+}
 
 // TestRawGet_HappyPath verifies raw get issues a GET to the given path with
 // key=value pairs turned into query parameters.

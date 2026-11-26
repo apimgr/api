@@ -26,11 +26,15 @@ func TestFrontendNegotiationAcrossRegisteredPages(t *testing.T) {
 
 	pagePaths := []string{
 		"/", "/text", "/crypto", "/datetime", "/categories",
-		"/server/about", "/server/privacy", "/server/contact", "/server/help",
-		"/server/help/mcp", "/server/terms", "/server/security",
+		"/server/about", "/server/privacy", "/server/dpo", "/server/contact", "/server/help",
+		"/server/terms", "/server/security",
 		"/server/security/policy", "/server/security/thanks",
-		"/server/preferences", "/server/preferences/sync",
+		"/server/preferences",
 		"/server/docs/swagger", "/server/docs/graphql", "/server/healthz", "/healthz",
+	}
+	registry := registeredServerPages("en")
+	for _, page := range append(registry.Help, registry.Preferences...) {
+		pagePaths = append(pagePaths, page.Path)
 	}
 	for _, category := range allCategories() {
 		pagePaths = append(pagePaths, category.Path)
@@ -45,6 +49,10 @@ func TestFrontendNegotiationAcrossRegisteredPages(t *testing.T) {
 			require.Equal(t, http.StatusOK, browser.Code)
 			assert.Contains(t, browser.Header().Get("Content-Type"), "text/html")
 			assert.Contains(t, browser.Body.String(), "<html")
+
+			jsonResponse := serveFrontendRequest(srv.Handler, path, "Mozilla/5.0", "application/json")
+			assert.Contains(t, jsonResponse.Header().Get("Content-Type"), "application/json", "frontend JSON negotiation for %s", path)
+			assert.NotContains(t, strings.ToLower(jsonResponse.Body.String()), "<!doctype html")
 
 			plain := serveFrontendRequest(srv.Handler, path, "Mozilla/5.0", "text/plain")
 			require.Equal(t, http.StatusOK, plain.Code)
@@ -89,4 +97,62 @@ func TestFrontendTextNegotiationHonorsExplicitHTMLPrecedence(t *testing.T) {
 	handler.ServeHTTP(response, req)
 	assert.Contains(t, response.Header().Get("Content-Type"), "text/html")
 	assert.Contains(t, response.Body.String(), "<html>")
+}
+
+func TestFrontendJSONNegotiationPreservesRootMetricsAliases(t *testing.T) {
+	for _, path := range []string{"/metrics", "/metrics/prometheus"} {
+		t.Run(path, func(t *testing.T) {
+			cfg := newTestConfig(t)
+			cfg.Server.Metrics.Root.Enabled = true
+			var gotPath string
+			handler := frontendJSONMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.Path
+				w.WriteHeader(http.StatusNoContent)
+			}))
+
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			request.Header.Set("Accept", "application/json")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			assert.Equal(t, http.StatusNoContent, response.Code)
+			assert.Equal(t, path, gotPath)
+		})
+	}
+}
+
+func TestFrontendJSONNegotiationPreservesRootHealthAlias(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Server.Healthz.Root.Enabled = true
+	var gotPath string
+	handler := frontendJSONMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	request.Header.Set("Accept", "application/json")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusNoContent, response.Code)
+	assert.Equal(t, "/healthz", gotPath)
+}
+
+func TestFrontendJSONNegotiationPreservesLocaleAssetPath(t *testing.T) {
+	var gotPath string
+	handler := frontendJSONMiddleware(newTestConfig(t))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/locales/en.json", nil)
+	request.Header.Set("Accept", "application/json")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Equal(t, "/locales/en.json", gotPath)
+	assert.Equal(t, "application/json", response.Header().Get("Content-Type"))
 }

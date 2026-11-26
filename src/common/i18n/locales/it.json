@@ -416,6 +416,13 @@
     "ccpa_opted_out": "La rinuncia alla vendita dei dati è stata registrata.",
     "ccpa_opt_back_in": "Revoca della rinuncia"
   },
+  "dpo": {
+    "title": "Responsabile della protezione dei dati",
+    "description": "Informazioni di contatto per questioni di privacy e protezione dei dati.",
+    "contact": "Responsabile della protezione dei dati",
+    "privacy_policy": "Informativa sulla privacy",
+    "security_contact": "Contatta il team di sicurezza"
+  },
   "terms": {
     "title": "Termini di servizio",
     "acceptance": "Accettazione",
@@ -472,13 +479,16 @@
   },
   "cookie_consent": {
     "message": "Questo messaggio viene visualizzato in conformità al GDPR dell’Unione europea.",
+    "message_if_sold": "Questo messaggio viene visualizzato in conformità al GDPR dell’Unione europea. Utilizziamo cookie per le funzioni essenziali del sito e, con il tuo consenso, per le preferenze e le analisi. I tuoi dati possono essere condivisi o venduti a terzi come descritto nella nostra Informativa sulla privacy.",
     "accept": "Accetta",
     "decline": "Rifiuta",
     "manage_preferences": "Gestisci preferenze",
     "blocked_content": "Contenuti esterni bloccati a causa delle preferenze sui cookie.",
     "essential_description": "Necessario per il funzionamento del sito. Non può essere disabilitato.",
     "preference_description": "Memorizzano impostazioni come il tema (chiaro/scuro), la lingua e le preferenze dell’interfaccia. Se disattivati, i valori predefiniti vengono ripristinati a ogni visita.",
-    "analytics_description": "Ci aiutano a comprendere come viene utilizzato il sito."
+    "analytics_description": "Ci aiutano a comprendere come viene utilizzato il sito.",
+    "analytics_suffix_not_sold": "I dati analitici sono anonimizzati e non vengono mai venduti.",
+    "analytics_suffix_sold": "I dati analitici possono essere condivisi con terzi."
   },
   "about": {
     "title": "Informazioni",
@@ -986,6 +996,9 @@
         }
       },
       "raw": {
+        "request": {
+          "description": "Richiama qualsiasi endpoint API del server con GET, POST, PUT, PATCH o DELETE"
+        },
         "get": {
           "description": "Chiama direttamente qualsiasi endpoint GET del server, anche senza comando dedicato"
         },
@@ -2888,5 +2901,15 @@
     "fallback_heading": "Accesso diretto all’API",
     "graphql_endpoint": "Endpoint GraphQL",
     "openapi_json": "OpenAPI JSON"
+  },
+  "offline": {
+    "title": "Offline",
+    "heading": "Sei offline",
+    "message": "Questa pagina non può essere caricata e non è disponibile alcuna copia nella cache. Controlla la connessione e riprova."
+  },
+  "page_sections": {
+    "terms": "Termini e condizioni",
+    "about_extension": "Informazioni aggiuntive",
+    "privacy_extension": "Informazioni aggiuntive sulla privacy"
   }
 }

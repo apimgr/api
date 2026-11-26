@@ -413,12 +413,12 @@ pipeline {
                     steps {
                         sh '''
                             if [ -n "${GIT_PREVIOUS_COMMIT:-}" ] && git cat-file -e "${GIT_PREVIOUS_COMMIT}^{commit}" 2>/dev/null; then
-                                docker run --rm -v "$WORKSPACE:/repo:ro" -w /repo trufflesecurity/trufflehog:3.95.9 \
+                                docker run --rm -v "$WORKSPACE:/repo:ro" -w /repo trufflesecurity/trufflehog:3.95.9@sha256:59b244249d1a1aef4baa24fe73d3c931616264482580d806d77f6c74d26b3e42 \
                                     git file://. --since-commit "$GIT_PREVIOUS_COMMIT" \
                                     --results=verified,unknown \
                                     --exclude-paths=.github/trufflehog-exclude.txt --fail
                             else
-                                docker run --rm -v "$WORKSPACE:/repo:ro" -w /repo trufflesecurity/trufflehog:3.95.9 \
+                                docker run --rm -v "$WORKSPACE:/repo:ro" -w /repo trufflesecurity/trufflehog:3.95.9@sha256:59b244249d1a1aef4baa24fe73d3c931616264482580d806d77f6c74d26b3e42 \
                                     git file://. --results=verified \
                                     --exclude-paths=.github/trufflehog-exclude.txt --fail
                             fi
@@ -456,7 +456,7 @@ pipeline {
                         sh '''
                             docker build -t local/scan-target:ci -f docker/Dockerfile .
                             ./tests/check_image.sh local/scan-target:ci
-                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.70.0 \
+                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e \
                                 image --exit-code 1 --severity CRITICAL,HIGH local/scan-target:ci
                         '''
                     }

@@ -157,9 +157,10 @@ func GenerateSpecForAPIVersion(version, baseURL, apiVersion string) *Spec {
 func generatePaths(apiBase string) map[string]PathItem {
 	paths := make(map[string]PathItem)
 
-	// Health endpoint
-	paths["/healthz"] = PathItem{
-		Get: &Operation{
+	// Health endpoints are API routes under the versioned server prefix and
+	// the unversioned API alias. The optional root /healthz frontend alias is
+	// registered only when configured and is not an API route.
+	healthOperation := Operation{
 			Summary:     "Health check",
 			Description: "Returns the health status of the API",
 			Tags:        []string{"Health"},
@@ -180,8 +181,10 @@ func generatePaths(apiBase string) map[string]PathItem {
 					},
 				},
 			},
-		},
-	}
+		}
+	paths[apiBase+"/server/healthz"] = PathItem{Get: &healthOperation}
+	apiHealthOperation := healthOperation
+	paths["/api/healthz"] = PathItem{Get: &apiHealthOperation}
 
 	// Version endpoint
 	paths[apiBase+"/version"] = PathItem{

@@ -3,8 +3,11 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
+	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode"
@@ -14,6 +17,136 @@ import (
 )
 
 const sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9"
+
+type verificationMetaTag struct {
+	Name     string
+	Property string
+	Content  string
+}
+
+func canonicalPageURL(r *http.Request, configured string) string {
+	if parsed, err := url.Parse(strings.TrimSpace(configured)); err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + "/" + strings.TrimLeft(r.URL.Path, "/")
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		return parsed.String()
+	}
+	return BuildURL(r, r.URL.Path)
+}
+
+func absoluteAssetURL(r *http.Request, value string) string {
+	if value == "" || strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "data:") {
+		return value
+	}
+	return BuildURL(r, value)
+}
+
+func validSEOMetaTags(tags map[string]string) map[string]string {
+	valid := make(map[string]string)
+	for name, content := range tags {
+		if !validSEOAttribute(name) || len(content) > 1024 {
+			continue
+		}
+		switch strings.ToLower(name) {
+		case "description", "keywords", "author", "robots", "viewport":
+			continue
+		}
+		valid[name] = content
+	}
+	return valid
+}
+
+func validSEOAttribute(value string) bool {
+	if value == "" || len(value) > 64 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || strings.ContainsRune(":_.-", character)) {
+			return false
+		}
+	}
+	return true
+}
+
+func validSEOVerification(config config.VerificationConfig) []verificationMetaTag {
+	var tags []verificationMetaTag
+	appendTag := func(name, property, content string, valid bool) {
+		if valid && strings.TrimSpace(content) != "" {
+			tags = append(tags, verificationMetaTag{Name: name, Property: property, Content: content})
+		}
+	}
+	appendTag("google-site-verification", "", config.Google, validPattern(config.Google, 43, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"))
+	appendTag("msvalidate.01", "", config.Bing, validPattern(config.Bing, 32, "0123456789abcdefABCDEF"))
+	appendTag("yandex-verification", "", config.Yandex, validPattern(config.Yandex, 32, "0123456789abcdef"))
+	appendTag("baidu-site-verification", "", config.Baidu, validPattern(config.Baidu, 64, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"))
+	appendTag("p:domain_verify", "", config.Pinterest, validPattern(config.Pinterest, 64, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"))
+	appendTag("", "fb:domain_verification", config.Facebook, validPattern(config.Facebook, 64, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"))
+	for _, custom := range config.Custom {
+		if (custom.Name == "") == (custom.Property == "") || (custom.Name != "" && !validSEOAttribute(custom.Name)) || (custom.Property != "" && !validSEOAttribute(custom.Property)) || len(custom.Content) > 256 || strings.TrimSpace(custom.Content) == "" {
+			continue
+		}
+		appendTag(custom.Name, custom.Property, custom.Content, true)
+	}
+	return tags
+}
+
+func validPattern(value string, maximum int, allowed string) bool {
+	if value == "" || len(value) > maximum {
+		return false
+	}
+	for _, character := range value {
+		if !strings.ContainsRune(allowed, character) {
+			return false
+		}
+	}
+	return true
+}
+
+func publicIndexableRoute(path string) bool {
+	if path == "/server/help/mcp" {
+		return true
+	}
+	for _, publicPath := range publicSitemapPaths() {
+		if path == publicPath {
+			return true
+		}
+	}
+	return false
+}
+
+func robotsTagMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if publicIndexableRoute(r.URL.Path) && (cfg == nil || !cfg.Server.SEO.NoIndex) {
+				w.Header().Set("X-Robots-Tag", "index, follow")
+			} else {
+				w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func normalizedTitleSeparator(separator string) string {
+	if separator == "" || len(separator) > 8 {
+		return " - "
+	}
+	return separator
+}
+
+func websiteJSONLD(name, description, canonical string) template.HTML {
+	body, err := json.Marshal(map[string]string{
+		"@context":    "https://schema.org",
+		"@type":       "WebSite",
+		"name":        name,
+		"description": description,
+		"url":         canonical,
+	})
+	if err != nil {
+		return "{}"
+	}
+	return template.HTML(body)
+}
 
 type sitemapDocument struct {
 	XMLName xml.Name     `xml:"urlset"`
@@ -82,8 +215,16 @@ func sitemapHandler(cfg *config.Config) http.HandlerFunc {
 			}
 		}
 		paths := publicSitemapPaths()
+		registeredPages := registeredServerPages(i18n.LangFromRequest(r)).Preferences
+		privatePages := make(map[string]struct{}, len(registeredPages))
+		for _, page := range registeredPages {
+			privatePages[page.Path] = struct{}{}
+		}
 		doc := sitemapDocument{XMLNS: sitemapNamespace}
 		for _, path := range paths {
+			if _, registered := privatePages[path]; registered {
+				continue
+			}
 			if !robotsAllowsPath(cfg, path) {
 				continue
 			}
@@ -96,6 +237,9 @@ func sitemapHandler(cfg *config.Config) http.HandlerFunc {
 				entry.Priority = "0.7"
 			}
 			doc.URLs = append(doc.URLs, entry)
+			if cfg.Server.SEO.Sitemap.MaxURLs > 0 && len(doc.URLs) >= cfg.Server.SEO.Sitemap.MaxURLs {
+				break
+			}
 		}
 		modified := time.Now().UTC().Truncate(time.Second)
 		if lastmod != "" {
@@ -111,7 +255,8 @@ func publicSitemapPaths() []string {
 		"/convert", "/dev", "/docker", "/fun", "/generate", "/geo",
 		"/image", "/language", "/lorem", "/math", "/osint", "/parse",
 		"/research", "/system", "/testing", "/validate", "/weather",
-		"/server/about", "/server/privacy", "/server/help", "/server/terms", "/server/security", "/server/security/policy",
+		"/server/about", "/server/privacy", "/server/dpo", "/server/help", "/server/terms", "/server/security", "/server/security/policy",
+		"/server/help/mcp",
 		"/server/docs/swagger", "/server/docs/graphql",
 	}
 	for _, page := range toolPages() {
@@ -145,7 +290,10 @@ func feedHandler(cfg *config.Config, rss bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		origin := BuildURL(r, "")
-		title := cfg.Server.Branding.Title
+		title := cfg.Server.SEO.Feed.Title
+		if title == "" {
+			title = cfg.Server.Branding.Title
+		}
 		if title == "" {
 			title = "api"
 		}

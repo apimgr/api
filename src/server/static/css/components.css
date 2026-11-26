@@ -427,7 +427,7 @@ dialog::backdrop {
   color: var(--on-dark-color);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-lg);
-  z-index: 9999;
+  z-index: var(--z-toast);
   animation: slideIn 0.3s ease;
 }
 
@@ -464,20 +464,17 @@ dialog::backdrop {
 }
 
 .update-banner {
-  position: fixed;
-  bottom: var(--spacing-lg);
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
   background-color: var(--dark-color);
   color: var(--on-dark-color);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-lg);
-  z-index: 9999;
-  max-width: 90%;
+  z-index: var(--z-banner);
+  width: 100%;
   flex-wrap: wrap;
 }
 
@@ -715,7 +712,7 @@ dialog::backdrop {
   border: var(--border-width) solid var(--border-color);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-md);
-  z-index: 1000;
+  z-index: var(--z-dropdown);
   margin-top: var(--spacing-xs);
 }
 
@@ -766,7 +763,7 @@ dialog::backdrop {
 
 .contact-review {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--z-modal);
   inset: 0;
   display: grid;
   align-content: center;

@@ -105,6 +105,24 @@ func (c *Client) PostJSON(path string, body any) ([]byte, error) {
 	return c.do(http.MethodPost, path, nil, payload)
 }
 
+// RequestJSON issues a supported REST method and encodes an optional JSON body.
+func (c *Client) RequestJSON(method, path string, query map[string]string, body any) ([]byte, error) {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	switch method {
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	default:
+		return nil, fmt.Errorf("unsupported HTTP method: %s", method)
+	}
+	if body == nil {
+		return c.do(method, path, query, nil)
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("encode request body: %w", err)
+	}
+	return c.do(method, path, query, payload)
+}
+
 func (c *Client) do(method, path string, query map[string]string, body []byte) ([]byte, error) {
 	if c.BaseURL == "" {
 		return nil, fmt.Errorf("no server configured; use --server or set server.primary in cli.yml")

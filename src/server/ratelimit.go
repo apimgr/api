@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -196,7 +195,7 @@ func RateLimitMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 				} else {
 					authenticatedCredential = credential
 					authenticated = true
-					identityKey = "token:" + credential.OwnerID + ":" + strconv.FormatInt(credential.TokenID, 10)
+					identityKey = "token:" + credential.OwnerID + ":" + credential.TokenID
 					if credential.Kind == "operator" {
 						identityKey = "token:operator"
 					}

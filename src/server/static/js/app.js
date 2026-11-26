@@ -2,11 +2,35 @@
 
 const appBaseURL = document.documentElement.dataset.baseUrl || window.location.origin;
 const appBasePath = new URL(appBaseURL, window.location.href).pathname.replace(/\/+$/, '');
+const renderedBuildStamp = document.querySelector('meta[name="build-stamp"]')?.content || '';
+let newBuildAvailable = false;
+let pendingBuildStamp = '';
 
 function appPath(path) {
   if (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//')) return path;
   return `${appBasePath}${path.startsWith('/') ? path : `/${path}`}`;
 }
+
+function storeOfflineStrings() {
+  if (!('caches' in window)) return;
+  const appName = document.querySelector('meta[name="app-name"]')?.content;
+  const readMeta = name => document.querySelector(`meta[name="${name}"]`)?.content || '';
+  const strings = {
+    lang: document.documentElement.lang || 'en',
+    dir: document.documentElement.dir || 'ltr',
+    title: readMeta('offline-title'),
+    heading: readMeta('offline-heading'),
+    message: readMeta('offline-message'),
+  };
+  if (!appName || !strings.title || !strings.heading || !strings.message) return;
+  caches.open(`${appName}-offline-strings`)
+    .then(cache => cache.put(appPath('/offline-strings.json'), new Response(JSON.stringify(strings), {
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    })))
+    .catch(() => {});
+}
+
+storeOfflineStrings();
 
 // Dynamic UI text comes from the same embedded locale files as server templates.
 const appLocale = {};
@@ -21,6 +45,55 @@ const appLocaleReady = fetch(appPath(`/locales/${encodeURIComponent(document.doc
     .then(response => response.ok ? response.json() : {}))
   .then(messages => Object.assign(appLocale, messages))
   .catch(() => {});
+
+document.addEventListener('submit', async function(event) {
+  const form = event.target.closest('.cookie-banner form, .site-banner-dismiss');
+  if (!form) return;
+  event.preventDefault();
+  const button = event.submitter || form.querySelector('button[type="submit"]');
+  const originalLabel = button ? button.textContent : '';
+  if (button) {
+    await appLocaleReady;
+    button.disabled = true;
+    button.textContent = appText('common.loading');
+  }
+  form.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch(form.action, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'text/html' },
+      body: new URLSearchParams(new FormData(form)),
+    });
+    if (!response.ok || new URL(response.url).origin !== window.location.origin) {
+      throw new Error('Banner action failed');
+    }
+    form.closest('.cookie-banner, .site-banner')?.remove();
+  } catch (_) {
+    form.submit();
+  } finally {
+    form.removeAttribute('aria-busy');
+    if (button && button.isConnected) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+});
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async function(...args) {
+  const response = await nativeFetch(...args);
+  const responseBuildStamp = response.headers.get('X-Build');
+  if (renderedBuildStamp && responseBuildStamp && responseBuildStamp !== renderedBuildStamp) {
+    newBuildAvailable = true;
+    pendingBuildStamp = responseBuildStamp;
+    setTimeout(() => {
+      if (hasUnsavedFormChanges()) showUpdateNotification();
+      else updateApp();
+    }, 1000);
+  }
+  return response;
+};
 
 function appText(key, values = {}) {
   const message = key.split('.').reduce((value, part) => value && value[part], appLocale);
@@ -707,7 +780,8 @@ async function showUpdateNotification() {
   laterBtn.textContent = appText('javascript.later');
   laterBtn.addEventListener('click', function() { banner.remove(); });
   banner.append(label, updateBtn, laterBtn);
-  document.body.appendChild(banner);
+  const bannerRegion = document.getElementById('site-banners') || document.body;
+  bannerRegion.appendChild(banner);
 }
 
 // The controller listener is registered once; an update reloads only after
@@ -716,10 +790,35 @@ let updateAccepted = false;
 let updateReloading = false;
 
 function reloadAfterUpdate() {
+  if (hasUnsavedFormChanges()) {
+    updateAccepted = false;
+    showUpdateNotification();
+    return;
+  }
   if (updateReloading) return;
   updateReloading = true;
   window.location.reload();
 }
+
+function hasUnsavedFormChanges() {
+  return Array.from(document.forms).some(form => {
+    if (form.dataset.dirty === 'true') return true;
+    return Array.from(form.elements).some(control => {
+      if (control.disabled || control.type === 'submit' || control.type === 'button' || control.type === 'reset') return false;
+      if (control.type === 'checkbox' || control.type === 'radio') return control.checked !== control.defaultChecked;
+      if (control.tagName === 'SELECT') return Array.from(control.options).some(option => option.selected !== option.defaultSelected);
+      if (control.type === 'file') return control.files && control.files.length > 0;
+      return 'value' in control && control.value !== control.defaultValue;
+    });
+  });
+}
+
+document.addEventListener('input', event => {
+  if (event.target.form) event.target.form.dataset.dirty = 'true';
+});
+document.addEventListener('change', event => {
+  if (event.target.form) event.target.form.dataset.dirty = 'true';
+});
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', function() {
@@ -729,6 +828,16 @@ if ('serviceWorker' in navigator) {
 
 // Tell the waiting service worker to activate, then guarantee a reload.
 function updateApp() {
+  if (newBuildAvailable) {
+    try {
+      const recoveryKey = `${document.querySelector('meta[name="app-name"]')?.content || 'api'}_recovered`;
+      if (sessionStorage.getItem(recoveryKey) === pendingBuildStamp) return;
+      sessionStorage.setItem(recoveryKey, pendingBuildStamp);
+    } catch (_) { /* The reload guard is best-effort when storage is disabled. */ }
+    window.location.reload();
+    return;
+  }
+  if (hasUnsavedFormChanges()) return;
   updateAccepted = true;
   setTimeout(reloadAfterUpdate, 5000);
   navigator.serviceWorker.ready.then(function(reg) {
@@ -782,3 +891,23 @@ function isIOSSafari() {
   const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
   return isIOS && isSafari;
 }
+
+// Theme changes are real form submissions; this only previews the next mode
+// while the browser is submitting so the preference remains JS-independent.
+(() => {
+  const themeCycle = ['dark', 'light', 'auto'];
+  const currentTheme = () => {
+    const root = document.documentElement;
+    if (root.classList.contains('theme-light')) return 'light';
+    if (root.classList.contains('theme-auto')) return 'auto';
+    return 'dark';
+  };
+
+  document.querySelectorAll('.theme-toggle-form').forEach(form => {
+    form.addEventListener('submit', () => {
+      const next = themeCycle[(themeCycle.indexOf(currentTheme()) + 1) % themeCycle.length];
+      document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
+      document.documentElement.classList.add(`theme-${next}`);
+    });
+  });
+})();

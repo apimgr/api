@@ -416,6 +416,13 @@
     "ccpa_opted_out": "Vous avez refusé la vente de données.",
     "ccpa_opt_back_in": "Réactiver la vente de données"
   },
+  "dpo": {
+    "title": "Délégué à la protection des données",
+    "description": "Coordonnées pour les questions de confidentialité et de protection des données.",
+    "contact": "Délégué à la protection des données",
+    "privacy_policy": "Politique de confidentialité",
+    "security_contact": "Contacter l’équipe de sécurité"
+  },
   "terms": {
     "title": "Conditions d'utilisation",
     "acceptance": "Acceptation",
@@ -472,13 +479,16 @@
   },
   "cookie_consent": {
     "message": "Conformément au RGPD de l'UE, ce message est affiché.",
+    "message_if_sold": "Conformément au RGPD de l'UE, ce message est affiché. Nous utilisons des cookies pour les fonctions essentielles du site et, avec votre consentement, pour les préférences et les statistiques. Vos données peuvent être partagées ou vendues à des tiers, comme indiqué dans notre politique de confidentialité.",
     "accept": "J'accepte",
     "decline": "Refuser",
     "manage_preferences": "Gérer les préférences",
     "blocked_content": "Contenu externe bloqué en raison des préférences de cookies.",
     "essential_description": "Nécessaires au fonctionnement du site. Ne peuvent pas être désactivés.",
     "preference_description": "Mémorise vos paramètres tels que le thème (clair/sombre), la langue et les préférences d'interface. Les désactiver rétablira les valeurs par défaut à chaque visite.",
-    "analytics_description": "Nous aident à comprendre comment le site est utilisé."
+    "analytics_description": "Nous aident à comprendre comment le site est utilisé.",
+    "analytics_suffix_not_sold": "Les données analytiques sont anonymisées et ne sont jamais vendues.",
+    "analytics_suffix_sold": "Les données analytiques peuvent être partagées avec des tiers."
   },
   "about": {
     "title": "À propos",
@@ -975,6 +985,9 @@
         }
       },
       "raw": {
+        "request": {
+          "description": "Appeler n’importe quel endpoint API du serveur avec GET, POST, PUT, PATCH ou DELETE"
+        },
         "get": {
           "description": "Appeler directement tout endpoint GET du serveur, y compris sans commande dédiée"
         },
@@ -2877,5 +2890,15 @@
     "fallback_heading": "Accès direct à l’API",
     "graphql_endpoint": "Point de terminaison GraphQL",
     "openapi_json": "OpenAPI JSON"
+  },
+  "offline": {
+    "title": "Hors ligne",
+    "heading": "Vous êtes hors ligne",
+    "message": "Cette page n’a pas pu être chargée et aucune copie en cache n’est disponible. Vérifiez votre connexion puis réessayez."
+  },
+  "page_sections": {
+    "terms": "Conditions d’utilisation",
+    "about_extension": "Informations complémentaires",
+    "privacy_extension": "Informations complémentaires sur la confidentialité"
   }
 }

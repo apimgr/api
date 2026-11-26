@@ -43,6 +43,15 @@
      themes (universal dimming convention), never swapped. */
   --overlay-color: rgba(0, 0, 0, 0.5);
 
+  /* Public banner and interaction layers follow PART 16's shared stack. */
+  --z-dropdown: 100;
+  --z-banner: 250;
+  --z-overlay: 300;
+  --z-drawer: 350;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
   /* Background & Text */
   --bg-color: #1a1b26;
   --text-color: #c0caf5;
@@ -210,7 +219,7 @@ label:focus-visible,
   position: absolute;
   top: -100%;
   left: 0;
-  z-index: 1100;
+  z-index: var(--z-tooltip);
   padding: var(--spacing-sm) var(--spacing-md);
   color: var(--text-color);
   background-color: var(--bg-color);

@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/mode"
+	"github.com/apimgr/api/src/paths"
 	"github.com/stretchr/testify/require"
 )
 
@@ -98,6 +100,39 @@ func TestDebugRoutesRequireFlagAndOperatorToken(t *testing.T) {
 	recorder = httptest.NewRecorder()
 	srv.Handler.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)
+
+	request = httptest.NewRequest(http.MethodGet, "/debug/pprof", nil)
+	request.Header.Set("Authorization", "Bearer operator-secret")
+	recorder = httptest.NewRecorder()
+	srv.Handler.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "goroutine")
+}
+
+func TestDebugOperatorRoutesRejectOwnerTokensAsForbidden(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Server.Token = "operator-secret"
+	require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+	t.Cleanup(func() { _ = database.Close() })
+
+	key := make([]byte, 32)
+	primary, owner, err := database.IssueOwnerToken(t.Context(), database.GetServerDB(), key)
+	require.NoError(t, err)
+	linked, _, err := database.CreateLinkedOwnerToken(t.Context(), database.GetServerDB(), key, owner.OwnerID, "debug-test", nil, 10)
+	require.NoError(t, err)
+
+	handler := requireDebugOperatorToken(cfg)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for name, token := range map[string]string{"primary owner": primary, "linked owner": linked} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/debug/config", nil)
+			request.Header.Set("Authorization", "Bearer "+token)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusForbidden, recorder.Code)
+		})
+	}
 }
 
 func TestDebugEndpointConfigGatesBothGroups(t *testing.T) {

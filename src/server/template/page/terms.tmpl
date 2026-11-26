@@ -5,7 +5,8 @@
     <p class="page-lead">{{.SiteTitle}}</p>
   </header>
 
-  <section class="section-card" aria-label="{{.PageTitle}}">
+  <section class="section-card" aria-labelledby="terms-content-heading">
+    <h2 id="terms-content-heading">{{t .Lang "page_sections.terms"}}</h2>
     {{.TermsContent}}
   </section>
 </article>

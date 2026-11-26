@@ -416,6 +416,13 @@
     "ccpa_opted_out": "You have opted out of the sale of data.",
     "ccpa_opt_back_in": "Opt Back In"
   },
+  "dpo": {
+    "title": "Data Protection Officer",
+    "description": "Contact information for privacy and data protection matters.",
+    "contact": "Data Protection Officer",
+    "privacy_policy": "Privacy policy",
+    "security_contact": "Contact the security team"
+  },
   "terms": {
     "title": "Terms of Service",
     "acceptance": "Acceptance",
@@ -472,13 +479,16 @@
   },
   "cookie_consent": {
     "message": "In accordance with EU GDPR law, this message is shown.",
+    "message_if_sold": "In accordance with EU GDPR law, this message is shown. We use cookies for essential site functionality and, with your consent, for preferences and analytics. Your data may be shared with or sold to third parties as described in our Privacy Policy.",
     "accept": "Accept",
     "decline": "Decline",
     "manage_preferences": "Manage Preferences",
     "blocked_content": "External content blocked due to cookie preferences.",
     "essential_description": "Necessary for the site to function. Cannot be disabled.",
     "preference_description": "Remember your settings such as theme (light/dark), language, and interface preferences. Disabling these will reset defaults on every visit.",
-    "analytics_description": "Help us understand how the site is used."
+    "analytics_description": "Help us understand how the site is used.",
+    "analytics_suffix_not_sold": "Analytics data is anonymized and never sold.",
+    "analytics_suffix_sold": "Analytics data may be shared with third parties."
   },
   "about": {
     "title": "About",
@@ -979,6 +989,9 @@
         }
       },
       "raw": {
+        "request": {
+          "description": "Call any server API endpoint with GET, POST, PUT, PATCH, or DELETE"
+        },
         "get": {
           "description": "Call any server GET endpoint directly, including endpoints without a dedicated command"
         },
@@ -2881,5 +2894,15 @@
     "fallback_heading": "Direct API access",
     "graphql_endpoint": "GraphQL endpoint",
     "openapi_json": "OpenAPI JSON"
+  },
+  "offline": {
+    "title": "Offline",
+    "heading": "You are offline",
+    "message": "This page could not be loaded and no cached copy is available. Check your connection and try again."
+  },
+  "page_sections": {
+    "terms": "Terms and conditions",
+    "about_extension": "Additional information",
+    "privacy_extension": "Additional privacy information"
   }
 }

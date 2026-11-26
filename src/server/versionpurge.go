@@ -15,6 +15,15 @@ const buildCookieName = "api_build"
 // build-stamp cookie.
 const buildCookieMaxAge = 31536000
 
+// buildStampMiddleware publishes the running build identifier so the browser
+// can recover an open page after a server restart.
+func buildStampMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Build", assetStamp())
+		next.ServeHTTP(w, r)
+	})
+}
+
 // assetStamp returns the running build's asset stamp,
 // `{project_version}-{short_commit}` per AI.md PART 9 "Asset Version-Busting".
 // This is the single source of truth for the stamp: the build-stamp cookie,

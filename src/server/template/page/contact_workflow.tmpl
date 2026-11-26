@@ -35,7 +35,8 @@
     </div>
   </section>
   {{else if .Type}}
-  <section class="section-card">
+  <section class="section-card" aria-labelledby="contact-form-heading">
+    <h2 id="contact-form-heading">{{t .Lang "common.contact"}}</h2>
     <form method="post" action="{{path .BaseURL "/server/contact"}}">
       {{csrfField .CSRFToken}}
       <input type="hidden" name="type" value="{{.Type}}"><input type="hidden" name="security_id" value="{{.SecurityID}}">
@@ -57,7 +58,7 @@
   </section>
   {{else}}
   <section class="section-card" aria-labelledby="contact-chooser">
-    <h2>{{t .Lang "contact.choose_type"}}</h2>
+    <h2 id="contact-chooser">{{t .Lang "contact.choose_type"}}</h2>
     <ul>
       <li><a href="{{path .BaseURL "/server/contact?type=abuse"}}">{{t .Lang "contact.type.abuse"}}</a></li>
       <li><a href="{{path .BaseURL "/server/contact?type=dmca"}}">{{t .Lang "contact.type.dmca"}}</a></li>

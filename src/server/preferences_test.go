@@ -243,7 +243,7 @@ func TestPreferencesSaveHandlerRedirects(t *testing.T) {
 	req.Host = "example.com"
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", "http://example.com/server/help")
-	req.AddCookie(&http.Cookie{Name: "cookie_consent", Value: url.QueryEscape(`{"essential":true,"preferences":true}`)})
+	req.AddCookie(&http.Cookie{Name: "cookie_consent", Value: url.PathEscape(`{"essential":true,"preferences":true,"analytics":false,"timestamp":1}`)})
 	w := httptest.NewRecorder()
 
 	preferencesSaveHandler(config.DefaultConfig())(w, req)
@@ -252,6 +252,18 @@ func TestPreferencesSaveHandlerRedirects(t *testing.T) {
 	assert.Equal(t, "/server/help", w.Header().Get("Location"))
 	assert.Equal(t, "light", cookieValue(w, "theme"))
 	assert.Equal(t, "de", cookieValue(w, "lang"))
+}
+
+func TestPreferencesPageStartsNonEssentialCookiesOffWithoutConsent(t *testing.T) {
+	require.NoError(t, initTemplates())
+	cfg := newTestConfig(t)
+	response := httptest.NewRecorder()
+	preferencesPageHandler(cfg)(response, httptest.NewRequest(http.MethodGet, "/server/preferences", nil))
+
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.NotContains(t, response.Body.String(), `class="cookie-banner"`)
+	assert.NotContains(t, response.Body.String(), `name="consent_preferences" checked`)
+	assert.NotContains(t, response.Body.String(), `name="consent_analytics" checked`)
 }
 
 func TestPreferencesSaveRequiresPreferenceConsent(t *testing.T) {

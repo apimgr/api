@@ -15,6 +15,7 @@ import (
 const (
 	brandingFaviconRoute = "/branding/favicon"
 	brandingLogoRoute    = "/branding/logo"
+	brandingOGImageRoute = "/branding/og-image"
 )
 
 // Embedded defaults used whenever the operator has not configured a custom
@@ -37,7 +38,7 @@ func brandingAssetURL(configured, route, embeddedDefault string) string {
 		}
 		return assetURL(embeddedDefault)
 	}
-	if strings.HasPrefix(configured, "https://") || strings.HasPrefix(configured, "http://") {
+	if strings.HasPrefix(configured, "https://") || strings.HasPrefix(configured, "data:") {
 		return configured
 	}
 	return route
@@ -51,7 +52,7 @@ func brandingLocalFile(configured string) (string, bool) {
 	if configured == "" {
 		return "", false
 	}
-	if strings.HasPrefix(configured, "https://") || strings.HasPrefix(configured, "http://") {
+	if strings.HasPrefix(configured, "https://") || strings.HasPrefix(configured, "data:") {
 		return "", false
 	}
 	if !filepath.IsAbs(configured) {

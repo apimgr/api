@@ -416,6 +416,13 @@
     "ccpa_opted_out": "Sie haben dem Verkauf Ihrer Daten widersprochen.",
     "ccpa_opt_back_in": "Verkauf wieder zulassen"
   },
+  "dpo": {
+    "title": "Datenschutzbeauftragte",
+    "description": "Kontaktinformationen zu Datenschutzfragen.",
+    "contact": "Datenschutzbeauftragte",
+    "privacy_policy": "Datenschutzerklärung",
+    "security_contact": "Sicherheitsteam kontaktieren"
+  },
   "terms": {
     "title": "Nutzungsbedingungen",
     "acceptance": "Annahme",
@@ -472,13 +479,16 @@
   },
   "cookie_consent": {
     "message": "Gemäß der EU-DSGVO wird diese Meldung angezeigt.",
+    "message_if_sold": "Gemäß der EU-DSGVO wird diese Meldung angezeigt. Wir verwenden Cookies für wesentliche Funktionen der Website und mit Ihrer Einwilligung für Einstellungen und Analysen. Ihre Daten können wie in unserer Datenschutzerklärung beschrieben an Dritte weitergegeben oder verkauft werden.",
     "accept": "Akzeptieren",
     "decline": "Ablehnen",
     "manage_preferences": "Einstellungen verwalten",
     "blocked_content": "Externe Inhalte aufgrund der Cookie-Einstellungen blockiert.",
     "essential_description": "Für den Betrieb der Website erforderlich. Können nicht deaktiviert werden.",
     "preference_description": "Speichert Ihre Einstellungen wie Design (hell/dunkel), Sprache und Oberflächenpräferenzen. Bei Deaktivierung werden bei jedem Besuch die Standardwerte wiederhergestellt.",
-    "analytics_description": "Helfen uns zu verstehen, wie die Website genutzt wird."
+    "analytics_description": "Helfen uns zu verstehen, wie die Website genutzt wird.",
+    "analytics_suffix_not_sold": "Analysedaten werden anonymisiert und niemals verkauft.",
+    "analytics_suffix_sold": "Analysedaten können an Dritte weitergegeben werden."
   },
   "about": {
     "title": "Über uns",
@@ -975,6 +985,9 @@
         }
       },
       "raw": {
+        "request": {
+          "description": "Jeden Server-API-Endpunkt mit GET, POST, PUT, PATCH oder DELETE aufrufen"
+        },
         "get": {
           "description": "Beliebigen Server-GET-Endpunkt direkt aufrufen, auch ohne eigenen Befehl"
         },
@@ -2877,5 +2890,15 @@
     "fallback_heading": "Direkter API-Zugriff",
     "graphql_endpoint": "GraphQL-Endpunkt",
     "openapi_json": "OpenAPI JSON"
+  },
+  "offline": {
+    "title": "Offline",
+    "heading": "Sie sind offline",
+    "message": "Diese Seite konnte nicht geladen werden und es ist keine zwischengespeicherte Kopie verfügbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+  },
+  "page_sections": {
+    "terms": "Nutzungsbedingungen",
+    "about_extension": "Zusätzliche Informationen",
+    "privacy_extension": "Zusätzliche Datenschutzinformationen"
   }
 }

@@ -314,12 +314,34 @@ func TestTier3UUIDToolInteraction(t *testing.T) {
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(suite.browserURL+"/text/uuid"),
 		chromedp.WaitReady("#uuid-form", chromedp.ByID),
-		chromedp.Click("#uuid-form button[type=submit]", chromedp.ByQuery, chromedp.NodeReady),
+	); err != nil {
+		saveArtifacts(t, ctx, "tier3-uuid")
+		t.Fatalf("/text/uuid: load the UUID form in the browser: %v", err)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(".cookie-banner .btn-accept", chromedp.ByQuery),
+		chromedp.WaitNotPresent(".cookie-banner", chromedp.ByQuery),
+	); err != nil {
+		saveArtifacts(t, ctx, "tier3-uuid-consent")
+		t.Fatalf("/text/uuid: accept first-visit consent before using the covered form: %v", err)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible("#uuid-form button[type=submit]", chromedp.ByQuery),
+		chromedp.Click("#uuid-form button[type=submit]", chromedp.ByQuery),
+	); err != nil {
+		saveArtifacts(t, ctx, "tier3-uuid")
+		t.Fatalf("/text/uuid: submit the UUID form in the browser: %v", err)
+	}
+	var state string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`JSON.stringify({readyState: document.readyState, templateHandler: typeof executeToolTemplate, resultHidden: document.querySelector('#uuid-result')?.hidden, buttonDisabled: document.querySelector('#uuid-form button[type=submit]')?.disabled})`, &state)); err != nil {
+		t.Fatalf("/text/uuid: inspect browser state after submission: %v", err)
+	}
+	if err := chromedp.Run(ctx,
 		chromedp.WaitVisible("#uuid-result", chromedp.ByID),
 		chromedp.Text("#uuid-result", &result, chromedp.ByID),
 	); err != nil {
 		saveArtifacts(t, ctx, "tier3-uuid")
-		t.Fatalf("/text/uuid: generate a UUID in the browser: %v", err)
+		t.Fatalf("/text/uuid: wait for the generated UUID in the browser: %v (browser state after submission: %s; requests: %v; console errors: %v; failed requests: %v)", err, state, rec.requestURLs(), rec.consoleErrors(), rec.failedRequests())
 	}
 
 	var payload struct {

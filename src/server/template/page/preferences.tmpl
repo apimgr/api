@@ -48,7 +48,7 @@
     <button class="btn btn-primary" type="submit">{{t .Lang "common.save"}}</button>
   </div>
   <div id="reset-preferences" class="reset-popover" popover>
-    <h2>{{t .Lang "page_text.text.forget.these.preferences.8c965f7367"}}</h2>
+    <h3>{{t .Lang "page_text.text.forget.these.preferences.8c965f7367"}}</h3>
     <p>{{t .Lang "page_text.text.this.erases.this.site.s.non.credential.cooki.353bf506e3"}}</p>
     <div class="form-actions">
       <button class="btn btn-secondary" type="button" popovertarget="reset-preferences" popovertargetaction="hide">{{t .Lang "page_text.text.keep.preferences.6d410e1ca4"}}</button>
@@ -60,8 +60,9 @@
   <section class="section-card" aria-labelledby="more-preferences">
     <h2 id="more-preferences">{{t .Lang "page_text.text.more.preferences.f63eb9a8c7"}}</h2>
     <ul class="hub-list">
-      <li class="hub-item"><a class="hub-link" href="{{path .BaseURL "/server/preferences/sync"}}"><span class="hub-title">{{t .Lang "page_text.text.sync.preferences.fc79211080"}}</span><span class="hub-desc">{{t .Lang "page_text.text.transfer.theme.and.language.settings.to.anot.69eb391118"}}</span></a></li>
-      <li class="hub-item"><a class="hub-link" href="{{path .BaseURL "/server/preferences/tokens"}}"><span class="hub-title">{{t .Lang "page_text.text.owner.tokens.a5dc2b2bfe"}}</span><span class="hub-desc">{{t .Lang "page_text.text.manage.the.credentials.that.identify.your.an.e3e4a1b248"}}</span></a></li>
+      {{range .PreferencePages}}
+      <li class="hub-item"><a class="hub-link" href="{{path $.BaseURL .Path}}"><span class="hub-title">{{.Title}}</span><span class="hub-desc">{{.Description}}</span></a></li>
+      {{end}}
     </ul>
   </section>
 </article>

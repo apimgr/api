@@ -23,7 +23,9 @@ func TestGenerateSpec(t *testing.T) {
 	assert.Equal(t, "https://api.example.com", spec.Servers[0].URL)
 
 	// Base paths.
-	assert.Contains(t, spec.Paths, "/healthz")
+	assert.NotContains(t, spec.Paths, "/healthz")
+	assert.Contains(t, spec.Paths, "/api/v1/server/healthz")
+	assert.Contains(t, spec.Paths, "/api/healthz")
 	assert.Contains(t, spec.Paths, "/api/v1/version")
 
 	// Text endpoints.
@@ -54,10 +56,13 @@ func TestGenerateSpec(t *testing.T) {
 // The health check path must document a GET operation with a 200 response.
 func TestGenerateSpecHealthzOperation(t *testing.T) {
 	spec := GenerateSpec("1.0.0", "http://localhost")
-	item := spec.Paths["/healthz"]
+	item := spec.Paths["/api/v1/server/healthz"]
 	require.NotNil(t, item.Get)
 	assert.Equal(t, "healthCheck", item.Get.OperationID)
 	assert.Contains(t, item.Get.Responses, "200")
+	alias := spec.Paths["/api/healthz"]
+	require.NotNil(t, alias.Get)
+	assert.Equal(t, "healthCheck", alias.Get.OperationID)
 }
 
 // Path parameters (e.g. {algorithm}, {input}) must be declared as required

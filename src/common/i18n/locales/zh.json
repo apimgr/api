@@ -416,6 +416,13 @@
     "ccpa_opted_out": "您已选择退出数据销售。",
     "ccpa_opt_back_in": "重新选择加入"
   },
+  "dpo": {
+    "title": "数据保护官",
+    "description": "隐私和数据保护事项的联系信息。",
+    "contact": "数据保护官",
+    "privacy_policy": "隐私政策",
+    "security_contact": "联系安全团队"
+  },
   "terms": {
     "title": "服务条款",
     "acceptance": "接受条款",
@@ -472,13 +479,16 @@
   },
   "cookie_consent": {
     "message": "根据欧盟 GDPR 法规，显示此消息。",
+    "message_if_sold": "根据欧盟 GDPR 法规显示此消息。我们使用 Cookie 来提供网站的基本功能，并在您同意后用于偏好设置和分析。根据我们的隐私政策，您的数据可能会与第三方共享或出售给第三方。",
     "accept": "接受",
     "decline": "拒绝",
     "manage_preferences": "管理偏好设置",
     "blocked_content": "由于 Cookie 偏好设置，外部内容已被屏蔽。",
     "essential_description": "网站正常运行所必需，无法禁用。",
     "preference_description": "记住您的设置，例如主题（浅色/深色）、语言和界面偏好。禁用后每次访问将恢复默认值。",
-    "analytics_description": "帮助我们了解网站的使用情况。"
+    "analytics_description": "帮助我们了解网站的使用情况。",
+    "analytics_suffix_not_sold": "分析数据会进行匿名化处理，绝不会出售。",
+    "analytics_suffix_sold": "分析数据可能会与第三方共享。"
   },
   "about": {
     "title": "关于",
@@ -968,6 +978,9 @@
         }
       },
       "raw": {
+        "request": {
+          "description": "使用 GET、POST、PUT、PATCH 或 DELETE 调用任意服务器 API 端点"
+        },
         "get": {
           "description": "直接调用任意服务器 GET 端点，包括没有专用命令的端点"
         },
@@ -2870,5 +2883,15 @@
     "fallback_heading": "直接访问 API",
     "graphql_endpoint": "GraphQL 端点",
     "openapi_json": "OpenAPI JSON"
+  },
+  "offline": {
+    "title": "离线",
+    "heading": "您当前处于离线状态",
+    "message": "无法加载此页面，也没有可用的缓存副本。请检查网络连接后重试。"
+  },
+  "page_sections": {
+    "terms": "条款和条件",
+    "about_extension": "其他信息",
+    "privacy_extension": "其他隐私信息"
   }
 }

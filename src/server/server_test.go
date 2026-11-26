@@ -140,6 +140,8 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		{"home page", http.MethodGet, "/", http.StatusOK},
 		{"about page", http.MethodGet, "/server/about", http.StatusOK},
 		{"privacy page", http.MethodGet, "/server/privacy", http.StatusOK},
+		{"DPO page", http.MethodGet, "/server/dpo", http.StatusOK},
+		{"DPO API mirror", http.MethodGet, "/api/v1/server/dpo", http.StatusOK},
 		{"contact page", http.MethodGet, "/server/contact", http.StatusOK},
 		{"contact API descriptor", http.MethodGet, "/api/v1/server/contact", http.StatusOK},
 		{"help page", http.MethodGet, "/server/help", http.StatusOK},

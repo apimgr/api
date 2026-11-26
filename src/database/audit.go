@@ -54,7 +54,7 @@ func WriteAuditEventWithSource(ctx context.Context, event, actor, ipAddress, sou
 	_, err := execContext(queryCtx, serverDB,
 		`INSERT INTO audit_log (timestamp, event, actor, ip_address, source, details)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		time.Now().UTC().Format(time.RFC3339), event, actor, ipAddress, source, encoded)
+		time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), event, actor, ipAddress, source, encoded)
 	if err != nil {
 		return fmt.Errorf("audit: write %s: %w", event, err)
 	}

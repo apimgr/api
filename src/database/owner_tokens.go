@@ -15,14 +15,21 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-var ErrInvalidOwnerToken = errors.New("invalid owner token")
+var (
+	ErrInvalidOwnerToken       = errors.New("invalid owner token")
+	ErrLinkedTokenValidation   = errors.New("invalid linked token name or expiry")
+	ErrLinkedTokenNameConflict = errors.New("linked token name must be unique for this owner")
+	ErrLinkedTokenLimit        = errors.New("owner has reached the maximum active linked tokens")
+)
 
 const ownerTokenAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 type OwnerToken struct {
-	ID        int64      `json:"id"`
+	ID        string     `json:"id"`
 	OwnerID   string     `json:"-"`
 	Kind      string     `json:"kind"`
 	Name      string     `json:"name,omitempty"`
@@ -37,7 +44,7 @@ type OwnerToken struct {
 
 type OwnerCredential struct {
 	OwnerID string
-	TokenID int64
+	TokenID string
 	Kind    string
 	Prefix  string
 }
@@ -88,7 +95,7 @@ func IssueOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte) (str
 	if err != nil {
 		return "", OwnerCredential{}, err
 	}
-	var id int64
+	var id string
 	err = withWriteTransaction(ctx, db, func(tx *sql.Tx) error {
 		if _, err := execTxContext(ctx, tx, `INSERT INTO owners (id) VALUES (?)`, ownerID); err != nil {
 			return err
@@ -177,13 +184,13 @@ func ListOwnerTokens(ctx context.Context, db *sql.DB, ownerID string) ([]OwnerTo
 func CreateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID, name string, expiresAt *time.Time, maxActive int) (string, OwnerToken, error) {
 	name = strings.TrimSpace(name)
 	if n := len([]rune(name)); n < 1 || n > 64 {
-		return "", OwnerToken{}, errors.New("linked token name must be 1 to 64 characters")
+		return "", OwnerToken{}, fmt.Errorf("%w: name must be 1 to 64 characters", ErrLinkedTokenValidation)
 	}
 	if maxActive <= 0 {
 		maxActive = 25
 	}
 	if expiresAt != nil && !expiresAt.After(time.Now()) {
-		return "", OwnerToken{}, errors.New("linked token expiry must be in the future")
+		return "", OwnerToken{}, fmt.Errorf("%w: expiry must be in the future", ErrLinkedTokenValidation)
 	}
 	token, err := newOwnerToken()
 	if err != nil {
@@ -193,21 +200,21 @@ func CreateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byt
 	if err != nil {
 		return "", OwnerToken{}, err
 	}
-	var id int64
+	var id string
 	err = withWriteTransaction(ctx, db, func(tx *sql.Tx) error {
 		var active int
 		if err := queryRowTxContext(ctx, tx, `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ? AND kind='linked' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > strftime('%s','now'))`, ownerID).Scan(&active); err != nil {
 			return err
 		}
 		if active >= maxActive {
-			return fmt.Errorf("owner has reached the maximum of %d active linked tokens", maxActive)
+			return fmt.Errorf("%w: %d", ErrLinkedTokenLimit, maxActive)
 		}
 		var duplicate int
 		if err := queryRowTxContext(ctx, tx, `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ? AND kind = 'linked' AND name = ?`, ownerID, name).Scan(&duplicate); err != nil {
 			return err
 		}
 		if duplicate > 0 {
-			return errors.New("linked token name must be unique for this owner")
+			return ErrLinkedTokenNameConflict
 		}
 		var expires any
 		if expiresAt != nil {
@@ -224,7 +231,7 @@ func CreateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byt
 }
 
 // RevealOwnerToken decrypts one token for an explicit reveal operation.
-func RevealOwnerToken(ctx context.Context, db *sql.DB, ownerID string, tokenID int64, encryptionKeys ...[]byte) (string, error) {
+func RevealOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string, encryptionKeys ...[]byte) (string, error) {
 	var encoded string
 	err := queryRowContext(ctx, db, `SELECT token_enc FROM api_tokens WHERE owner_id = ? AND id = ? AND kind = 'primary' AND revoked_at IS NULL`, ownerID, tokenID).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -250,7 +257,7 @@ func RevealOwnerToken(ctx context.Context, db *sql.DB, ownerID string, tokenID i
 }
 
 // RevealLinkedOwnerToken decrypts only an active linked token.
-func RevealLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID string, tokenID int64, encryptionKeys ...[]byte) (string, error) {
+func RevealLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string, encryptionKeys ...[]byte) (string, error) {
 	var encoded string
 	err := queryRowContext(ctx, db, `SELECT token_enc FROM api_tokens WHERE owner_id = ? AND id = ? AND kind = 'linked' AND revoked_at IS NULL`, ownerID, tokenID).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -277,16 +284,16 @@ func RevealLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID string, tok
 
 // RotateOwnerToken changes one token value in place while preserving owner
 // identity and every other linked credential.
-func RotateOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID string, tokenID int64) (string, error) {
+func RotateOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID, tokenID string) (string, error) {
 	return rotateOwnerToken(ctx, db, encryptionKey, ownerID, tokenID, "primary")
 }
 
 // RotateLinkedOwnerToken rotates only a linked credential.
-func RotateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID string, tokenID int64) (string, error) {
+func RotateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID, tokenID string) (string, error) {
 	return rotateOwnerToken(ctx, db, encryptionKey, ownerID, tokenID, "linked")
 }
 
-func rotateOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID string, tokenID int64, kind string) (string, error) {
+func rotateOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID, tokenID, kind string) (string, error) {
 	token, err := newOwnerToken()
 	if err != nil {
 		return "", err
@@ -310,7 +317,7 @@ func rotateOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, own
 }
 
 // RevokeLinkedOwnerToken permanently revokes a linked credential.
-func RevokeLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID string, tokenID int64) error {
+func RevokeLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string) error {
 	result, err := execContext(ctx, db, `UPDATE api_tokens SET revoked_at = strftime('%s','now'), revoked_reason = 'owner' WHERE owner_id = ? AND id = ? AND kind = 'linked' AND revoked_at IS NULL`, ownerID, tokenID)
 	if err != nil {
 		return err
@@ -326,26 +333,45 @@ func RevokeLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID string, tok
 }
 
 // UpdateLinkedOwnerToken changes a linked token's label and expiry only.
-func UpdateLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID string, tokenID int64, name string, expiresAt *time.Time) error {
-	name = strings.TrimSpace(name)
-	if n := len([]rune(name)); n < 1 || n > 64 {
-		return errors.New("linked token name must be 1 to 64 characters")
+func UpdateLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID, name string, expiresAt *time.Time) error {
+	return PatchLinkedOwnerToken(ctx, db, ownerID, tokenID, &name, expiresAt, true)
+}
+
+// PatchLinkedOwnerToken updates only fields supplied by the API caller.
+func PatchLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string, name *string, expiresAt *time.Time, updateExpiry bool) error {
+	if name == nil && !updateExpiry {
+		return fmt.Errorf("%w: at least one field is required", ErrLinkedTokenValidation)
 	}
-	var expires any
-	if expiresAt != nil {
-		if !expiresAt.After(time.Now()) {
-			return errors.New("linked token expiry must be in the future")
+	var args []any
+	var updates []string
+	if name != nil {
+		normalizedName := strings.TrimSpace(*name)
+		if n := len([]rune(normalizedName)); n < 1 || n > 64 {
+			return fmt.Errorf("%w: name must be 1 to 64 characters", ErrLinkedTokenValidation)
 		}
-		expires = expiresAt.Unix()
+		var duplicate int
+		if err := queryRowContext(ctx, db, `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ? AND kind = 'linked' AND name = ? AND id != ?`, ownerID, normalizedName, tokenID).Scan(&duplicate); err != nil {
+			return err
+		}
+		if duplicate > 0 {
+			return ErrLinkedTokenNameConflict
+		}
+		updates = append(updates, "name = ?")
+		args = append(args, normalizedName)
 	}
-	var duplicate int
-	if err := queryRowContext(ctx, db, `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ? AND kind = 'linked' AND name = ? AND id != ?`, ownerID, name, tokenID).Scan(&duplicate); err != nil {
-		return err
+	if updateExpiry {
+		var expires any
+		if expiresAt != nil {
+			if !expiresAt.After(time.Now()) {
+				return fmt.Errorf("%w: expiry must be in the future", ErrLinkedTokenValidation)
+			}
+			expires = expiresAt.Unix()
+		}
+		updates = append(updates, "expires_at = ?")
+		args = append(args, expires)
 	}
-	if duplicate > 0 {
-		return errors.New("linked token name must be unique for this owner")
-	}
-	result, err := execContext(ctx, db, `UPDATE api_tokens SET name = ?, expires_at = ? WHERE owner_id = ? AND id = ? AND kind = 'linked' AND revoked_at IS NULL`, name, expires, ownerID, tokenID)
+	args = append(args, ownerID, tokenID)
+	result, err := execContext(ctx, db, `UPDATE api_tokens SET `+strings.Join(updates, ", ")+` WHERE owner_id = ? AND id = ? AND kind = 'linked' AND revoked_at IS NULL`, args...)
 	if err != nil {
 		return err
 	}
@@ -392,7 +418,7 @@ func ReencryptOwnerTokens(ctx context.Context, db *sql.DB, previousKey, currentK
 			return err
 		}
 		type encryptedToken struct {
-			id    int64
+			id    string
 			value string
 		}
 		var tokens []encryptedToken
@@ -414,7 +440,7 @@ func ReencryptOwnerTokens(ctx context.Context, db *sql.DB, previousKey, currentK
 		for index := range tokens {
 			plain, err := decryptOwnerToken(tokens[index].value, previousKey, currentKey)
 			if err != nil {
-				return fmt.Errorf("decrypt owner token row %d: %w", tokens[index].id, err)
+				return fmt.Errorf("decrypt owner token row %s: %w", tokens[index].id, err)
 			}
 			tokens[index].value, err = encryptOwnerToken(plain, currentKey)
 			if err != nil {
@@ -459,18 +485,22 @@ func PurgeIdleOwners(ctx context.Context, db *sql.DB, idleDays int) (int64, erro
 	return deleted, nil
 }
 
-func insertOwnerToken(ctx context.Context, tx *sql.Tx, ownerID, kind, name, raw, encrypted string, expires any) (int64, error) {
+func insertOwnerToken(ctx context.Context, tx *sql.Tx, ownerID, kind, name, raw, encrypted string, expires any) (string, error) {
 	var nullableName any
 	if name != "" {
 		nullableName = name
 	}
-	result, err := execTxContext(ctx, tx, `INSERT INTO api_tokens
-		(owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ownerID, kind, nullableName, hashOwnerToken(raw), tokenPrefix(raw), raw[len(raw)-4:], encrypted, expires)
+	id, err := uuid.NewV7()
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return result.LastInsertId()
+	_, err = execTxContext(ctx, tx, `INSERT INTO api_tokens
+		(id, owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id.String(), ownerID, kind, nullableName, hashOwnerToken(raw), tokenPrefix(raw), raw[len(raw)-4:], encrypted, expires)
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }
 
 func newOwnerToken() (string, error) {

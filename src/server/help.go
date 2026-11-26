@@ -50,11 +50,7 @@ type mcpHelpToolAPI struct {
 }
 
 func helpPageRegistry(language string) []helpPageInfo {
-	return []helpPageInfo{{
-		Path:        "/server/help/mcp",
-		Title:       i18n.Translate(language, "help.mcp.title"),
-		Description: i18n.Translate(language, "help.mcp.description"),
-	}}
+	return registeredServerPages(language).Help
 }
 
 func helpMCPPageHandler(cfg *config.Config, routes func() []swagger.Route) http.HandlerFunc {

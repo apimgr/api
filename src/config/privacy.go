@@ -67,20 +67,35 @@ func (p PrivacyRetentionConfig) PeriodFor(language string) string {
 // PrivacyConsentConfig configures the cookie consent banner.
 type PrivacyConsentConfig struct {
 	ShowUntilAcknowledged bool                       `yaml:"show_until_acknowledged"`
-	DefaultEnabled        bool                       `yaml:"default_enabled"`
 	Message               string                     `yaml:"message"`
 	MessageIfSold         string                     `yaml:"message_if_sold"`
 	Policy                PrivacyPolicyLinkConfig    `yaml:"policy"`
 	Buttons               PrivacyConsentButtonConfig `yaml:"buttons"`
-	Position              string                     `yaml:"position"`
 	ShowPreferences       bool                       `yaml:"show_preferences"`
 	PreferencesText       string                     `yaml:"preferences_text"`
 }
 
+// DefaultPrivacyConsentMessage values are operator-configurable English
+// defaults whose display falls back to localized strings in the web UI.
+const (
+	DefaultPrivacyConsentMessage               = "In accordance with the EU GDPR law this message is being displayed. We use cookies for essential site functionality and, with your consent, for preferences and analytics. Your data is stored on our servers and is never sold."
+	DefaultPrivacyConsentMessageIfSold         = "In accordance with the EU GDPR law this message is being displayed. We use cookies for essential site functionality and, with your consent, for preferences and analytics. Your data may be shared with or sold to third parties as described in our Privacy Policy."
+	DefaultPrivacyConsentPolicyText            = "Privacy Policy"
+	DefaultPrivacyConsentAcceptText            = "I Agree"
+	DefaultPrivacyConsentDeclineText           = "Decline"
+	DefaultPrivacyConsentPreferencesText       = "Manage Preferences"
+	DefaultPrivacyEssentialCookieDescription   = "Required for the site to function. Includes security tokens (CSRF) and site preferences. These cookies are strictly necessary and cannot be disabled."
+	DefaultPrivacyPreferencesCookieDescription = "Remember your settings such as theme (dark/light), language, and UI preferences. Disabling will reset to defaults on each visit."
+	DefaultPrivacyAnalyticsCookieDescription   = "Help us understand how visitors use our site to improve the experience."
+	DefaultPrivacyAnalyticsSuffixNotSold       = "Analytics data is anonymized and never sold."
+	DefaultPrivacyAnalyticsSuffixSold          = "Analytics data may be shared with third parties."
+)
+
 // PrivacyPolicyLinkConfig is the consent banner's privacy policy link.
 type PrivacyPolicyLinkConfig struct {
-	Text string `yaml:"text"`
-	URL  string `yaml:"url"`
+	Text    string `yaml:"text"`
+	URL     string `yaml:"url"`
+	Version string `yaml:"version"`
 }
 
 // PrivacyConsentButtonConfig holds the consent banner button labels.
@@ -198,35 +213,34 @@ func defaultPrivacyConfig() PrivacyConfig {
 		},
 		Consent: PrivacyConsentConfig{
 			ShowUntilAcknowledged: true,
-			DefaultEnabled:        true,
-			Message:               "In accordance with the EU GDPR law this message is being displayed. We use cookies for essential site functionality and, with your consent, for preferences and analytics. Your data is stored on our servers and is never sold.",
-			MessageIfSold:         "In accordance with the EU GDPR law this message is being displayed. We use cookies for essential site functionality and, with your consent, for preferences and analytics. Your data may be shared with or sold to third parties as described in our Privacy Policy.",
+			Message:               DefaultPrivacyConsentMessage,
+			MessageIfSold:         DefaultPrivacyConsentMessageIfSold,
 			Policy: PrivacyPolicyLinkConfig{
-				Text: "Privacy Policy",
-				URL:  "/server/privacy",
+				Text:    DefaultPrivacyConsentPolicyText,
+				URL:     "/server/privacy",
+				Version: "1",
 			},
 			Buttons: PrivacyConsentButtonConfig{
-				Decline: "Decline",
-				Accept:  "I Agree",
+				Decline: DefaultPrivacyConsentDeclineText,
+				Accept:  DefaultPrivacyConsentAcceptText,
 			},
-			Position:        "bottom",
 			ShowPreferences: true,
-			PreferencesText: "Manage Preferences",
+			PreferencesText: DefaultPrivacyConsentPreferencesText,
 		},
 		Cookies: PrivacyCookiesConfig{
 			Essential: PrivacyCookieCategoryConfig{
 				Enabled:     true,
-				Description: "Required for the site to function. Includes security tokens (CSRF) and site preferences. These cookies are strictly necessary and cannot be disabled.",
+				Description: DefaultPrivacyEssentialCookieDescription,
 			},
 			Preferences: PrivacyCookieCategoryConfig{
 				Enabled:     true,
-				Description: "Remember your settings such as theme (dark/light), language, and UI preferences. Disabling will reset to defaults on each visit.",
+				Description: DefaultPrivacyPreferencesCookieDescription,
 			},
 			Analytics: PrivacyAnalyticsCookieConfig{
 				Enabled:                  true,
-				Description:              "Help us understand how visitors use our site to improve the experience.",
-				DescriptionSuffixNotSold: "Analytics data is anonymized and never sold.",
-				DescriptionSuffixSold:    "Analytics data may be shared with third parties.",
+				Description:              DefaultPrivacyAnalyticsCookieDescription,
+				DescriptionSuffixNotSold: DefaultPrivacyAnalyticsSuffixNotSold,
+				DescriptionSuffixSold:    DefaultPrivacyAnalyticsSuffixSold,
 			},
 		},
 		ThirdParty: PrivacyThirdPartyConfig{

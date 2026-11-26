@@ -24,7 +24,7 @@
   <section class="section-card" id="authentication" aria-labelledby="mcp-authentication">
     <h2 id="mcp-authentication">{{t .Lang "help.mcp.authentication_title"}}</h2>
     <p>{{t .Lang "help.mcp.authentication"}}</p>
-    <p><a href="{{path .BaseURL "/server/preferences/tokens"}}">{{t .Lang "help.mcp.manage_tokens"}}</a></p>
+    <p><a href="{{path .BaseURL .OwnerTokensPath}}">{{t .Lang "help.mcp.manage_tokens"}}</a></p>
   </section>
 
   <section class="section-card" id="connect" aria-labelledby="mcp-connect">

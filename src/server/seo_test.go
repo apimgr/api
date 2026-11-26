@@ -27,9 +27,13 @@ func TestSitemapHandlerUsesRequestOriginAndPublicRoutes(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "http://site.example/")
 	assert.Contains(t, rec.Body.String(), "http://site.example/server/docs/swagger")
 	assert.Contains(t, rec.Body.String(), "http://site.example/server/terms")
+	assert.Contains(t, rec.Body.String(), "http://site.example/server/dpo")
 	assert.Contains(t, rec.Body.String(), "http://site.example/server/security/policy")
+	assert.Contains(t, rec.Body.String(), "http://site.example/server/help/mcp")
 	assert.NotContains(t, rec.Body.String(), "http://site.example/crypto")
 	assert.NotContains(t, rec.Body.String(), "http://site.example/server/contact")
+	assert.NotContains(t, rec.Body.String(), "http://site.example/server/preferences/sync")
+	assert.NotContains(t, rec.Body.String(), "http://site.example/server/preferences/tokens")
 	assert.NotContains(t, rec.Body.String(), "http://site.example/api/")
 }
 
@@ -83,4 +87,33 @@ func TestRSSHandlerUsesRSSContentType(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/rss+xml")
 	assert.Contains(t, rec.Body.String(), "<rss version=\"2.0\">")
+}
+
+func TestCanonicalPageURLAndSEOValidation(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/server/about?preview=1", nil)
+	req.Host = "site.example"
+	assert.Equal(t, "https://canonical.example/base/server/about", canonicalPageURL(req, "https://canonical.example/base"))
+	assert.Equal(t, "http://site.example/server/about", canonicalPageURL(req, "http://insecure.example"))
+
+	meta := validSEOMetaTags(map[string]string{
+		"theme-color": "#123456",
+		"bad name":    "ignored",
+		"robots":      "index,follow",
+	})
+	assert.Equal(t, map[string]string{"theme-color": "#123456"}, meta)
+
+	tags := validSEOVerification(config.VerificationConfig{
+		Google: "valid_123-code",
+		Bing:   "ABCDEF0123456789",
+		Yandex: "ABCDEF",
+		Custom: []config.CustomVerificationTag{
+			{Name: "service-check", Content: "ok"},
+			{Name: "bad name", Content: "ignored"},
+			{Name: "name", Property: "property", Content: "ignored"},
+		},
+	})
+	require.Len(t, tags, 3)
+	assert.Equal(t, "google-site-verification", tags[0].Name)
+	assert.Equal(t, "msvalidate.01", tags[1].Name)
+	assert.Equal(t, "service-check", tags[2].Name)
 }
