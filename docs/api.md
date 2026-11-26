@@ -41,13 +41,13 @@ Owners are anonymous, credential-only identities. There are no user accounts or 
 | `POST` | `/api/{api_version}/server/preferences/tokens/primary/reveal` | Primary owner Bearer token | Reveals the primary token in the response body. |
 | `POST` | `/api/{api_version}/server/preferences/tokens/primary/rotate` | Primary owner Bearer token | Replaces the primary token in place; linked tokens and resources remain valid. |
 | `DELETE` | `/api/{api_version}/server/preferences/tokens/primary` | Primary owner Bearer token | Deletes the owner, all its tokens, and all its resources. |
-| `POST` | `/api/{api_version}/server/preferences/tokens` | Primary owner Bearer token | Creates a linked token. Supply a name (1–64 characters) and optional expiry (`never`, `7d`, `30d`, `90d`, `1y`, or a future UTC date). |
-| `POST` | `/api/{api_version}/server/preferences/tokens/{id}/reveal` | Primary owner Bearer token | Reveals one linked token. |
-| `POST` | `/api/{api_version}/server/preferences/tokens/{id}/rotate` | Primary owner Bearer token | Rotates one linked token in place; the primary and other linked tokens remain valid. |
+| `POST` | `/api/{api_version}/server/preferences/tokens` | Primary owner Bearer token | Creates a linked token. Supply a name (1–64 characters) and either `expires` (`never`, `7d`, `30d`, `90d`, `1y`) or `expires_on` (a future UTC date); the response returns its value as `linked_token`. |
+| `POST` | `/api/{api_version}/server/preferences/tokens/{id}/reveal` | Primary owner Bearer token | Reveals one linked token in the `linked_token` response field. |
+| `POST` | `/api/{api_version}/server/preferences/tokens/{id}/rotate` | Primary owner Bearer token | Rotates one linked token in place and returns its new value as `linked_token`; the primary and other linked tokens remain valid. |
 | `PATCH` | `/api/{api_version}/server/preferences/tokens/{id}` | Primary owner Bearer token | Changes a linked token's name or expiry. |
 | `DELETE` | `/api/{api_version}/server/preferences/tokens/{id}` | Primary owner Bearer token | Revokes one linked token. |
 
-The API returns raw token values only from issue, reveal, and rotate operations. List responses contain masked values. Token-management routes are never exposed as MCP tools. Browser token management is available at `/server/preferences/tokens`; its POST forms use the owner cookie and CSRF protection. See [Security](security.md) for credential handling and the page's restore behavior.
+The API returns raw primary token values as `owner_token` and raw linked token values as `linked_token`, only from issue, reveal, and rotate operations. Token objects in list responses contain masked values. Token-management routes are never exposed as MCP tools. Browser token management is available at `/server/preferences/tokens`; its POST forms use the owner cookie and CSRF protection. See [Security](security.md) for credential handling and the page's restore behavior.
 
 ## Project utility routes
 
