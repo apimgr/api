@@ -37,7 +37,7 @@ The current project implements only the entries listed above; feature-gated entr
 
 The site includes a web app manifest at `/manifest.json`, app icons, and a service worker at `/sw.js`. On HTTPS origins, supported browsers can offer their normal install or “Add to Home Screen” action. The service worker is an enhancement: the server-rendered pages and forms remain usable when it is unavailable or disabled.
 
-The worker caches versioned static assets and public pages that the server marks safe to reuse between visitors. It does not cache API responses or queue writes for later delivery. When offline, a previously cached public page can still open; otherwise the browser displays the offline page. Installation and service-worker support depend on the browser.
+The worker caches versioned static assets and public pages that the server marks safe to reuse between visitors. It does not cache API responses or queue writes for later delivery. When offline, a previously cached public page can still open; otherwise the worker synthesizes a translated offline page from strings stored during the last page load. Installation and service-worker support depend on the browser.
 
 ## Identity and federation
 

@@ -138,6 +138,34 @@ server:
 
 `header` is appended inside the public header, `about` and `privacy` extend their built-in pages, `terms` replaces the built-in terms, and `footer` replaces the optional branding block above the standard footer. Scripts, forms, frames, unsafe URLs, and links to `/server/contact` are removed. The terms API returns the configured source text and its format.
 
+The same `branding.yml` file accepts `server.seo` metadata. Robots directives default to `index,follow` only for registered public pages; internal and management routes default to `noindex,nofollow`. Verification codes are validated before the server renders their tags. The sitemap and feeds are always available.
+
+```yaml
+server:
+  seo:
+    keywords: [api, developer tools]
+    author: Example Organization
+    og_image: https://example.org/social-card.png
+    twitter_handle: '@example'
+    title_separator: ' - '
+    canonical: ''
+    noindex: false
+    opengraph:
+      enabled: true
+      type: website
+      site_name: ''
+    twitter:
+      enabled: true
+      card: summary_large_image
+      creator: ''
+    sitemap:
+      max_urls: 50000
+      include_images: false
+    feed:
+      max_items: 50
+      title: ''
+```
+
 ## Contact destinations and webhooks
 
 Contact destinations include `admin`, `security`, `abuse`, `general`, and `dpo`. The `admin` destination is the internal notification recipient; the other roles serve their documented public or submission workflows. Supported recipient roles accept named webhook URLs; DPO additionally accepts a `name`. Empty role destinations follow the fallback rules in AI.md PART 12; the admin address is never exposed publicly.
