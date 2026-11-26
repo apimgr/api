@@ -33,6 +33,12 @@ MCP uses the same Bearer tokens, validation, authorization, rate limits, and aud
 
 The current project implements only the entries listed above; feature-gated entries are served only while their matching feature is active, and unknown or unsupported `/.well-known/*` paths return `404`. Absolute URLs in discovery responses are resolved for the current request and honor only trusted proxy headers. See [Security](security.md#other-security-endpoints) for the complete enabled-path summary.
 
+## Installable browser app and offline use
+
+The site includes a web app manifest at `/manifest.json`, app icons, and a service worker at `/sw.js`. On HTTPS origins, supported browsers can offer their normal install or “Add to Home Screen” action. The service worker is an enhancement: the server-rendered pages and forms remain usable when it is unavailable or disabled.
+
+The worker caches versioned static assets and public pages that the server marks safe to reuse between visitors. It does not cache API responses or queue writes for later delivery. When offline, a previously cached public page can still open; otherwise the browser displays the offline page. Installation and service-worker support depend on the browser.
+
 ## Identity and federation
 
 The project has no user accounts, account profiles, OAuth/OIDC provider, or federation identity service. Anonymous owners are credential-only identities, and API access uses operator, owner, or linked Bearer tokens. There are no native app association or federation discovery endpoints enabled.

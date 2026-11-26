@@ -11,6 +11,7 @@ API is a self-hosted utility service with a server-rendered web interface, versi
 - Eight interface locales: English, Spanish, French, German, Italian, Arabic, Chinese, and Japanese
 - Anonymous credential-based resource ownership without user accounts or login
 - Browser owner-token management at `/server/preferences/tokens`; its forms work without JavaScript. See [Security](security.md#owner-tokens).
+- Public privacy and DPO contact pages at `/server/privacy` and `/server/dpo`, with deployment-specific contact details described in [Configuration](configuration.md#contact-destinations-and-webhooks).
 
 ## Quick start
 

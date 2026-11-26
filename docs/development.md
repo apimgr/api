@@ -33,6 +33,12 @@ The production image command-presence and Tor bootstrap contract is checked afte
 
 Pages use Go `html/template` and the shared server shell. Keep the primary flow usable without JavaScript, use semantic labels and headings, provide keyboard-accessible controls, and preserve responsive behavior at narrow widths. Use the shared template functions and components rather than introducing a second page framework. Interactive API explorers are the documented exception to the no-JavaScript requirement; surrounding page chrome and explanatory content remain usable without JavaScript.
 
+### Accessibility review
+
+For page, form, navigation, or style changes, check keyboard-only operation, visible focus, skip links, landmarks, heading order, form labels and error descriptions, screen-reader announcements, image alternative text, and reduced-motion behavior. Check both themes and Arabic right-to-left layout; maintain WCAG 2.1 AA contrast (4.5:1 for normal text and 3:1 for large text and UI components).
+
+Automated accessibility tests must cover the skip link, image `alt` attributes, associated form labels, heading hierarchy, and page landmarks. Supplement them with axe DevTools, WAVE, or Lighthouse, then perform keyboard-only and screen-reader checks with NVDA or VoiceOver.
+
 ## Documentation
 
 The `docs/` directory is exclusively the MkDocs documentation set. Update the relevant pages when a feature, route, setting, client command, protocol, or operator workflow changes. `docs/configuration.md` covers configuration, `docs/api.md` covers routes and formats, and the security and integration pages describe the corresponding public surfaces. The translation workflow is in [Translating](translating.md).
