@@ -14,7 +14,7 @@
 - Never let coverage drop below 60% in the CI test gate (`go test -cover`)
 - Never pin third-party GitHub/Gitea/Forgejo Actions to a tag — pin to a full commit SHA
 - Never run `docker-compose.yml`/`docker-compose.dev.yml` from CI or as AI actions — CI uses `docker buildx build` / `docker run` directly
-- Never leave workflow concurrency ungated — branch pushes must auto-cancel superseded runs; tag/release runs must never auto-cancel
+- Never leave workflow concurrency ungated — branch pushes must auto-cancel superseded runs and tag releases must cancel only older runs for the same tag ref
 
 ## CRITICAL - ALWAYS DO
 - Always keep CI/CD build patterns and local dev patterns strictly separate: CI/CD = explicit `go build` + CI-native cache; local dev = Makefile-first + host cache dirs + `casjaysdev/go:latest` in Docker
@@ -40,6 +40,6 @@
 - **Release artifacts**: `releases/version.txt` + copied platform binaries; stable release additionally produces a `{project_name}-{version}-source.tar.gz` excluding `.git`, `.github`, `.gitea`, `.forgejo`, `binaries`, `releases`, `*.tar.gz`
 - **Makefile has exactly 6 targets**: `dev`, `local`, `build`, `test`, `release`, `docker` — CI never invokes these; CI calls `go build`/`go test`/`docker buildx build` directly
 - **Docker base**: tini as init, Alpine base image
-- **Concurrency policy**: branch pushes auto-cancel in-flight runs for the same ref; tag/release runs never auto-cancel
+- **Concurrency policy**: branch pushes auto-cancel in-flight runs for the same ref; tag runs auto-cancel only older runs for the same exact tag ref
 
 For complete details, see AI.md PART 27
