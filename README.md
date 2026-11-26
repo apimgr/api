@@ -66,10 +66,11 @@ Install the `api-cli` binary for your platform from [GitHub Releases](https://gi
 
 ```bash
 api-cli --server http://172.17.0.1:64580 raw get /api/v1/text/uuid
+api-cli raw request PATCH /api/v1/server/preferences/tokens/TOKEN_ID name=automation
 api-cli --help
 ```
 
-The CLI configuration supports an API version setting; its default is `v1`. The client also provides command groups, output formatting, shell completions, and an interactive terminal interface.
+`raw request` supports GET, POST, PUT, PATCH, and DELETE so API operations without a dedicated CLI command remain available. The CLI configuration supports an API version setting; its default is `v1`. The client also provides command groups, output formatting, shell completions, and an interactive terminal interface.
 
 ## Configuration
 

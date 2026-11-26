@@ -36,7 +36,15 @@ The token lookup order is `--token-file`, `--token`, `API_TOKEN`, `auth.token` i
 
 When a configured server advertises a newer client binary, the CLI prompts on an interactive terminal. Use `api-cli --update check` to check explicitly. `api-cli --update yes` installs the release after verifying its SHA-256 checksum, then re-executes the original command. The CLI requires an HTTPS server for downloads; set `update.auto: true` in `cli.yml` for silent updates in non-interactive runs. The server must have operator-provisioned binaries in `{data_dir}/cli/`.
 
-Command groups currently include `crypto`, `datetime`, `network`, `raw`, and `text`. Run `api-cli GROUP` to list that group's commands; global `--help` lists every registered command.
+Command groups currently include `crypto`, `datetime`, `network`, `raw`, and `text`. Run `api-cli GROUP` to list that group's commands; global `--help` lists every registered command. The `raw request` command reaches API operations without a dedicated command:
+
+```bash
+api-cli raw request GET /api/v1/server/healthz
+api-cli raw request PATCH /api/v1/server/preferences/tokens/TOKEN_ID name=automation
+api-cli raw request DELETE /api/v1/server/preferences/tokens/TOKEN_ID
+```
+
+For `GET`, `key=value` arguments become query parameters. For `POST`, `PUT`, `PATCH`, and `DELETE`, they form a JSON request body. The client applies the configured API version when a path uses `/api/v1/`.
 
 For scripting, the client's process exit codes distinguish general failures (`1`), configuration (`2`), connection (`3`), authentication (`4`), missing resources (`5`), and usage errors (`64`).
 
