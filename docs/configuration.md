@@ -40,7 +40,7 @@ Configuration is validated per setting. Consult the matching sections of `AI.md`
 
 ## Consent and announcements
 
-The first-visit consent banner is rendered by the server and its Accept and Decline forms work without JavaScript. Choices are stored in the browser's `cookie_consent` cookie; the `/server/preferences` form provides the granular preference controls. The banner is omitted from that page so its single-form contract remains intact. The configured policy link defaults to `/server/privacy`.
+The first-visit consent banner is rendered by the server on every frontend page. On regular pages its Accept and Decline forms work without JavaScript and store the choice in the browser's `cookie_consent` cookie. On `/server/preferences`, the banner links to the granular controls in that page's single form and adds no separate forms. The configured policy link defaults to `/server/privacy`; `position` accepts `top` or `bottom`.
 
 Announcements are rendered before the page header from `web.announcements`. Only enabled messages with a supported type and an active RFC 3339 start/end window are shown. Dismissible messages store their IDs in the `dismissed_announcements` cookie, and Reset on the preferences page clears it.
 
@@ -525,7 +525,6 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.port` | `string` |
 | `server.privacy.consent.buttons.accept` | `string` |
 | `server.privacy.consent.buttons.decline` | `string` |
-| `server.privacy.consent.default_enabled` | `bool` |
 | `server.privacy.consent.message` | `string` |
 | `server.privacy.consent.message_if_sold` | `string` |
 | `server.privacy.consent.policy.text` | `string` |
