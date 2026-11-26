@@ -529,6 +529,7 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.privacy.consent.message_if_sold` | `string` |
 | `server.privacy.consent.policy.text` | `string` |
 | `server.privacy.consent.policy.url` | `string` |
+| `server.privacy.consent.policy.version` | `string` |
 | `server.privacy.consent.position` | `string` |
 | `server.privacy.consent.preferences_text` | `string` |
 | `server.privacy.consent.show_preferences` | `bool` |
