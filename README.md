@@ -125,7 +125,7 @@ docker run --rm --no-healthcheck \
   casjaysdev/go:latest bash scripts/verify-licenses.sh
 ```
 
-Review `licenses.csv` and `third_party_licenses/` before committing the report.
+The script checks the shipped Go packages and writes its temporary license report under a project-scoped OS temp directory. It removes that directory when it exits; update `LICENSE.md` from reviewed dependency license changes instead of committing generated reports.
 
 ## Disclaimer
 

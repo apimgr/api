@@ -2,8 +2,8 @@
 
 ## Development setup
 
-Use Go 1.26.4 or the repository's `casjaysdev/go:latest` build image. Set
-`CGO_ENABLED=0` for Go builds.
+Use the current stable Go version in the repository's `casjaysdev/go:latest`
+build image. Set `CGO_ENABLED=0` for Go builds.
 
 ```sh
 make dev
