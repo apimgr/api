@@ -300,12 +300,14 @@ The server reads the runtime and directory variables below. Database/cache conne
 | `NO_COLOR` | Disable ANSI color output when set to a non-empty value |
 | `TERM` | Detect terminal capabilities; `dumb` disables ANSI output |
 | `DOMAIN` | Highest-priority public hostname override |
+| `PORT` | Listen port override checked at every startup; `--port` takes precedence |
+| `LISTEN` | Listen address override checked at every startup; `--address` takes precedence |
 | `HOSTNAME` | Hostname candidate after `os.Hostname()` during public URL resolution |
 | `MODE` | Select `production` (default) or `development`; aliases are documented in the CLI help |
 | `DEBUG` | Enable debug behavior when set to a truthy value; `--debug` takes precedence |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | SMTP connection overrides |
 | `SMTP_FROM_NAME`, `SMTP_FROM_EMAIL`, `SMTP_TLS` | SMTP sender and TLS mode overrides |
-| `CONFIG_DIR`, `DATA_DIR`, `LOG_DIR`, `DATABASE_DIR`, `BACKUP_DIR` | Directory overrides applied at every startup where supported |
+| `CONFIG_DIR`, `DATA_DIR`, `LOG_DIR`, `DATABASE_DIR`, `BACKUP_DIR`, `CACHE_DIR` | Directory overrides applied at every startup where supported |
 | `I2P_ENABLED` | Override `server.i2p.enabled` for this process |
 | `LC_ALL`, `LANG` | Select the CLI language when no explicit language flag or CLI config value is set |
 | `API_TOKEN` | Client token fallback, after `--token` and before `cli.yml` |
@@ -314,8 +316,6 @@ Directory variables are applied on every startup; command-line directory flags t
 
 | Variable | Purpose |
 |----------|---------|
-| `PORT` | Initial server port |
-| `LISTEN` | Initial listen address |
 | `APPLICATION_NAME` | Initial application title |
 | `APPLICATION_TAGLINE` | Initial application description |
 | `DATABASE_DRIVER` | Initial database driver when `DATABASE_URL` is not set (`sqlite` or `libsql`, including documented aliases) |

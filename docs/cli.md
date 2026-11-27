@@ -1,6 +1,6 @@
 # CLI reference
 
-The project provides two binaries: `api` runs the server, and `api-cli` is the companion client. The client opens its interactive TUI when run interactively without a command; a category and command run a single request and print the selected output format. Use `--help` for the complete command list in the installed build.
+The project provides two binaries: `api` runs the server, and `api-cli` is the companion client. The default static client opens its interactive TUI when run interactively without a command; a category and command run a single request and print the selected output format. Its `cli.yml` `display.mode` setting accepts `auto` (default), `tui`, or `gui`. The default static build has no GUI support, so explicitly selecting `gui` reports `gui_unavailable`; an optional separate GUI artifact is not part of the default build. A headless invocation without a command exits with usage status `2`. Use `--help` for the complete command list in the installed build.
 
 ## Client options
 
