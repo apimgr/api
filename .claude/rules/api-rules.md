@@ -25,6 +25,8 @@
 - Never manually edit generated OpenAPI JSON or GraphQL schema files, and never
   place swagger/graphql files outside `src/swagger/` / `src/graphql/`.
 - Never serve OpenAPI as YAML or add a `.json` suffix route — JSON only, fixed path.
+- Never publish an operation classified `INTERNAL` (including metrics, Tor
+  control, or debug routes) in OpenAPI, GraphQL, MCP, or `llms.txt`.
 - Never implement client-side routing/rendering (SPA), business logic in JS, or
   make JS required for core functionality — server renders, JS only enhances.
 - Never replicate an external service's entire API surface (view/list/delete/
@@ -43,6 +45,10 @@
 ## CRITICAL - ALWAYS DO
 - Always version API routes: `/api/{api_version}/...`; always use plural,
   lowercase, hyphenated nouns with no trailing slash.
+- Always keep the route inventory drift check across AI.md template routes,
+  IDEA.md project API routes, registered router routes, and the generated
+  OpenAPI superset. Optional operations carry `x-mounted-when` and the served
+  OpenAPI removes operations whose condition is disabled for that run.
 - Always mount unversioned aliases (`/api/swagger`, `/api/graphql`, `/api/healthz`,
   `/healthz`) as the exact same handler as their versioned/canonical route — direct
   serve, never a redirect (curl/SDKs don't follow redirects reliably; POST+redirect

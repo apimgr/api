@@ -13,6 +13,7 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 | YAML area | Purpose |
 |------------|---------|
 | `server.address`, `server.port`, `server.fqdn`, `server.api_version`, `server.baseurl` | Listener, public host, API version, and base URL resolution |
+| `server.pidfile`, `server.daemonize` | Startup lifecycle; PID files default on and are skipped in application containers and on Windows |
 | `server.mode`, `server.branding` | Runtime mode and application identity |
 | `server.limits` | HTTP request body and connection timeouts |
 | `server.database`, `server.cache` | Database and optional cache connections |
@@ -37,6 +38,8 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 | `data.security_dir`, `data.cve`, `data.trivy` | External security-database storage, NVD CVE API updates, and optional Trivy OCI data |
 
 Configuration is validated per setting. Consult the matching sections of `AI.md` for field-specific accepted values, defaults, and interactions; this table names the complete configuration areas, not a substitute for those detailed constraints.
+
+`server.pidfile: false` disables the server's own PID-file check and creation. Containers and Windows skip PID files regardless of this setting; Windows service state comes from the Service Control Manager. A service manager that needs its own PID file must use a separate path from the server PID file. Changing `server.pidfile` or `server.daemonize` takes effect on the next start.
 
 ## Consent and announcements
 
