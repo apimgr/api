@@ -71,6 +71,8 @@
 - Always strip default ports from displayed URLs (`:80`, `:443`).
 - Always resolve FQDN in priority order: reverse-proxy headers → `DOMAIN` env →
   `os.Hostname()` → `$HOSTNAME` → public IPv6 → public IPv4 → `localhost`.
+- On a Tor request, `/api/autodiscover` returns an empty `urls` array; an exposed
+  onion address appears only in its dedicated `onion` field, never in `urls`.
 
 ## Key Rules Summary
 - **Health checks:** `/server/healthz` (frontend, content-negotiated per PART 16

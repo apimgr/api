@@ -25,20 +25,20 @@
 - Always tag Docker images per build type: release → `commit_id`, `version`, `latest`, `YYMM`; beta → `commit_id`, `beta`, `devel`; all other branches → `commit_id`, `devel`
 - Always set full OCI labels and buildx manifest annotations (vendor, authors, title, description, licenses=MIT, version, created, revision, url, source, documentation) on every Docker build
 - Always use `docker buildx build --platform linux/amd64,linux/arm64` for multi-arch Docker images
-- Always mirror workflow triggers/equivalence exactly across providers: `release.yml`/tag push ↔ stable release; `beta.yml`/beta branch ↔ beta release; `devel.yml`/daily schedule + main/master ↔ devel release; `docker.yml`/all branches ↔ Docker stage always runs
+- Always mirror workflow triggers/equivalence exactly across providers: stable tag pushes trigger release; `*-beta` tag pushes trigger beta; daily schedules and main pushes trigger devel and Docker; version/beta tags trigger Docker. Docker builds never run on unrelated branches.
 - Always clean up the workspace/container after every build (`cleanWs()` in Jenkins post-always; `--rm` on every `docker run`)
 - Always give docker containers a unique random name: `--name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"`
 
 ## Key Rules Summary
 - **Providers supported**: GitHub Actions, Gitea Actions, Forgejo Actions, GitLab CI, Jenkins — all five must stay behaviorally equivalent (see Triggers/Feature comparison tables in AI.md PART 27)
-- **Workflow files**: `ci.yml` (test gate on push/PR), `release.yml` (tag push, stable), `beta.yml` (beta branch), `devel.yml` (daily schedule + main/master), `docker.yml` (all branches and tags)
+- **Workflow files**: all five providers ship `ci.yml`, `release.yml`, `beta.yml`, `devel.yml`, and `docker.yml`; Docker runs on main, version/beta tags, and the daily schedule.
 - **Toolchain image**: `casjaysdev/go:latest` for all Go builds in CI containers — `CGO_ENABLED=0`, `GOOS`/`GOARCH` set per target, `-trimpath -ldflags "${LDFLAGS}"`
 - **Go cache mounts (CI)**: `${GO_CACHE:-$HOME/go/pkg/mod}` → `/usr/local/share/go/pkg/mod`; `${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}` → `/usr/local/share/go/cache`
 - **Binary output naming**: `{project_name}-{os}-{arch}` (add `.exe` for windows); CLI variants: `{project_name}-cli-{os}-{arch}`
 - **Registry**: `REGISTRY = "{registry_host}/{project_org}/{internal_name}"` — works with ghcr.io, registry.gitlab.com, gitea/forgejo, docker.io; login via `echo "${GIT_TOKEN}" | docker login <host> -u <org> --password-stdin`
 - **Jenkins-specific**: requires `amd64` and `arm64` agent labels, Docker + buildx on the amd64 runner, credentials as Secret text (`github-token`, `gitea-token`, `forgejo-token`, `gitlab-token`, `dockerhub-token`) with provider-specific token scopes (e.g. GitHub `write:packages`, `read:packages`, `delete:packages`)
 - **Release artifacts**: `releases/version.txt` + copied platform binaries; stable release additionally produces a `{project_name}-{version}-source.tar.gz` excluding `.git`, `.github`, `.gitea`, `.forgejo`, `binaries`, `releases`, `*.tar.gz`
-- **Makefile has exactly 6 targets**: `dev`, `local`, `build`, `test`, `release`, `docker` — CI never invokes these; CI calls `go build`/`go test`/`docker buildx build` directly
+- **Makefile has exactly 7 core targets**: `dev`, `local`, `build`, `test`, `release`, `beta`, `docker`; `clean` and internal `release-check` are the only other permitted targets. CI never invokes Makefile targets.
 - **Docker base**: tini as init, Alpine base image
 - **Concurrency policy**: branch pushes auto-cancel in-flight runs for the same ref; tag runs auto-cancel only older runs for the same exact tag ref
 

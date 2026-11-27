@@ -36,6 +36,9 @@
 - Always keep the audit log append-only, JSON-only, one event per line, with `id`/`time`/`event`/`category`/`severity`/`actor`/`result`.
 
 ## Key Rules Summary
+- Keep `server.backup.encryption_password` in `secrets.yml` as `enc:v1:` AES-256-GCM
+  ciphertext, decrypt it only in memory, and fail scheduled backups closed with
+  `backup.password_unreadable` if it cannot be decrypted.
 
 **PART 9 — Error Handling & Caching**
 - Response shape: success `{"ok":true,"data":{}}`; error `{"ok":false,"error":"CODE","message":"..."}` with an optional `details` object for structured validation context.

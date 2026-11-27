@@ -35,6 +35,9 @@
 - Always update `docs/security.md` to reflect the actual enabled `/.well-known/*` entries and note that unknown entries return 404
 
 ## Key Rules Summary
+- **Thin server entry point**: `src/main.go` calls `config.Load(os.Args[1:])` and
+  `app.Run(ctx, cfg)`; flag parsing, configuration construction, and testable
+  lifecycle code live outside `main()` in the designated packages.
 - **Host System Safety Rule**: no host-affecting commands outside a container or VM boundary — this applies to all build, test, and binary-execution steps
 - **Container tiers**: Docker `casjaysdev/go:latest` (build), Alpine `alpine:latest` (quick container tests), Incus `debian:latest` (full OS/systemd integration tests)
 - **Test scripts**: `tests/docker.sh`, `tests/incus.sh`, `tests/run_tests.sh` drive Phase 2 binary validation; these exercise every endpoint including content-negotiation variants

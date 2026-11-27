@@ -31,6 +31,8 @@
 - Always adjust privacy/consent messaging dynamically based on `server.privacy.data.sold` (never-sold vs may-be-sold copy)
 
 ## Key Rules Summary
+- **SQLite directory**: `DATABASE_DIR` overrides `{data_dir}/db`; the container
+  sets `/data/db/sqlite`. A configured `server.database.url` takes precedence.
 
 **Markdown & HTML.** Use Goldmark as the CommonMark renderer for every Markdown surface, with raw HTML passthrough disabled. Sanitize rendered Markdown and operator-supplied HTML with the bluemonday policy before serving.
 

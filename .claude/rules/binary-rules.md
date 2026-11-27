@@ -34,6 +34,9 @@
 - Always validate FQDNs with `golang.org/x/net/publicsuffix`; reject IPs and single-label hosts; block internal/dev-only TLDs (`.local`, `.test`, `.internal`, etc.) in production mode
 - Always give every CLI flag a corresponding `cli.yml` config setting, and only persist `--server`/`--token` flag values to config when the current config value is empty or invalid
 - Always support `--shell completions [SHELL]` and `--shell init [SHELL]` (auto-detect `$SHELL` when omitted) on every binary — built into the binary, not separate files
+- Completions are supported for bash, zsh, fish, powershell, and pwsh; shell init
+  also supports sh, dash, and ksh. Requesting completions for those three shells
+  is a usage error with exit code 2.
 - Always keep CLI runtime state (config/data/cache/logs) in the invoking user's XDG/profile directories, even when the CLI binary is installed system-wide or run by root
 - Always create parent directories and set correct permissions (`0700`/`0600` user mode, `0755`/`0644` root mode) before writing any file
 

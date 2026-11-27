@@ -5,7 +5,8 @@
 ## CRITICAL - NEVER DO
 - Never attempt to send email without a valid, working SMTP connection; never queue emails hoping SMTP appears later; never log "would have sent email" messages
 - Never show email-dependent UI/options when SMTP is not configured
-- Never store the backup encryption password anywhere — no recovery if lost
+- Never store a backup encryption password in plaintext; configured values live
+  encrypted as `enc:v1:` in `secrets.yml` and are decrypted only in memory.
 - Never use external schedulers (cron, systemd timers, Task Scheduler, launchd, Kubernetes CronJob, cloud schedulers) for any project task — built-in scheduler only, no exceptions
 - Never treat GeoIP/country data as the sole access-control gate or as authentication — it is advisory only (VPN/proxy/Tor bypass it trivially)
 - Never block a request solely because GeoIP lookup failed/missing/stale — fail-open for GeoIP, fail-closed only for real auth

@@ -22,7 +22,7 @@ The project provides two binaries: `api` runs the server, and `api-cli` is the c
 | `--shell init [SHELL]` | Print the shell initialization line |
 | `--shell help` | Show shell integration help |
 
-Supported shell names are `bash`, `zsh`, `fish`, `sh`, `dash`, `ksh`, `powershell`, and `pwsh`. If omitted, the shell is detected from `$SHELL`.
+Completion scripts are available for `bash`, `zsh`, `fish`, `powershell`, and `pwsh`. `--shell init` also accepts `sh`, `dash`, and `ksh`, where it prints a comment because those shells do not support programmable completions. If omitted, the shell is detected from `$SHELL`.
 
 Client examples:
 

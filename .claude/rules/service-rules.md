@@ -23,6 +23,10 @@
 - Always support all detected init systems per platform: Linux (systemd, OpenRC, SysVinit, runit), macOS (launchd), BSD (rc.d), Windows (Windows Service).
 
 ## Key Rules Summary
+- **Existing service account**: reuse only an account with UID and primary GID
+  from 1–999 (neither 0), matching `{internal_name}` group, and a `nologin` or
+  `false` shell; never alter its IDs, shell, or home. Reject human or root
+  identities. Newly created accounts still use matching IDs from 200–899.
 - **Escalation flow**: binary checks EUID==0/admin first; only prompts if the user can actually escalate; otherwise errors out with an explanation. See PART 5 "Privileged Port Binding" for full flow.
 - **Service install** (`--service --install`): detect platform/init system, install system service if root/admin (fallback to user service e.g. `systemd --user` otherwise), enable, start. User/group creation and directory setup happen at binary startup, not here.
 - **Service uninstall** (`--service --uninstall`): stop, disable, remove service file, delete config/data/cache/log/backup dirs and PID file, delete the system user/group, leave the binary in place with a manual-delete message. Requires `[y/N]` confirmation.
