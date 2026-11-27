@@ -73,7 +73,6 @@ For scripting, the client's process exit codes distinguish general failures (`1`
 | `--service ACTION` | Manage the native service |
 | `--maintenance ACTION` | Run an operator maintenance command |
 | `--update ACTION` | Check or apply an update |
-| `--tor ACTION` | Inspect or manage the Tor hidden service |
 | `--i2p` | Enable the I2P eepsite for this run |
 
 The server publishes operator-provisioned CLI releases from `{data_dir}/cli/` by default. `/api/autodiscover` advertises only artifacts whose `sha256.txt` hash matches the file; `/cli/binaries/{api-cli-os-arch}` serves those binaries. Set `cli.binary_download.require_auth` to require a valid Bearer token.
@@ -101,6 +100,8 @@ Maintenance operations include setup, backup and restore, secret rotation, secur
 api --maintenance --help
 api --update --help
 ```
+
+Tor management is grouped under maintenance: `api --maintenance tor status`, `api --maintenance tor validate`, and `api --maintenance tor --help`.
 
 `api --maintenance backup test [file]` verifies a backup without restoring it. If `file` is omitted, the newest archive by its manifest timestamp is checked. Encrypted archives use the configured backup password or prompt interactively. Verification includes the archive checksum, database integrity, and the backed-up PGP keypair when those files are present.
 
