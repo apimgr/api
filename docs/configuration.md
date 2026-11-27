@@ -405,7 +405,17 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.cache.type` | `string` |
 | `server.cache.url` | `string` |
 | `server.cache.username` | `string` |
-| `server.compliance.enabled` | `bool` |
+| `server.compliance.gdpr` | `bool` |
+| `server.compliance.ccpa` | `bool` |
+| `server.compliance.hipaa` | `bool` |
+| `server.compliance.soc2` | `bool` |
+| `server.compliance.pci_dss` | `bool` |
+| `server.compliance.iso27001` | `bool` |
+| `server.compliance.fedramp` | `bool` |
+| `server.compliance.lgpd` | `bool` |
+| `server.compliance.pipeda` | `bool` |
+| `server.compliance.appi` | `bool` |
+| `server.compliance.pdpa` | `bool` |
 | `server.contact.abuse.email` | `string` |
 | `server.contact.abuse.webhooks.{transport}` | `string` |
 | `server.contact.admin.email` | `string` |
@@ -480,6 +490,7 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.logs.audit.enabled` | `bool` |
 | `server.logs.audit.filename` | `string` |
 | `server.logs.audit.format` | `string` |
+| `server.logs.audit.group` | `string` |
 | `server.logs.audit.keep` | `string` |
 | `server.logs.audit.rotate` | `string` |
 | `server.logs.auth.custom` | `string` |
@@ -621,6 +632,7 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.security.abuse_detection.auto_block_ip` | `bool` |
 | `server.security.abuse_detection.request_flood.block_duration` | `time.Duration` |
 | `server.security.abuse_detection.request_flood.multiplier` | `int` |
+| `server.security.abuse_detection.request_flood.window` | `time.Duration` |
 | `server.security.blocklists.enabled` | `bool` |
 | `server.security.blocklists.extra_sources.enabled` | `bool` |
 | `server.security.blocklists.extra_sources.id` | `string` |

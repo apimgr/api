@@ -6,6 +6,10 @@ This page describes the security controls and reporting routes currently availab
 
 The server applies configured security headers, request-size limits, rate limits, origin checks for browser form posts, and trusted-proxy rules. Browser Reporting API requests are accepted at `/api/{api_version}/server/reports/{name}`. Bodies are size-capped, parsed as JSON, and reduced to an allowlist before security logging; report bodies are not returned.
 
+Permanent IP blocks are configured with `server.security.blocked_ips` entries containing a valid `cidr` and optional `description`. Bare IPv4 and IPv6 addresses are normalized to `/32` and `/128`; an invalid entry is skipped with one warning naming its index and `cidr` field, and does not prevent startup. Allowlisted addresses take precedence over permanent and temporary blocks.
+
+Trusted IPs are configured with `server.security.allowlist` entries. Invalid CIDRs and overly broad ranges (`/0` through `/7` for IPv4 and `/0` through `/15` for IPv6) are skipped with one indexed warning each; other entries remain active and do not make startup fail.
+
 ## Coordinated disclosure
 
 Repository vulnerabilities should be reported through the configured private repository reporting URL. Vulnerabilities in a deployed instance can be submitted from `/server/security`, which links to `/server/contact?security_id=…`. The rotating security ID is required to reveal the security-report form. The form uses a review and confirm step, CAPTCHA, request limits, and encrypted storage. Report content is not written to plaintext storage or included in ordinary logs.
