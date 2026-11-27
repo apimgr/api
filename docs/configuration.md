@@ -16,6 +16,7 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 | `server.pidfile`, `server.daemonize` | Startup lifecycle; PID files default on and are skipped in application containers and on Windows |
 | `server.mode`, `server.branding` | Runtime mode and application identity |
 | `server.limits` | HTTP request body and connection timeouts |
+| `server.compression` | Gzip response compression, level, and MIME types |
 | `server.database`, `server.cache` | Database and optional cache connections |
 | `server.debug` | Explicitly enabled diagnostics, profiling, and verbose request/query/cache logging |
 | `server.ssl` | TLS and certificate automation |
@@ -42,13 +43,34 @@ Configuration is validated per setting. Consult the matching sections of `AI.md`
 
 `server.pidfile: false` disables the server's own PID-file check and creation. Containers and Windows skip PID files regardless of this setting; Windows service state comes from the Service Control Manager. A service manager that needs its own PID file must use a separate path from the server PID file. Changing `server.pidfile` or `server.daemonize` takes effect on the next start.
 
+The operator mailbox `server.contact.admin.email` has no generated default. Set it to the real operator address; when it is empty, startup logs a warning and operator email notifications are disabled. Other contact-role addresses remain independent.
+
+## Response compression
+
+Gzip compression is enabled by default at level 5 for HTML, CSS, JavaScript, JSON, and XML responses. `level` must be between 1 and 9; invalid levels or MIME lists use the built-in defaults with a warning.
+
+```yaml
+server:
+  compression:
+    enabled: true
+    level: 5
+    types:
+      - text/html
+      - text/css
+      - text/javascript
+      - application/json
+      - application/xml
+```
+
 ## Maintenance recovery
 
-The server enters read-only maintenance mode when its database is unavailable, a critical database write fails, a configuration write fails, or it cannot write to its configuration, data, or log directories. Health routes remain available and report the reason, recovery attempts, and next retry; write requests receive HTTP 503 with `Retry-After` and maintenance headers. Recovery retries every 30 seconds by default, with `server.maintenance.self_healing.max_attempts: 0` meaning unlimited retries. Disk pressure triggers cleanup using the log-retention and backup-retention policies. See the matching `server.maintenance` values in the generated configuration.
+The server enters read-only maintenance mode when its database is unavailable, a critical database write fails, a configuration write fails, or it cannot write to its configuration, data, log, or backup directories. Backup and restore file writes also trigger maintenance for disk-full, permission, quota, or read-only filesystem failures; validation and encryption errors stay isolated to that backup operation. Health routes remain available and report the reason, recovery attempts, and next retry; write requests receive HTTP 503 with `Retry-After` and maintenance headers. Recovery retries every 30 seconds by default, with `server.maintenance.self_healing.max_attempts: 0` meaning unlimited retries. Disk pressure triggers cleanup using the log-retention and backup-retention policies. See the matching `server.maintenance` values in the generated configuration.
 
 ## Consent and announcements
 
 The first-visit consent banner is rendered by the server on every frontend page. On regular pages its Accept and Decline forms work without JavaScript and store the choice in the browser's `cookie_consent` cookie. On `/server/preferences`, the banner links to the granular controls in that page's single form and adds no separate forms. The configured policy link defaults to `/server/privacy`; `position` accepts `top` or `bottom`.
+
+Analytics is opt-in. A valid `server.tracking` provider is rendered only after the visitor enables analytics in the consent controls; the generated same-origin `/server/tracking.js` is also consent-gated and sent with `Cache-Control: no-cache`. Analytics tags and scripts are suppressed on Tor and I2P requests. Supported providers are Google Analytics, Matomo/Piwik, Open Web Analytics, Fathom, Plausible, Umami, Simple Analytics, and Cloudflare Web Analytics. Self-hosted providers use `server.tracking.url`; the provider host is added to CSP only while tracking is active.
 
 Announcements are rendered before the page header from `web.announcements`. Only enabled messages with a supported type and an active RFC 3339 start/end window are shown. Dismissible messages store their IDs in the `dismissed_announcements` cookie, and Reset on the preferences page clears it.
 
@@ -561,8 +583,8 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.privacy.data.sharing.when` | `string` |
 | `server.privacy.data.sold` | `bool` |
 | `server.privacy.data.stored_on_server` | `bool` |
-| `server.privacy.retention.deletion_available` | `bool` |
-| `server.privacy.retention.export_available` | `bool` |
+| `server.privacy.retention.deletion_available` | `bool` (default `true`) |
+| `server.privacy.retention.export_available` | `bool` (default `true`) |
 | `server.privacy.retention.period` | `string` or language map (`en`, `es`, `fr`, `de`, `it`, `ar`, `zh`, `ja`, optional `default`) |
 | `server.privacy.third_party.services.data_sent` | `string` |
 | `server.privacy.third_party.services.name` | `string` |

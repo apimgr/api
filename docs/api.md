@@ -14,7 +14,9 @@ Use the method shown in the route table. Path and query values are supplied in t
 
 - `GET /api/{api_version}/version` returns version/build metadata.
 - `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health. `/healthz` is an optional HTML health alias controlled by `server.healthz.root.enabled`; `/api/healthz` is the unversioned API alias.
+- Health statistics expose aggregate request totals and rolling 24-hour counts; totals are persisted in `server.db`, while health and metrics probes are excluded from those request counters.
 - `GET /server/about`, `/server/privacy`, `/server/dpo`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
+- `GET /server/tracking.js` serves the configured same-origin analytics loader only after analytics consent; it returns `404` when disabled, unconsented, or requested over Tor/I2P.
 - `GET /api/{api_version}/server/help` and `/api/{api_version}/server/help/mcp` return JSON help documents; `/server/help/mcp` is the corresponding HTML page.
 - `GET`/`POST /api/{api_version}/server/contact` expose the public contact form contract and two-step submit/review flow. A valid `security_id` selects the coordinated-disclosure fields; the response includes a fresh CAPTCHA descriptor and form token.
 - The contact review response contains only `review.type`, `review.email`, and `review.subject`, plus the review token and delay. On confirmation, clients repeat the original submitted fields unchanged; the server resolves an HTTPS researcher-key URL only after validating the review token.
