@@ -25,6 +25,7 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 | `server.tokens` | Anonymous owner-token limits and lifecycle settings |
 | `server.logs` | Access, application, audit, and security logging |
 | `server.scheduler`, `server.backup`, `server.restore`, `server.update` | Scheduled tasks, encrypted backups, restore size limits, retention, and release channel |
+| `server.maintenance` | Automatic recovery pacing, disk cleanup thresholds, and transition notifications |
 | `server.notifications`, `server.contact`, `server.privacy`, `server.csrf` | Email delivery and contact/privacy protections |
 | `server.pages` | Project-defined page/help content settings |
 | `server.i18n` | Default interface language and the enabled locale set |
@@ -40,6 +41,10 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 Configuration is validated per setting. Consult the matching sections of `AI.md` for field-specific accepted values, defaults, and interactions; this table names the complete configuration areas, not a substitute for those detailed constraints.
 
 `server.pidfile: false` disables the server's own PID-file check and creation. Containers and Windows skip PID files regardless of this setting; Windows service state comes from the Service Control Manager. A service manager that needs its own PID file must use a separate path from the server PID file. Changing `server.pidfile` or `server.daemonize` takes effect on the next start.
+
+## Maintenance recovery
+
+The server enters read-only maintenance mode when its database is unavailable or it cannot write to its data or log directories. Health routes remain available and report the reason, recovery attempts, and next retry; write requests receive HTTP 503 with a `Retry-After` header. Recovery retries every 30 seconds by default, with `server.maintenance.self_healing.max_attempts: 0` meaning unlimited retries. Disk pressure triggers cleanup using the log-retention and backup-retention policies. See the matching `server.maintenance` values in the generated configuration.
 
 ## Consent and announcements
 

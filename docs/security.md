@@ -65,7 +65,7 @@ The server currently exposes these public discovery paths: `/.well-known/securit
 | `/.well-known/llms.txt` and `/llms.txt` | Generate route-derived API discovery documents. |
 | `/api/{api_version}/server/reports/{name}` | Accepts sanitized browser Reporting API reports. |
 | `/api/{api_version}/server/mcp`, `/api/mcp`, `/mcp` | Streamable HTTP MCP endpoint using existing Bearer tokens and API authorization. Token-management routes are excluded from MCP tools. |
-| `/server/healthz` and `/api/{api_version}/server/healthz` | Return the server health response. |
+| `/server/healthz` and `/api/{api_version}/server/healthz` | Return health and maintenance recovery guidance. During maintenance, reads remain available and write requests receive HTTP 503 with `Retry-After` and maintenance-reason headers. |
 
 `web.security.report_url` configures the repository reporting contact. `server.contact.security.email` configures the security email contact. `web.security.expires` controls the `security.txt` expiry, `web.security.policy` replaces the built-in disclosure policy with operator-supplied Markdown, and `web.security.publish_pgp_key` controls public key discovery. Do not put secrets or report contents in public settings.
 
