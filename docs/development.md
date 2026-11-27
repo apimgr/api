@@ -15,7 +15,7 @@ make test
 
 `make dev` builds the server and client into an isolated temporary directory for quick iteration. `make local` creates production-style local binaries, and `make build` builds the local pair plus all eight server and client platform targets. Build products are written to the ignored `binaries/` directory. All builds run in one bounded Docker toolchain container with `CGO_ENABLED=0`.
 
-`make test` runs the complete Go package suite with coverage in Docker. `make release` is for manual, local stable releases only: set the version in `release.txt` to a stable `X.Y.Z`; it rejects devel and prerelease versions, builds all targets, prepares checksums and a source archive, and publishes the `vX.Y.Z` GitHub release. `make beta` must run on a clean `main` branch; it creates and pushes a UTC `YYYYMMDDHHMMSS-beta` tag for CI to publish. Devel releases are produced by CI. `make docker` builds and pushes the multi-architecture container; set `REGISTRY` for the destination before running it.
+`make test` runs the complete Go package suite with coverage in Docker. `make release` is for manual, local stable releases only: set the version in `release.txt` to a stable `X.Y.Z`; it rejects devel and prerelease versions, builds all targets, prepares checksums and a source archive, and publishes the `vX.Y.Z` GitHub release. `make beta` must run on a clean `main` branch; it creates and pushes a UTC `YYYYMMDDHHMMSS-beta` tag for CI to publish. Devel releases are produced by CI. `make docker` builds and checks a local image for the host platform and never pushes it; CI/CD handles publication.
 
 ## Tests and lint
 

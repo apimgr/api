@@ -90,7 +90,7 @@ sudo api --service --install
 api --service --help
 ```
 
-Supported actions include `start`, `restart`, `stop`, `reload`, `--install`, `--uninstall`, `--disable`, and `--help`. Available service managers depend on the operating system. Installation and removal affect the host service configuration and require the appropriate operator privileges.
+Supported actions include `start`, `restart`, `stop`, `reload`, `--install`, `--uninstall`, `--disable`, and `--help`. Available service managers depend on the operating system. An unprivileged `--install` creates, enables, and starts a per-user service on Linux or macOS; other service-control actions require root or Administrator access. Uninstall removes the dedicated system account and group only when this application created them, and leaves reused accounts untouched. On macOS, a legacy `_api` account is left unchanged while application directories are transferred to `api`; remove the legacy account manually when it is no longer needed.
 
 ## Maintenance and updates
 

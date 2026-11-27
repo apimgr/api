@@ -13,9 +13,10 @@ The repository currently contains eight locale files: English (`en`), Spanish (`
 3. Use UTF-8, two-space indentation, and valid JSON without comments or trailing commas.
 4. Keep every placeholder unchanged, including braces and spelling, such as `{count}`, `{total}`, and `{datetime}`. A placeholder may move within a translated sentence.
 5. Provide every CLDR plural category required by the locale.
-6. Write complete phrases rather than fragments intended to be joined by code. Italian uses the formal `Lei` register consistently.
-7. Keep product and brand names, protocols, technology names, code, file names, configuration keys, URLs, and literal user values such as `dark` and `auto` untranslated.
-8. Follow the locale's punctuation, quotation, decimal, and grouping conventions. French text, for example, uses its required spacing before punctuation.
+6. Keep the `format.date`, `format.time`, and `format.datetime` values as Go reference-time layouts appropriate to the locale. Set `format.am`, `format.pm`, and the ten `format.digits` when the locale uses localized day-period words or numerals.
+7. Write complete phrases rather than fragments intended to be joined by code. Italian uses the formal `Lei` register consistently.
+8. Keep product and brand names, protocols, technology names, code, file names, configuration keys, URLs, and literal user values such as `dark` and `auto` untranslated.
+9. Follow the locale's punctuation, quotation, decimal, and grouping conventions. French text, for example, uses its required spacing before punctuation.
 
 ## Translation rules
 

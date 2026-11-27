@@ -58,7 +58,7 @@ The resulting binaries are written to the git-ignored `binaries/` directory.
 
 ## Service management
 
-The server provides native service management through its `--service` command. Use `api --service=--help` to see commands supported by the current platform. Installation and removal may create or delete system files, so run those commands as the system operator.
+The server provides native service management through its `--service` command. Use `api --service=--help` to see commands supported by the current platform. A non-root install creates, enables, and starts a per-user service on Linux or macOS; system-service installation and other system-service controls require root or Administrator access. Uninstall asks for confirmation before deleting application data and removes the service account/group only when this application created them. On macOS, a legacy `_api` account remains untouched while runtime directories are transferred to `api`; remove the legacy account manually when it is no longer needed.
 
 ## Verification
 
