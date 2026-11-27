@@ -44,7 +44,7 @@ Configuration is validated per setting. Consult the matching sections of `AI.md`
 
 ## Maintenance recovery
 
-The server enters read-only maintenance mode when its database is unavailable or it cannot write to its data or log directories. Health routes remain available and report the reason, recovery attempts, and next retry; write requests receive HTTP 503 with a `Retry-After` header. Recovery retries every 30 seconds by default, with `server.maintenance.self_healing.max_attempts: 0` meaning unlimited retries. Disk pressure triggers cleanup using the log-retention and backup-retention policies. See the matching `server.maintenance` values in the generated configuration.
+The server enters read-only maintenance mode when its database is unavailable, a critical database write fails, a configuration write fails, or it cannot write to its configuration, data, or log directories. Health routes remain available and report the reason, recovery attempts, and next retry; write requests receive HTTP 503 with `Retry-After` and maintenance headers. Recovery retries every 30 seconds by default, with `server.maintenance.self_healing.max_attempts: 0` meaning unlimited retries. Disk pressure triggers cleanup using the log-retention and backup-retention policies. See the matching `server.maintenance` values in the generated configuration.
 
 ## Consent and announcements
 
