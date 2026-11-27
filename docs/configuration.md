@@ -353,6 +353,13 @@ server:
 ## Configuration management
 
 The configuration is file-based; the watcher monitors `server.yml`, `yaml.d/`, `secrets.yml`, and the configured assets directory and re-merges changes. Restart the service only when an affected feature requires it. Sensitive operations such as secret rotation and backup restoration use the CLI maintenance flow and audit logging. The CLI uses its own configuration file and options; see [CLI reference](cli.md).
+
+## Server self-update
+
+`server.update.branch` accepts `stable`, `beta`, or `devel`; `daily`, `rolling`, `dev`, and `development` normalize to `devel`. The scheduled `update_check` task runs daily at 06:00. By default it only notifies operators; `auto_install: true` stages updates only when the server was started elevated. `defer_days` is limited to 0–365 and applies to scheduled stable/beta checks; devel ignores it. Manual `--update check` and `--update yes` bypass the defer window.
+
+Use `api --update [check|yes|branch stable|beta|devel]`; the default is `yes`. `api --maintenance update [cmd]` is an alias. A staged update exits with status 75 so a supported supervisor can restart the server and apply it as root. Update availability remains operator-only.
+
 ## Complete setting key index
 
 This index lists the stable YAML keys exposed by the server configuration model. It excludes user-account settings because this product has no accounts. Map keys use `{key}` and list items use `[*]`; replace those markers with the application-defined map key or list item. The `data` and `server.pages` maps also accept the project-specific entries described above. Webhook transport names are open maps; built-in names are listed in [Contact destinations and webhooks](#contact-destinations-and-webhooks).

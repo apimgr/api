@@ -101,9 +101,11 @@ api --maintenance --help
 api --update --help
 ```
 
+The server updater supports `api --update [check|yes|branch {stable|beta|devel}]`; omitting the command defaults to `yes`. `api --maintenance update [cmd]` is an alias. Manual checks and installs bypass `server.update.defer_days`; scheduled stable/beta checks honor it, while devel ignores it. Update availability is shown to operators only. A staged privileged update exits with status 75 so a supported supervisor can restart and apply it.
+
 Tor management is grouped under maintenance: `api --maintenance tor status`, `api --maintenance tor validate`, and `api --maintenance tor --help`.
 
-`api --maintenance backup test [file]` verifies a backup without restoring it. If `file` is omitted, the newest archive by its manifest timestamp is checked. Encrypted archives use the configured backup password or prompt interactively. Verification includes the archive checksum, database integrity, and the backed-up PGP keypair when those files are present.
+`api --maintenance backup test [file]` verifies a backup without restoring it. If `file` is omitted, the newest full backup by its date-bearing filename is checked. Encrypted archives use the configured backup password or prompt interactively. Verification includes the manifest SHA-256, database integrity, and the backed-up PGP keypair when those files are present.
 
 Restore accepts only relative archive paths and enforces the configured `server.restore` size, file-count, and compression-ratio limits. Backups from older releases that stored absolute tar paths fail this safety check; restore those with the matching older release and create a current-format backup before moving to this release.
 
