@@ -20,7 +20,7 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 | `server.database`, `server.cache` | Database and optional cache connections |
 | `server.debug` | Explicitly enabled diagnostics, profiling, and verbose request/query/cache logging |
 | `server.ssl` | TLS and certificate automation |
-| `server.trusted_proxies` | Peers allowed to supply trusted reverse-proxy headers |
+| `server.trusted_proxies` | Peers allowed to supply trusted reverse-proxy headers, with automatic or pinned client-IP header selection |
 | `server.rate_limit`, `server.healthz` | Request limits and health aliases |
 | `server.security`, `server.token` | Security controls and operator credential |
 | `server.tokens` | Anonymous owner-token limits and lifecycle settings |
@@ -42,6 +42,10 @@ Use `yaml.d/` for optional area files. Project help and report-form settings bel
 Configuration is validated per setting. Consult the matching sections of `AI.md` for field-specific accepted values, defaults, and interactions; this table names the complete configuration areas, not a substitute for those detailed constraints.
 
 `server.pidfile: false` disables the server's own PID-file check and creation. Containers and Windows skip PID files regardless of this setting; Windows service state comes from the Service Control Manager. A service manager that needs its own PID file must use a separate path from the server PID file. Changing `server.pidfile` or `server.daemonize` takes effect on the next start.
+
+`server.trusted_proxies.client_ip_header` defaults to `auto`, which selects the first present supported client-IP header (`X-Forwarded-For`, `Forwarded`, `CF-Connecting-IP`, `True-Client-IP`, `X-Real-IP`, or `X-Client-IP`). Pin it to one of those headers when the trusted front proxy uses a known header; unsupported values fall back to `auto` with a warning.
+
+`server.cache.type` defaults to `memory`; `none` disables value caching, while `valkey` and `redis` provide shared TTL storage. Startup and hourly refresh warm only derived blocklist state (1 hour) and GeoIP database availability metadata (7 days), never operator configuration or GeoIP records. In-process TTL values are capped at 10,000 entries and 64 MiB. Rate-limit counters remain database-backed unless an external cache is configured.
 
 The operator mailbox `server.contact.admin.email` has no generated default. Set it to the real operator address; when it is empty, startup logs a warning and operator email notifications are disabled. Other contact-role addresses remain independent.
 
@@ -656,6 +660,7 @@ The first-run configuration is generated with the effective built-in defaults fo
 | `server.tracking.type` | `string` |
 | `server.tracking.url` | `string` |
 | `server.trusted_proxies.additional[*]` | `[]string` |
+| `server.trusted_proxies.client_ip_header` | `string` (`auto` or a supported proxy client-IP header) |
 | `server.update.auto_install` | `bool` |
 | `server.update.branch` | `string` |
 | `server.update.cli_min_version` | `string` |

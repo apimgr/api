@@ -46,7 +46,7 @@ api-cli raw request DELETE /api/v1/server/preferences/tokens/TOKEN_ID
 
 For `GET`, `key=value` arguments become query parameters. For `POST`, `PUT`, `PATCH`, and `DELETE`, they form a JSON request body. The client applies the configured API version when a path uses `/api/v1/`.
 
-For scripting, the client's process exit codes distinguish general failures (`1`), configuration (`2`), connection (`3`), authentication (`4`), missing resources (`5`), and usage errors (`64`).
+For scripting, the client's process exit codes distinguish general failures (`1`), usage errors (`2`), connection (`3`), authentication (`4`), and missing resources (`5`). The server also uses exit code `2` for command-line usage errors.
 
 ## Server options
 
