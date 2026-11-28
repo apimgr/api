@@ -8,7 +8,7 @@ The API server exposes documented HTTP interfaces and standards-based discovery 
 |-----------|----------|
 | REST | `/api/{api_version}/...` |
 | `/api/autodiscover` | Unversioned CLI/server discovery; overlay addresses are published only when their `expose` setting is enabled and the service is active |
-| `/cli/binaries/{api-cli-os-arch}` | Operator-provisioned CLI release binary, served only when its `sha256.txt` checksum matches; optionally requires a Bearer token |
+| `/api/{api_version}/cli/binaries/{api-cli-os-arch}` | Operator-provisioned CLI release binary, served only when its `sha256.txt` checksum matches; optionally requires a Bearer token |
 | OpenAPI JSON | `/api/{api_version}/server/swagger`; direct alias `/api/swagger` |
 | Swagger UI | `/server/docs/swagger` |
 | GraphQL | GET and POST `/api/{api_version}/server/graphql`; direct alias `/api/graphql`; read-only queries |

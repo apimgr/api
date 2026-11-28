@@ -75,7 +75,7 @@ For scripting, the client's process exit codes distinguish general failures (`1`
 | `--update ACTION` | Check or apply an update |
 | `--i2p` | Enable the I2P eepsite for this run |
 
-The server publishes operator-provisioned CLI releases from `{data_dir}/cli/` by default. `/api/autodiscover` advertises only artifacts whose `sha256.txt` hash matches the file; `/cli/binaries/{api-cli-os-arch}` serves those binaries. Set `cli.binary_download.require_auth` to require a valid Bearer token.
+The server publishes operator-provisioned CLI releases from `{data_dir}/cli/` by default. `/api/autodiscover` advertises only artifacts whose `sha256.txt` hash matches the file; `/api/{api_version}/cli/binaries/{api-cli-os-arch}` serves those binaries. Set `cli.binary_download.require_auth` to require a valid Bearer token.
 
 The local `--status` output includes the I2P provider state and address when available. `--i2p` overrides the configured I2P enabled value for that server run.
 

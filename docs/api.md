@@ -9,7 +9,7 @@ Use the method shown in the route table. Path and query values are supplied in t
 ## Shared server endpoints
 
 - `GET /api/autodiscover` is the unversioned CLI discovery endpoint. It returns the running project/API version and checksum-verified operator-provisioned CLI artifacts; exposed Tor/I2P addresses appear only when the service is active and its `expose` setting is enabled. See [Integrations](integrations.md) for public discovery behavior.
-- `GET /cli/binaries/{api-cli-os-arch}` serves an operator-provisioned CLI release binary after verifying its published checksum. Downloads are public by default; `cli.binary_download.require_auth` requires a valid Bearer token.
+- `GET /api/{api_version}/cli/binaries/{api-cli-os-arch}` serves an operator-provisioned CLI release binary after verifying its published checksum. Downloads are public by default; `cli.binary_download.require_auth` requires a valid Bearer token.
 - `GET /server/i2p/status` is a loopback-only status endpoint for the server CLI and does not expose key material.
 
 - `GET /api/{api_version}/version` returns version/build metadata.

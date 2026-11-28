@@ -129,7 +129,7 @@ Failure mode for GeoIP: if databases unavailable, the geo/network tools return I
 Project-defined API routes are inventoried below. AI.md PART 14 defines the shared server-template routes; those are not repeated here.
 
 - GET /api/autodiscover: no authentication; Returns project/server/API version, checksum-verified CLI release metadata and minimum version, and active Tor/I2P addresses only when their exposure settings are enabled.
-- GET /cli/binaries/{api-cli-os-arch}: public by default; Streams an operator-provisioned CLI release binary only when its published checksum matches; requires a valid Bearer token when `cli.binary_download.require_auth` is true.
+- GET /api/{api_version}/cli/binaries/{api-cli-os-arch}: public by default; Streams an operator-provisioned CLI release binary only when its published checksum matches; requires a valid Bearer token when `cli.binary_download.require_auth` is true.
 
 - GET /api/{api_version}/convert/area: no authentication; Converts {value} from {from} to {to} units. Request: Query (also accepted by the no-JavaScript form fallback): `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
 - GET /api/{api_version}/convert/area/{value}/{from}/{to}: no authentication; Converts {value} from {from} to {to} units. Request: Path: `value`, `from`, `to`. Response: JSON success envelope `{ "ok": true, "data": ... }`; `data` fields: `value`, `from`, `to`, `result`. Errors use `ok`, `error`, `message`, and optional `details`.
