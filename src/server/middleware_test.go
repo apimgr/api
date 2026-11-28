@@ -9,10 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/google/uuid"
 )
 
 // TestRequestIDMiddleware_GeneratesID covers the case where no
-// X-Request-ID is supplied by the client/proxy: a fresh 32-hex-char ID
+// X-Request-ID is supplied by the client/proxy: a fresh UUIDv4
 // must be generated, set on the response header, and made available to
 // downstream handlers through the request context.
 func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
@@ -30,14 +31,17 @@ func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
 
 	headerID := rec.Header().Get("X-Request-ID")
 	require.NotEmpty(t, headerID)
-	assert.Len(t, headerID, 32, "expected 16 random bytes hex-encoded to 32 chars")
+	parsed, err := uuid.Parse(headerID)
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(4), parsed.Version())
+	assert.Equal(t, uuid.RFC4122, parsed.Variant())
 	assert.Equal(t, headerID, seenInContext, "context request ID must match response header")
+	assert.Equal(t, headerID, req.Header.Get("X-Request-ID"), "downstream request header must carry the canonical ID")
 }
 
-// TestRequestIDMiddleware_PreservesUpstreamID covers the load-balancer/
-// proxy case: an incoming X-Request-ID must be reused verbatim, not
-// replaced with a freshly generated one.
-func TestRequestIDMiddleware_PreservesUpstreamID(t *testing.T) {
+// TestRequestIDMiddleware_ValidatesUpstreamID covers the proxy case: a
+// valid UUIDv4 is reused while arbitrary text is replaced.
+func TestRequestIDMiddleware_ValidatesUpstreamID(t *testing.T) {
 	var seenInContext string
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seenInContext = RequestIDFromContext(r.Context())
@@ -45,13 +49,51 @@ func TestRequestIDMiddleware_PreservesUpstreamID(t *testing.T) {
 
 	handler := requestIDMiddleware(next)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-Request-ID", "upstream-provided-id")
+	upstreamID := "550e8400-e29b-41d4-a716-446655440000"
+	req.Header.Set("X-Request-ID", upstreamID)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
 
-	assert.Equal(t, "upstream-provided-id", rec.Header().Get("X-Request-ID"))
-	assert.Equal(t, "upstream-provided-id", seenInContext)
+	assert.Equal(t, upstreamID, rec.Header().Get("X-Request-ID"))
+	assert.Equal(t, upstreamID, seenInContext)
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Request-ID", "upstream-provided-id")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	parsed, err := uuid.Parse(rec.Header().Get("X-Request-ID"))
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(4), parsed.Version())
+	assert.NotEqual(t, "upstream-provided-id", seenInContext)
+}
+
+func TestRequestIDMiddlewareUsesCorrelationAndTraceFallback(t *testing.T) {
+	for _, header := range []string{"X-Correlation-ID", "X-Trace-ID"} {
+		t.Run(header, func(t *testing.T) {
+			requestID := "550e8400-e29b-41d4-a716-446655440000"
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set(header, requestID)
+			rec := httptest.NewRecorder()
+			requestIDMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, requestID, RequestIDFromContext(r.Context()))
+			})).ServeHTTP(rec, req)
+			assert.Equal(t, requestID, rec.Header().Get("X-Request-ID"))
+		})
+	}
+}
+
+func TestRequestIDMiddlewareInvalidPrimaryDoesNotUseLowerPriorityID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Request-ID", "invalid")
+	req.Header.Set("X-Correlation-ID", "550e8400-e29b-41d4-a716-446655440000")
+	rec := httptest.NewRecorder()
+	requestIDMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		assert.NotEqual(t, "550e8400-e29b-41d4-a716-446655440000", RequestIDFromContext(r.Context()))
+	})).ServeHTTP(rec, req)
+	parsed, err := uuid.Parse(rec.Header().Get("X-Request-ID"))
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(4), parsed.Version())
 }
 
 // TestRequestIDMiddleware_UniquePerRequest ensures two requests without an
@@ -75,7 +117,7 @@ func TestRequestIDMiddleware_UniquePerRequest(t *testing.T) {
 // newSecurityHeadersConfig builds a production-default config (so CSP,
 // HSTS, Permissions-Policy, and other Web.* header settings are populated
 // as they would be at runtime) and overrides only the SSL flag under test.
-func newSecurityHeadersConfig(sslEnabled bool) *config.Config {
+func newSecurityHeadersConfig(sslEnabled bool) *config.ServerConfig {
 	cfg := config.DefaultConfig()
 	cfg.Server.SSL.Enabled = sslEnabled
 	cfg.Server.Port = ""
@@ -86,6 +128,7 @@ func newSecurityHeadersConfig(sslEnabled bool) *config.Config {
 // always be present regardless of scheme/SSL state.
 func TestSecurityHeadersMiddleware_StaticHeaders(t *testing.T) {
 	cfg := newSecurityHeadersConfig(false)
+	cfg.Server.APIVersion = "v7"
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -112,13 +155,14 @@ func TestSecurityHeadersMiddleware_StaticHeaders(t *testing.T) {
 	assert.NotContains(t, permissionsPolicy, "battery=")
 	assert.NotContains(t, permissionsPolicy, "interest-cohort")
 	assert.NotContains(t, permissionsPolicy, "web-share")
-	assert.NotEmpty(t, rec.Header().Get("Reporting-Endpoints"))
-	assert.NotEmpty(t, rec.Header().Get("Report-To"))
-	assert.NotEmpty(t, rec.Header().Get("NEL"))
+	assert.Equal(t, `default="http://example.com/api/v7/server/reports/default", nel="http://example.com/api/v7/server/reports/nel"`, rec.Header().Get("Reporting-Endpoints"))
+	assert.Equal(t, `{"group":"default","max_age":10886400,"endpoints":[{"url":"http://example.com/api/v7/server/reports/default"}]}, {"group":"nel","max_age":10886400,"endpoints":[{"url":"http://example.com/api/v7/server/reports/nel"}]}`, rec.Header().Get("Report-To"))
+	assert.Contains(t, rec.Header().Get("NEL"), `"report_to":"nel"`)
+	assert.Contains(t, rec.Header().Get("NEL"), `"max_age":2592000`)
 
 	csp := rec.Header().Get("Content-Security-Policy")
 	assert.Contains(t, csp, "default-src 'self'")
-	assert.Contains(t, csp, "report-uri http://example.com/api/v1/server/reports/csp")
+	assert.Contains(t, csp, "report-uri http://example.com/api/v7/server/reports/csp")
 	assert.NotContains(t, csp, "upgrade-insecure-requests")
 }
 
@@ -259,7 +303,7 @@ func TestSecurityHeadersMiddleware_CSPNoLearnedOrigins(t *testing.T) {
 // newSecFetchConfig builds a production-default config with
 // SecFetchValidation forced to the given state, so tests don't depend on
 // whatever config.DefaultConfig() happens to default it to.
-func newSecFetchConfig(enabled bool) *config.Config {
+func newSecFetchConfig(enabled bool) *config.ServerConfig {
 	cfg := config.DefaultConfig()
 	cfg.Web.Headers.SecFetchValidation = enabled
 	return cfg
@@ -302,13 +346,13 @@ func TestSecFetchValidationMiddleware_AbsentHeadersPassThrough(t *testing.T) {
 // TestSecFetchValidationMiddleware_CrossSiteRejected covers the
 // Sec-Fetch-Site rule: a cross-site state-changing request with no Bearer
 // token must be rejected with 403.
-func TestSecFetchValidationMiddleware_CrossSiteRejected(t *testing.T) {
+func TestSecFetchValidationMiddleware_CrossSiteFrontendRejected(t *testing.T) {
 	cfg := newSecFetchConfig(true)
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
 	handler := secFetchValidationMiddleware(cfg)(next)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/text/hash", nil)
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -327,7 +371,7 @@ func TestSecFetchValidationMiddleware_CrossSiteBearerBypasses(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
 	handler := secFetchValidationMiddleware(cfg)(next)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/text/hash", nil)
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", nil)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	req.Header.Set("Authorization", "Bearer sometoken")
 	rec := httptest.NewRecorder()
@@ -337,28 +381,30 @@ func TestSecFetchValidationMiddleware_CrossSiteBearerBypasses(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-// TestSecFetchValidationMiddleware_NavigateModeOnAPIRejected covers the
-// Sec-Fetch-Mode rule: a POST navigation against /api/* must be rejected
-// (form-based navigation CSRF against the JSON API surface).
-func TestSecFetchValidationMiddleware_NavigateModeOnAPIRejected(t *testing.T) {
+// API and compatibility routes bypass frontend Sec-Fetch validation.
+func TestSecFetchValidationMiddleware_APIRoutesAreNotValidated(t *testing.T) {
 	cfg := newSecFetchConfig(true)
-	called := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
-	handler := secFetchValidationMiddleware(cfg)(next)
+	for _, route := range []string{"/api/v1/text/hash", "/mcp"} {
+		t.Run(route, func(t *testing.T) {
+			called := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
+			handler := secFetchValidationMiddleware(cfg)(next)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/text/hash", nil)
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+			req := httptest.NewRequest(http.MethodPost, route, nil)
+			req.Header.Set("Sec-Fetch-Site", "cross-site")
+			req.Header.Set("Sec-Fetch-Mode", "navigate")
+			req.Header.Set("Sec-Fetch-Dest", "iframe")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
 
-	assert.False(t, called)
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+			assert.True(t, called)
+			assert.Equal(t, http.StatusOK, rec.Code)
+		})
+	}
 }
 
-// TestSecFetchValidationMiddleware_GetNavigateOnAPIAllowed covers the
-// spec's explicit exception: GET/HEAD navigation to /api/* is always
-// allowed, even with Sec-Fetch-Mode: navigate, since GETs are
-// side-effect-free.
+// GET/HEAD API navigations also pass through because the API surface is
+// outside frontend Sec-Fetch validation.
 func TestSecFetchValidationMiddleware_GetNavigateOnAPIAllowed(t *testing.T) {
 	cfg := newSecFetchConfig(true)
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
@@ -379,8 +425,7 @@ func TestSecFetchValidationMiddleware_GetNavigateOnAPIAllowed(t *testing.T) {
 }
 
 // TestSecFetchValidationMiddleware_CrossSiteIframeRejected covers the
-// Sec-Fetch-Dest rule: a cross-site iframe-destination request must be
-// rejected (frame-ancestors is hardcoded to 'self').
+// Sec-Fetch-Dest rule when no allowed frame ancestor is identified.
 func TestSecFetchValidationMiddleware_CrossSiteIframeRejected(t *testing.T) {
 	cfg := newSecFetchConfig(true)
 	called := false
@@ -397,9 +442,9 @@ func TestSecFetchValidationMiddleware_CrossSiteIframeRejected(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
 
-// TestSecFetchValidationMiddleware_SameSiteIframeAllowed ensures a
-// same-site iframe destination is not rejected by the Sec-Fetch-Dest rule.
-func TestSecFetchValidationMiddleware_SameSiteIframeAllowed(t *testing.T) {
+// TestSecFetchValidationMiddleware_SameOriginIframeAllowed ensures the
+// request's own origin is accepted by the Sec-Fetch-Dest rule.
+func TestSecFetchValidationMiddleware_SameOriginIframeAllowed(t *testing.T) {
 	cfg := newSecFetchConfig(true)
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
@@ -415,22 +460,52 @@ func TestSecFetchValidationMiddleware_SameSiteIframeAllowed(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-// TestSecFetchValidationMiddleware_SecFetchUserBadRejected covers the
-// Sec-Fetch-User rule: an authenticated (Bearer) navigation with
-// Sec-Fetch-Mode: navigate but a non-"?1" Sec-Fetch-User must be rejected.
-func TestSecFetchValidationMiddleware_SecFetchUserBadRejected(t *testing.T) {
+func TestSecFetchValidationMiddleware_LearnedFrameAncestorAllowed(t *testing.T) {
+	t.Setenv("DOMAIN", "parent.example.com")
+	cfg := newSecFetchConfig(true)
+	called := false
+	handler := secFetchValidationMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
+	req := httptest.NewRequest(http.MethodGet, "http://app.example.test/", nil)
+	req.Header.Set("Sec-Fetch-Dest", "iframe")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Referer", "https://parent.example.com/page")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// Sec-Fetch-User is scoped to sensitive operator-token browser flows. This
+// API project has no such frontend route, and owner-token navigation is not
+// an operator flow.
+func TestSecFetchValidationMiddleware_OwnerTokenNavigationIgnoresFetchUser(t *testing.T) {
 	cfg := newSecFetchConfig(true)
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
 	handler := secFetchValidationMiddleware(cfg)(next)
 
-	req := httptest.NewRequest(http.MethodPost, "/manage/example", nil)
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/tokens", nil)
 	req.Header.Set("Authorization", "Bearer sometoken")
 	req.Header.Set("Sec-Fetch-Mode", "navigate")
 	req.Header.Set("Sec-Fetch-User", "?0")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	assert.False(t, called)
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestSecFetchValidationMiddleware_CrossSiteExemptPathPasses(t *testing.T) {
+	cfg := newSecFetchConfig(true)
+	cfg.Server.CSRF.ExemptPaths = []string{"/server/hooks/*"}
+	called := false
+	handler := secFetchValidationMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
+	req := httptest.NewRequest(http.MethodPost, "/server/hooks/provider", nil)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rec.Code)
 }

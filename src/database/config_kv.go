@@ -38,7 +38,7 @@ func GetConfigValue(ctx context.Context, key string) (string, error) {
 // SetConfigValue writes one string key to the config key/value table,
 // inserting it or replacing the existing value and refreshing updated_at.
 func SetConfigValue(ctx context.Context, key, value string) error {
-	db := GetServerDB()
+	db := serverWriteDB()
 	if db == nil {
 		return fmt.Errorf("config: database not initialized")
 	}

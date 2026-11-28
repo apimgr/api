@@ -10,10 +10,10 @@ import (
 	"syscall"
 )
 
-// ServiceAccountIDs returns the UID and GID of the dedicated service
-// account. Both values are always identical on a correctly created
-// account (AI.md PART 23 "UID/GID Must match"), and a mismatch is
-// reported as an error rather than silently accepted.
+// ServiceAccountIDs returns the UID and primary GID of the dedicated service
+// account after validating the PART 23 existing-account reuse restrictions.
+// Newly created accounts have matching IDs; a compliant pre-existing system
+// account may retain its distinct non-root UID and primary GID.
 func ServiceAccountIDs() (uid, gid int, err error) {
 	u, err := user.Lookup(ServiceUserName)
 	if err != nil {
@@ -28,8 +28,16 @@ func ServiceAccountIDs() (uid, gid int, err error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("service account %s has a non-numeric gid %q: %w", ServiceUserName, u.Gid, err)
 	}
-	if uid != gid {
-		return 0, 0, fmt.Errorf("service account %s has mismatched uid %d and gid %d; AI.md PART 23 requires them to be identical", ServiceUserName, uid, gid)
+	shell, err := serviceAccountShell(u.Username)
+	if err != nil {
+		return 0, 0, err
+	}
+	group, err := user.LookupGroup(ServiceGroupName)
+	if err != nil {
+		return 0, 0, fmt.Errorf("service account group %s does not exist: %w", ServiceGroupName, err)
+	}
+	if err := validateExistingServiceAccount(u, group, shell); err != nil {
+		return 0, 0, err
 	}
 
 	return uid, gid, nil

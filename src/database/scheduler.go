@@ -28,7 +28,7 @@ type SchedulerTaskState struct {
 // Called on registration so the schedule/enabled columns always reflect the
 // current in-code task definitions.
 func UpsertSchedulerTask(taskID, taskName, schedule string, nextRun time.Time, enabled bool) error {
-	db := GetServerDB()
+	db := serverWriteDB()
 	if db == nil {
 		return nil
 	}
@@ -37,13 +37,13 @@ func UpsertSchedulerTask(taskID, taskName, schedule string, nextRun time.Time, e
 	defer cancel()
 
 	_, err := execContext(ctx, db, `
-		INSERT INTO scheduler_tasks (task_id, task_name, schedule, next_run, enabled)
+		INSERT INTO scheduler_tasks (id, name, schedule, next_run, enabled)
 		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(task_id) DO UPDATE SET
-			task_name = excluded.task_name,
+		ON CONFLICT(id) DO UPDATE SET
+			name = excluded.name,
 			schedule = excluded.schedule,
 			enabled = excluded.enabled
-	`, taskID, taskName, schedule, nextRun, enabled)
+	`, taskID, taskName, schedule, nextRun.Unix(), enabled)
 
 	return err
 }
@@ -56,10 +56,10 @@ func GetSchedulerTask(taskID string) (*SchedulerTaskState, error) {
 	}
 
 	const getTaskQuery = `
-		SELECT task_id, task_name, schedule, last_run, last_status, last_error,
+		SELECT id, name, schedule, last_run, last_status, last_error,
 			next_run, run_count, fail_count, enabled
 		FROM scheduler_tasks
-		WHERE task_id = ?
+		WHERE id = ?
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSimpleSelect)
@@ -68,9 +68,10 @@ func GetSchedulerTask(taskID string) (*SchedulerTaskState, error) {
 	row := queryRowContext(ctx, db, getTaskQuery, taskID)
 
 	var state SchedulerTaskState
+	var lastRun, nextRun sql.NullInt64
 	var lastStatus, lastError sql.NullString
-	if err := row.Scan(&state.TaskID, &state.TaskName, &state.Schedule, &state.LastRun,
-		&lastStatus, &lastError, &state.NextRun, &state.RunCount, &state.FailCount, &state.Enabled); err != nil {
+	if err := row.Scan(&state.TaskID, &state.TaskName, &state.Schedule, &lastRun,
+		&lastStatus, &lastError, &nextRun, &state.RunCount, &state.FailCount, &state.Enabled); err != nil {
 		recordQueryError(getTaskQuery, err)
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -80,6 +81,12 @@ func GetSchedulerTask(taskID string) (*SchedulerTaskState, error) {
 
 	state.LastStatus = lastStatus.String
 	state.LastError = lastError.String
+	if lastRun.Valid {
+		state.LastRun = sql.NullTime{Time: time.Unix(lastRun.Int64, 0).UTC(), Valid: true}
+	}
+	if nextRun.Valid {
+		state.NextRun = time.Unix(nextRun.Int64, 0).UTC()
+	}
 
 	return &state, nil
 }
@@ -87,8 +94,8 @@ func GetSchedulerTask(taskID string) (*SchedulerTaskState, error) {
 // RecordSchedulerRun persists the outcome of a task run: it updates the
 // task's last_run/next_run/status/counters and appends a scheduler_history
 // row, matching AI.md PART 18's "Database-backed state" requirement.
-func RecordSchedulerRun(taskID string, startedAt, completedAt time.Time, status string, runErr error, nextRun time.Time) {
-	db := GetServerDB()
+func RecordSchedulerRun(taskID string, startedAt, finishedAt time.Time, status string, runErr error, nextRun time.Time) {
+	db := serverWriteDB()
 	if db == nil {
 		return
 	}
@@ -110,19 +117,19 @@ func RecordSchedulerRun(taskID string, startedAt, completedAt time.Time, status 
 		UPDATE scheduler_tasks
 		SET last_run = ?, last_status = ?, last_error = ?, next_run = ?,
 			run_count = run_count + 1, fail_count = fail_count + ?
-		WHERE task_id = ?
-	`, startedAt, status, errText, nextRun, failIncrement, taskID); err != nil {
+		WHERE id = ?
+	`, startedAt.Unix(), status, errText, nextRun.Unix(), failIncrement, taskID); err != nil {
 		log.Printf("Database: failed to update scheduler task '%s': %v", taskID, err)
 	}
 
-	durationMS := completedAt.Sub(startedAt).Milliseconds()
+	durationMS := finishedAt.Sub(startedAt).Milliseconds()
 	historyCtx, cancelHistory := context.WithTimeout(context.Background(), timeoutWrite)
 	defer cancelHistory()
 
 	if _, err := execContext(historyCtx, db, `
-		INSERT INTO scheduler_history (task_id, started_at, completed_at, status, error, duration_ms)
+		INSERT INTO scheduler_history (task_id, started_at, finished_at, status, error, duration_ms)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, taskID, startedAt, completedAt, status, errText, durationMS); err != nil {
+	`, taskID, startedAt.Unix(), finishedAt.Unix(), status, errText, durationMS); err != nil {
 		log.Printf("Database: failed to record scheduler history for '%s': %v", taskID, err)
 	}
 }
@@ -130,13 +137,13 @@ func RecordSchedulerRun(taskID string, startedAt, completedAt time.Time, status 
 // SchedulerHistoryEntry is one persisted execution of a scheduled task,
 // backing the `scheduler history <id>` CLI command in AI.md PART 18.
 type SchedulerHistoryEntry struct {
-	ID          int64
-	TaskID      string
-	StartedAt   time.Time
-	CompletedAt time.Time
-	Status      string
-	Error       string
-	DurationMS  int64
+	ID         any
+	TaskID     string
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Status     string
+	Error      string
+	DurationMS int64
 }
 
 // SchedulerHistory returns the most recent executions of one task, newest
@@ -152,7 +159,7 @@ func SchedulerHistory(taskID string, limit int) ([]SchedulerHistoryEntry, error)
 	}
 
 	const historyQuery = `
-		SELECT id, task_id, started_at, completed_at, status, error, duration_ms
+		SELECT id, task_id, started_at, finished_at, status, error, duration_ms
 		FROM scheduler_history
 		WHERE task_id = ?
 		ORDER BY started_at DESC
@@ -173,19 +180,21 @@ func SchedulerHistory(taskID string, limit int) ([]SchedulerHistoryEntry, error)
 	entries := make([]SchedulerHistoryEntry, 0, limit)
 	for rows.Next() {
 		var (
-			entry       SchedulerHistoryEntry
-			completedAt sql.NullTime
-			runError    sql.NullString
-			durationMS  sql.NullInt64
+			entry      SchedulerHistoryEntry
+			startedAt  int64
+			finishedAt sql.NullInt64
+			runError   sql.NullString
+			durationMS sql.NullInt64
 		)
-		if err := rows.Scan(&entry.ID, &entry.TaskID, &entry.StartedAt, &completedAt,
+		if err := rows.Scan(&entry.ID, &entry.TaskID, &startedAt, &finishedAt,
 			&entry.Status, &runError, &durationMS); err != nil {
 			recordQueryError(historyQuery, err)
 			return nil, fmt.Errorf("scan scheduler history: %w", err)
 		}
-		if completedAt.Valid {
-			entry.CompletedAt = completedAt.Time
+		if finishedAt.Valid {
+			entry.FinishedAt = time.Unix(finishedAt.Int64, 0).UTC()
 		}
+		entry.StartedAt = time.Unix(startedAt, 0).UTC()
 		if runError.Valid {
 			entry.Error = runError.String
 		}
@@ -213,7 +222,7 @@ func DueSchedulerTasks(now time.Time) ([]SchedulerTaskState, error) {
 	}
 
 	const dueTasksQuery = `
-		SELECT task_id, task_name, schedule, last_run, last_status, last_error,
+		SELECT id, name, schedule, last_run, last_status, last_error,
 			next_run, run_count, fail_count, enabled
 		FROM scheduler_tasks
 		WHERE enabled = 1 AND next_run <= ?
@@ -226,7 +235,7 @@ func DueSchedulerTasks(now time.Time) ([]SchedulerTaskState, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutComplexSelect)
 	defer cancel()
 
-	rows, err := queryContext(ctx, db, dueTasksQuery, now)
+	rows, err := queryContext(ctx, db, dueTasksQuery, now.Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -235,14 +244,21 @@ func DueSchedulerTasks(now time.Time) ([]SchedulerTaskState, error) {
 	var states []SchedulerTaskState
 	for rows.Next() {
 		var state SchedulerTaskState
+		var lastRun, nextRun sql.NullInt64
 		var lastStatus, lastError sql.NullString
-		if err := rows.Scan(&state.TaskID, &state.TaskName, &state.Schedule, &state.LastRun,
-			&lastStatus, &lastError, &state.NextRun, &state.RunCount, &state.FailCount, &state.Enabled); err != nil {
+		if err := rows.Scan(&state.TaskID, &state.TaskName, &state.Schedule, &lastRun,
+			&lastStatus, &lastError, &nextRun, &state.RunCount, &state.FailCount, &state.Enabled); err != nil {
 			recordQueryError(dueTasksQuery, err)
 			return nil, err
 		}
 		state.LastStatus = lastStatus.String
 		state.LastError = lastError.String
+		if lastRun.Valid {
+			state.LastRun = sql.NullTime{Time: time.Unix(lastRun.Int64, 0).UTC(), Valid: true}
+		}
+		if nextRun.Valid {
+			state.NextRun = time.Unix(nextRun.Int64, 0).UTC()
+		}
 		states = append(states, state)
 	}
 

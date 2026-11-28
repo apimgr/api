@@ -1,12 +1,16 @@
 package metrics
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
@@ -136,9 +140,43 @@ func TestMiddlewareRecordsRequest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if got := testutil.ToFloat64(m.httpRequestsTotal.WithLabelValues("POST", "/items/:id", "201")); got != 1 {
+	if got := testutil.ToFloat64(m.httpRequestsTotal.WithLabelValues("POST", "__unmatched__", "201")); got != 1 {
 		t.Fatalf("httpRequestsTotal = %v, want 1", got)
 	}
+}
+
+func TestMiddlewareUsesMatchedRouteAndCountsChunkedRequestBytes(t *testing.T) {
+	m := newMetrics()
+	router := chi.NewRouter()
+	router.Use(m.Middleware)
+	router.Post("/reports/{tracking_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	handler := router
+	req := httptest.NewRequest(http.MethodPost, "/reports/01J8M4Q6G7H2D9P3K5T1V8W0XA", strings.NewReader("chunked request payload"))
+	req.ContentLength = -1
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if got := testutil.ToFloat64(m.httpRequestsTotal.WithLabelValues("POST", "/reports/{tracking_id}", "200")); got != 1 {
+		t.Fatalf("route-template request count = %v, want 1", got)
+	}
+	families, err := m.registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != "api_http_request_size_bytes" || len(family.Metric) != 1 {
+			continue
+		}
+		histogram := family.Metric[0].GetHistogram()
+		if histogram.GetSampleCount() != 1 || histogram.GetSampleSum() != float64(len("chunked request payload")) {
+			t.Fatalf("request size histogram = count %d sum %v", histogram.GetSampleCount(), histogram.GetSampleSum())
+		}
+		return
+	}
+	t.Fatal("request size histogram was not gathered")
 }
 
 func TestGrafanaHandlerServesDashboard(t *testing.T) {
@@ -155,6 +193,15 @@ func TestGrafanaHandlerServesDashboard(t *testing.T) {
 	for _, category := range []string{"scheduler_tasks_running", "system_memory_usage_percent", "owner_tokens_active"} {
 		if !strings.Contains(rec.Body.String(), category) {
 			t.Errorf("dashboard is missing %s category", category)
+		}
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, rec.Body.Bytes()); err != nil {
+		t.Fatalf("dashboard JSON is invalid: %v", err)
+	}
+	for _, contract := range []string{`"apiVersion":"dashboard.grafana.app/v2"`, `"elements"`, `"kind":"DatasourceVariable"`, `"pluginId":"prometheus"`, `"name":"$datasource"`, `"kind":"GridLayout"`, `"group":"timeseries"`} {
+		if !strings.Contains(compact.String(), contract) {
+			t.Errorf("dashboard is missing import contract %s", contract)
 		}
 	}
 }

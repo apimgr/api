@@ -1,11 +1,14 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
@@ -23,7 +26,7 @@ func TestServerPageConformance(t *testing.T) {
 	cfg := newTestConfig(t)
 	cfg.Server.RateLimit.Read.Requests = 10000
 	cfg.Server.RateLimit.GlobalBurst = 10000
-	require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+	require.NoError(t, database.InitDatabase(cfg.Server.Database, paths.DataDir()))
 	t.Cleanup(func() { _ = database.Close() })
 	require.NoError(t, database.EnsureAppSecrets(t.Context()))
 	require.NoError(t, database.EnsureCaptchaSchema(t.Context()))
@@ -45,6 +48,23 @@ func TestServerPageConformance(t *testing.T) {
 		"/server/docs/graphql",
 		"/server/preferences",
 	}
+	statusToken := "conformance-status-token"
+	statusTokenHash := sha256.Sum256([]byte(statusToken))
+	trackingDigest := sha256.Sum256([]byte(t.Name()))
+	trackingID := "sec_" + hex.EncodeToString(trackingDigest[:8])
+	report := database.SecurityReportInput{
+		TrackingID: trackingID,
+		IDWindow:   time.Now().UTC().Unix() / (48 * 60 * 60),
+		Severity:   "low",
+		Body:       []byte("encrypted-body-fixture"),
+		BodyAlg:    "pgp",
+		Contact:    []byte("encrypted-contact-fixture"),
+		CreditPref: "anon",
+		TokenHash:  hex.EncodeToString(statusTokenHash[:]),
+	}
+	require.NoError(t, database.StoreSecurityReport(t.Context(), report))
+	statusURL := "/server/security/report/" + trackingID + "?token=" + url.QueryEscape(statusToken)
+	pagePaths = append(pagePaths, statusURL)
 	registry := registeredServerPages("en")
 	assertHubRouteInventory(t, srv, registry)
 	for _, page := range append(registry.Help, registry.Preferences...) {
@@ -63,6 +83,11 @@ func TestServerPageConformance(t *testing.T) {
 			require.Equal(t, http.StatusOK, rec.Code)
 			require.Contains(t, rec.Header().Get("Content-Type"), "text/html")
 			body := rec.Body.String()
+			if pagePath == statusURL {
+				assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+				assert.Equal(t, "no-referrer", rec.Header().Get("Referrer-Policy"))
+				assert.NotContains(t, body, statusToken)
+			}
 			assert.Equal(t, 1, countLinkHrefInFooter(body, registry.HelpHubPath), "footer must link to the registered help hub: %s", pagePath)
 			assert.Equal(t, 1, countLinkHrefInFooter(body, registry.PreferencesHubPath), "footer must link to the registered preferences hub: %s", pagePath)
 			if pagePath == "/server/about" {
@@ -357,6 +382,16 @@ func assertServerHTMLConformance(t *testing.T, srv *http.Server, pagePath, body 
 			assert.True(t, hasNamedInput(form, "csrf_token"), "POST form must carry csrf_token: %s", pagePath)
 		}
 	}
+	if pagePath == "/server/preferences" {
+		var postForms []*nethtml.Node
+		for _, form := range forms {
+			if strings.EqualFold(htmlAttributes(form)["method"], http.MethodPost) {
+				postForms = append(postForms, form)
+			}
+		}
+		require.Len(t, postForms, 1, "preferences page must have exactly one POST form: %s", pagePath)
+		assert.Equal(t, "/server/preferences", htmlAttributes(postForms[0])["action"], "preferences page POST form must save its own values")
+	}
 	for _, table := range tables {
 		assert.True(t, hasElementDescendant(table, "thead"), "table must have a thead: %s", pagePath)
 		assert.True(t, hasClassAncestor(table, "table-wrapper"), "table must be inside .table-wrapper: %s", pagePath)
@@ -513,9 +548,16 @@ func assertHeaderConformance(t *testing.T, doc *nethtml.Node, pagePath string, h
 	assert.Equal(t, "div", children[3].Data, pagePath)
 	assert.True(t, strings.Contains(" "+htmlAttributes(children[3])["class"]+" ", " header-actions "), pagePath)
 	actions := elementChildren(children[3])
-	require.Len(t, actions, 2, "header actions must contain preferences and theme controls only: %s", pagePath)
-	assert.Equal(t, "form", actions[1].Data, pagePath)
-	assert.Equal(t, "POST", strings.ToUpper(htmlAttributes(actions[1])["method"]), pagePath)
+	wantActions := 2
+	if pagePath == "/server/preferences" {
+		wantActions = 1
+	}
+	require.Len(t, actions, wantActions, "header actions must contain the documented preferences and theme controls: %s", pagePath)
+	assert.Equal(t, "a", actions[0].Data, pagePath)
+	if pagePath != "/server/preferences" {
+		assert.Equal(t, "form", actions[1].Data, pagePath)
+		assert.Equal(t, "POST", strings.ToUpper(htmlAttributes(actions[1])["method"]), pagePath)
+	}
 }
 
 func sharedHeaderContainer(t *testing.T, body string) string {

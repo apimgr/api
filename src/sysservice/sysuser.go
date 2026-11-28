@@ -6,8 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
+
+	"github.com/apimgr/api/src/paths"
 )
 
 var ErrAccountToolsUnavailable = errors.New("no supported account-management tools are available")
@@ -16,12 +20,18 @@ const (
 	// ServiceUserName is the dedicated system account the server drops
 	// privileges to after binding privileged ports.
 	ServiceUserName = "api"
-	// ServiceGroupName matches ServiceUserName; AI.md PART 23 requires the
-	// service account's UID and GID to be identical.
+	// ServiceGroupName matches ServiceUserName; newly created accounts use
+	// matching UID and GID values as required by AI.md PART 23.
 	ServiceGroupName = "api"
 	// serviceGecos is the account's descriptive comment field.
-	serviceGecos = "api service account"
+	serviceGecos             = "api service account"
+	serviceAccountMarkerName = ".api-service-account-created"
 )
+
+type serviceAccountManagement struct {
+	userCreated  bool
+	groupCreated bool
+}
 
 // reservedSystemIDs lists well-known UID/GID values that must never be
 // assigned to the service account, even when they appear free on the
@@ -67,9 +77,13 @@ func findAvailableSystemID() (int, error) {
 		}
 		if _, err := user.LookupId(strconv.Itoa(id)); err == nil {
 			continue
+		} else if !isUnknownUserID(err, id) {
+			return 0, fmt.Errorf("check whether UID %d is available: %w", id, err)
 		}
 		if _, err := user.LookupGroupId(strconv.Itoa(id)); err == nil {
 			continue
+		} else if !isUnknownGroupID(err, id) {
+			return 0, fmt.Errorf("check whether GID %d is available: %w", id, err)
 		}
 		return id, nil
 	}
@@ -79,14 +93,25 @@ func findAvailableSystemID() (int, error) {
 
 // CreateServiceUser creates the dedicated "api" system user and group
 // (matching UID/GID, nologin shell, no password) with homeDir as its home
-// directory, if they do not already exist. It is a no-op on Windows,
+// directory, if they do not already exist. A pre-existing account is reused
+// only when it meets PART 23's system-account restrictions. It is a no-op on Windows,
 // which uses a Virtual Service Account instead of a POSIX user/group.
 func CreateServiceUser(homeDir string) error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	if _, err := user.Lookup(ServiceUserName); err == nil {
-		return nil
+	if existing, err := user.Lookup(ServiceUserName); err == nil {
+		shell, err := serviceAccountShell(existing.Username)
+		if err != nil {
+			return err
+		}
+		group, err := user.LookupGroup(ServiceGroupName)
+		if err != nil {
+			return fmt.Errorf("existing account %s conflicts with the service identity: group %s is missing", existing.Username, ServiceGroupName)
+		}
+		return validateExistingServiceAccount(existing, group, shell)
+	} else if !errors.Is(err, user.UnknownUserError(ServiceUserName)) {
+		return fmt.Errorf("look up service account %s: %w", ServiceUserName, err)
 	}
 	if err := ensureAccountToolsAvailable(); err != nil {
 		return err
@@ -116,7 +141,77 @@ func CreateServiceUser(homeDir string) error {
 		}
 	}
 
-	return os.Chown(homeDir, id, id)
+	if err := os.Chown(homeDir, id, id); err != nil {
+		return fmt.Errorf("set service account home ownership: %w", err)
+	}
+	management := serviceAccountManagement{userCreated: true, groupCreated: !groupExists}
+	if err := writeServiceAccountManagement(management); err != nil {
+		cleanupErr := deleteServiceAccount(management)
+		return errors.Join(fmt.Errorf("record managed service account ownership: %w", err), cleanupErr)
+	}
+	return nil
+}
+
+// serviceAccountShell returns the login shell recorded for a local account.
+// The standard os/user package intentionally does not expose this passwd field.
+func serviceAccountShell(username string) (string, error) {
+	if runtime.GOOS == "darwin" {
+		output, err := exec.Command("dscl", ".", "-read", "/Users/"+username, "UserShell").Output()
+		if err != nil {
+			return "", fmt.Errorf("read shell for service account %s: %w", username, err)
+		}
+		fields := strings.Fields(string(output))
+		if len(fields) == 2 && fields[0] == "UserShell:" {
+			return fields[1], nil
+		}
+		return "", fmt.Errorf("could not read shell for service account %s", username)
+	}
+	if runtime.GOOS == "freebsd" || runtime.GOOS == "openbsd" || runtime.GOOS == "netbsd" {
+		output, err := exec.Command("pw", "usershow", "-n", username, "-7").Output()
+		if err == nil {
+			fields := strings.Split(strings.TrimSpace(string(output)), ":")
+			if len(fields) >= 10 && fields[0] == username {
+				return fields[len(fields)-1], nil
+			}
+		}
+	}
+	contents, err := os.ReadFile("/etc/passwd")
+	if err != nil {
+		return "", fmt.Errorf("read passwd database for service account %s: %w", username, err)
+	}
+	for _, line := range strings.Split(string(contents), "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) >= 7 && fields[0] == username {
+			return fields[6], nil
+		}
+	}
+	return "", fmt.Errorf("service account %s is not present in /etc/passwd", username)
+}
+
+// validateExistingServiceAccount enforces PART 23's narrow reuse exception.
+// Newly created accounts use the stricter 200-899 matching-ID allocation rule.
+func validateExistingServiceAccount(account *user.User, group *user.Group, shell string) error {
+	if account == nil || group == nil {
+		return fmt.Errorf("existing service account data is incomplete")
+	}
+	uid, err := strconv.Atoi(account.Uid)
+	if err != nil {
+		return fmt.Errorf("existing service account %s has invalid uid %q", account.Username, account.Uid)
+	}
+	gid, err := strconv.Atoi(account.Gid)
+	if err != nil {
+		return fmt.Errorf("existing service account %s has invalid primary gid %q", account.Username, account.Gid)
+	}
+	if uid < 1 || uid > 999 || gid < 1 || gid > 999 {
+		return fmt.Errorf("existing account %s conflicts with the service identity: uid and primary gid must both be from 1 to 999", account.Username)
+	}
+	if shell != "/sbin/nologin" && shell != "/usr/sbin/nologin" && shell != "/usr/bin/false" && shell != "/bin/false" {
+		return fmt.Errorf("existing account %s conflicts with the service identity: shell %q allows login", account.Username, shell)
+	}
+	if group.Name != ServiceGroupName || group.Gid != account.Gid {
+		return fmt.Errorf("existing account %s conflicts with the service identity: primary gid %s does not match group %s gid %s", account.Username, account.Gid, ServiceGroupName, group.Gid)
+	}
+	return nil
 }
 
 func ensureAccountToolsAvailable() error {
@@ -152,6 +247,9 @@ func ensureAccountToolsAvailable() error {
 func resolveServiceIDs() (int, bool, error) {
 	grp, err := user.LookupGroup(ServiceGroupName)
 	if err != nil {
+		if !errors.Is(err, user.UnknownGroupError(ServiceGroupName)) {
+			return 0, false, fmt.Errorf("look up service group %s: %w", ServiceGroupName, err)
+		}
 		id, findErr := findAvailableSystemID()
 		return id, false, findErr
 	}
@@ -166,6 +264,8 @@ func resolveServiceIDs() (int, bool, error) {
 	}
 	if _, lookupErr := user.LookupId(grp.Gid); lookupErr == nil {
 		return 0, true, fmt.Errorf("group %s exists with gid %d but that id is already taken by another user", ServiceGroupName, gid)
+	} else if !isUnknownUserID(lookupErr, gid) {
+		return 0, true, fmt.Errorf("check whether UID %d is available: %w", gid, lookupErr)
 	}
 
 	return gid, true, nil
@@ -287,31 +387,47 @@ func nologinShell() string {
 	return "/sbin/nologin"
 }
 
-// DeleteServiceUser removes the dedicated "api" system user and group. It
-// is a no-op on Windows and is idempotent - deleting an already-absent
-// user/group is not an error.
+// DeleteServiceUser removes only the system account and group recorded as
+// created by this application. Reused pre-existing accounts are preserved.
+// It is a no-op on Windows and when no ownership marker exists.
 func DeleteServiceUser() error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	if _, err := user.Lookup(ServiceUserName); err != nil {
+	management, err := readServiceAccountManagement()
+	if err != nil {
+		return err
+	}
+	if !management.userCreated {
 		return nil
 	}
+	if err := deleteServiceAccount(management); err != nil {
+		return err
+	}
+	if err := os.Remove(serviceAccountMarkerPath()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove service account ownership marker: %w", err)
+	}
+	return nil
+}
 
+func deleteServiceAccount(management serviceAccountManagement) error {
+	if !management.userCreated {
+		return nil
+	}
+	if _, err := user.Lookup(ServiceUserName); err != nil {
+		if errors.Is(err, user.UnknownUserError(ServiceUserName)) {
+			return deleteServiceGroupForManagedAccount(management)
+		}
+		return fmt.Errorf("look up service user %s before deletion: %w", ServiceUserName, err)
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		if err := exec.Command("dscl", ".", "-delete", "/Users/"+ServiceUserName).Run(); err != nil {
 			return fmt.Errorf("failed to delete service user %s: %w", ServiceUserName, err)
 		}
-		if err := deleteServiceGroup("dscl", ".", "-delete", "/Groups/"+ServiceGroupName); err != nil {
-			return err
-		}
 	case "freebsd", "openbsd", "netbsd":
 		if err := exec.Command("pw", "userdel", ServiceUserName).Run(); err != nil {
 			return fmt.Errorf("failed to delete service user %s: %w", ServiceUserName, err)
-		}
-		if err := deleteServiceGroup("pw", "groupdel", ServiceGroupName); err != nil {
-			return err
 		}
 	default:
 		userDelete := "userdel"
@@ -324,28 +440,116 @@ func DeleteServiceUser() error {
 		if err := exec.Command(userDelete, ServiceUserName).Run(); err != nil {
 			return fmt.Errorf("failed to delete service user %s: %w", ServiceUserName, err)
 		}
+	}
+
+	return deleteServiceGroupForManagedAccount(management)
+}
+
+// deleteServiceGroupForManagedAccount removes the group only when the
+// ownership marker says this application created it. An absent group is
+// already cleaned up by some user deletion commands and is treated as done.
+func deleteServiceGroupForManagedAccount(management serviceAccountManagement) error {
+	if !management.groupCreated {
+		return nil
+	}
+	if _, err := user.LookupGroup(ServiceGroupName); err != nil {
+		if errors.Is(err, user.UnknownGroupError(ServiceGroupName)) {
+			return nil
+		}
+		return fmt.Errorf("look up service group %s before deletion: %w", ServiceGroupName, err)
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("dscl", ".", "-delete", "/Groups/"+ServiceGroupName)
+	case "freebsd", "openbsd", "netbsd":
+		cmd = exec.Command("pw", "groupdel", ServiceGroupName)
+	default:
 		groupDelete := "groupdel"
 		if _, err := exec.LookPath(groupDelete); err != nil {
 			groupDelete = "delgroup"
 		}
-		if err := deleteServiceGroup(groupDelete, ServiceGroupName); err != nil {
-			return err
-		}
+		cmd = exec.Command(groupDelete, ServiceGroupName)
 	}
-
-	return nil
-}
-
-// deleteServiceGroup runs the platform's group-deletion command, treating
-// an already-absent group as success. Some userdel implementations remove
-// the account's primary group along with the user, so the group can be
-// gone by the time this runs.
-func deleteServiceGroup(name string, args ...string) error {
-	if _, err := user.LookupGroup(ServiceGroupName); err != nil {
-		return nil
-	}
-	if err := exec.Command(name, args...).Run(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to delete group %s: %w", ServiceGroupName, err)
 	}
 	return nil
+}
+
+func serviceAccountMarkerPath() string {
+	configDir, _, _ := paths.GetDefaultDirs()
+	return filepath.Join(filepath.Dir(configDir), serviceAccountMarkerName)
+}
+
+func writeServiceAccountManagement(management serviceAccountManagement) error {
+	return writeServiceAccountManagementAt(serviceAccountMarkerPath(), management)
+}
+
+func writeServiceAccountManagementAt(path string, management serviceAccountManagement) error {
+	content := "user\n"
+	if management.groupCreated {
+		content += "group\n"
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil
+		}
+		return err
+	}
+	if _, err := file.WriteString(content); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	return file.Close()
+}
+
+func readServiceAccountManagement() (serviceAccountManagement, error) {
+	return readServiceAccountManagementAt(serviceAccountMarkerPath())
+}
+
+func readServiceAccountManagementAt(path string) (serviceAccountManagement, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return serviceAccountManagement{}, nil
+		}
+		return serviceAccountManagement{}, fmt.Errorf("read service account ownership marker: %w", err)
+	}
+	management := serviceAccountManagement{}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		switch line {
+		case "user":
+			management.userCreated = true
+		case "group":
+			management.groupCreated = true
+		case "":
+		default:
+			return serviceAccountManagement{}, fmt.Errorf("invalid service account ownership marker")
+		}
+	}
+	if management.groupCreated && !management.userCreated {
+		return serviceAccountManagement{}, fmt.Errorf("invalid service account ownership marker")
+	}
+	return management, nil
+}
+
+func isUnknownUserID(err error, id int) bool {
+	var unknown user.UnknownUserIdError
+	return errors.As(err, &unknown) && unknown == user.UnknownUserIdError(id)
+}
+
+func isUnknownGroupID(err error, id int) bool {
+	var unknown user.UnknownGroupIdError
+	return errors.As(err, &unknown) && unknown == user.UnknownGroupIdError(strconv.Itoa(id))
 }

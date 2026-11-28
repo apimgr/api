@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -37,9 +38,22 @@ type BlocklistManager struct {
 	lists    map[string]Blocklist
 }
 
+type CacheBlocklistSnapshot struct {
+	ID       string               `json:"id"`
+	Type     string               `json:"type"`
+	IPs      []string             `json:"ips"`
+	Domains  []CacheDomainPattern `json:"domains"`
+	LoadedAt time.Time            `json:"loaded_at"`
+}
+
+type CacheDomainPattern struct {
+	Name     string `json:"name"`
+	Wildcard bool   `json:"wildcard"`
+}
+
 var DefaultBlocklists = &BlocklistManager{loadedAt: map[string]time.Time{}, lists: map[string]Blocklist{}}
 
-func RegisterHealthChecks(cfg *config.Config) {
+func RegisterHealthChecks(cfg *config.ServerConfig) {
 	health.UnregisterPrefix("blocklist_")
 	health.Unregister("cve_nvd")
 	health.Unregister("trivy_db")
@@ -124,7 +138,7 @@ func ParseBlocklist(id, kind string, reader io.Reader, trusted []netip.Prefix) (
 	return parseBlocklist(id, kind, bufio.NewScanner(reader), trusted)
 }
 
-func TrustedNetworks(cfg *config.Config) []netip.Prefix { return trustedNetworks(cfg) }
+func TrustedNetworks(cfg *config.ServerConfig) []netip.Prefix { return trustedNetworks(cfg) }
 
 func parseBlocklist(id, kind string, scanner *bufio.Scanner, trusted []netip.Prefix) ([]string, Blocklist, int, error) {
 	parsed := Blocklist{ID: id, Type: kind}
@@ -223,7 +237,7 @@ func overlaps(a, b netip.Prefix) bool {
 	return a.Addr().Is4() == b.Addr().Is4() && (a.Contains(b.Addr()) || b.Contains(a.Addr()))
 }
 
-func (m *BlocklistManager) Reload(cfg *config.Config, now time.Time) {
+func (m *BlocklistManager) Reload(cfg *config.ServerConfig, now time.Time) {
 	if cfg == nil || !cfg.Server.Security.Blocklists.Enabled {
 		m.mu.Lock()
 		m.lists = map[string]Blocklist{}
@@ -287,6 +301,37 @@ func (m *BlocklistManager) MatchesIP(addr netip.Addr) (string, bool) {
 	return "", false
 }
 
+// CacheSnapshot returns a detached representation of the active blocklists;
+// it contains runtime-derived state and never reads operator configuration.
+func (m *BlocklistManager) CacheSnapshot() []CacheBlocklistSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	ids := make([]string, 0, len(m.lists))
+	for id := range m.lists {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	snapshot := make([]CacheBlocklistSnapshot, 0, len(ids))
+	for _, id := range ids {
+		list := m.lists[id]
+		entry := CacheBlocklistSnapshot{
+			ID:       list.ID,
+			Type:     list.Type,
+			IPs:      make([]string, 0, len(list.IPs)),
+			Domains:  make([]CacheDomainPattern, 0, len(list.Domains)),
+			LoadedAt: list.LoadedAt,
+		}
+		for _, prefix := range list.IPs {
+			entry.IPs = append(entry.IPs, prefix.String())
+		}
+		for _, domain := range list.Domains {
+			entry.Domains = append(entry.Domains, CacheDomainPattern{Name: domain.name, Wildcard: domain.wildcard})
+		}
+		snapshot = append(snapshot, entry)
+	}
+	return snapshot
+}
+
 func (m *BlocklistManager) MatchesDomain(host string) (string, bool) {
 	domain, ok := config.NormalizeBlocklistDomain(host)
 	if !ok {
@@ -327,7 +372,7 @@ func configString(data map[string]interface{}, key string) string {
 
 func boolPointer(value bool) *bool { return &value }
 
-func trustedNetworks(cfg *config.Config) []netip.Prefix {
+func trustedNetworks(cfg *config.ServerConfig) []netip.Prefix {
 	raw := append([]string{}, cfg.Server.TrustedProxies.Additional...)
 	for _, entry := range cfg.Server.Security.Allowlist {
 		raw = append(raw, entry.CIDR)

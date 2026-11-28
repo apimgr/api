@@ -10,7 +10,7 @@ import (
 )
 
 func TestPublicDPOContactUsesOnlyDPOAndGeneralEmail(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Contact.Admin.Email = "admin@example.test"
 	cfg.Server.Contact.DPO.Name = "Privacy Office"
 	cfg.Server.Contact.General.Email = "general@example.test"
@@ -32,7 +32,7 @@ func TestPublicDPOContactUsesOnlyDPOAndGeneralEmail(t *testing.T) {
 }
 
 func TestDPOAPIHandlerReturnsContactAndRequestResolvedPrivacyURL(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Contact.Admin.Email = "admin@example.test"
 	cfg.Server.Contact.DPO.Name = "Privacy Office"
 	cfg.Server.Contact.DPO.Email = "dpo@example.test"
@@ -49,7 +49,7 @@ func TestDPOAPIHandlerReturnsContactAndRequestResolvedPrivacyURL(t *testing.T) {
 }
 
 func TestDPOAPIHandlerReturnsEmptyContactInsteadOfAdminFallback(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Contact.Admin.Email = "admin@example.test"
 
 	req := httptest.NewRequest("GET", "https://example.test/api/v1/server/dpo", nil)

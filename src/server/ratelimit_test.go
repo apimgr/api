@@ -44,6 +44,42 @@ func TestClassLimiterAllow(t *testing.T) {
 	assert.True(t, allowed, "request should be allowed again after window elapses")
 }
 
+func TestReportsRateLimiterSharesEndpointBudgetAndBurst(t *testing.T) {
+	store := cache.New(config.CacheConfig{Type: "memory"})
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	limiter := newReportsRateLimiter(store, 2, 2)
+	now := time.Unix(1000, 0)
+	allowed, _ := limiter.allow("192.0.2.9", now)
+	require.True(t, allowed)
+	allowed, _ = limiter.allow("192.0.2.9", now)
+	require.True(t, allowed)
+	allowed, reset := limiter.allow("192.0.2.9", now)
+	require.False(t, allowed)
+	require.True(t, reset.After(now))
+
+	burstStore := cache.New(config.CacheConfig{Type: "memory"})
+	t.Cleanup(func() { require.NoError(t, burstStore.Close()) })
+	burst := newReportsRateLimiter(burstStore, 60, 2)
+	allowed, _ = burst.allow("192.0.2.10", now)
+	require.True(t, allowed)
+	allowed, _ = burst.allow("192.0.2.10", now)
+	require.True(t, allowed)
+	allowed, reset = burst.allow("192.0.2.10", now)
+	require.False(t, allowed)
+	require.True(t, reset.After(now))
+	allowed, _ = burst.allow("192.0.2.10", now.Add(time.Second))
+	require.True(t, allowed)
+}
+
+func TestReportEndpointClassificationCoversAllReportTypes(t *testing.T) {
+	for _, path := range []string{
+		"/api/v1/server/reports/default", "/api/v1/server/reports/csp", "/api/v1/server/reports/nel",
+	} {
+		require.True(t, isReportEndpoint(path))
+	}
+	require.False(t, isReportEndpoint("/server/security/report/track-id"))
+}
+
 // classLimiter.allow must track distinct clients independently - one
 // client hitting its limit must not affect another client's quota.
 func TestClassLimiterAllowPerClient(t *testing.T) {
@@ -189,11 +225,11 @@ func TestWriteRateLimitExceeded(t *testing.T) {
 	assert.False(t, hasRetryAfter)
 }
 
-// testRateLimitConfig builds a config.Config with small, deterministic
+// testRateLimitConfig builds a config.ServerConfig with small, deterministic
 // rate limit classes suitable for exercising the middleware without long
 // test sleeps.
-func testRateLimitConfig(_ bool, readLimit, writeLimit, healthLimit, globalBurst int) *config.Config {
-	cfg := &config.Config{}
+func testRateLimitConfig(_ bool, readLimit, writeLimit, healthLimit, globalBurst int) *config.ServerConfig {
+	cfg := &config.ServerConfig{}
 	cfg.Server.RateLimit = config.RateLimitConfig{
 		Read:        config.RateLimitClassConfig{Requests: readLimit, Window: 60},
 		Write:       config.RateLimitClassConfig{Requests: writeLimit, Window: 60},

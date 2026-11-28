@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestAutodiscoverIncludesVerifiedCLIReleaseAndVersion(t *testing.T) {
-	t.Setenv("DOMAIN", "primary.example,secondary.example")
+	t.Setenv("DOMAIN", "primary.example.com,secondary.example.com")
 	resetLearnedOrigins()
 	t.Cleanup(resetLearnedOrigins)
 	dir := t.TempDir()
@@ -27,7 +28,7 @@ func TestAutodiscoverIncludesVerifiedCLIReleaseAndVersion(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "version.txt"), []byte("2.3.4\n"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "sha256.txt"), []byte(hex.EncodeToString(sum[:])+"  "+filename+"\n"), 0600))
 
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.CLI.BinaryDownload.Dir = dir
 	cfg.Server.APIVersion = "v9"
 	cfg.Server.Update.CLIMinVersion = "1.2.0"
@@ -46,7 +47,7 @@ func TestAutodiscoverIncludesVerifiedCLIReleaseAndVersion(t *testing.T) {
 	require.Equal(t, "3.4.5", body.Data.Version)
 	require.Equal(t, "v9", body.Data.API.CurrentVersion)
 	require.Equal(t, "1.2.0", body.Data.CLIMinVersion)
-	require.Equal(t, []string{"http://example.com", "https://primary.example", "https://secondary.example"}, body.Data.URLs)
+	require.Equal(t, []string{"http://example.com", "https://primary.example.com", "https://secondary.example.com"}, body.Data.URLs)
 	require.Equal(t, cliRelease{Version: "2.3.4", SHA256: hex.EncodeToString(sum[:])}, body.Data.CLIVersions["linux-amd64"])
 }
 
@@ -57,7 +58,7 @@ func TestAutodiscoverOmitsChecksumMismatchAndUnexposedOverlays(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "version.txt"), []byte("2.3.4\n"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "sha256.txt"), []byte(hex.EncodeToString(make([]byte, sha256.Size))+"  "+filename+"\n"), 0600))
 
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.CLI.BinaryDownload.Dir = dir
 	cfg.Server.I2P.Enabled = true
 	cfg.Server.I2P.Expose = false
@@ -72,8 +73,23 @@ func TestAutodiscoverOmitsChecksumMismatchAndUnexposedOverlays(t *testing.T) {
 	require.NotContains(t, data, "i2p")
 }
 
+func TestAutodiscoverDoesNotReturnOriginsToTorRequests(t *testing.T) {
+	t.Setenv("DOMAIN", "primary.example,secondary.example")
+	cfg := &config.ServerConfig{}
+	cfg.Server.Tor.Expose = true
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "http://service.onion/api/autodiscover", nil)
+	req = req.WithContext(context.WithValue(req.Context(), torCircuitContextKey, "tor:0123456789abcdef"))
+	autodiscoverHandler(cfg)(rec, req)
+
+	var body autodiscoverResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.True(t, body.OK)
+	require.Empty(t, body.Data.URLs)
+}
+
 func TestAutodiscoverContentNegotiation(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	routes := []swagger.Route{apiRouteDefinition("GET", "/api/autodiscover")}
 	handler := apiTextMiddleware(paths.ProjectName, &routes)(autodiscoverHandler(cfg))
 	for _, test := range []struct {

@@ -13,15 +13,15 @@ import (
 
 // csrfTestConfig builds a config with CSRF enabled and the supplied exempt
 // path patterns.
-func csrfTestConfig(exempt []string) *config.Config {
-	cfg := &config.Config{}
+func csrfTestConfig(exempt []string) *config.ServerConfig {
+	cfg := &config.ServerConfig{}
 	cfg.Server.CSRF.Enabled = true
 	cfg.Server.CSRF.ExemptPaths = exempt
 	return cfg
 }
 
 // newCSRFTestHandler wraps an always-200 handler in the csrf middleware.
-func newCSRFTestHandler(cfg *config.Config) http.Handler {
+func newCSRFTestHandler(cfg *config.ServerConfig) http.Handler {
 	return csrfMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -204,7 +204,7 @@ func TestCSRFMiddleware_MultipartFieldIsAccepted(t *testing.T) {
 }
 
 func TestCSRFMiddleware_DisabledPassesThrough(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.CSRF.Enabled = false
 
 	rec := httptest.NewRecorder()

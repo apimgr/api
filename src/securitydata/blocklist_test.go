@@ -54,3 +54,18 @@ func TestBlocklistStatusFreshness(t *testing.T) {
 		t.Fatalf("missing status=%q", got)
 	}
 }
+
+func TestBlocklistCacheSnapshotIsSortedAndDetached(t *testing.T) {
+	manager := &BlocklistManager{lists: map[string]Blocklist{
+		"z-list": {ID: "z-list", Type: "ip", IPs: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}},
+		"a-list": {ID: "a-list", Type: "domain", Domains: []domainPattern{{name: "example.test", wildcard: true}}},
+	}}
+	snapshot := manager.CacheSnapshot()
+	if len(snapshot) != 2 || snapshot[0].ID != "a-list" || snapshot[1].ID != "z-list" {
+		t.Fatalf("snapshot order/content = %#v", snapshot)
+	}
+	snapshot[1].IPs[0] = "changed"
+	if got := manager.CacheSnapshot()[1].IPs[0]; got != "192.0.2.0/24" {
+		t.Fatalf("snapshot mutation changed manager data: %q", got)
+	}
+}

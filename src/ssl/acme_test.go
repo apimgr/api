@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ShouldRenew must trigger at exactly 7 days remaining and below, and not
-// above it.
+// ShouldRenew must trigger at 30 days remaining and below, and not trigger
+// above the fixed renewal window.
 func TestShouldRenew(t *testing.T) {
 	assert.True(t, ShouldRenew(0))
-	assert.True(t, ShouldRenew(7))
+	assert.True(t, ShouldRenew(30))
 	assert.True(t, ShouldRenew(-1))
-	assert.False(t, ShouldRenew(8))
+	assert.False(t, ShouldRenew(31))
 	assert.False(t, ShouldRenew(365))
 }
 

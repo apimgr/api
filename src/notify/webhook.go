@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apimgr/api/src/common/requestid"
 	"github.com/google/uuid"
 )
 
@@ -285,7 +286,7 @@ func Send(client HTTPDoer, request *http.Request) error {
 			},
 		}
 	}
-	response, err := client.Do(request)
+	response, err := requestid.DoOutboundRequestWithID(client, request)
 	if err != nil {
 		return errors.New("webhook request failed")
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -161,11 +162,23 @@ func TestLibSQLSchemaUsesPrefixedTablesAndMigrations(t *testing.T) {
 	assertTablesExist(t, db, []string{
 		"srv_config", "srv_config_meta", "srv_app_secrets", "srv_owners", "srv_api_tokens",
 		"srv_audit_log", "srv_scheduler_tasks", "srv_scheduler_history", "srv_backups",
-		"srv_security_reports", "srv_security_thanks", "srv_rate_limits",
+		"srv_security_reports", "srv_security_thanks", "srv_rate_limits", "srv_server_stats", "srv_server_request_hours",
 	})
 	var count int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM srv_config_meta`).Scan(&count))
 	require.Equal(t, 1, count)
+	columns, err := db.Query(`PRAGMA table_info(srv_app_secrets)`)
+	require.NoError(t, err)
+	columnNames := make([]string, 0, 3)
+	for columns.Next() {
+		var cid, notNull, primaryKey int
+		var name, dataType string
+		var defaultValue sql.NullString
+		require.NoError(t, columns.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey))
+		columnNames = append(columnNames, name)
+	}
+	require.NoError(t, errors.Join(columns.Err(), columns.Close()))
+	require.Equal(t, []string{"name", "value", "updated_at"}, columnNames)
 }
 
 func TestEnsureAppSecretsUsesFreshOfflineCacheWithoutWriting(t *testing.T) {
@@ -181,7 +194,7 @@ func TestEnsureAppSecretsUsesFreshOfflineCacheWithoutWriting(t *testing.T) {
 	old := time.Now().UTC().AddDate(0, -7, 0).Unix()
 	require.NoError(t, cacheStore.Write(ctx, func(tx *sql.Tx) error {
 		for _, name := range []string{SecretInstallationSecret, SecretCookieSigningKey, SecretCSRFTokenSecret} {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO app_secrets (name, value, created_at) VALUES (?, ?, ?)`, name, value, old); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?)`, name, value, time.Unix(old, 0).UTC().Format(time.RFC3339Nano)); err != nil {
 				return err
 			}
 		}

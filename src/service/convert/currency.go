@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // CurrencyResult is the outcome of a live currency conversion
@@ -59,7 +61,7 @@ func (s *Service) ConvertCurrency(amount float64, from, to string) (CurrencyResu
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := currencyHTTPClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(currencyHTTPClient, req)
 	if err != nil {
 		return CurrencyResult{}, fmt.Errorf("currency provider request failed: %w", err)
 	}

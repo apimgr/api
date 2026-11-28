@@ -238,6 +238,13 @@ func TestInstallUninstallBSDRC(t *testing.T) {
 	if _, statErr := os.Stat(rcPath); statErr != nil {
 		t.Fatalf("expected rc.d script to exist at %s: %v", rcPath, statErr)
 	}
+	data, readErr := os.ReadFile(rcPath)
+	if readErr != nil {
+		t.Fatalf("read rc.d script: %v", readErr)
+	}
+	if !strings.Contains(string(data), `pidfile="/var/run/apimgr-api.pid"`) {
+		t.Error("BSD rc.d supervisor must use a PID file separate from the server PID")
+	}
 
 	if err := uninstallBSDRC(); err != nil {
 		t.Fatalf("uninstallBSDRC failed: %v", err)
@@ -441,10 +448,9 @@ func TestInstallUninstallSysVinit(t *testing.T) {
 		t.Fatalf("expected SysVinit script at %s: %v", scriptPath, readErr)
 	}
 
-	// AI.md PART 24's SysVinit template requires the LSB header with
-	// $network $remote_fs $syslog, the DAEMON_USER/PIDFILE/LOGFILE vars,
-	// start-stop-daemon with --chuid, a --retry 30 stop, and a status
-	// branch exiting 3 when the daemon is not running.
+	// AI.md PART 24's SysVinit template requires the LSB header, a
+	// supervisor PID separate from the server PID, root startup without
+	// --chuid, a --retry 30 stop, and status exit 3 when stopped.
 	script := string(data)
 	for _, want := range []string{
 		"### BEGIN INIT INFO",
@@ -452,19 +458,24 @@ func TestInstallUninstallSysVinit(t *testing.T) {
 		"# Required-Stop:     $network $remote_fs $syslog",
 		"NAME=api",
 		"DAEMON_USER=api",
-		"PIDFILE=" + paths.DefaultPIDPath(),
+		"PIDFILE=" + filepath.Join("/var/run", orgName+"-"+appName) + ".pid",
 		"LOGFILE=" + paths.LogDir() + "/server.log",
+		"chown -R $DAEMON_USER:$DAEMON_USER $(dirname $LOGFILE)",
 		"start-stop-daemon --start --quiet --background --make-pidfile",
-		"--chuid $DAEMON_USER",
+		"--pidfile $PIDFILE --exec $DAEMON",
 		"--no-close >> $LOGFILE 2>&1",
 		"start-stop-daemon --stop --quiet --pidfile $PIDFILE --retry 30",
 		"rm -f $PIDFILE",
 		"kill -0 $(cat $PIDFILE)",
 		"exit 3",
+		"exit 2",
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("SysVinit script is missing %q", want)
 		}
+	}
+	if strings.Contains(script, "--chuid") || strings.Contains(script, "PIDFILE="+paths.DefaultPIDPath()) {
+		t.Error("SysVinit supervisor must not pre-drop privileges or reuse the server PID file")
 	}
 
 	if err := uninstallSysVinit(); err != nil {

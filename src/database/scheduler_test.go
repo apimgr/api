@@ -10,10 +10,10 @@ import (
 )
 
 // UpsertSchedulerTask must insert a new row on first call and update the
-// mutable fields (task_name, schedule, enabled) on conflict, without
+// mutable fields (name, schedule, enabled) on conflict, without
 // resetting run_count/fail_count.
 func TestUpsertAndGetSchedulerTask(t *testing.T) {
-	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE task_id = ?`, "task-upsert")
+	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE id = ?`, "task-upsert")
 
 	next := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	require.NoError(t, UpsertSchedulerTask("task-upsert", "First Name", "@daily", next, true))
@@ -26,7 +26,7 @@ func TestUpsertAndGetSchedulerTask(t *testing.T) {
 	assert.Equal(t, "@daily", state.Schedule)
 	assert.True(t, state.Enabled)
 
-	// Conflict path: same task_id, changed name/schedule/enabled.
+	// Conflict path: same task id, changed name/schedule/enabled.
 	require.NoError(t, UpsertSchedulerTask("task-upsert", "Second Name", "@hourly", next, false))
 	state2, err := GetSchedulerTask("task-upsert")
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestGetSchedulerTaskNotFound(t *testing.T) {
 func TestRecordSchedulerRun(t *testing.T) {
 	db := GetServerDB()
 	taskID := "task-record"
-	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE task_id = ?`, taskID)
+	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE id = ?`, taskID)
 	execTestWrite(t, `DELETE FROM scheduler_history WHERE task_id = ?`, taskID)
 
 	next := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
@@ -83,6 +83,12 @@ func TestRecordSchedulerRun(t *testing.T) {
 	var historyCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM scheduler_history WHERE task_id = ?`, taskID).Scan(&historyCount))
 	assert.Equal(t, 2, historyCount)
+	entries, err := SchedulerHistory(taskID, 10)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, started, entries[0].StartedAt)
+	assert.Equal(t, completed, entries[0].FinishedAt)
+	assert.IsType(t, int64(0), entries[0].ID)
 }
 
 // RecordSchedulerRun against a task_id with no scheduler_tasks row must not
@@ -105,7 +111,7 @@ func TestRecordSchedulerRunUnknownTask(t *testing.T) {
 // before "now", excluding disabled tasks and tasks scheduled in the
 // future.
 func TestDueSchedulerTasks(t *testing.T) {
-	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE task_id LIKE 'due-%'`)
+	execTestWrite(t, `DELETE FROM scheduler_tasks WHERE id LIKE 'due-%'`)
 
 	now := time.Now().UTC().Truncate(time.Second)
 	past := now.Add(-time.Hour)

@@ -1,0 +1,6003 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "API Toolkit",
+    "description": "API operations registered by the server router",
+    "version": "generated",
+    "contact": {
+      "name": "API Manager",
+      "url": "https://github.com/apimgr/api"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "",
+      "description": "API Server"
+    }
+  ],
+  "paths": {
+    "/api/autodiscover": {
+      "get": {
+        "summary": "autodiscover",
+        "operationId": "get_api_autodiscover",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/graphql": {
+      "get": {
+        "summary": "graphql",
+        "operationId": "get_api_graphql",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "graphql",
+        "operationId": "post_api_graphql",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/healthz": {
+      "get": {
+        "summary": "healthz",
+        "operationId": "get_api_healthz",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/mcp": {
+      "post": {
+        "summary": "mcp",
+        "operationId": "post_api_mcp",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/swagger": {
+      "get": {
+        "summary": "swagger",
+        "operationId": "get_api_swagger",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}": {
+      "get": {
+        "summary": "{api_version}",
+        "operationId": "get_api_api_version",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/cli/binaries/{artifact}": {
+      "get": {
+        "summary": "{api_version} cli binaries {artifact}",
+        "operationId": "get_api_api_version_cli_binaries_artifact",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/area": {
+      "get": {
+        "summary": "{api_version} convert area",
+        "operationId": "get_api_api_version_convert_area",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/area/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert area {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_area_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/color": {
+      "get": {
+        "summary": "{api_version} convert color",
+        "operationId": "get_api_api_version_convert_color",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/currency": {
+      "get": {
+        "summary": "{api_version} convert currency",
+        "operationId": "get_api_api_version_convert_currency",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/data": {
+      "get": {
+        "summary": "{api_version} convert data",
+        "operationId": "get_api_api_version_convert_data",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/data/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert data {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_data_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/energy": {
+      "get": {
+        "summary": "{api_version} convert energy",
+        "operationId": "get_api_api_version_convert_energy",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/energy/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert energy {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_energy_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/length": {
+      "get": {
+        "summary": "{api_version} convert length",
+        "operationId": "get_api_api_version_convert_length",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/length/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert length {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_length_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/pressure": {
+      "get": {
+        "summary": "{api_version} convert pressure",
+        "operationId": "get_api_api_version_convert_pressure",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/pressure/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert pressure {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_pressure_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/speed": {
+      "get": {
+        "summary": "{api_version} convert speed",
+        "operationId": "get_api_api_version_convert_speed",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/speed/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert speed {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_speed_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/temperature": {
+      "get": {
+        "summary": "{api_version} convert temperature",
+        "operationId": "get_api_api_version_convert_temperature",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/temperature/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert temperature {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_temperature_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/time": {
+      "get": {
+        "summary": "{api_version} convert time",
+        "operationId": "get_api_api_version_convert_time",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/time/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert time {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_time_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/volume": {
+      "get": {
+        "summary": "{api_version} convert volume",
+        "operationId": "get_api_api_version_convert_volume",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/volume/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert volume {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_volume_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/weight": {
+      "get": {
+        "summary": "{api_version} convert weight",
+        "operationId": "get_api_api_version_convert_weight",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/convert/weight/{value}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} convert weight {value} {from} {to}",
+        "operationId": "get_api_api_version_convert_weight_value_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/bcrypt": {
+      "get": {
+        "summary": "{api_version} crypto bcrypt",
+        "operationId": "get_api_api_version_crypto_bcrypt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/bcrypt/hash": {
+      "get": {
+        "summary": "{api_version} crypto bcrypt hash",
+        "operationId": "get_api_api_version_crypto_bcrypt_hash",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/bcrypt/hash/{password}": {
+      "get": {
+        "summary": "{api_version} crypto bcrypt hash {password}",
+        "operationId": "get_api_api_version_crypto_bcrypt_hash_password",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/bcrypt/verify": {
+      "get": {
+        "summary": "{api_version} crypto bcrypt verify",
+        "operationId": "get_api_api_version_crypto_bcrypt_verify",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "{api_version} crypto bcrypt verify",
+        "operationId": "post_api_api_version_crypto_bcrypt_verify",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/bcrypt/verify/{password}/{hash}": {
+      "get": {
+        "summary": "{api_version} crypto bcrypt verify {password} {hash}",
+        "operationId": "get_api_api_version_crypto_bcrypt_verify_password_hash",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/bcrypt/{cost}/{password}": {
+      "get": {
+        "summary": "{api_version} crypto bcrypt {cost} {password}",
+        "operationId": "get_api_api_version_crypto_bcrypt_cost_password",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/bcrypt/{password}": {
+      "get": {
+        "summary": "{api_version} crypto bcrypt {password}",
+        "operationId": "get_api_api_version_crypto_bcrypt_password",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/certificate": {
+      "post": {
+        "summary": "{api_version} crypto certificate",
+        "operationId": "post_api_api_version_crypto_certificate",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/decrypt": {
+      "post": {
+        "summary": "{api_version} crypto decrypt",
+        "operationId": "post_api_api_version_crypto_decrypt",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/ed25519": {
+      "post": {
+        "summary": "{api_version} crypto ed25519",
+        "operationId": "post_api_api_version_crypto_ed25519",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/encrypt": {
+      "post": {
+        "summary": "{api_version} crypto encrypt",
+        "operationId": "post_api_api_version_crypto_encrypt",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/hash": {
+      "get": {
+        "summary": "{api_version} crypto hash",
+        "operationId": "get_api_api_version_crypto_hash",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/hash.txt": {
+      "get": {
+        "summary": "{api_version} crypto hash.txt",
+        "operationId": "get_api_api_version_crypto_hash.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/hash/{algorithm}/{input}": {
+      "get": {
+        "summary": "{api_version} crypto hash {algorithm} {input}",
+        "operationId": "get_api_api_version_crypto_hash_algorithm_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/hash/{algorithm}/{input}.txt": {
+      "get": {
+        "summary": "{api_version} crypto hash {algorithm} {input}.txt",
+        "operationId": "get_api_api_version_crypto_hash_algorithm_input.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/hmac": {
+      "post": {
+        "summary": "{api_version} crypto hmac",
+        "operationId": "post_api_api_version_crypto_hmac",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/jwt": {
+      "get": {
+        "summary": "{api_version} crypto jwt",
+        "operationId": "get_api_api_version_crypto_jwt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/jwt/{token}": {
+      "get": {
+        "summary": "{api_version} crypto jwt {token}",
+        "operationId": "get_api_api_version_crypto_jwt_token",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/password": {
+      "get": {
+        "summary": "{api_version} crypto password",
+        "operationId": "get_api_api_version_crypto_password",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/password.txt": {
+      "get": {
+        "summary": "{api_version} crypto password.txt",
+        "operationId": "get_api_api_version_crypto_password.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/password/strength": {
+      "get": {
+        "summary": "{api_version} crypto password strength",
+        "operationId": "get_api_api_version_crypto_password_strength",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "{api_version} crypto password strength",
+        "operationId": "post_api_api_version_crypto_password_strength",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/password/strength/{password}": {
+      "get": {
+        "summary": "{api_version} crypto password strength {password}",
+        "operationId": "get_api_api_version_crypto_password_strength_password",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/password/{length}": {
+      "get": {
+        "summary": "{api_version} crypto password {length}",
+        "operationId": "get_api_api_version_crypto_password_length",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/password/{length}.txt": {
+      "get": {
+        "summary": "{api_version} crypto password {length}.txt",
+        "operationId": "get_api_api_version_crypto_password_length.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/pgp": {
+      "post": {
+        "summary": "{api_version} crypto pgp",
+        "operationId": "post_api_api_version_crypto_pgp",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/pin": {
+      "get": {
+        "summary": "{api_version} crypto pin",
+        "operationId": "get_api_api_version_crypto_pin",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/pin.txt": {
+      "get": {
+        "summary": "{api_version} crypto pin.txt",
+        "operationId": "get_api_api_version_crypto_pin.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/pin/{length}": {
+      "get": {
+        "summary": "{api_version} crypto pin {length}",
+        "operationId": "get_api_api_version_crypto_pin_length",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/pin/{length}.txt": {
+      "get": {
+        "summary": "{api_version} crypto pin {length}.txt",
+        "operationId": "get_api_api_version_crypto_pin_length.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/random/bytes": {
+      "get": {
+        "summary": "{api_version} crypto random bytes",
+        "operationId": "get_api_api_version_crypto_random_bytes",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/random/bytes/{count}": {
+      "get": {
+        "summary": "{api_version} crypto random bytes {count}",
+        "operationId": "get_api_api_version_crypto_random_bytes_count",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/random/hex": {
+      "get": {
+        "summary": "{api_version} crypto random hex",
+        "operationId": "get_api_api_version_crypto_random_hex",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/random/hex/{count}": {
+      "get": {
+        "summary": "{api_version} crypto random hex {count}",
+        "operationId": "get_api_api_version_crypto_random_hex_count",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/rsa": {
+      "post": {
+        "summary": "{api_version} crypto rsa",
+        "operationId": "post_api_api_version_crypto_rsa",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/code": {
+      "get": {
+        "summary": "{api_version} crypto totp code",
+        "operationId": "get_api_api_version_crypto_totp_code",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/code.txt": {
+      "get": {
+        "summary": "{api_version} crypto totp code.txt",
+        "operationId": "get_api_api_version_crypto_totp_code.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/code/{secret}": {
+      "get": {
+        "summary": "{api_version} crypto totp code {secret}",
+        "operationId": "get_api_api_version_crypto_totp_code_secret",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/code/{secret}.txt": {
+      "get": {
+        "summary": "{api_version} crypto totp code {secret}.txt",
+        "operationId": "get_api_api_version_crypto_totp_code_secret.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/generate": {
+      "get": {
+        "summary": "{api_version} crypto totp generate",
+        "operationId": "get_api_api_version_crypto_totp_generate",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/secret": {
+      "get": {
+        "summary": "{api_version} crypto totp secret",
+        "operationId": "get_api_api_version_crypto_totp_secret",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/verify": {
+      "get": {
+        "summary": "{api_version} crypto totp verify",
+        "operationId": "get_api_api_version_crypto_totp_verify",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/crypto/totp/verify/{secret}/{code}": {
+      "get": {
+        "summary": "{api_version} crypto totp verify {secret} {code}",
+        "operationId": "get_api_api_version_crypto_totp_verify_secret_code",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/add": {
+      "get": {
+        "summary": "{api_version} datetime add",
+        "operationId": "get_api_api_version_datetime_add",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/add/{timestamp}/{duration}": {
+      "get": {
+        "summary": "{api_version} datetime add {timestamp} {duration}",
+        "operationId": "get_api_api_version_datetime_add_timestamp_duration",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/calendar": {
+      "get": {
+        "summary": "{api_version} datetime calendar",
+        "operationId": "get_api_api_version_datetime_calendar",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/calendar/{year}/{month}": {
+      "get": {
+        "summary": "{api_version} datetime calendar {year} {month}",
+        "operationId": "get_api_api_version_datetime_calendar_year_month",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/convert": {
+      "get": {
+        "summary": "{api_version} datetime convert",
+        "operationId": "get_api_api_version_datetime_convert",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/convert/{timestamp}": {
+      "get": {
+        "summary": "{api_version} datetime convert {timestamp}",
+        "operationId": "get_api_api_version_datetime_convert_timestamp",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/convert/{timestamp}/{timezone}": {
+      "get": {
+        "summary": "{api_version} datetime convert {timestamp} {timezone}",
+        "operationId": "get_api_api_version_datetime_convert_timestamp_timezone",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/cron": {
+      "get": {
+        "summary": "{api_version} datetime cron",
+        "operationId": "get_api_api_version_datetime_cron",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/diff": {
+      "get": {
+        "summary": "{api_version} datetime diff",
+        "operationId": "get_api_api_version_datetime_diff",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/diff/{timestamp1}/{timestamp2}": {
+      "get": {
+        "summary": "{api_version} datetime diff {timestamp1} {timestamp2}",
+        "operationId": "get_api_api_version_datetime_diff_timestamp1_timestamp2",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/format": {
+      "get": {
+        "summary": "{api_version} datetime format",
+        "operationId": "get_api_api_version_datetime_format",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/format/{timestamp}/{format}": {
+      "get": {
+        "summary": "{api_version} datetime format {timestamp} {format}",
+        "operationId": "get_api_api_version_datetime_format_timestamp_format",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/moon": {
+      "get": {
+        "summary": "{api_version} datetime moon",
+        "operationId": "get_api_api_version_datetime_moon",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/moon/{date}": {
+      "get": {
+        "summary": "{api_version} datetime moon {date}",
+        "operationId": "get_api_api_version_datetime_moon_date",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/now": {
+      "get": {
+        "summary": "{api_version} datetime now",
+        "operationId": "get_api_api_version_datetime_now",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/now.txt": {
+      "get": {
+        "summary": "{api_version} datetime now.txt",
+        "operationId": "get_api_api_version_datetime_now.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/now/{timezone}": {
+      "get": {
+        "summary": "{api_version} datetime now {timezone}",
+        "operationId": "get_api_api_version_datetime_now_timezone",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/parse": {
+      "get": {
+        "summary": "{api_version} datetime parse",
+        "operationId": "get_api_api_version_datetime_parse",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/parse/{value}": {
+      "get": {
+        "summary": "{api_version} datetime parse {value}",
+        "operationId": "get_api_api_version_datetime_parse_value",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/sunrise": {
+      "get": {
+        "summary": "{api_version} datetime sunrise",
+        "operationId": "get_api_api_version_datetime_sunrise",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/sunrise/{lat}/{lon}": {
+      "get": {
+        "summary": "{api_version} datetime sunrise {lat} {lon}",
+        "operationId": "get_api_api_version_datetime_sunrise_lat_lon",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/sunrise/{lat}/{lon}/{date}": {
+      "get": {
+        "summary": "{api_version} datetime sunrise {lat} {lon} {date}",
+        "operationId": "get_api_api_version_datetime_sunrise_lat_lon_date",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/timestamp": {
+      "get": {
+        "summary": "{api_version} datetime timestamp",
+        "operationId": "get_api_api_version_datetime_timestamp",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/timestamp.txt": {
+      "get": {
+        "summary": "{api_version} datetime timestamp.txt",
+        "operationId": "get_api_api_version_datetime_timestamp.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/timezone": {
+      "get": {
+        "summary": "{api_version} datetime timezone",
+        "operationId": "get_api_api_version_datetime_timezone",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/timezone/convert": {
+      "get": {
+        "summary": "{api_version} datetime timezone convert",
+        "operationId": "get_api_api_version_datetime_timezone_convert",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/timezone/convert/{timestamp}/{from}/{to}": {
+      "get": {
+        "summary": "{api_version} datetime timezone convert {timestamp} {from} {to}",
+        "operationId": "get_api_api_version_datetime_timezone_convert_timestamp_from_to",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/timezone/{timezone}": {
+      "get": {
+        "summary": "{api_version} datetime timezone {timezone}",
+        "operationId": "get_api_api_version_datetime_timezone_timezone",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/timezones": {
+      "get": {
+        "summary": "{api_version} datetime timezones",
+        "operationId": "get_api_api_version_datetime_timezones",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/to-unix": {
+      "get": {
+        "summary": "{api_version} datetime to-unix",
+        "operationId": "get_api_api_version_datetime_to_unix",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/to-unix/{datetime}": {
+      "get": {
+        "summary": "{api_version} datetime to-unix {datetime}",
+        "operationId": "get_api_api_version_datetime_to_unix_datetime",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/workdays": {
+      "get": {
+        "summary": "{api_version} datetime workdays",
+        "operationId": "get_api_api_version_datetime_workdays",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/datetime/workdays/{start}/{end}": {
+      "get": {
+        "summary": "{api_version} datetime workdays {start} {end}",
+        "operationId": "get_api_api_version_datetime_workdays_start_end",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/base64": {
+      "post": {
+        "summary": "{api_version} dev base64",
+        "operationId": "post_api_api_version_dev_base64",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/cron": {
+      "get": {
+        "summary": "{api_version} dev cron",
+        "operationId": "get_api_api_version_dev_cron",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/echo": {
+      "get": {
+        "summary": "{api_version} dev echo",
+        "operationId": "get_api_api_version_dev_echo",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/format/css": {
+      "post": {
+        "summary": "{api_version} dev format css",
+        "operationId": "post_api_api_version_dev_format_css",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/format/html": {
+      "post": {
+        "summary": "{api_version} dev format html",
+        "operationId": "post_api_api_version_dev_format_html",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/format/js": {
+      "post": {
+        "summary": "{api_version} dev format js",
+        "operationId": "post_api_api_version_dev_format_js",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/format/json": {
+      "post": {
+        "summary": "{api_version} dev format json",
+        "operationId": "post_api_api_version_dev_format_json",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/format/sql": {
+      "post": {
+        "summary": "{api_version} dev format sql",
+        "operationId": "post_api_api_version_dev_format_sql",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/format/xml": {
+      "post": {
+        "summary": "{api_version} dev format xml",
+        "operationId": "post_api_api_version_dev_format_xml",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/jwt": {
+      "get": {
+        "summary": "{api_version} dev jwt",
+        "operationId": "get_api_api_version_dev_jwt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/jwt/{token}": {
+      "get": {
+        "summary": "{api_version} dev jwt {token}",
+        "operationId": "get_api_api_version_dev_jwt_token",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/regex": {
+      "post": {
+        "summary": "{api_version} dev regex",
+        "operationId": "post_api_api_version_dev_regex",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/dev/url-encode": {
+      "post": {
+        "summary": "{api_version} dev url-encode",
+        "operationId": "post_api_api_version_dev_url_encode",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/best-practices": {
+      "get": {
+        "summary": "{api_version} docker best-practices",
+        "operationId": "get_api_api_version_docker_best_practices",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/compose-to-run": {
+      "post": {
+        "summary": "{api_version} docker compose-to-run",
+        "operationId": "post_api_api_version_docker_compose_to_run",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/compose-validate": {
+      "post": {
+        "summary": "{api_version} docker compose-validate",
+        "operationId": "post_api_api_version_docker_compose_validate",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/dockerfile-generate": {
+      "post": {
+        "summary": "{api_version} docker dockerfile-generate",
+        "operationId": "post_api_api_version_docker_dockerfile_generate",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/dockerfile-lint": {
+      "post": {
+        "summary": "{api_version} docker dockerfile-lint",
+        "operationId": "post_api_api_version_docker_dockerfile_lint",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/env-parser": {
+      "post": {
+        "summary": "{api_version} docker env-parser",
+        "operationId": "post_api_api_version_docker_env_parser",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/network-helper": {
+      "get": {
+        "summary": "{api_version} docker network-helper",
+        "operationId": "get_api_api_version_docker_network_helper",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/port-mapping": {
+      "get": {
+        "summary": "{api_version} docker port-mapping",
+        "operationId": "get_api_api_version_docker_port_mapping",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/run-to-compose": {
+      "post": {
+        "summary": "{api_version} docker run-to-compose",
+        "operationId": "post_api_api_version_docker_run_to_compose",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/security-scan": {
+      "post": {
+        "summary": "{api_version} docker security-scan",
+        "operationId": "post_api_api_version_docker_security_scan",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/size-optimizer": {
+      "post": {
+        "summary": "{api_version} docker size-optimizer",
+        "operationId": "post_api_api_version_docker_size_optimizer",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/version": {
+      "get": {
+        "summary": "{api_version} docker version",
+        "operationId": "get_api_api_version_docker_version",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/docker/volume-helper": {
+      "get": {
+        "summary": "{api_version} docker volume-helper",
+        "operationId": "get_api_api_version_docker_volume_helper",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/compliment": {
+      "get": {
+        "summary": "{api_version} fun compliment",
+        "operationId": "get_api_api_version_fun_compliment",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/dad-joke": {
+      "get": {
+        "summary": "{api_version} fun dad-joke",
+        "operationId": "get_api_api_version_fun_dad_joke",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/fact": {
+      "get": {
+        "summary": "{api_version} fun fact",
+        "operationId": "get_api_api_version_fun_fact",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/fortune": {
+      "get": {
+        "summary": "{api_version} fun fortune",
+        "operationId": "get_api_api_version_fun_fortune",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/insult": {
+      "get": {
+        "summary": "{api_version} fun insult",
+        "operationId": "get_api_api_version_fun_insult",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/joke": {
+      "get": {
+        "summary": "{api_version} fun joke",
+        "operationId": "get_api_api_version_fun_joke",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/meme": {
+      "get": {
+        "summary": "{api_version} fun meme",
+        "operationId": "get_api_api_version_fun_meme",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/motivational": {
+      "get": {
+        "summary": "{api_version} fun motivational",
+        "operationId": "get_api_api_version_fun_motivational",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/programming-joke": {
+      "get": {
+        "summary": "{api_version} fun programming-joke",
+        "operationId": "get_api_api_version_fun_programming_joke",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/quote": {
+      "get": {
+        "summary": "{api_version} fun quote",
+        "operationId": "get_api_api_version_fun_quote",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/riddle": {
+      "get": {
+        "summary": "{api_version} fun riddle",
+        "operationId": "get_api_api_version_fun_riddle",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/fun/trivia": {
+      "get": {
+        "summary": "{api_version} fun trivia",
+        "operationId": "get_api_api_version_fun_trivia",
+        "x-primary": "text",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/api-docs": {
+      "get": {
+        "summary": "{api_version} generate api-docs",
+        "operationId": "get_api_api_version_generate_api_docs",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/avatar": {
+      "get": {
+        "summary": "{api_version} generate avatar",
+        "operationId": "get_api_api_version_generate_avatar",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/barcode": {
+      "get": {
+        "summary": "{api_version} generate barcode",
+        "operationId": "get_api_api_version_generate_barcode",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/config": {
+      "get": {
+        "summary": "{api_version} generate config",
+        "operationId": "get_api_api_version_generate_config",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/dockerfile": {
+      "get": {
+        "summary": "{api_version} generate dockerfile",
+        "operationId": "get_api_api_version_generate_dockerfile",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/gitignore": {
+      "get": {
+        "summary": "{api_version} generate gitignore",
+        "operationId": "get_api_api_version_generate_gitignore",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/identicon": {
+      "get": {
+        "summary": "{api_version} generate identicon",
+        "operationId": "get_api_api_version_generate_identicon",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/license": {
+      "get": {
+        "summary": "{api_version} generate license",
+        "operationId": "get_api_api_version_generate_license",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/placeholder": {
+      "get": {
+        "summary": "{api_version} generate placeholder",
+        "operationId": "get_api_api_version_generate_placeholder",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/placeholder/{width}/{height}": {
+      "get": {
+        "summary": "{api_version} generate placeholder {width} {height}",
+        "operationId": "get_api_api_version_generate_placeholder_width_height",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/qr": {
+      "get": {
+        "summary": "{api_version} generate qr",
+        "operationId": "get_api_api_version_generate_qr",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/sql": {
+      "post": {
+        "summary": "{api_version} generate sql",
+        "operationId": "post_api_api_version_generate_sql",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/generate/ssh-key": {
+      "get": {
+        "summary": "{api_version} generate ssh-key",
+        "operationId": "get_api_api_version_generate_ssh_key",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/bbox": {
+      "get": {
+        "summary": "{api_version} geo bbox",
+        "operationId": "get_api_api_version_geo_bbox",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/bearing": {
+      "get": {
+        "summary": "{api_version} geo bearing",
+        "operationId": "get_api_api_version_geo_bearing",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/country": {
+      "get": {
+        "summary": "{api_version} geo country",
+        "operationId": "get_api_api_version_geo_country",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/distance": {
+      "get": {
+        "summary": "{api_version} geo distance",
+        "operationId": "get_api_api_version_geo_distance",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/geocode": {
+      "get": {
+        "summary": "{api_version} geo geocode",
+        "operationId": "get_api_api_version_geo_geocode",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/geohash": {
+      "get": {
+        "summary": "{api_version} geo geohash",
+        "operationId": "get_api_api_version_geo_geohash",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/h3": {
+      "get": {
+        "summary": "{api_version} geo h3",
+        "operationId": "get_api_api_version_geo_h3",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/ip": {
+      "get": {
+        "summary": "{api_version} geo ip",
+        "operationId": "get_api_api_version_geo_ip",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/ip/{ip}": {
+      "get": {
+        "summary": "{api_version} geo ip {ip}",
+        "operationId": "get_api_api_version_geo_ip_ip",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/midpoint": {
+      "get": {
+        "summary": "{api_version} geo midpoint",
+        "operationId": "get_api_api_version_geo_midpoint",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/pluscode": {
+      "get": {
+        "summary": "{api_version} geo pluscode",
+        "operationId": "get_api_api_version_geo_pluscode",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/reverse": {
+      "get": {
+        "summary": "{api_version} geo reverse",
+        "operationId": "get_api_api_version_geo_reverse",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/geo/timezone": {
+      "get": {
+        "summary": "{api_version} geo timezone",
+        "operationId": "get_api_api_version_geo_timezone",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/avatar": {
+      "get": {
+        "summary": "{api_version} image avatar",
+        "operationId": "get_api_api_version_image_avatar",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/barcode": {
+      "get": {
+        "summary": "{api_version} image barcode",
+        "operationId": "get_api_api_version_image_barcode",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/convert": {
+      "post": {
+        "summary": "{api_version} image convert",
+        "operationId": "post_api_api_version_image_convert",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/crop": {
+      "post": {
+        "summary": "{api_version} image crop",
+        "operationId": "post_api_api_version_image_crop",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/filter": {
+      "post": {
+        "summary": "{api_version} image filter",
+        "operationId": "post_api_api_version_image_filter",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/identicon": {
+      "get": {
+        "summary": "{api_version} image identicon",
+        "operationId": "get_api_api_version_image_identicon",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/metadata": {
+      "post": {
+        "summary": "{api_version} image metadata",
+        "operationId": "post_api_api_version_image_metadata",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/optimize": {
+      "post": {
+        "summary": "{api_version} image optimize",
+        "operationId": "post_api_api_version_image_optimize",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/placeholder": {
+      "get": {
+        "summary": "{api_version} image placeholder",
+        "operationId": "get_api_api_version_image_placeholder",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/placeholder/{width}/{height}": {
+      "get": {
+        "summary": "{api_version} image placeholder {width} {height}",
+        "operationId": "get_api_api_version_image_placeholder_width_height",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/qr": {
+      "get": {
+        "summary": "{api_version} image qr",
+        "operationId": "get_api_api_version_image_qr",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/resize": {
+      "post": {
+        "summary": "{api_version} image resize",
+        "operationId": "post_api_api_version_image_resize",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/image/watermark": {
+      "post": {
+        "summary": "{api_version} image watermark",
+        "operationId": "post_api_api_version_image_watermark",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/dictionary": {
+      "post": {
+        "summary": "{api_version} language dictionary",
+        "operationId": "post_api_api_version_language_dictionary",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/keywords": {
+      "post": {
+        "summary": "{api_version} language keywords",
+        "operationId": "post_api_api_version_language_keywords",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/phonetic": {
+      "get": {
+        "summary": "{api_version} language phonetic",
+        "operationId": "get_api_api_version_language_phonetic",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/readability": {
+      "post": {
+        "summary": "{api_version} language readability",
+        "operationId": "post_api_api_version_language_readability",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/reading-time": {
+      "post": {
+        "summary": "{api_version} language reading-time",
+        "operationId": "post_api_api_version_language_reading_time",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/sentiment": {
+      "post": {
+        "summary": "{api_version} language sentiment",
+        "operationId": "post_api_api_version_language_sentiment",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/thesaurus": {
+      "post": {
+        "summary": "{api_version} language thesaurus",
+        "operationId": "post_api_api_version_language_thesaurus",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/language/word-count": {
+      "post": {
+        "summary": "{api_version} language word-count",
+        "operationId": "post_api_api_version_language_word_count",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/lorem/address": {
+      "get": {
+        "summary": "{api_version} lorem address",
+        "operationId": "get_api_api_version_lorem_address",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/lorem/company": {
+      "get": {
+        "summary": "{api_version} lorem company",
+        "operationId": "get_api_api_version_lorem_company",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/lorem/person": {
+      "get": {
+        "summary": "{api_version} lorem person",
+        "operationId": "get_api_api_version_lorem_person",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/base": {
+      "get": {
+        "summary": "{api_version} math base",
+        "operationId": "get_api_api_version_math_base",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/calculate": {
+      "get": {
+        "summary": "{api_version} math calculate",
+        "operationId": "get_api_api_version_math_calculate",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/fibonacci": {
+      "get": {
+        "summary": "{api_version} math fibonacci",
+        "operationId": "get_api_api_version_math_fibonacci",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/matrix": {
+      "post": {
+        "summary": "{api_version} math matrix",
+        "operationId": "post_api_api_version_math_matrix",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/prime": {
+      "get": {
+        "summary": "{api_version} math prime",
+        "operationId": "get_api_api_version_math_prime",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/prime/{n}": {
+      "get": {
+        "summary": "{api_version} math prime {n}",
+        "operationId": "get_api_api_version_math_prime_n",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/random": {
+      "get": {
+        "summary": "{api_version} math random",
+        "operationId": "get_api_api_version_math_random",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/random/{min}/{max}": {
+      "get": {
+        "summary": "{api_version} math random {min} {max}",
+        "operationId": "get_api_api_version_math_random_min_max",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/sequence": {
+      "get": {
+        "summary": "{api_version} math sequence",
+        "operationId": "get_api_api_version_math_sequence",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/math/stats": {
+      "get": {
+        "summary": "{api_version} math stats",
+        "operationId": "get_api_api_version_math_stats",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/dns": {
+      "get": {
+        "summary": "{api_version} network dns",
+        "operationId": "get_api_api_version_network_dns",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/dns/{domain}": {
+      "get": {
+        "summary": "{api_version} network dns {domain}",
+        "operationId": "get_api_api_version_network_dns_domain",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/dns/{domain}/{type}": {
+      "get": {
+        "summary": "{api_version} network dns {domain} {type}",
+        "operationId": "get_api_api_version_network_dns_domain_type",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/headers": {
+      "get": {
+        "summary": "{api_version} network headers",
+        "operationId": "get_api_api_version_network_headers",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/ip": {
+      "get": {
+        "summary": "{api_version} network ip",
+        "operationId": "get_api_api_version_network_ip",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/ip/{ip}": {
+      "get": {
+        "summary": "{api_version} network ip {ip}",
+        "operationId": "get_api_api_version_network_ip_ip",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/mac": {
+      "get": {
+        "summary": "{api_version} network mac",
+        "operationId": "get_api_api_version_network_mac",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/mac/{mac}": {
+      "get": {
+        "summary": "{api_version} network mac {mac}",
+        "operationId": "get_api_api_version_network_mac_mac",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/ping": {
+      "get": {
+        "summary": "{api_version} network ping",
+        "operationId": "get_api_api_version_network_ping",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/port": {
+      "get": {
+        "summary": "{api_version} network port",
+        "operationId": "get_api_api_version_network_port",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/ssl": {
+      "get": {
+        "summary": "{api_version} network ssl",
+        "operationId": "get_api_api_version_network_ssl",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/subnet": {
+      "get": {
+        "summary": "{api_version} network subnet",
+        "operationId": "get_api_api_version_network_subnet",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/ula": {
+      "get": {
+        "summary": "{api_version} network ula",
+        "operationId": "get_api_api_version_network_ula",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/url": {
+      "get": {
+        "summary": "{api_version} network url",
+        "operationId": "get_api_api_version_network_url",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/user-agent": {
+      "get": {
+        "summary": "{api_version} network user-agent",
+        "operationId": "get_api_api_version_network_user_agent",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/network/whois": {
+      "get": {
+        "summary": "{api_version} network whois",
+        "operationId": "get_api_api_version_network_whois",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/cert": {
+      "get": {
+        "summary": "{api_version} osint cert",
+        "operationId": "get_api_api_version_osint_cert",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/cert/{domain}": {
+      "get": {
+        "summary": "{api_version} osint cert {domain}",
+        "operationId": "get_api_api_version_osint_cert_domain",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/domain": {
+      "get": {
+        "summary": "{api_version} osint domain",
+        "operationId": "get_api_api_version_osint_domain",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/domain/{domain}": {
+      "get": {
+        "summary": "{api_version} osint domain {domain}",
+        "operationId": "get_api_api_version_osint_domain_domain",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/email": {
+      "get": {
+        "summary": "{api_version} osint email",
+        "operationId": "get_api_api_version_osint_email",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/email/{email}": {
+      "get": {
+        "summary": "{api_version} osint email {email}",
+        "operationId": "get_api_api_version_osint_email_email",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/ip": {
+      "get": {
+        "summary": "{api_version} osint ip",
+        "operationId": "get_api_api_version_osint_ip",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/ip/{ip}": {
+      "get": {
+        "summary": "{api_version} osint ip {ip}",
+        "operationId": "get_api_api_version_osint_ip_ip",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/subdomain": {
+      "get": {
+        "summary": "{api_version} osint subdomain",
+        "operationId": "get_api_api_version_osint_subdomain",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/subdomain/{domain}": {
+      "get": {
+        "summary": "{api_version} osint subdomain {domain}",
+        "operationId": "get_api_api_version_osint_subdomain_domain",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/osint/tech-stack": {
+      "get": {
+        "summary": "{api_version} osint tech-stack",
+        "operationId": "get_api_api_version_osint_tech_stack",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/csv": {
+      "post": {
+        "summary": "{api_version} parse csv",
+        "operationId": "post_api_api_version_parse_csv",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/env": {
+      "post": {
+        "summary": "{api_version} parse env",
+        "operationId": "post_api_api_version_parse_env",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/html": {
+      "post": {
+        "summary": "{api_version} parse html",
+        "operationId": "post_api_api_version_parse_html",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/ini": {
+      "post": {
+        "summary": "{api_version} parse ini",
+        "operationId": "post_api_api_version_parse_ini",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/json": {
+      "post": {
+        "summary": "{api_version} parse json",
+        "operationId": "post_api_api_version_parse_json",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/jwt": {
+      "get": {
+        "summary": "{api_version} parse jwt",
+        "operationId": "get_api_api_version_parse_jwt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/jwt/{token}": {
+      "get": {
+        "summary": "{api_version} parse jwt {token}",
+        "operationId": "get_api_api_version_parse_jwt_token",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/log": {
+      "post": {
+        "summary": "{api_version} parse log",
+        "operationId": "post_api_api_version_parse_log",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/markdown": {
+      "post": {
+        "summary": "{api_version} parse markdown",
+        "operationId": "post_api_api_version_parse_markdown",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/sql": {
+      "post": {
+        "summary": "{api_version} parse sql",
+        "operationId": "post_api_api_version_parse_sql",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/toml": {
+      "post": {
+        "summary": "{api_version} parse toml",
+        "operationId": "post_api_api_version_parse_toml",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/xml": {
+      "post": {
+        "summary": "{api_version} parse xml",
+        "operationId": "post_api_api_version_parse_xml",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/parse/yaml": {
+      "post": {
+        "summary": "{api_version} parse yaml",
+        "operationId": "post_api_api_version_parse_yaml",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/research/arxiv": {
+      "post": {
+        "summary": "{api_version} research arxiv",
+        "operationId": "post_api_api_version_research_arxiv",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/research/citation": {
+      "post": {
+        "summary": "{api_version} research citation",
+        "operationId": "post_api_api_version_research_citation",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/research/doi": {
+      "get": {
+        "summary": "{api_version} research doi",
+        "operationId": "get_api_api_version_research_doi",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/research/doi/{path}": {
+      "get": {
+        "summary": "{api_version} research doi {path}",
+        "operationId": "get_api_api_version_research_doi_path",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/research/isbn": {
+      "post": {
+        "summary": "{api_version} research isbn",
+        "operationId": "post_api_api_version_research_isbn",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/about": {
+      "get": {
+        "summary": "{api_version} server about",
+        "operationId": "get_api_api_version_server_about",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/auth/check": {
+      "get": {
+        "summary": "{api_version} server auth check",
+        "operationId": "get_api_api_version_server_auth_check",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/contact": {
+      "get": {
+        "summary": "{api_version} server contact",
+        "operationId": "get_api_api_version_server_contact",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "{api_version} server contact",
+        "operationId": "post_api_api_version_server_contact",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/dpo": {
+      "get": {
+        "summary": "{api_version} server dpo",
+        "operationId": "get_api_api_version_server_dpo",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/graphql": {
+      "get": {
+        "summary": "{api_version} server graphql",
+        "operationId": "get_api_api_version_server_graphql",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "{api_version} server graphql",
+        "operationId": "post_api_api_version_server_graphql",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/healthz": {
+      "get": {
+        "summary": "{api_version} server healthz",
+        "operationId": "get_api_api_version_server_healthz",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/help": {
+      "get": {
+        "summary": "{api_version} server help",
+        "operationId": "get_api_api_version_server_help",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/help/mcp": {
+      "get": {
+        "summary": "{api_version} server help mcp",
+        "operationId": "get_api_api_version_server_help_mcp",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/mcp": {
+      "post": {
+        "summary": "{api_version} server mcp",
+        "operationId": "post_api_api_version_server_mcp",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences": {
+      "get": {
+        "summary": "{api_version} server preferences",
+        "operationId": "get_api_api_version_server_preferences",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "{api_version} server preferences",
+        "operationId": "post_api_api_version_server_preferences",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/sync": {
+      "get": {
+        "summary": "{api_version} server preferences sync",
+        "operationId": "get_api_api_version_server_preferences_sync",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/sync/import": {
+      "get": {
+        "summary": "{api_version} server preferences sync import",
+        "operationId": "get_api_api_version_server_preferences_sync_import",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/tokens": {
+      "get": {
+        "summary": "{api_version} server preferences tokens",
+        "operationId": "get_api_api_version_server_preferences_tokens",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "{api_version} server preferences tokens",
+        "operationId": "post_api_api_version_server_preferences_tokens",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/tokens/primary": {
+      "post": {
+        "summary": "{api_version} server preferences tokens primary",
+        "operationId": "post_api_api_version_server_preferences_tokens_primary",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "delete": {
+        "summary": "{api_version} server preferences tokens primary",
+        "operationId": "delete_api_api_version_server_preferences_tokens_primary",
+        "x-text-message": "Deleted successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/tokens/primary/reveal": {
+      "post": {
+        "summary": "{api_version} server preferences tokens primary reveal",
+        "operationId": "post_api_api_version_server_preferences_tokens_primary_reveal",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/tokens/primary/rotate": {
+      "post": {
+        "summary": "{api_version} server preferences tokens primary rotate",
+        "operationId": "post_api_api_version_server_preferences_tokens_primary_rotate",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/tokens/{id}": {
+      "delete": {
+        "summary": "{api_version} server preferences tokens {id}",
+        "operationId": "delete_api_api_version_server_preferences_tokens_id",
+        "x-text-message": "Deleted successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "patch": {
+        "summary": "{api_version} server preferences tokens {id}",
+        "operationId": "patch_api_api_version_server_preferences_tokens_id",
+        "x-text-message": "Updated successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/tokens/{id}/reveal": {
+      "post": {
+        "summary": "{api_version} server preferences tokens {id} reveal",
+        "operationId": "post_api_api_version_server_preferences_tokens_id_reveal",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/preferences/tokens/{id}/rotate": {
+      "post": {
+        "summary": "{api_version} server preferences tokens {id} rotate",
+        "operationId": "post_api_api_version_server_preferences_tokens_id_rotate",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/privacy": {
+      "get": {
+        "summary": "{api_version} server privacy",
+        "operationId": "get_api_api_version_server_privacy",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/reports/{name}": {
+      "post": {
+        "summary": "{api_version} server reports {name}",
+        "operationId": "post_api_api_version_server_reports_name",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/security": {
+      "get": {
+        "summary": "{api_version} server security",
+        "operationId": "get_api_api_version_server_security",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/security/policy": {
+      "get": {
+        "summary": "{api_version} server security policy",
+        "operationId": "get_api_api_version_server_security_policy",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/security/thanks": {
+      "get": {
+        "summary": "{api_version} server security thanks",
+        "operationId": "get_api_api_version_server_security_thanks",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/swagger": {
+      "get": {
+        "summary": "{api_version} server swagger",
+        "operationId": "get_api_api_version_server_swagger",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/server/terms": {
+      "get": {
+        "summary": "{api_version} server terms",
+        "operationId": "get_api_api_version_server_terms",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/api-client": {
+      "post": {
+        "summary": "{api_version} test api-client",
+        "operationId": "post_api_api_version_test_api_client",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/assert": {
+      "post": {
+        "summary": "{api_version} test assert",
+        "operationId": "post_api_api_version_test_assert",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/curl-generator": {
+      "post": {
+        "summary": "{api_version} test curl-generator",
+        "operationId": "post_api_api_version_test_curl_generator",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/fake-data": {
+      "get": {
+        "summary": "{api_version} test fake-data",
+        "operationId": "get_api_api_version_test_fake_data",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/fixture": {
+      "get": {
+        "summary": "{api_version} test fixture",
+        "operationId": "get_api_api_version_test_fixture",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/fixture/{type}": {
+      "get": {
+        "summary": "{api_version} test fixture {type}",
+        "operationId": "get_api_api_version_test_fixture_type",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/http": {
+      "get": {
+        "summary": "{api_version} test http",
+        "operationId": "get_api_api_version_test_http",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/postman": {
+      "post": {
+        "summary": "{api_version} test postman",
+        "operationId": "post_api_api_version_test_postman",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/request-inspector": {
+      "get": {
+        "summary": "{api_version} test request-inspector",
+        "operationId": "get_api_api_version_test_request_inspector",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      },
+      "post": {
+        "summary": "{api_version} test request-inspector",
+        "operationId": "post_api_api_version_test_request_inspector",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/response-generator": {
+      "get": {
+        "summary": "{api_version} test response-generator",
+        "operationId": "get_api_api_version_test_response_generator",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/status-codes": {
+      "get": {
+        "summary": "{api_version} test status-codes",
+        "operationId": "get_api_api_version_test_status_codes",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/status-codes/{code}": {
+      "get": {
+        "summary": "{api_version} test status-codes {code}",
+        "operationId": "get_api_api_version_test_status_codes_code",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/test/webhook": {
+      "post": {
+        "summary": "{api_version} test webhook",
+        "operationId": "post_api_api_version_test_webhook",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/case": {
+      "get": {
+        "summary": "{api_version} text case",
+        "operationId": "get_api_api_version_text_case",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/case.txt": {
+      "get": {
+        "summary": "{api_version} text case.txt",
+        "operationId": "get_api_api_version_text_case.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/case/{style}/{input}": {
+      "get": {
+        "summary": "{api_version} text case {style} {input}",
+        "operationId": "get_api_api_version_text_case_style_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/case/{style}/{input}.txt": {
+      "get": {
+        "summary": "{api_version} text case {style} {input}.txt",
+        "operationId": "get_api_api_version_text_case_style_input.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/compress": {
+      "post": {
+        "summary": "{api_version} text compress",
+        "operationId": "post_api_api_version_text_compress",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/decode": {
+      "get": {
+        "summary": "{api_version} text decode",
+        "operationId": "get_api_api_version_text_decode",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/decode.txt": {
+      "get": {
+        "summary": "{api_version} text decode.txt",
+        "operationId": "get_api_api_version_text_decode.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/decode/{encoding}/{input}": {
+      "get": {
+        "summary": "{api_version} text decode {encoding} {input}",
+        "operationId": "get_api_api_version_text_decode_encoding_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/decode/{encoding}/{input}.txt": {
+      "get": {
+        "summary": "{api_version} text decode {encoding} {input}.txt",
+        "operationId": "get_api_api_version_text_decode_encoding_input.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/diff": {
+      "post": {
+        "summary": "{api_version} text diff",
+        "operationId": "post_api_api_version_text_diff",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/encode": {
+      "get": {
+        "summary": "{api_version} text encode",
+        "operationId": "get_api_api_version_text_encode",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/encode.txt": {
+      "get": {
+        "summary": "{api_version} text encode.txt",
+        "operationId": "get_api_api_version_text_encode.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/encode/{encoding}/{input}": {
+      "get": {
+        "summary": "{api_version} text encode {encoding} {input}",
+        "operationId": "get_api_api_version_text_encode_encoding_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/encode/{encoding}/{input}.txt": {
+      "get": {
+        "summary": "{api_version} text encode {encoding} {input}.txt",
+        "operationId": "get_api_api_version_text_encode_encoding_input.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/extract": {
+      "post": {
+        "summary": "{api_version} text extract",
+        "operationId": "post_api_api_version_text_extract",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/hash": {
+      "get": {
+        "summary": "{api_version} text hash",
+        "operationId": "get_api_api_version_text_hash",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/hash.txt": {
+      "get": {
+        "summary": "{api_version} text hash.txt",
+        "operationId": "get_api_api_version_text_hash.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/hash/multi": {
+      "get": {
+        "summary": "{api_version} text hash multi",
+        "operationId": "get_api_api_version_text_hash_multi",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/hash/multi/{input}": {
+      "get": {
+        "summary": "{api_version} text hash multi {input}",
+        "operationId": "get_api_api_version_text_hash_multi_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/hash/{algorithm}/{input}": {
+      "get": {
+        "summary": "{api_version} text hash {algorithm} {input}",
+        "operationId": "get_api_api_version_text_hash_algorithm_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/hash/{algorithm}/{input}.txt": {
+      "get": {
+        "summary": "{api_version} text hash {algorithm} {input}.txt",
+        "operationId": "get_api_api_version_text_hash_algorithm_input.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/lorem": {
+      "get": {
+        "summary": "{api_version} text lorem",
+        "operationId": "get_api_api_version_text_lorem",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/lorem.txt": {
+      "get": {
+        "summary": "{api_version} text lorem.txt",
+        "operationId": "get_api_api_version_text_lorem.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/lorem/{type}": {
+      "get": {
+        "summary": "{api_version} text lorem {type}",
+        "operationId": "get_api_api_version_text_lorem_type",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/lorem/{type}/{count}": {
+      "get": {
+        "summary": "{api_version} text lorem {type} {count}",
+        "operationId": "get_api_api_version_text_lorem_type_count",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/lorem/{type}/{count}.txt": {
+      "get": {
+        "summary": "{api_version} text lorem {type} {count}.txt",
+        "operationId": "get_api_api_version_text_lorem_type_count.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/nanoid": {
+      "get": {
+        "summary": "{api_version} text nanoid",
+        "operationId": "get_api_api_version_text_nanoid",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/regex": {
+      "post": {
+        "summary": "{api_version} text regex",
+        "operationId": "post_api_api_version_text_regex",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/reverse": {
+      "get": {
+        "summary": "{api_version} text reverse",
+        "operationId": "get_api_api_version_text_reverse",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/reverse.txt": {
+      "get": {
+        "summary": "{api_version} text reverse.txt",
+        "operationId": "get_api_api_version_text_reverse.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/reverse/{input}": {
+      "get": {
+        "summary": "{api_version} text reverse {input}",
+        "operationId": "get_api_api_version_text_reverse_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/reverse/{input}.txt": {
+      "get": {
+        "summary": "{api_version} text reverse {input}.txt",
+        "operationId": "get_api_api_version_text_reverse_input.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/rot13": {
+      "get": {
+        "summary": "{api_version} text rot13",
+        "operationId": "get_api_api_version_text_rot13",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/rot13.txt": {
+      "get": {
+        "summary": "{api_version} text rot13.txt",
+        "operationId": "get_api_api_version_text_rot13.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/rot13/{input}": {
+      "get": {
+        "summary": "{api_version} text rot13 {input}",
+        "operationId": "get_api_api_version_text_rot13_input",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/rot13/{input}.txt": {
+      "get": {
+        "summary": "{api_version} text rot13 {input}.txt",
+        "operationId": "get_api_api_version_text_rot13_input.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/stats": {
+      "post": {
+        "summary": "{api_version} text stats",
+        "operationId": "post_api_api_version_text_stats",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/ulid": {
+      "get": {
+        "summary": "{api_version} text ulid",
+        "operationId": "get_api_api_version_text_ulid",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/uuid": {
+      "get": {
+        "summary": "{api_version} text uuid",
+        "operationId": "get_api_api_version_text_uuid",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/uuid.txt": {
+      "get": {
+        "summary": "{api_version} text uuid.txt",
+        "operationId": "get_api_api_version_text_uuid.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/uuid/{version}": {
+      "get": {
+        "summary": "{api_version} text uuid {version}",
+        "operationId": "get_api_api_version_text_uuid_version",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/uuid/{version}.txt": {
+      "get": {
+        "summary": "{api_version} text uuid {version}.txt",
+        "operationId": "get_api_api_version_text_uuid_version.txt",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/text/uuid/{version}/{count}": {
+      "get": {
+        "summary": "{api_version} text uuid {version} {count}",
+        "operationId": "get_api_api_version_text_uuid_version_count",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/credit-card": {
+      "post": {
+        "summary": "{api_version} validate credit-card",
+        "operationId": "post_api_api_version_validate_credit_card",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/domain": {
+      "post": {
+        "summary": "{api_version} validate domain",
+        "operationId": "post_api_api_version_validate_domain",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/email": {
+      "post": {
+        "summary": "{api_version} validate email",
+        "operationId": "post_api_api_version_validate_email",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/iban": {
+      "post": {
+        "summary": "{api_version} validate iban",
+        "operationId": "post_api_api_version_validate_iban",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/ip": {
+      "post": {
+        "summary": "{api_version} validate ip",
+        "operationId": "post_api_api_version_validate_ip",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/isbn": {
+      "post": {
+        "summary": "{api_version} validate isbn",
+        "operationId": "post_api_api_version_validate_isbn",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/json": {
+      "post": {
+        "summary": "{api_version} validate json",
+        "operationId": "post_api_api_version_validate_json",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/mac": {
+      "post": {
+        "summary": "{api_version} validate mac",
+        "operationId": "post_api_api_version_validate_mac",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/phone": {
+      "post": {
+        "summary": "{api_version} validate phone",
+        "operationId": "post_api_api_version_validate_phone",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/url": {
+      "post": {
+        "summary": "{api_version} validate url",
+        "operationId": "post_api_api_version_validate_url",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/uuid": {
+      "post": {
+        "summary": "{api_version} validate uuid",
+        "operationId": "post_api_api_version_validate_uuid",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/validate/vat": {
+      "post": {
+        "summary": "{api_version} validate vat",
+        "operationId": "post_api_api_version_validate_vat",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/air-quality": {
+      "get": {
+        "summary": "{api_version} weather air-quality",
+        "operationId": "get_api_api_version_weather_air_quality",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/air-quality/{location}": {
+      "get": {
+        "summary": "{api_version} weather air-quality {location}",
+        "operationId": "get_api_api_version_weather_air_quality_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/alerts": {
+      "get": {
+        "summary": "{api_version} weather alerts",
+        "operationId": "get_api_api_version_weather_alerts",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/alerts/{location}": {
+      "get": {
+        "summary": "{api_version} weather alerts {location}",
+        "operationId": "get_api_api_version_weather_alerts_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/astronomy": {
+      "get": {
+        "summary": "{api_version} weather astronomy",
+        "operationId": "get_api_api_version_weather_astronomy",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/astronomy/{location}": {
+      "get": {
+        "summary": "{api_version} weather astronomy {location}",
+        "operationId": "get_api_api_version_weather_astronomy_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/current": {
+      "get": {
+        "summary": "{api_version} weather current",
+        "operationId": "get_api_api_version_weather_current",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/current/{location}": {
+      "get": {
+        "summary": "{api_version} weather current {location}",
+        "operationId": "get_api_api_version_weather_current_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/forecast": {
+      "get": {
+        "summary": "{api_version} weather forecast",
+        "operationId": "get_api_api_version_weather_forecast",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/forecast/{location}": {
+      "get": {
+        "summary": "{api_version} weather forecast {location}",
+        "operationId": "get_api_api_version_weather_forecast_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/historical": {
+      "get": {
+        "summary": "{api_version} weather historical",
+        "operationId": "get_api_api_version_weather_historical",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/historical/{location}": {
+      "get": {
+        "summary": "{api_version} weather historical {location}",
+        "operationId": "get_api_api_version_weather_historical_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/hourly": {
+      "get": {
+        "summary": "{api_version} weather hourly",
+        "operationId": "get_api_api_version_weather_hourly",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/hourly/{location}": {
+      "get": {
+        "summary": "{api_version} weather hourly {location}",
+        "operationId": "get_api_api_version_weather_hourly_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/marine": {
+      "get": {
+        "summary": "{api_version} weather marine",
+        "operationId": "get_api_api_version_weather_marine",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/marine/{location}": {
+      "get": {
+        "summary": "{api_version} weather marine {location}",
+        "operationId": "get_api_api_version_weather_marine_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/pollen": {
+      "get": {
+        "summary": "{api_version} weather pollen",
+        "operationId": "get_api_api_version_weather_pollen",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/pollen/{location}": {
+      "get": {
+        "summary": "{api_version} weather pollen {location}",
+        "operationId": "get_api_api_version_weather_pollen_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/uv": {
+      "get": {
+        "summary": "{api_version} weather uv",
+        "operationId": "get_api_api_version_weather_uv",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/api/{api_version}/weather/uv/{location}": {
+      "get": {
+        "summary": "{api_version} weather uv {location}",
+        "operationId": "get_api_api_version_weather_uv_location",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "healthz",
+        "operationId": "get_healthz",
+        "x-text-message": "Retrieved successfully",
+        "x-mounted-when": "server.healthz.root.enabled",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "post": {
+        "summary": "mcp",
+        "operationId": "post_mcp",
+        "x-text-message": "OK",
+        "x-mounted-when": "always",
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Error message"
+          },
+          "request_id": {
+            "type": "string",
+            "example": "abc123"
+          },
+          "status": {
+            "type": "integer",
+            "example": 400
+          }
+        }
+      }
+    }
+  }
+}

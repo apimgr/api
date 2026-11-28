@@ -32,6 +32,7 @@ type OwnerToken struct {
 	ID        string     `json:"id"`
 	OwnerID   string     `json:"-"`
 	Kind      string     `json:"kind"`
+	Scope     string     `json:"scope"`
 	Name      string     `json:"name,omitempty"`
 	Prefix    string     `json:"prefix"`
 	Last4     string     `json:"last4"`
@@ -46,6 +47,7 @@ type OwnerCredential struct {
 	OwnerID string
 	TokenID string
 	Kind    string
+	Scope   string
 	Prefix  string
 }
 
@@ -97,22 +99,32 @@ func IssueOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte) (str
 	}
 	var id string
 	err = withWriteTransaction(ctx, db, func(tx *sql.Tx) error {
-		if _, err := execTxContext(ctx, tx, `INSERT INTO owners (id) VALUES (?)`, ownerID); err != nil {
+		now := time.Now().UTC().Unix()
+		if _, err := execTxContext(ctx, tx, `INSERT INTO owners (id, created_at, last_seen_at) VALUES (?, ?, ?)`, ownerID, now, now); err != nil {
 			return err
 		}
 		var insertErr error
-		id, insertErr = insertOwnerToken(ctx, tx, ownerID, "primary", "", token, encoded, nil)
+		id, insertErr = insertOwnerToken(ctx, tx, ownerID, "primary", "global", "", token, encoded, nil)
 		return insertErr
 	})
 	if err != nil {
 		return "", OwnerCredential{}, err
 	}
-	return token, OwnerCredential{OwnerID: ownerID, TokenID: id, Kind: "primary", Prefix: tokenPrefix(token)}, nil
+	return token, OwnerCredential{OwnerID: ownerID, TokenID: id, Kind: "primary", Scope: "global", Prefix: tokenPrefix(token)}, nil
 }
 
 // ValidateOwnerToken resolves a token or the operator credential. Operator
 // comparison uses constant-time SHA-256 hashes and does not require the DB.
 func ValidateOwnerToken(ctx context.Context, db *sql.DB, raw, operatorToken string) (OwnerCredential, error) {
+	return validateOwnerToken(ctx, db, raw, operatorToken, true)
+}
+
+// ValidateOwnerTokenReadOnly validates a credential without recording usage.
+func ValidateOwnerTokenReadOnly(ctx context.Context, db *sql.DB, raw, operatorToken string) (OwnerCredential, error) {
+	return validateOwnerToken(ctx, db, raw, operatorToken, false)
+}
+
+func validateOwnerToken(ctx context.Context, db *sql.DB, raw, operatorToken string, recordUsage bool) (OwnerCredential, error) {
 	if raw == "" {
 		return OwnerCredential{}, ErrInvalidOwnerToken
 	}
@@ -120,7 +132,7 @@ func ValidateOwnerToken(ctx context.Context, db *sql.DB, raw, operatorToken stri
 	if operatorToken != "" {
 		operatorHash := sha256.Sum256([]byte(operatorToken))
 		if subtle.ConstantTimeCompare(providedHash[:], operatorHash[:]) == 1 {
-			return OwnerCredential{Kind: "operator", Prefix: "adm_"}, nil
+			return OwnerCredential{Kind: "operator", Scope: "global", Prefix: "adm_"}, nil
 		}
 	}
 	if db == nil {
@@ -129,9 +141,9 @@ func ValidateOwnerToken(ctx context.Context, db *sql.DB, raw, operatorToken stri
 	hash := hex.EncodeToString(providedHash[:])
 	var credential OwnerCredential
 	var expires, lastUsed sql.NullInt64
-	err := queryRowContext(ctx, db, `SELECT t.id, t.owner_id, t.kind, t.token_prefix, t.expires_at, t.last_used_at
+	err := queryRowContext(ctx, db, `SELECT COALESCE(t.public_id, t.id), t.owner_id, t.kind, t.scope, t.token_prefix, t.expires_at, t.last_used_at
 		FROM api_tokens t WHERE t.token_hash = ? AND t.revoked_at IS NULL`, hash).Scan(
-		&credential.TokenID, &credential.OwnerID, &credential.Kind, &credential.Prefix, &expires, &lastUsed)
+		&credential.TokenID, &credential.OwnerID, &credential.Kind, &credential.Scope, &credential.Prefix, &expires, &lastUsed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return OwnerCredential{}, ErrInvalidOwnerToken
 	}
@@ -141,15 +153,17 @@ func ValidateOwnerToken(ctx context.Context, db *sql.DB, raw, operatorToken stri
 	if expires.Valid && expires.Int64 <= time.Now().Unix() {
 		return OwnerCredential{}, ErrInvalidOwnerToken
 	}
-	if err := recordOwnerTokenUsage(ctx, db, credential.TokenID, credential.OwnerID, time.Now(), lastUsed); err != nil {
-		return OwnerCredential{}, err
+	if recordUsage {
+		if err := recordOwnerTokenUsage(ctx, db, credential.TokenID, credential.OwnerID, time.Now(), lastUsed); err != nil {
+			return OwnerCredential{}, err
+		}
 	}
 	return credential, nil
 }
 
 // ListOwnerTokens returns metadata only; it never decrypts stored credentials.
 func ListOwnerTokens(ctx context.Context, db *sql.DB, ownerID string) ([]OwnerToken, error) {
-	rows, err := queryContext(ctx, db, `SELECT id, owner_id, kind, COALESCE(name,''), token_prefix, token_last4,
+	rows, err := queryContext(ctx, db, `SELECT COALESCE(public_id, id), owner_id, kind, scope, COALESCE(name,''), token_prefix, token_last4,
 		created_at, expires_at, last_used_at, revoked_at FROM api_tokens WHERE owner_id = ? ORDER BY kind, created_at`, ownerID)
 	if err != nil {
 		return nil, err
@@ -160,7 +174,7 @@ func ListOwnerTokens(ctx context.Context, db *sql.DB, ownerID string) ([]OwnerTo
 		var token OwnerToken
 		var created int64
 		var expires, lastUsed, revoked sql.NullInt64
-		if err := rows.Scan(&token.ID, &token.OwnerID, &token.Kind, &token.Name, &token.Prefix, &token.Last4, &created, &expires, &lastUsed, &revoked); err != nil {
+		if err := rows.Scan(&token.ID, &token.OwnerID, &token.Kind, &token.Scope, &token.Name, &token.Prefix, &token.Last4, &created, &expires, &lastUsed, &revoked); err != nil {
 			return nil, err
 		}
 		token.CreatedAt = time.Unix(created, 0).UTC()
@@ -181,13 +195,20 @@ func ListOwnerTokens(ctx context.Context, db *sql.DB, ownerID string) ([]OwnerTo
 }
 
 // CreateLinkedOwnerToken adds a named, independently revocable credential.
-func CreateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID, name string, expiresAt *time.Time, maxActive int) (string, OwnerToken, error) {
+func CreateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, ownerID, name string, expiresAt *time.Time, maxActive int, requestedScope ...string) (string, OwnerToken, error) {
 	name = strings.TrimSpace(name)
 	if n := len([]rune(name)); n < 1 || n > 64 {
 		return "", OwnerToken{}, fmt.Errorf("%w: name must be 1 to 64 characters", ErrLinkedTokenValidation)
 	}
 	if maxActive <= 0 {
 		maxActive = 25
+	}
+	scope := "read-write"
+	if len(requestedScope) > 0 && strings.TrimSpace(requestedScope[0]) != "" {
+		scope = strings.TrimSpace(requestedScope[0])
+	}
+	if scope != "read" && scope != "read-write" {
+		return "", OwnerToken{}, fmt.Errorf("%w: scope must be read or read-write", ErrLinkedTokenValidation)
 	}
 	if expiresAt != nil && !expiresAt.After(time.Now()) {
 		return "", OwnerToken{}, fmt.Errorf("%w: expiry must be in the future", ErrLinkedTokenValidation)
@@ -221,19 +242,19 @@ func CreateLinkedOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byt
 			expires = expiresAt.Unix()
 		}
 		var insertErr error
-		id, insertErr = insertOwnerToken(ctx, tx, ownerID, "linked", name, token, encoded, expires)
+		id, insertErr = insertOwnerToken(ctx, tx, ownerID, "linked", scope, name, token, encoded, expires)
 		return insertErr
 	})
 	if err != nil {
 		return "", OwnerToken{}, err
 	}
-	return token, OwnerToken{ID: id, OwnerID: ownerID, Kind: "linked", Name: name, Prefix: tokenPrefix(token), Last4: token[len(token)-4:], CreatedAt: time.Now().UTC(), ExpiresAt: expiresAt}, nil
+	return token, OwnerToken{ID: id, OwnerID: ownerID, Kind: "linked", Scope: scope, Name: name, Prefix: tokenPrefix(token), Last4: token[len(token)-4:], CreatedAt: time.Now().UTC(), ExpiresAt: expiresAt}, nil
 }
 
 // RevealOwnerToken decrypts one token for an explicit reveal operation.
 func RevealOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string, encryptionKeys ...[]byte) (string, error) {
 	var encoded string
-	err := queryRowContext(ctx, db, `SELECT token_enc FROM api_tokens WHERE owner_id = ? AND id = ? AND kind = 'primary' AND revoked_at IS NULL`, ownerID, tokenID).Scan(&encoded)
+	err := queryRowContext(ctx, db, `SELECT token_enc FROM api_tokens WHERE owner_id = ? AND COALESCE(public_id, id) = ? AND kind = 'primary' AND revoked_at IS NULL`, ownerID, tokenID).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrInvalidOwnerToken
 	}
@@ -249,7 +270,7 @@ func RevealOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string, 
 		if err != nil {
 			return "", err
 		}
-		if _, err := execContext(ctx, db, `UPDATE api_tokens SET token_enc = ? WHERE owner_id = ? AND id = ?`, reencrypted, ownerID, tokenID); err != nil {
+		if _, err := execContext(ctx, db, `UPDATE api_tokens SET token_enc = ? WHERE owner_id = ? AND COALESCE(public_id, id) = ?`, reencrypted, ownerID, tokenID); err != nil {
 			return "", err
 		}
 	}
@@ -259,7 +280,7 @@ func RevealOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string, 
 // RevealLinkedOwnerToken decrypts only an active linked token.
 func RevealLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string, encryptionKeys ...[]byte) (string, error) {
 	var encoded string
-	err := queryRowContext(ctx, db, `SELECT token_enc FROM api_tokens WHERE owner_id = ? AND id = ? AND kind = 'linked' AND revoked_at IS NULL`, ownerID, tokenID).Scan(&encoded)
+	err := queryRowContext(ctx, db, `SELECT token_enc FROM api_tokens WHERE owner_id = ? AND COALESCE(public_id, id) = ? AND kind = 'linked' AND revoked_at IS NULL`, ownerID, tokenID).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrInvalidOwnerToken
 	}
@@ -275,7 +296,7 @@ func RevealLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID st
 		if err != nil {
 			return "", err
 		}
-		if _, err := execContext(ctx, db, `UPDATE api_tokens SET token_enc = ? WHERE owner_id = ? AND id = ? AND kind = 'linked'`, reencrypted, ownerID, tokenID); err != nil {
+		if _, err := execContext(ctx, db, `UPDATE api_tokens SET token_enc = ? WHERE owner_id = ? AND COALESCE(public_id, id) = ? AND kind = 'linked'`, reencrypted, ownerID, tokenID); err != nil {
 			return "", err
 		}
 	}
@@ -302,7 +323,7 @@ func rotateOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, own
 	if err != nil {
 		return "", err
 	}
-	result, err := execContext(ctx, db, `UPDATE api_tokens SET token_hash = ?, token_prefix = ?, token_last4 = ?, token_enc = ?, rotated_at = strftime('%s','now') WHERE owner_id = ? AND id = ? AND kind = ? AND revoked_at IS NULL`, hashOwnerToken(token), tokenPrefix(token), token[len(token)-4:], encoded, ownerID, tokenID, kind)
+	result, err := execContext(ctx, db, `UPDATE api_tokens SET token_hash = ?, token_prefix = ?, token_last4 = ?, token_enc = ?, rotated_at = strftime('%s','now') WHERE owner_id = ? AND COALESCE(public_id, id) = ? AND kind = ? AND revoked_at IS NULL`, hashOwnerToken(token), tokenPrefix(token), token[len(token)-4:], encoded, ownerID, tokenID, kind)
 	if err != nil {
 		return "", err
 	}
@@ -318,7 +339,7 @@ func rotateOwnerToken(ctx context.Context, db *sql.DB, encryptionKey []byte, own
 
 // RevokeLinkedOwnerToken permanently revokes a linked credential.
 func RevokeLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID string) error {
-	result, err := execContext(ctx, db, `UPDATE api_tokens SET revoked_at = strftime('%s','now'), revoked_reason = 'owner' WHERE owner_id = ? AND id = ? AND kind = 'linked' AND revoked_at IS NULL`, ownerID, tokenID)
+	result, err := execContext(ctx, db, `UPDATE api_tokens SET revoked_at = strftime('%s','now'), revoked_reason = 'owner' WHERE owner_id = ? AND COALESCE(public_id, id) = ? AND kind = 'linked' AND revoked_at IS NULL`, ownerID, tokenID)
 	if err != nil {
 		return err
 	}
@@ -350,7 +371,7 @@ func PatchLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID str
 			return fmt.Errorf("%w: name must be 1 to 64 characters", ErrLinkedTokenValidation)
 		}
 		var duplicate int
-		if err := queryRowContext(ctx, db, `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ? AND kind = 'linked' AND name = ? AND id != ?`, ownerID, normalizedName, tokenID).Scan(&duplicate); err != nil {
+		if err := queryRowContext(ctx, db, `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ? AND kind = 'linked' AND name = ? AND COALESCE(public_id, id) != ?`, ownerID, normalizedName, tokenID).Scan(&duplicate); err != nil {
 			return err
 		}
 		if duplicate > 0 {
@@ -371,7 +392,7 @@ func PatchLinkedOwnerToken(ctx context.Context, db *sql.DB, ownerID, tokenID str
 		args = append(args, expires)
 	}
 	args = append(args, ownerID, tokenID)
-	result, err := execContext(ctx, db, `UPDATE api_tokens SET `+strings.Join(updates, ", ")+` WHERE owner_id = ? AND id = ? AND kind = 'linked' AND revoked_at IS NULL`, args...)
+	result, err := execContext(ctx, db, `UPDATE api_tokens SET `+strings.Join(updates, ", ")+` WHERE owner_id = ? AND COALESCE(public_id, id) = ? AND kind = 'linked' AND revoked_at IS NULL`, args...)
 	if err != nil {
 		return err
 	}
@@ -485,7 +506,7 @@ func PurgeIdleOwners(ctx context.Context, db *sql.DB, idleDays int) (int64, erro
 	return deleted, nil
 }
 
-func insertOwnerToken(ctx context.Context, tx *sql.Tx, ownerID, kind, name, raw, encrypted string, expires any) (string, error) {
+func insertOwnerToken(ctx context.Context, tx *sql.Tx, ownerID, kind, scope, name, raw, encrypted string, expires any) (string, error) {
 	var nullableName any
 	if name != "" {
 		nullableName = name
@@ -494,13 +515,65 @@ func insertOwnerToken(ctx context.Context, tx *sql.Tx, ownerID, kind, name, raw,
 	if err != nil {
 		return "", err
 	}
-	_, err = execTxContext(ctx, tx, `INSERT INTO api_tokens
-		(id, owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id.String(), ownerID, kind, nullableName, hashOwnerToken(raw), tokenPrefix(raw), raw[len(raw)-4:], encrypted, expires)
+	integerID, err := ownerTokenIntegerPrimaryKey(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	if integerID {
+		_, err = execTxContext(ctx, tx, `INSERT INTO api_tokens
+			(public_id, owner_id, kind, scope, name, token_hash, token_prefix, token_last4, token_enc, created_at, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id.String(), ownerID, kind, scope, nullableName, hashOwnerToken(raw), tokenPrefix(raw), raw[len(raw)-4:], encrypted, time.Now().UTC().Unix(), expires)
+	} else {
+		_, err = execTxContext(ctx, tx, `INSERT INTO api_tokens
+			(id, owner_id, kind, scope, name, token_hash, token_prefix, token_last4, token_enc, created_at, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id.String(), ownerID, kind, scope, nullableName, hashOwnerToken(raw), tokenPrefix(raw), raw[len(raw)-4:], encrypted, time.Now().UTC().Unix(), expires)
+	}
 	if err != nil {
 		return "", err
 	}
 	return id.String(), nil
+}
+
+func ownerTokenIntegerPrimaryKey(ctx context.Context, tx *sql.Tx) (bool, error) {
+	tableNames := []string{TableName("api_tokens"), "api_tokens"}
+	seen := make(map[string]struct{}, len(tableNames))
+	for _, tableName := range tableNames {
+		if _, ok := seen[tableName]; ok {
+			continue
+		}
+		seen[tableName] = struct{}{}
+		rows, err := tx.QueryContext(ctx, "PRAGMA table_info("+tableName+")")
+		if err != nil {
+			return false, err
+		}
+		found := false
+		integerID := false
+		for rows.Next() {
+			var cid, notNull, primaryKey int
+			var name, dataType string
+			var defaultValue sql.NullString
+			if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+				_ = rows.Close()
+				return false, err
+			}
+			if name == "id" {
+				found = true
+				integerID = strings.EqualFold(strings.TrimSpace(dataType), "INTEGER")
+			}
+		}
+		rowsErr := rows.Err()
+		closeErr := rows.Close()
+		if rowsErr != nil {
+			return false, rowsErr
+		}
+		if closeErr != nil {
+			return false, closeErr
+		}
+		if found {
+			return integerID, nil
+		}
+	}
+	return false, errors.New("api_tokens.id column is missing")
 }
 
 func newOwnerToken() (string, error) {

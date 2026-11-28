@@ -37,7 +37,7 @@ type contactMaxLengthWhen struct {
 
 // contactAPIHandler serves the machine-readable contact form contract and its
 // two-step submission flow.
-func contactAPIHandler(cfg *config.Config, router chi.Router) http.HandlerFunc {
+func contactAPIHandler(cfg *config.ServerConfig, router chi.Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !contactConfigEnabled(cfg) {
 			contactAPIError(w, r, http.StatusNotFound, "NOT_FOUND", "contact.errors.unavailable", nil)
@@ -57,7 +57,7 @@ func contactAPIHandler(cfg *config.Config, router chi.Router) http.HandlerFunc {
 	}
 }
 
-func contactAPIGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+func contactAPIGet(cfg *config.ServerConfig, w http.ResponseWriter, r *http.Request) {
 	lang := i18n.LangFromRequest(r)
 	fields := contactAPIFields()
 	securityURL := ""
@@ -89,7 +89,7 @@ func contactAPIGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	if abuseEmail == "" {
 		abuseEmail = strings.TrimSpace(cfg.Server.Contact.General.Email)
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"fields": fields, "captcha": captcha, "security_url": securityURL, "abuse_email": abuseEmail, "form_token": formToken})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("fields", fields), responseField("captcha", captcha), responseField("security_url", securityURL), responseField("abuse_email", abuseEmail), responseField("form_token", formToken)))
 }
 
 func contactAPIFields() []contactAPIDescriptor {
@@ -144,7 +144,7 @@ func securityAPIFields() []contactAPIDescriptor {
 	}
 }
 
-func contactAPIPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+func contactAPIPost(cfg *config.ServerConfig, w http.ResponseWriter, r *http.Request) {
 	settings := contactAntispamConfig(cfg)
 	settings.RouteExists = func(path string) bool {
 		router, ok := r.Context().Value(contactRouteMatcherContextKey{}).(chi.Router)
@@ -235,7 +235,7 @@ func contactAPIPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) 
 	if step == "" || step == "submit" {
 		if !validContactFormToken(r.Context(), fields["form_token"], settings) || !consumeContactToken("form", fields["form_token"], time.Now().UTC().Add(settings.MaxAge)) {
 			recordContactStrike(r, settings)
-			contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.wait_and_submit", map[string]interface{}{"field": "form_token"})
+			contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.wait_and_submit", responseObject(responseField("field", "form_token")))
 			return
 		}
 		if !contactSecurityRateAllowed(r, fields["email"], false, settings) {
@@ -245,7 +245,7 @@ func contactAPIPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) 
 		valid, captchaErr := VerifySimpleCaptcha(r.Context(), fields["captcha_id"], fields["captcha_answer"])
 		if captchaErr != nil || !valid {
 			recordContactStrike(r, settings)
-			contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.captcha_incorrect", map[string]interface{}{"field": "captcha"})
+			contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.captcha_incorrect", responseObject(responseField("field", "captcha")))
 			return
 		}
 		if !securityMode && !ordinaryContactContentAllowed(typeName, fields, r, settings) {
@@ -272,7 +272,7 @@ func contactAPIPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) 
 			subject = fields["summary"]
 		}
 		review := map[string]string{"type": typeName, "email": fields["email"], "subject": subject}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"review": review, "review_token": token, "confirm_after_seconds": int(settings.ReviewMin.Seconds())})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("review", review), responseField("review_token", token), responseField("confirm_after_seconds", int(settings.ReviewMin.Seconds()))))
 		return
 	}
 	var idWindow int64
@@ -286,7 +286,7 @@ func contactAPIPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) 
 	}
 	if step != "confirm" || fields["confirmed"] != "true" || !validContactFormToken(r.Context(), fields["form_token"], settings) || !consumeContactReviewToken(r.Context(), fields["review_token"], fields, idWindow, settings) {
 		recordContactStrike(r, settings)
-		contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.confirm_required", map[string]interface{}{"field": "confirmed"})
+		contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.confirm_required", responseObject(responseField("field", "confirmed")))
 		return
 	}
 	if !contactSecurityRateAllowed(r, fields["email"], true, settings) {
@@ -296,7 +296,7 @@ func contactAPIPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) 
 	if securityMode {
 		fields["researcher_gpg"], err = normalizeResearcherKey(r.Context(), fields["researcher_gpg"])
 		if err != nil {
-			contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.invalid_researcher_key", map[string]interface{}{"field": "researcher_gpg"})
+			contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.invalid_researcher_key", responseObject(responseField("field", "researcher_gpg")))
 			return
 		}
 		trackingID, _, err := acceptSecurityReport(cfg, r.Context(), r, fields, idWindow)
@@ -304,22 +304,22 @@ func contactAPIPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) 
 			contactAPIError(w, r, http.StatusServiceUnavailable, "DELIVERY_UNAVAILABLE", "contact.errors.delivery_unavailable", nil)
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"tracking_id": trackingID})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("tracking_id", trackingID)))
 		return
 	}
 	if contactDuplicate(fields, settings) {
 		recordContactStrike(r, settings)
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"message": i18n.Translate(i18n.LangFromRequest(r), "contact.errors.report_received")})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("message", i18n.Translate(i18n.LangFromRequest(r), "contact.errors.report_received"))))
 		return
 	}
 	if err := sendOrdinaryContact(cfg, typeName, fields); err != nil {
 		contactAPIError(w, r, http.StatusServiceUnavailable, "DELIVERY_UNAVAILABLE", "contact.errors.delivery_unavailable", nil)
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"message": i18n.Translate(i18n.LangFromRequest(r), "contact.errors.report_received")})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("message", i18n.Translate(i18n.LangFromRequest(r), "contact.errors.report_received"))))
 }
 
-func contactAPIError(w http.ResponseWriter, r *http.Request, status int, code, key string, details map[string]interface{}) {
+func contactAPIError(w http.ResponseWriter, r *http.Request, status int, code, key string, details interface{}) {
 	writeEnvelopeError(w, status, code, i18n.Translate(i18n.LangFromRequest(r), key), details)
 }
 
@@ -327,6 +327,6 @@ func contactAPIValidationError(w http.ResponseWriter, r *http.Request) {
 	contactAPIError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "contact.errors.invalid_submission", nil)
 }
 
-func contactConfigEnabled(cfg *config.Config) bool {
+func contactConfigEnabled(cfg *config.ServerConfig) bool {
 	return contactPageEnabled(cfg)
 }

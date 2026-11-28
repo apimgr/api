@@ -20,7 +20,7 @@ type Manager struct {
 	mu sync.Mutex
 
 	svc         *Service
-	cfg         Config
+	cfg         TorConfig
 	enabled     bool
 	starting    bool
 	status      string
@@ -37,7 +37,9 @@ type Manager struct {
 	// invocation (a separate process) can apply it via ApplyVanity
 	// without re-transmitting the private key blob over the loopback
 	// control channel a second time.
-	lastVanity *VanityResult
+	lastVanity   *VanityResult
+	vanityCancel context.CancelFunc
+	vanityPrefix string
 }
 
 // global holds the process-wide Manager instance so packages that cannot
@@ -65,7 +67,7 @@ func Get() *Manager {
 }
 
 // NewManager creates a Manager bound to the resolved config and data roots.
-func NewManager(cfg Config, configDir, dataDir string) *Manager {
+func NewManager(cfg TorConfig, configDir, dataDir string) *Manager {
 	return &Manager{
 		cfg:       cfg,
 		configDir: configDir,
@@ -222,7 +224,7 @@ func (m *Manager) Restart(ctx context.Context) error {
 
 // UpdateConfig applies new settings and restarts Tor to pick them up. The
 // torrc on disk is regenerated to match the new configuration.
-func (m *Manager) UpdateConfig(ctx context.Context, cfg Config) error {
+func (m *Manager) UpdateConfig(ctx context.Context, cfg TorConfig) error {
 	m.mu.Lock()
 	m.cfg = cfg
 	m.mu.Unlock()
@@ -290,10 +292,10 @@ func (m *Manager) ApplyKeys(ctx context.Context, keyBlob []byte) (string, error)
 	return m.OnionAddress(), nil
 }
 
-// ConfigSnapshot returns a copy of the Manager's current Config, for
+// ConfigSnapshot returns a copy of the Manager's current TorConfig, for
 // read-only inspection (e.g. the internal /server/tor/status and
 // /server/tor/validate handlers).
-func (m *Manager) ConfigSnapshot() Config {
+func (m *Manager) ConfigSnapshot() TorConfig {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.cfg
@@ -305,6 +307,41 @@ func (m *Manager) SetLastVanity(v *VanityResult) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastVanity = v
+}
+
+func (m *Manager) SetVanityCancel(cancel context.CancelFunc, prefix string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.vanityCancel != nil {
+		return false
+	}
+	m.vanityCancel = cancel
+	m.vanityPrefix = prefix
+	return true
+}
+
+func (m *Manager) ClearVanityCancel() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.vanityCancel = nil
+	m.vanityPrefix = ""
+}
+
+func (m *Manager) StopVanity() bool {
+	m.mu.Lock()
+	cancel := m.vanityCancel
+	m.mu.Unlock()
+	if cancel == nil {
+		return false
+	}
+	cancel()
+	return true
+}
+
+func (m *Manager) VanityPrefix() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.vanityPrefix
 }
 
 // LastVanity returns the most recently found vanity address candidate, or

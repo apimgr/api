@@ -39,7 +39,7 @@ const csrfMultipartMemory = 1 << 20
 // operator-declared exempt path. There is deliberately NO Origin- or
 // Referer-based bypass — those headers can be absent or spoofed by
 // non-browser clients, and the double-submit check is cheap.
-func csrfMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func csrfMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	csrfCfg := cfg.Server.CSRF.Normalized()
 
 	return func(next http.Handler) http.Handler {

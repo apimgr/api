@@ -18,14 +18,16 @@ const ssrfResolveTimeout = 5 * time.Second
 // which can front internal infrastructure and must be blocked to prevent
 // SSRF / internal-network scanning.
 var ssrfExtraBlockedCIDRs = func() []*net.IPNet {
-	nets := make([]*net.IPNet, 0, 2)
-	for _, cidr := range []string{"100.64.0.0/10", "198.18.0.0/15"} {
+	nets := make([]*net.IPNet, 0, 5)
+	for _, cidr := range []string{"100.64.0.0/10", "198.18.0.0/15", "192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24"} {
 		if _, n, err := net.ParseCIDR(cidr); err == nil {
 			nets = append(nets, n)
 		}
 	}
 	return nets
 }()
+
+var e2eFixtureIP net.IP
 
 // isBlockedIP reports whether ip is loopback, link-local, private
 // (RFC 1918/RFC 4193), unspecified, multicast, carrier-grade NAT
@@ -35,6 +37,9 @@ var ssrfExtraBlockedCIDRs = func() []*net.IPNet {
 func isBlockedIP(ip net.IP) bool {
 	if ip == nil {
 		return true
+	}
+	if e2eFixtureIP != nil && e2eFixtureIP.Equal(ip) {
+		return false
 	}
 	if ip.IsLoopback() ||
 		ip.IsLinkLocalUnicast() ||

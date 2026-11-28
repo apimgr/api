@@ -23,7 +23,7 @@ func initTestPaths(t *testing.T) (configDir, dataDir string) {
 	configDir = t.TempDir()
 	dataDir = t.TempDir()
 	logDir := t.TempDir()
-	paths.Init(configDir, dataDir, logDir)
+	paths.SetApplicationPathOverrides(configDir, dataDir, logDir)
 	return configDir, dataDir
 }
 
@@ -41,7 +41,7 @@ func TestI2PConfigNormalization(t *testing.T) {
 
 func TestI2PEnabledEnvironmentOverride(t *testing.T) {
 	t.Setenv("I2P_ENABLED", "false")
-	cfg := &Config{}
+	cfg := &ServerConfig{}
 	cfg.Server.I2P.Enabled = true
 	applyI2PEnvOverrides(cfg)
 	assert.False(t, cfg.Server.I2P.Enabled)
@@ -78,6 +78,7 @@ func TestDefaultConfig(t *testing.T) {
 
 	assert.Equal(t, "0.0.0.0", cfg.Server.Address)
 	assert.Equal(t, "production", cfg.Server.Mode)
+	assert.True(t, cfg.Server.PIDFile)
 	assert.Equal(t, "v1", cfg.Server.APIVersion)
 	assert.False(t, cfg.Server.SSL.Enabled)
 	assert.Equal(t, RateLimitClassConfig{Requests: 10, Window: 900}, cfg.Server.RateLimit.Strict)
@@ -94,6 +95,12 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, []string{"en", "es", "zh", "fr", "ar", "de", "it", "ja"}, cfg.Server.I18N.AvailableLanguages)
 	assert.Equal(t, ServerTokenConfig{MaxLinked: 25, CookieMaxAge: "1y", IdlePurgeDays: 0}, cfg.Server.Tokens)
 	assert.Equal(t, DefaultRestoreConfig(), cfg.Server.Restore)
+	assert.Equal(t, "none", cfg.Server.Logs.Audit.Keep)
+	assert.Empty(t, cfg.Server.Logs.Audit.Group)
+	assert.Equal(t, 10, cfg.Server.Security.AbuseDetection.RequestFlood.Multiplier)
+	assert.Equal(t, 60*time.Second, cfg.Server.Security.AbuseDetection.RequestFlood.Window)
+	assert.Equal(t, time.Hour, cfg.Server.Security.AbuseDetection.RequestFlood.BlockDuration)
+	assert.Equal(t, WebReportsConfig{RateLimitPerMinute: 60, RateLimitPerIPBurst: 10}, cfg.Web.Reports)
 	assert.Equal(t, DefaultServerLimitsConfig(), cfg.Server.Limits)
 	assert.Equal(t, DefaultDiskLowConfig(), cfg.Server.Notifications.DiskLow)
 	assert.Equal(t, DefaultDatabaseErrorConfig(), cfg.Server.Notifications.DatabaseError)
@@ -200,19 +207,33 @@ func TestRestoreConfigNormalizationAndSizeParsing(t *testing.T) {
 	}
 }
 
+func TestUpdateConfigNormalizedDeferDaysBounds(t *testing.T) {
+	for _, deferDays := range []int{-1, 366} {
+		cfg, warnings := (UpdateConfig{Branch: "daily", DeferDays: deferDays}).Normalized()
+		if cfg.Branch != "devel" || cfg.DeferDays != 0 || len(warnings) != 2 {
+			t.Fatalf("Normalized() = %#v, %v; want devel, defer 0, two warnings", cfg, warnings)
+		}
+	}
+	cfg, warnings := (UpdateConfig{Branch: "stable", DeferDays: 365}).Normalized()
+	if cfg.DeferDays != 365 || len(warnings) != 0 {
+		t.Fatalf("Normalized() = %#v, %v; want defer 365 without warnings", cfg, warnings)
+	}
+}
+
 func TestServerLimitsNormalization(t *testing.T) {
 	got, warnings := (ServerLimitsConfig{MaxBodySize: "0", ReadTimeout: "bad", WriteTimeout: "0s", IdleTimeout: "-1m"}).Normalized()
 	assert.Equal(t, DefaultServerLimitsConfig(), got)
 	assert.Len(t, warnings, 4)
 	assert.Equal(t, int64(10<<20), got.MaxBodySizeBytes())
 	assert.Equal(t, "security.yml", areaFileForServerKey("limits"))
+	assert.Equal(t, "web.yml", areaFileForServerKey("compression"))
 }
 
 func TestPrivacyDefaultsMatchProjectDataHandling(t *testing.T) {
 	privacy := defaultPrivacyConfig()
 
-	assert.False(t, privacy.Retention.ExportAvailable)
-	assert.False(t, privacy.Retention.DeletionAvailable)
+	assert.True(t, privacy.Retention.ExportAvailable)
+	assert.True(t, privacy.Retention.DeletionAvailable)
 	assert.Empty(t, privacy.Retention.PeriodFor("en"))
 	assert.Contains(t, privacy.DataCollectionContent(), "not retained as user records")
 	assert.Contains(t, privacy.DataUsageContent(), "does not create user accounts")
@@ -287,7 +308,7 @@ func TestLoadCreatesDefaultWhenMissing(t *testing.T) {
 	configDir, _ := initTestPaths(t)
 	resetGlobalConfig(t)
 
-	cfg, err := Load()
+	cfg, err := Load(nil)
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
@@ -312,7 +333,7 @@ func TestLoadReadsExistingFile(t *testing.T) {
 	require.NoError(t, Save(cfg))
 	_ = configDir
 
-	loaded, err := Load()
+	loaded, err := Load(nil)
 	require.NoError(t, err)
 	assert.Equal(t, "roundtrip.example.com", loaded.Server.FQDN)
 	assert.Equal(t, "Custom Title", loaded.Server.Branding.Title)
@@ -328,7 +349,7 @@ func TestLoadInvalidYAMLUsesDefaults(t *testing.T) {
 	badFile := filepath.Join(configDir, "server.yml")
 	require.NoError(t, os.WriteFile(badFile, []byte("server: [unterminated"), 0644))
 
-	cfg, err := Load()
+	cfg, err := Load(nil)
 	require.NoError(t, err)
 	assert.Equal(t, defaultConfig().Server.Address, cfg.Server.Address)
 	data, err := os.ReadFile(badFile)
@@ -350,7 +371,7 @@ func TestLoadMigratesLegacyBareStringCORS(t *testing.T) {
 	legacyYAML := "web:\n  cors: https://legacy.example.com\n"
 	require.NoError(t, os.WriteFile(legacyFile, []byte(legacyYAML), 0644))
 
-	cfg, err := Load()
+	cfg, err := Load(nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://legacy.example.com"}, cfg.Web.CORS.AllowedOrigins)
 }
@@ -366,7 +387,7 @@ func TestWebLLMSDefaultsAndConfig(t *testing.T) {
 	require.NoError(t, os.MkdirAll(configDir, 0700))
 	content := "web:\n  llms:\n    include_endpoints: false\n    include_schemas: true\n"
 	require.NoError(t, os.WriteFile(filepath.Join(configDir, "server.yml"), []byte(content), 0600))
-	cfg, err := Load()
+	cfg, err := Load(nil)
 	require.NoError(t, err)
 	assert.False(t, cfg.Web.LLMS.IncludeEndpoints)
 	assert.True(t, cfg.Web.LLMS.IncludeSchemas)
@@ -384,7 +405,7 @@ func TestCORSConfigUnmarshalYAML_StructForm(t *testing.T) {
 	structYAML := "web:\n  cors:\n    allowed_origins:\n      - https://a.example.com\n      - https://b.example.com\n"
 	require.NoError(t, os.WriteFile(structFile, []byte(structYAML), 0644))
 
-	cfg, err := Load()
+	cfg, err := Load(nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://a.example.com", "https://b.example.com"}, cfg.Web.CORS.AllowedOrigins)
 }
@@ -394,7 +415,7 @@ func TestCORSConfigUnmarshalYAML_StructForm(t *testing.T) {
 // (DATABASE_URL over DATABASE_DIR), and the no-env no-op case.
 func TestApplyDatabaseEnvOverrides(t *testing.T) {
 	t.Run("no env vars leaves config untouched", func(t *testing.T) {
-		cfg := &Config{Server: ServerConfig{Database: DatabaseConfig{Driver: "sqlite", URL: "orig"}}}
+		cfg := &ServerConfig{Server: ServerSettings{Database: DatabaseConfig{Driver: "sqlite", URL: "orig"}}}
 		applyDatabaseEnvOverrides(cfg)
 		assert.Equal(t, "sqlite", cfg.Server.Database.Driver)
 		assert.Equal(t, "orig", cfg.Server.Database.URL)
@@ -402,21 +423,21 @@ func TestApplyDatabaseEnvOverrides(t *testing.T) {
 
 	t.Run("DATABASE_DRIVER overrides driver", func(t *testing.T) {
 		t.Setenv("DATABASE_DRIVER", "postgres")
-		cfg := &Config{Server: ServerConfig{Database: DatabaseConfig{Driver: "sqlite"}}}
+		cfg := &ServerConfig{Server: ServerSettings{Database: DatabaseConfig{Driver: "sqlite"}}}
 		applyDatabaseEnvOverrides(cfg)
 		assert.Equal(t, "postgres", cfg.Server.Database.Driver)
 	})
 
 	t.Run("DATABASE_URL overrides URL directly", func(t *testing.T) {
 		t.Setenv("DATABASE_URL", "postgres://host/db")
-		cfg := &Config{Server: ServerConfig{Database: DatabaseConfig{URL: "orig"}}}
+		cfg := &ServerConfig{Server: ServerSettings{Database: DatabaseConfig{URL: "orig"}}}
 		applyDatabaseEnvOverrides(cfg)
 		assert.Equal(t, "postgres://host/db", cfg.Server.Database.URL)
 	})
 
 	t.Run("DATABASE_DIR builds server.db path when URL unset", func(t *testing.T) {
 		t.Setenv("DATABASE_DIR", "/custom/data")
-		cfg := &Config{Server: ServerConfig{Database: DatabaseConfig{URL: "orig"}}}
+		cfg := &ServerConfig{Server: ServerSettings{Database: DatabaseConfig{URL: "orig"}}}
 		applyDatabaseEnvOverrides(cfg)
 		assert.Equal(t, filepath.Join("/custom/data", "server.db"), cfg.Server.Database.URL)
 	})
@@ -424,7 +445,7 @@ func TestApplyDatabaseEnvOverrides(t *testing.T) {
 	t.Run("DATABASE_URL takes priority over DATABASE_DIR", func(t *testing.T) {
 		t.Setenv("DATABASE_URL", "postgres://host/db")
 		t.Setenv("DATABASE_DIR", "/custom/data")
-		cfg := &Config{Server: ServerConfig{Database: DatabaseConfig{URL: "orig"}}}
+		cfg := &ServerConfig{Server: ServerSettings{Database: DatabaseConfig{URL: "orig"}}}
 		applyDatabaseEnvOverrides(cfg)
 		assert.Equal(t, "postgres://host/db", cfg.Server.Database.URL)
 	})
@@ -435,7 +456,7 @@ func TestApplyDatabaseEnvOverrides(t *testing.T) {
 func TestSaveCreatesConfigDir(t *testing.T) {
 	configDir := filepath.Join(t.TempDir(), "nested", "config")
 	dataDir := t.TempDir()
-	paths.Init(configDir, dataDir, t.TempDir())
+	paths.SetApplicationPathOverrides(configDir, dataDir, t.TempDir())
 
 	cfg := defaultConfig()
 	require.NoError(t, Save(cfg))
@@ -492,8 +513,8 @@ func TestConfigWatcherDetectsChanges(t *testing.T) {
 	cfg := defaultConfig()
 	require.NoError(t, Save(cfg))
 
-	var received *Config
-	watcher := NewConfigWatcher(func(c *Config) {
+	var received *ServerConfig
+	watcher := NewConfigWatcher(func(c *ServerConfig) {
 		received = c
 	})
 	require.Equal(t, filepath.Join(configDir, "server.yml"), watcher.path)
@@ -527,7 +548,7 @@ func TestConfigWatcherStartStop(t *testing.T) {
 	cfg := defaultConfig()
 	require.NoError(t, Save(cfg))
 
-	watcher := NewConfigWatcher(func(*Config) {})
+	watcher := NewConfigWatcher(func(*ServerConfig) {})
 	watcher.Start()
 	watcher.Stop()
 }
@@ -548,7 +569,7 @@ func TestLoadReadsTermsFromBrandingDropIn(t *testing.T) {
 `
 	require.NoError(t, os.WriteFile(filepath.Join(configDir, "yaml.d", "branding.yml"), []byte(branding), 0600))
 
-	loaded, err := Load()
+	loaded, err := Load(nil)
 	require.NoError(t, err)
 	entry, ok := loaded.Server.Branding.Content["terms"]
 	require.True(t, ok)
@@ -573,7 +594,7 @@ func TestOnChange(t *testing.T) {
 	require.NoError(t, Save(cfg))
 
 	called := false
-	start := OnChange(func(*Config) { called = true })
+	start := OnChange(func(*ServerConfig) { called = true })
 	require.NotNil(t, start)
 	assert.False(t, called, "OnChange must not start watching before the returned function is invoked")
 
@@ -603,7 +624,7 @@ func TestServerModeRoundTrip(t *testing.T) {
 			cfg.Server.Mode = tt.mode
 			require.NoError(t, Save(cfg))
 
-			loaded, err := Load()
+			loaded, err := Load(nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.mode, loaded.Server.Mode)
 		})
@@ -652,7 +673,7 @@ func TestCacheModeKeysRoundTrip(t *testing.T) {
 			cfg.Server.Cache.Static = tt.static
 			require.NoError(t, Save(cfg))
 
-			loaded, err := Load()
+			loaded, err := Load(nil)
 			require.NoError(t, err)
 
 			if tt.templates == nil {

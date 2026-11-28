@@ -1,9 +1,13 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // TestParseBool covers every truthy/falsy alias, case-insensitivity,
@@ -49,14 +53,49 @@ func TestParseBool(t *testing.T) {
 	}
 }
 
-// TestMustParseBool covers the success path and confirms invalid input
-// panics rather than silently defaulting.
+// TestMustParseBool covers the compatibility wrapper's default behavior.
 func TestMustParseBool(t *testing.T) {
 	assert.True(t, MustParseBool("true", false))
 	assert.False(t, MustParseBool("", false))
-	assert.Panics(t, func() {
-		MustParseBool("not-a-bool", false)
-	})
+	assert.True(t, MustParseBool("not-a-bool", true))
+	assert.False(t, MustParseBool("not-a-bool", false))
+}
+
+func TestParseBoolOrDefault(t *testing.T) {
+	assert.True(t, ParseBoolOrDefault("test.enabled", "yes", false))
+	assert.False(t, ParseBoolOrDefault("test.disabled", "invalid", false))
+	assert.True(t, ParseBoolOrDefault("test.enabled-default", "invalid", true))
+}
+
+func TestUnmarshalConfigResilientDefaultsInvalidBooleans(t *testing.T) {
+	merged := map[string]interface{}{
+		"server": map[string]interface{}{
+			"debug":    map[string]interface{}{"pprof": "not-a-bool"},
+			"ssl":      map[string]interface{}{"enabled": "perhaps"},
+			"database": map[string]interface{}{"pool": map[string]interface{}{"max_open": "not-a-number"}},
+		},
+	}
+	data, err := yaml.Marshal(merged)
+	require.NoError(t, err)
+	cfg := defaultConfig()
+	require.NoError(t, unmarshalConfigResilient(data, cfg))
+	assert.True(t, cfg.Server.Debug.Pprof)
+	assert.False(t, cfg.Server.SSL.Enabled)
+	assert.Equal(t, defaultConfig().Server.Database.Pool.MaxOpen, cfg.Server.Database.Pool.MaxOpen)
+}
+
+func TestLoadMergedConfigDefaultsInvalidBooleansWithoutMaskingOtherMalformedValues(t *testing.T) {
+	configDir, _ := initTestPaths(t)
+	resetGlobalConfig(t)
+	contents := "server:\n  debug:\n    pprof: not-a-bool\n  ssl:\n    enabled: perhaps\n  database:\n    pool:\n      max_open: not-a-number\n"
+	require.NoError(t, os.MkdirAll(configDir, 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "server.yml"), []byte(contents), 0600))
+
+	cfg, err := Load(nil)
+	require.NoError(t, err)
+	assert.Equal(t, defaultConfig().Server.Debug.Pprof, cfg.Server.Debug.Pprof)
+	assert.Equal(t, defaultConfig().Server.SSL.Enabled, cfg.Server.SSL.Enabled)
+	assert.Equal(t, defaultConfig().Server.Database.Pool.MaxOpen, cfg.Server.Database.Pool.MaxOpen)
 }
 
 // TestIsTruthyIsFalsy covers both helpers across truthy, falsy, empty, and

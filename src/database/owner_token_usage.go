@@ -188,7 +188,7 @@ func (usage *ownerTokenUsageCache) flush(ctx context.Context) error {
 	owners := make(map[string]time.Time)
 	err := withWriteTransaction(ctx, db, func(tx *sql.Tx) error {
 		for tokenID, item := range batch {
-			if _, err := execTxContext(ctx, tx, `UPDATE api_tokens SET last_used_at = ? WHERE id = ?`, item.usedAt.Unix(), tokenID); err != nil {
+			if _, err := execTxContext(ctx, tx, `UPDATE api_tokens SET last_used_at = ? WHERE COALESCE(public_id, id) = ?`, item.usedAt.Unix(), tokenID); err != nil {
 				return fmt.Errorf("update owner token usage: %w", err)
 			}
 			if item.usedAt.After(owners[item.ownerID]) {

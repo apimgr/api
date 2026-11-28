@@ -31,6 +31,9 @@ func TestIsBlockedIP(t *testing.T) {
 		{name: "unspecified v4", ip: net.ParseIP("0.0.0.0"), want: true},
 		{name: "unspecified v6", ip: net.ParseIP("::"), want: true},
 		{name: "multicast v4", ip: net.ParseIP("239.1.1.1"), want: true},
+		{name: "documentation range 1", ip: net.ParseIP("192.0.2.1"), want: true},
+		{name: "documentation range 2", ip: net.ParseIP("198.51.100.1"), want: true},
+		{name: "documentation range 3", ip: net.ParseIP("203.0.113.1"), want: true},
 		{name: "public v4", ip: net.ParseIP("8.8.8.8"), want: false},
 		{name: "public v6", ip: net.ParseIP("2001:4860:4860::8888"), want: false},
 	}

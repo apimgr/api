@@ -12,24 +12,24 @@ import (
 	"github.com/apimgr/api/src/config"
 )
 
-// Mode represents the application execution mode
-type Mode string
+// AppMode represents the application execution mode
+type AppMode string
 
 const (
 	// Production mode - optimized for performance and security
-	Production Mode = "production"
+	Production AppMode = "production"
 	// Development mode - optimized for debugging and development
-	Development Mode = "development"
+	Development AppMode = "development"
 	// Debug mode - maximum verbosity and minimal sanitization. Explicit
 	// opt-in only (via the mode flag or environment variable), never
 	// implied or auto-enabled, and it never disables authentication or
 	// security checks. Selecting it defaults the debug flag on.
-	Debug Mode = "debug"
+	Debug AppMode = "debug"
 )
 
 var (
 	// currentMode stores the active application mode
-	currentMode Mode = Production
+	currentMode AppMode = Production
 	// debugEnabled stores whether --debug/DEBUG=true diagnostics are active
 	debugEnabled         bool
 	blockProfileRate     = 1
@@ -41,7 +41,7 @@ var (
 )
 
 // GetCurrentMode returns the current application mode
-func GetCurrentMode() Mode {
+func GetCurrentMode() AppMode {
 	mu.RLock()
 	defer mu.RUnlock()
 	return currentMode
@@ -63,12 +63,12 @@ func SetMode(mode string) error {
 	return nil
 }
 
-// ParseMode parses a mode string into a Mode constant.
+// ParseMode parses a mode string into a AppMode constant.
 // Accepts (case-insensitive, surrounding whitespace ignored):
 // "production"/"prod", "development"/"dev"/"devel", and "debug".
 // "debug" is a first-class third mode, not an alias for development, and
 // it has no shortcut form — it must be spelled out.
-func ParseMode(s string) (Mode, error) {
+func ParseMode(s string) (AppMode, error) {
 	normalized := strings.ToLower(strings.TrimSpace(s))
 
 	switch normalized {
@@ -101,13 +101,13 @@ func SetWithDebugDefault(mode string) error {
 	return nil
 }
 
-// IsDevelopment returns true if the current mode is Development
-func IsDevelopment() bool {
+// IsAppModeDev returns true if the current mode is Development.
+func IsAppModeDev() bool {
 	return GetCurrentMode() == Development
 }
 
-// IsProduction returns true if the current mode is Production
-func IsProduction() bool {
+// IsAppModeProd returns true if the current mode is Production.
+func IsAppModeProd() bool {
 	return GetCurrentMode() == Production
 }
 
@@ -185,28 +185,36 @@ func GetLang() string {
 
 // Initialize sets the mode and debug flag based on priority order:
 //
-// Mode:
+// AppMode:
 //  1. cliMode (--mode flag), highest priority
 //  2. MODE environment variable
-//  3. Default: production
+//  3. configuredMode (server.mode in server.yml)
+//  4. Default: production
 //
 // Debug:
 //  1. cliDebug (--debug flag), highest priority
 //  2. DEBUG environment variable (truthy/falsy, if explicitly set)
 //  3. debug mode's own default (on)
 //  4. Default: false
-func Initialize(cliMode string, cliDebug bool, cliDebugSet bool) error {
-	// Priority 1/2/3 for mode (also applies debug mode's flag default)
+func Initialize(cliMode string, cliDebug bool, cliDebugSet bool, configuredMode ...string) error {
+	configMode := ""
+	if len(configuredMode) > 0 {
+		configMode = configuredMode[0]
+	}
+
+	// Apply the selected mode source (also applies debug mode's flag default).
 	switch {
 	case cliMode != "":
 		if err := SetWithDebugDefault(cliMode); err != nil {
 			return err
 		}
-	default:
-		if envMode := os.Getenv("MODE"); envMode != "" {
-			if err := SetWithDebugDefault(envMode); err != nil {
-				return err
-			}
+	case os.Getenv("MODE") != "":
+		if err := SetWithDebugDefault(os.Getenv("MODE")); err != nil {
+			return err
+		}
+	case configMode != "":
+		if err := SetWithDebugDefault(configMode); err != nil {
+			return err
 		}
 	}
 
@@ -218,7 +226,7 @@ func Initialize(cliMode string, cliDebug bool, cliDebugSet bool) error {
 
 	// Priority 2 for debug: an explicitly set DEBUG environment variable
 	// wins over the value debug mode defaulted to, in both directions
-	if v, set := os.LookupEnv("DEBUG"); set {
+	if v, set := os.LookupEnv("DEBUG"); set && v != "" {
 		SetDebugEnabled(config.IsTruthy(v))
 	}
 
@@ -376,8 +384,8 @@ func GetPanicRecoveryMode() string {
 	return "graceful"
 }
 
-// String returns the string representation of the Mode
-func (m Mode) String() string {
+// String returns the string representation of the AppMode
+func (m AppMode) String() string {
 	return string(m)
 }
 
@@ -392,7 +400,7 @@ func GetModeString() string {
 }
 
 // Validate returns an error if the mode is not valid
-func (m Mode) Validate() error {
+func (m AppMode) Validate() error {
 	switch m {
 	case Production, Development, Debug:
 		return nil

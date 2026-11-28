@@ -3,6 +3,7 @@ package pidfile
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 )
 
 func TestCheckPIDFile_NotExist(t *testing.T) {
+	requirePIDFileSupport(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nonexistent.pid")
 
@@ -21,7 +23,23 @@ func TestCheckPIDFile_NotExist(t *testing.T) {
 	assert.Equal(t, 0, pid)
 }
 
+func TestPIDFileOperationsAreSkippedOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows uses Service Control Manager lifecycle")
+	}
+	path := filepath.Join(t.TempDir(), "server.pid")
+	running, pid, err := CheckPIDFile(path)
+	require.NoError(t, err)
+	assert.False(t, running)
+	assert.Zero(t, pid)
+	require.NoError(t, WritePIDFile(path))
+	require.NoError(t, RemovePIDFile(path))
+	_, err = os.Stat(path)
+	assert.True(t, os.IsNotExist(err))
+}
+
 func TestCheckPIDFile_CorruptContent(t *testing.T) {
+	requirePIDFileSupport(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "corrupt.pid")
 	require.NoError(t, os.WriteFile(path, []byte("not-a-pid"), 0644))
@@ -37,6 +55,7 @@ func TestCheckPIDFile_CorruptContent(t *testing.T) {
 }
 
 func TestCheckPIDFile_DeadProcess(t *testing.T) {
+	requirePIDFileSupport(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dead.pid")
 
@@ -54,6 +73,7 @@ func TestCheckPIDFile_DeadProcess(t *testing.T) {
 }
 
 func TestCheckPIDFile_RunningButNotOurBinary(t *testing.T) {
+	requirePIDFileSupport(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "other.pid")
 
@@ -71,6 +91,7 @@ func TestCheckPIDFile_RunningButNotOurBinary(t *testing.T) {
 }
 
 func TestCheckPIDFile_WhitespaceTrimmed(t *testing.T) {
+	requirePIDFileSupport(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "whitespace.pid")
 	require.NoError(t, os.WriteFile(path, []byte("  999999  \n"), 0644))
@@ -96,14 +117,19 @@ func TestWritePIDFile_SkippedInContainer(t *testing.T) {
 }
 
 func TestWritePIDFile_WritesAndDetectsExisting(t *testing.T) {
-	if paths.IsRunningInContainer() {
-		t.Skip("WritePIDFile is a no-op inside containers; covered by TestWritePIDFile_SkippedInContainer")
-	}
+	requirePIDFileSupport(t)
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nested", "app.pid")
 
 	require.NoError(t, WritePIDFile(path))
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	wantMode := os.FileMode(0600)
+	if paths.IsElevated() {
+		wantMode = 0644
+	}
+	assert.Equal(t, wantMode, info.Mode().Perm())
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -138,15 +164,20 @@ func TestRemovePIDFile_SkippedInContainer(t *testing.T) {
 }
 
 func TestRemovePIDFile_NonexistentReturnsError(t *testing.T) {
-	if paths.IsRunningInContainer() {
-		t.Skip("RemovePIDFile is a no-op inside containers")
-	}
+	requirePIDFileSupport(t)
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "missing.pid")
 
 	err := RemovePIDFile(path)
 	assert.Error(t, err)
+}
+
+func requirePIDFileSupport(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" || paths.IsRunningInContainer() {
+		t.Skip("PID file operations are disabled on Windows and in containers")
+	}
 }
 
 func TestIsProcessRunning_CurrentProcess(t *testing.T) {

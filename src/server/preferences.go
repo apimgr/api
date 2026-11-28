@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/common/i18n"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
@@ -250,10 +251,10 @@ func decodeCookieConsent(raw string) (consentCookie, bool) {
 }
 
 func preferenceCookieConsent(r *http.Request) bool {
-	if cfg, ok := r.Context().Value(serverConfigKey).(*config.Config); ok && cfg != nil && !cfg.Server.Privacy.Cookies.Preferences.Enabled {
+	if cfg, ok := r.Context().Value(serverConfigKey).(*config.ServerConfig); ok && cfg != nil && !cfg.Server.Privacy.Cookies.Preferences.Enabled {
 		return false
 	}
-	if _, ok := r.Context().Value(serverConfigKey).(*config.Config); !ok {
+	if _, ok := r.Context().Value(serverConfigKey).(*config.ServerConfig); !ok {
 		return true
 	}
 	return hasValidCookieConsent(r) && readCookieConsent(r).Preferences
@@ -277,7 +278,8 @@ func applyPreferenceValuesWhenAllowed(w http.ResponseWriter, r *http.Request, va
 	return []string{}, uniqueStrings(ignored)
 }
 
-func applyCookieConsent(w http.ResponseWriter, r *http.Request, cfg *config.Config, values url.Values) {
+func applyCookieConsent(w http.ResponseWriter, r *http.Request, cfg *config.ServerConfig, values url.Values) {
+	previous := readCookieConsent(r)
 	consent := consentCookie{
 		Essential:   true,
 		Preferences: values.Get("consent_preferences") == "on" || values.Get("consent_preferences") == "true",
@@ -289,6 +291,10 @@ func applyCookieConsent(w http.ResponseWriter, r *http.Request, cfg *config.Conf
 	}
 	if !cfg.Server.Privacy.Cookies.Analytics.Enabled {
 		consent.Analytics = false
+	}
+	if cfg.Web.Headers.ClearSiteData.OnConsentWithdrawal &&
+		((previous.Preferences && !consent.Preferences) || (previous.Analytics && !consent.Analytics)) {
+		w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
 	}
 	auditConsentChange(r, cfg, "preferences", consent.Preferences)
 	auditConsentChange(r, cfg, "analytics", consent.Analytics)
@@ -311,7 +317,7 @@ func applyCookieConsent(w http.ResponseWriter, r *http.Request, cfg *config.Conf
 	}
 }
 
-func auditConsentChange(r *http.Request, cfg *config.Config, consentType string, value bool) {
+func auditConsentChange(r *http.Request, cfg *config.ServerConfig, consentType string, value bool) {
 	actorType := "anonymous"
 	actor := "anonymous"
 	details := map[string]any{
@@ -366,7 +372,7 @@ func deletePreferenceCookie(w http.ResponseWriter, r *http.Request, name string)
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, Secure: proto == "https", SameSite: http.SameSiteLaxMode})
 }
 
-func resetGuestPreferences(w http.ResponseWriter, r *http.Request) {
+func resetGuestPreferences(w http.ResponseWriter, r *http.Request, cfg *config.ServerConfig) {
 	deleteNames := map[string]bool{"theme": true, i18n.CookieName: true, "cookie_consent": true, "dismissed_announcements": true, "ccpa_opt_out": true, buildCookieName: true}
 	for _, cookie := range r.Cookies() {
 		name := cookie.Name
@@ -379,11 +385,13 @@ func resetGuestPreferences(w http.ResponseWriter, r *http.Request) {
 	for name := range deleteNames {
 		deletePreferenceCookie(w, r, name)
 	}
-	w.Header().Set("Clear-Site-Data", `"storage"`)
+	if cfg.Web.Headers.ClearSiteData.OnConsentWithdrawal {
+		w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+	}
 	w.Header().Set("Cache-Control", "no-store")
 }
 
-func preferenceSnapshot(r *http.Request, values url.Values) map[string]interface{} {
+func preferenceSnapshot(r *http.Request, values url.Values) taggedResponseObject {
 	theme, lang := currentPreferences(r)
 	if requested := values.Get("theme"); requested == string(ThemeDark) || requested == string(ThemeLight) || requested == string(ThemeAuto) {
 		theme = requested
@@ -393,14 +401,17 @@ func preferenceSnapshot(r *http.Request, values url.Values) map[string]interface
 			lang = canonical
 		}
 	}
-	return map[string]interface{}{"theme": theme, "lang": lang, "prefs": map[string]string{}}
+	return responseObject(
+		responseField("theme", theme),
+		responseField("lang", lang),
+		responseField("prefs", responseObject()),
+	)
 }
 
 func writePreferenceJSON(w http.ResponseWriter, r *http.Request, applied, ignored []string, shareURL, code string) {
 	data := preferenceSnapshot(r, nil)
 	if shareURL != "" {
-		data["url"] = shareURL
-		data["code"] = code
+		data = append(data, responseField("url", shareURL), responseField("code", sanitize.PublicResponseValue{Value: code}))
 	}
 	if applied != nil || ignored != nil {
 		if applied == nil {
@@ -409,8 +420,7 @@ func writePreferenceJSON(w http.ResponseWriter, r *http.Request, applied, ignore
 		if ignored == nil {
 			ignored = []string{}
 		}
-		data["applied"] = applied
-		data["ignored"] = ignored
+		data = append(data, responseField("applied", applied), responseField("ignored", ignored))
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeEnvelopeOK(w, http.StatusOK, data)
@@ -517,7 +527,7 @@ func currentPreferences(r *http.Request) (theme string, lang string) {
 // preferencesPageHandler renders the guest preferences page: a no-JS form for
 // theme and language plus the export URL and short code for carrying the same
 // state to another browser or device.
-func preferencesPageHandler(cfg *config.Config) http.HandlerFunc {
+func preferencesPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		theme, lang := currentPreferences(r)
@@ -544,13 +554,13 @@ func preferencesPageHandler(cfg *config.Config) http.HandlerFunc {
 // preferencesSaveHandler applies a submitted preference form and redirects
 // back to the page the visitor came from. It answers 303 See Other so the
 // browser re-issues a GET and a refresh never resubmits the form.
-func preferencesSaveHandler(cfg *config.Config) http.HandlerFunc {
+func preferencesSaveHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		_ = r.ParseForm()
 		w.Header().Set("Cache-Control", "no-store")
 		if r.PostForm.Get("action") == "reset" {
-			resetGuestPreferences(w, r)
+			resetGuestPreferences(w, r, cfg)
 			redirectSeeOtherNoBody(w, "/")
 			return
 		}
@@ -566,7 +576,7 @@ func preferencesSaveHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func ccpaOptOutHandler(cfg *config.Config) http.HandlerFunc {
+func ccpaOptOutHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		_ = r.ParseForm()
@@ -586,7 +596,7 @@ func ccpaOptOutHandler(cfg *config.Config) http.HandlerFunc {
 
 // preferencesSyncPageHandler renders the existing export and import actions as
 // one preferences sub-page, with native links and forms that work without JS.
-func preferencesSyncPageHandler(cfg *config.Config) http.HandlerFunc {
+func preferencesSyncPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		theme, lang := currentPreferences(r)
@@ -660,8 +670,7 @@ func apiPreferencesSaveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := preferenceSnapshot(r, values)
-	data["applied"] = applied
-	data["ignored"] = ignored
+	data = append(data, responseField("applied", applied), responseField("ignored", ignored))
 	w.Header().Set("Cache-Control", "no-store")
 	writeEnvelopeOK(w, http.StatusOK, data)
 }
@@ -698,7 +707,7 @@ func redirectSeeOtherNoBody(w http.ResponseWriter, target string) {
 	w.WriteHeader(http.StatusSeeOther)
 }
 
-func preferencesSyncAPIHandler(cfg *config.Config) http.HandlerFunc {
+func preferencesSyncAPIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		theme, lang := currentPreferences(r)
@@ -712,8 +721,7 @@ func preferencesImportAPIHandler(w http.ResponseWriter, r *http.Request) {
 	values := mergedPreferenceInput(query.Get("code"), query)
 	applied, ignored := applyPreferenceValues(w, r, values, false)
 	data := preferenceSnapshot(r, values)
-	data["applied"] = applied
-	data["ignored"] = ignored
+	data = append(data, responseField("applied", applied), responseField("ignored", ignored))
 	w.Header().Set("Cache-Control", "no-store")
 	writeEnvelopeOK(w, http.StatusOK, data)
 }

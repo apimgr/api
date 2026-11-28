@@ -316,7 +316,7 @@ func SecurityReportPGPBodies(ctx context.Context) ([][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("security PGP: list encrypted report bodies: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var bodies [][]byte
 	for rows.Next() {
 		var body []byte

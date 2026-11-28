@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -27,7 +26,6 @@ func GenericHandler(service, endpoint string) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(resp)
-		_, _ = fmt.Fprintln(w)
+		writeJSONValue(w, resp)
 	}
 }

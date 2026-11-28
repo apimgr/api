@@ -30,7 +30,7 @@ func TestRestoreIncrementalReconstructsBaseOverlayAndDeletions(t *testing.T) {
 		Kind:       KindFull,
 	})
 	require.NoError(t, err)
-	baseSHA, err := fileSHA256(basePath)
+	baseManifest, err := Verify(basePath, "")
 	require.NoError(t, err)
 
 	require.NoError(t, os.WriteFile(filepath.Join(source, "changed.yml"), []byte("after"), 0600))
@@ -41,7 +41,7 @@ func TestRestoreIncrementalReconstructsBaseOverlayAndDeletions(t *testing.T) {
 		SnapshotAt: time.Date(2026, 11, 2, 2, 0, 0, 0, time.UTC),
 		Kind:       KindDailyIncremental,
 		BaseBackup: baseName,
-		BaseSHA256: baseSHA,
+		BaseSHA256: baseManifest.SHA256,
 		Deleted:    []string{"config/removed.yml"},
 		SnapshotFiles: []SnapshotFile{
 			{ArchivePath: "config/changed.yml", Path: filepath.Join(source, "changed.yml")},
@@ -82,7 +82,7 @@ func TestManagerDailyIncrementalUsesPreviousFullAndRetainsItsBase(t *testing.T) 
 	require.Equal(t, FullBackupName(firstRun, false), manifest.BaseBackup)
 	require.FileExists(t, filepath.Join(manager.Dir(), manifest.BaseBackup))
 	require.Equal(t, []string{filepath.ToSlash(filepath.Join(filepath.Base(source), "removed.yml"))}, manifest.Deleted)
-	require.Len(t, manifest.Files, 2)
+	require.Len(t, manifest.Files, 3)
 }
 
 func TestVerifyIncrementalRejectsMissingBase(t *testing.T) {
@@ -93,13 +93,13 @@ func TestVerifyIncrementalRejectsMissingBase(t *testing.T) {
 	basePath := filepath.Join(root, "base.tar.gz")
 	_, err := CreateWithOptions(basePath, CreateOptions{Sources: []string{source}, Kind: KindFull})
 	require.NoError(t, err)
-	baseSHA, err := fileSHA256(basePath)
+	baseManifest, err := Verify(basePath, "")
 	require.NoError(t, err)
 	incrementalPath := filepath.Join(root, "incremental.tar.gz")
 	_, err = CreateWithOptions(incrementalPath, CreateOptions{
 		Kind:       KindDailyIncremental,
 		BaseBackup: filepath.Base(basePath),
-		BaseSHA256: baseSHA,
+		BaseSHA256: baseManifest.SHA256,
 		SnapshotFiles: []SnapshotFile{{
 			ArchivePath: "config/server.yml",
 			Path:        filepath.Join(source, "server.yml"),
@@ -127,7 +127,7 @@ func TestVerifyIncrementalRejectsDifferentEncryptionState(t *testing.T) {
 	basePath := filepath.Join(root, "base.tar.gz")
 	_, err := CreateWithOptions(basePath, CreateOptions{Sources: []string{source}, Kind: KindFull})
 	require.NoError(t, err)
-	baseSHA, err := fileSHA256(basePath)
+	baseManifest, err := Verify(basePath, "")
 	require.NoError(t, err)
 	incrementalPath := filepath.Join(root, "incremental.tar.gz.enc")
 	_, err = CreateWithOptions(incrementalPath, CreateOptions{
@@ -135,7 +135,7 @@ func TestVerifyIncrementalRejectsDifferentEncryptionState(t *testing.T) {
 		Password:   "test-password",
 		Kind:       KindDailyIncremental,
 		BaseBackup: filepath.Base(basePath),
-		BaseSHA256: baseSHA,
+		BaseSHA256: baseManifest.SHA256,
 	})
 	require.NoError(t, err)
 

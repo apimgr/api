@@ -52,7 +52,7 @@ func securityPublicPageTemplate(name string) (*template.Template, error) {
 
 // securityReportStatusPageHandler consumes the emailed status token at most
 // once per UTC day and renders only metadata approved for researcher access.
-func securityReportStatusPageHandler(cfg *config.Config) http.HandlerFunc {
+func securityReportStatusPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		trackingID := chi.URLParam(r, "tracking_id")
 		status, err := database.SecurityReportStatusForResearcher(r.Context(), trackingID, r.URL.Query().Get("token"), time.Now().UTC())
@@ -67,6 +67,7 @@ func securityReportStatusPageHandler(cfg *config.Config) http.HandlerFunc {
 		page.PageDescription = i18n.Translate(page.Lang, "security.status_description")
 		page.NoIndex = true
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		securityPublicRender(w, r, "security_status", page)
 	}
@@ -74,7 +75,7 @@ func securityReportStatusPageHandler(cfg *config.Config) http.HandlerFunc {
 
 // securityThanksPageHandler lists only researchers who opted into public
 // credit and the disclosure metadata stored in security_thanks.
-func securityThanksPageHandler(cfg *config.Config) http.HandlerFunc {
+func securityThanksPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := database.ListSecurityThanks(r.Context())
 		if err != nil {

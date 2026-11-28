@@ -1,9 +1,8 @@
 package scheduler
 
 import (
-	"bytes"
+	"encoding/json"
 	"errors"
-	"log"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -23,7 +22,7 @@ import (
 func initTestDB(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, database.Init(config.DatabaseConfig{Driver: "sqlite"}, dir))
+	require.NoError(t, database.InitDatabase(config.DatabaseConfig{Driver: "sqlite"}, dir))
 	t.Cleanup(func() {
 		_ = database.Close()
 	})
@@ -59,20 +58,32 @@ func TestNewScheduler(t *testing.T) {
 	s := New()
 	require.NotNil(t, s)
 	assert.Empty(t, s.GetTasks())
+	assert.False(t, s.Running())
+	s.Start()
+	assert.True(t, s.Running())
+	s.Stop()
+	assert.False(t, s.Running())
 }
 
-func TestLogRegisteredTasksListsTaskNamesInStableOrder(t *testing.T) {
+func TestSchedulerStatusIsSerializableAndOmitsTaskFunction(t *testing.T) {
+	s := New()
+	s.tasks["status-task"] = &Task{
+		Name: "status-task", Title: "Status task", Schedule: "@hourly",
+		Func: func() error { return nil }, Enabled: true, Skippable: true,
+		RunCount: 3, FailCount: 1,
+	}
+
+	status := s.Status()
+	encoded, err := json.Marshal(status)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[{"name":"status-task","title":"Status task","schedule":"@hourly","last_run":"0001-01-01T00:00:00Z","next_run":"0001-01-01T00:00:00Z","enabled":true,"skippable":true,"run_count":3,"fail_count":1}]`, string(encoded))
+}
+
+func TestRegisteredTaskNamesAreStableAndSorted(t *testing.T) {
 	s := New()
 	s.tasks["zeta"] = &Task{Name: "zeta"}
 	s.tasks["alpha"] = &Task{Name: "alpha"}
-
-	var output bytes.Buffer
-	previousWriter := log.Writer()
-	log.SetOutput(&output)
-	t.Cleanup(func() { log.SetOutput(previousWriter) })
-	s.logRegisteredTasks()
-
-	assert.Contains(t, output.String(), "Scheduler: Registered tasks: alpha, zeta")
+	assert.Equal(t, []string{"alpha", "zeta"}, s.registeredTaskNames())
 }
 
 // TestAddTaskAndGetTasks covers registration, persistence, and the
@@ -111,10 +122,8 @@ func TestAddTaskInvalidScheduleFallsBackToDaily(t *testing.T) {
 	assert.False(t, tasks[0].NextRun.IsZero())
 }
 
-// TestAddTaskRestoresPersistedState confirms that when a task with the same
-// name already has persisted state in the DB, AddTask restores next_run/
-// enabled/last_run from storage rather than recomputing from scratch - this
-// is what lets schedules survive restarts.
+// TestAddTaskRestoresPersistedState confirms execution bookkeeping survives
+// restarts while configured enabled state remains authoritative.
 func TestAddTaskRestoresPersistedState(t *testing.T) {
 	initTestDB(t)
 
@@ -127,7 +136,19 @@ func TestAddTaskRestoresPersistedState(t *testing.T) {
 	tasks := s.GetTasks()
 	require.Len(t, tasks, 1)
 	assert.WithinDuration(t, fixedNext, tasks[0].NextRun, time.Second)
-	assert.False(t, tasks[0].Enabled, "persisted disabled state should override enabledDefault")
+	assert.True(t, tasks[0].Enabled, "configured enabled state must override the legacy persisted value")
+}
+
+func TestAddTaskConfiguredEnabledOverrideWinsPersistedState(t *testing.T) {
+	initTestDB(t)
+	require.NoError(t, database.UpsertSchedulerTask("configured", "configured", "@daily", time.Now().Add(time.Hour), true))
+	disabled := false
+	s := NewWithOptions(SchedulerOptions{Overrides: map[string]TaskOverride{
+		"configured": {Enabled: &disabled},
+	}})
+	s.AddTask("configured", "@daily", func() error { return nil }, true)
+	require.Len(t, s.GetTasks(), 1)
+	assert.False(t, s.GetTasks()[0].Enabled)
 }
 
 // TestRemoveTask covers removal of an existing task and the no-op case for
@@ -315,7 +336,7 @@ func TestHealth(t *testing.T) {
 // timezone America/New_York, a one hour catch-up window, three retries and
 // the exponential 5m/10m/20m backoff ladder.
 func TestSchedulerDefaultsMatchSpec(t *testing.T) {
-	opts, loc := Options{}.normalized()
+	opts, loc := SchedulerOptions{}.normalized()
 
 	assert.Equal(t, "America/New_York", DefaultTimezone)
 	assert.Equal(t, "America/New_York", opts.Timezone)
@@ -331,7 +352,7 @@ func TestSchedulerDefaultsMatchSpec(t *testing.T) {
 // TestBackoffLadder covers the exponential ladder itself, including the
 // repeat-last-entry behavior once the ladder is exhausted.
 func TestBackoffLadder(t *testing.T) {
-	opts, _ := Options{}.normalized()
+	opts, _ := SchedulerOptions{}.normalized()
 
 	assert.Equal(t, 5*time.Minute, opts.backoffFor(-1))
 	assert.Equal(t, 5*time.Minute, opts.backoffFor(0))
@@ -345,7 +366,7 @@ func TestBackoffLadder(t *testing.T) {
 // the shared ladder with a fixed delay.
 func TestRetryPolicyForOverrides(t *testing.T) {
 	disabled := false
-	opts, _ := Options{
+	opts, _ := SchedulerOptions{
 		Overrides: map[string]TaskOverride{
 			"never_retries": {RetryOnFail: &disabled},
 			"fixed_delay":   {RetryDelay: time.Hour},

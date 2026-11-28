@@ -2,12 +2,7 @@ package server
 
 import (
 	"net/http"
-	"strconv"
 	"time"
-
-	"github.com/go-chi/chi/v5"
-
-	"github.com/apimgr/api/src/metrics"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code and size
@@ -50,10 +45,6 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			size:           0,
 		}
 
-		m := metrics.Get()
-		m.IncActiveRequests()
-		defer m.DecActiveRequests()
-
 		// Serve the request
 		next.ServeHTTP(wrapped, r)
 
@@ -65,17 +56,5 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			logger.LogAccess(r, wrapped.status, wrapped.size, duration)
 		}
 
-		// Record metrics using the matched chi route pattern (never the
-		// raw request path) to keep label cardinality bounded. Guard
-		// against a nil chi route context (e.g. the handler invoked
-		// directly outside of chi's router) to avoid a nil pointer panic.
-		routePattern := ""
-		if rctx := chi.RouteContext(r.Context()); rctx != nil {
-			routePattern = rctx.RoutePattern()
-		}
-		if routePattern == "" {
-			routePattern = "unmatched"
-		}
-		m.RecordRequest(r.Method, routePattern, strconv.Itoa(wrapped.status), duration, int(r.ContentLength), wrapped.size)
 	})
 }

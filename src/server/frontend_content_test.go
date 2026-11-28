@@ -17,7 +17,7 @@ func TestFrontendNegotiationAcrossRegisteredPages(t *testing.T) {
 	cfg.Server.RateLimit.Read.Requests = 100000
 	cfg.Server.RateLimit.GlobalBurst = 100000
 	cfg.Server.Healthz.Root.Enabled = true
-	require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+	require.NoError(t, database.InitDatabase(cfg.Server.Database, paths.DataDir()))
 	t.Cleanup(func() { _ = database.Close() })
 	require.NoError(t, database.EnsureAppSecrets(t.Context()))
 	require.NoError(t, database.EnsureCaptchaSchema(t.Context()))

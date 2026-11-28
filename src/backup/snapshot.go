@@ -9,12 +9,67 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"gopkg.in/yaml.v3"
 )
 
 // SnapshotFile binds a frozen file copy to its archive-relative path.
 type SnapshotFile struct {
 	ArchivePath string
 	Path        string
+}
+
+func redactBackupSecrets(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return err
+	}
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("secrets.yml must contain a YAML mapping")
+	}
+	root := document.Content[0]
+	server := yamlMappingValue(root, "server")
+	if server != nil {
+		blankYAMLMappingValue(server, "token")
+		if backup := yamlMappingValue(server, "backup"); backup != nil {
+			blankYAMLMappingValue(backup, "encryption_password")
+		}
+	}
+	redacted, err := yaml.Marshal(&document)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, redacted, 0600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0600)
+}
+
+func yamlMappingValue(mapping *yaml.Node, key string) *yaml.Node {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == key {
+			return mapping.Content[index+1]
+		}
+	}
+	return nil
+}
+
+func blankYAMLMappingValue(mapping *yaml.Node, key string) {
+	value := yamlMappingValue(mapping, key)
+	if value == nil {
+		return
+	}
+	value.Kind = yaml.ScalarNode
+	value.Tag = "!!str"
+	value.Value = ""
+	value.Content = nil
 }
 
 // captureSources copies every regular source file into a private workspace
@@ -73,6 +128,7 @@ func captureSupplementalSources(files []SnapshotFile, supplemental []Supplementa
 		}
 		destination := filepath.Join(workspace, "files", filepath.FromSlash(source.ArchivePath))
 		if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
+			reportCriticalWriteError(err)
 			return nil, err
 		}
 		if err := copySnapshotFile(source.Path, destination, info); err != nil {
@@ -108,6 +164,7 @@ func captureSourceFile(root, source string, sourceInfo os.FileInfo, workspace, s
 	}
 	destination := filepath.Join(workspace, "files", filepath.FromSlash(archiveName))
 	if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
+		reportCriticalWriteError(err)
 		return err
 	}
 	if err := copySnapshotFile(copySource, destination, copyInfo); err != nil {
@@ -132,16 +189,20 @@ func copySnapshotFile(source, destination string, expected os.FileInfo) (returnE
 	}
 	output, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
+		reportCriticalWriteError(err)
 		return err
 	}
-	_, copyErr := io.Copy(output, input)
+	_, copyErr := io.Copy(criticalWriteReporter{writer: output}, input)
 	if copyErr == nil {
 		copyErr = output.Chmod(expected.Mode().Perm() & 0777)
+		reportCriticalWriteError(copyErr)
 	}
 	if copyErr == nil {
 		copyErr = output.Sync()
+		reportCriticalWriteError(copyErr)
 	}
 	closeErr := output.Close()
+	reportCriticalWriteError(closeErr)
 	if err := errors.Join(copyErr, closeErr); err != nil {
 		return errors.Join(err, removeSnapshotFile(destination))
 	}
@@ -166,20 +227,6 @@ func removeSnapshotFile(path string) error {
 	return nil
 }
 
-// fileSHA256 returns the archive hash used to bind incrementals to their base.
-func fileSHA256(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = file.Close() }()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 func snapshotRecord(path, archivePath string, info os.FileInfo) (ManifestFile, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -190,7 +237,7 @@ func snapshotRecord(path, archivePath string, info os.FileInfo) (ManifestFile, e
 	if _, err := io.Copy(hash, file); err != nil {
 		return ManifestFile{}, err
 	}
-	return ManifestFile{Path: archivePath, Size: info.Size(), Modified: info.ModTime().UTC(), SHA256: "sha256:" + hex.EncodeToString(hash.Sum(nil))}, nil
+	return ManifestFile{Path: archivePath, Size: info.Size(), Modified: info.ModTime().UTC(), SHA256: hex.EncodeToString(hash.Sum(nil))}, nil
 }
 
 func diffSnapshotFiles(files []SnapshotFile, base []ManifestFile) ([]SnapshotFile, []string, error) {

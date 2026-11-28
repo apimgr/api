@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/common/requestid"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/paths"
 )
@@ -41,11 +42,11 @@ type nvdRequestLimiter struct {
 	lastRequest    time.Time
 }
 
-func updateNVD(ctx context.Context, cfg *config.Config, client *http.Client, now time.Time) error {
+func updateNVD(ctx context.Context, cfg *config.ServerConfig, client *http.Client, now time.Time) error {
 	return updateNVDWithMinimumSpacing(ctx, cfg, client, now, 0)
 }
 
-func updateNVDWithMinimumSpacing(ctx context.Context, cfg *config.Config, client *http.Client, now time.Time, minimumSpacing time.Duration) error {
+func updateNVDWithMinimumSpacing(ctx context.Context, cfg *config.ServerConfig, client *http.Client, now time.Time, minimumSpacing time.Duration) error {
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
@@ -129,7 +130,7 @@ func updateNVDWithMinimumSpacing(ctx context.Context, cfg *config.Config, client
 	return nil
 }
 
-func nvdConfiguration(cfg *config.Config) (string, string, string) {
+func nvdConfiguration(cfg *config.ServerConfig) (string, string, string) {
 	securityDir := filepath.Join(paths.DataDir(), "security")
 	apiURL := nvdDefaultAPIURL
 	apiKey := ""
@@ -177,7 +178,7 @@ func fetchNVDWindow(ctx context.Context, client *http.Client, endpoint, apiKey s
 		if apiKey != "" {
 			request.Header.Set("apiKey", apiKey)
 		}
-		response, err := client.Do(request)
+		response, err := requestid.DoOutboundRequestWithID(client, request)
 		if err != nil {
 			cancel()
 			return fmt.Errorf("request NVD API: %w", err)

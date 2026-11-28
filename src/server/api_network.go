@@ -3,9 +3,11 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strconv"
 
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/sanitize"
 	appmode "github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/service/network"
 )
@@ -56,7 +58,7 @@ func apiNetworkMACVendorHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MAC")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"mac": mac, "vendor": vendor})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mac", mac), responseField("vendor", vendor)))
 }
 
 // networkSubnetParams validates apiNetworkSubnetHandler's ?cidr= input.
@@ -87,7 +89,7 @@ func apiNetworkULAHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "ULA_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"ula": ula})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("ula", ula)))
 }
 
 // apiNetworkPortHandler suggests a random unprivileged port.
@@ -97,7 +99,7 @@ func apiNetworkPortHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "PORT_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]int{"port": port})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("port", port)))
 }
 
 // networkPingParams validates apiNetworkPingHandler's ?host= and ?count=
@@ -195,10 +197,7 @@ func apiNetworkWhoisHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"domain": params.Domain,
-		"raw":    result,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("domain", params.Domain), responseField("raw", result)))
 }
 
 // apiNetworkTracerouteHandler honestly reports 501 NOT_SUPPORTED: a real
@@ -237,30 +236,57 @@ func writeLocalizedAPIError(w http.ResponseWriter, r *http.Request, status int, 
 
 // writeEnvelopeOK writes a PART 14 success envelope: {"ok":true,"data":...}.
 func writeEnvelopeOK(w http.ResponseWriter, status int, data interface{}) {
-	writeJSONEnvelope(w, status, map[string]interface{}{
-		"ok":   true,
-		"data": data,
-	}, i18n.Translate(appmode.GetLang(), "errors.server_error"))
+	writeJSONEnvelope(w, status, successEnvelope{OK: true, Data: envelopeData(data)}, i18n.Translate(appmode.GetLang(), "errors.server_error"))
+}
+
+func envelopeData(data interface{}) interface{} {
+	if data == nil {
+		return nil
+	}
+	if _, ok := data.(sanitize.TaggedObject); ok {
+		return data
+	}
+	if _, ok := data.(sanitize.TaggedResponseFields); ok {
+		return data
+	}
+	value := reflect.ValueOf(data)
+	switch value.Kind() {
+	case reflect.Map, reflect.Slice, reflect.Array:
+		if value.Kind() == reflect.Slice && value.Type().Elem().Kind() == reflect.Uint8 {
+			return data
+		}
+		return sanitize.OpaqueUserJSON{Value: data}
+	default:
+		return data
+	}
 }
 
 // writeEnvelopeError writes a PART 14 error envelope:
 // {"ok":false,"error":CODE,"message":"...","details":{}}.
-func writeEnvelopeError(w http.ResponseWriter, status int, code, message string, details map[string]interface{}) {
-	body := map[string]interface{}{
-		"ok":      false,
-		"error":   code,
-		"message": message,
-	}
+func writeEnvelopeError(w http.ResponseWriter, status int, code, message string, details interface{}) {
+	var safeDetails interface{}
 	if details != nil {
-		body["details"] = details
+		safeDetails = sanitize.OpaqueUserJSON{Value: details}
 	}
-	writeJSONEnvelope(w, status, body, message)
+	writeJSONEnvelope(w, status, errorEnvelope{OK: false, Error: code, Message: message, Details: safeDetails}, message)
+}
+
+type successEnvelope struct {
+	OK   bool        `json:"ok"`
+	Data interface{} `json:"data"`
+}
+
+type errorEnvelope struct {
+	OK      bool        `json:"ok"`
+	Error   string      `json:"error"`
+	Message string      `json:"message"`
+	Details interface{} `json:"details,omitempty"`
 }
 
 // writeJSONEnvelope marshals with 2-space indentation and a single
 // trailing newline, per PART 14 JSON formatting rules.
 func writeJSONEnvelope(w http.ResponseWriter, status int, body interface{}, fallbackMessage ...string) {
-	data, err := json.MarshalIndent(body, "", "  ")
+	data, err := sanitize.MarshalTaggedResponse(body, appmode.IsAppModeProd())
 	if err != nil {
 		message := i18n.Translate(appmode.GetLang(), "errors.server_error")
 		if len(fallbackMessage) > 0 && fallbackMessage[0] != "" {
@@ -271,14 +297,19 @@ func writeJSONEnvelope(w http.ResponseWriter, status int, body interface{}, fall
 			encodedMessage = []byte(`""`)
 		}
 		fallback := append([]byte(`{"ok":false,"error":"INTERNAL","message":`), encodedMessage...)
-		fallback = append(fallback, '}', '\n')
+		fallback = append(fallback, '}')
+		fallback, _ = sanitize.FormatResponseJSON(fallback)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write(fallback)
 		return
 	}
+	data, err = sanitize.FormatResponseJSON(data)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(data)
-	_, _ = w.Write([]byte("\n"))
 }

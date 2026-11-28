@@ -213,3 +213,19 @@ func TestResilientCacheStoreKeepsMirroredCountsOnOutage(t *testing.T) {
 		t.Fatalf("fallback lockout count = %d, %v; want 3, nil", count, err)
 	}
 }
+
+func TestClassLimiterDeniesWhenAllStorePathsFail(t *testing.T) {
+	store := &switchableRateLimitCache{Store: cache.New(config.CacheConfig{Type: "memory"}), fail: true}
+	limiter := newClassLimiter(store, "write", 10, 60)
+
+	allowed, remaining, limit, reset := limiter.allow("ip:192.0.2.1")
+	if allowed {
+		t.Fatal("request was allowed after the counter store failed")
+	}
+	if remaining != 0 || limit != 10 {
+		t.Fatalf("remaining/limit = %d/%d, want 0/10", remaining, limit)
+	}
+	if reset.IsZero() || !reset.After(time.Now()) {
+		t.Fatalf("reset = %v, want a future retry time", reset)
+	}
+}

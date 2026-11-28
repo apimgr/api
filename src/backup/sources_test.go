@@ -1,13 +1,57 @@
 package backup
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/apimgr/api/src/config"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSourcesWithConfigRequiresServerYAML(t *testing.T) {
+	_, _, err := SourcesWithConfig(&config.ServerConfig{}, t.TempDir(), t.TempDir(), false, false)
+	require.ErrorContains(t, err, "required backup source server.yml")
+}
+
+func TestManifestUsesCanonicalSortedChecksumField(t *testing.T) {
+	files := []ManifestFile{
+		{Path: "z/file", SHA256: "bbbb"},
+		{Path: "a/file", SHA256: "aaaa"},
+	}
+	first := ManifestSHA256(files)
+	second := ManifestSHA256([]ManifestFile{files[1], files[0]})
+	require.Equal(t, first, second)
+	require.Len(t, first, 64)
+	encoded, err := json.Marshal(Manifest{SHA256: first})
+	require.NoError(t, err)
+	require.Contains(t, string(encoded), `"sha256":"`+first+`"`)
+	require.NotContains(t, string(encoded), `"checksum"`)
+}
+
+func TestManifestFileUsesUnixMTimeAndBareContentHash(t *testing.T) {
+	encoded, err := json.Marshal(ManifestFile{Path: "server.yml", Size: 3, Modified: time.Unix(1736937000, 0).UTC(), SHA256: "abcdef"})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"path":"server.yml","size":3,"mtime":1736937000,"sha256":"abcdef"}`, string(encoded))
+}
+
+func TestRedactBackupSecretsOnlyBlanksRequiredCredentials(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "secrets.yml")
+	content := []byte("server:\n  token: operator-secret\n  backup:\n    encryption_password: archive-secret\n    other: preserve-me\nother:\n  value: keep\n")
+	require.NoError(t, os.WriteFile(path, content, 0600))
+	require.NoError(t, redactBackupSecrets(path))
+	redacted, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(redacted), "operator-secret")
+	require.NotContains(t, string(redacted), "archive-secret")
+	require.Contains(t, string(redacted), "other: preserve-me")
+	require.Contains(t, string(redacted), "value: keep")
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+}
 
 func TestSourcesAndRestoreRootsIncludeSecurityKeyMaterial(t *testing.T) {
 	configDir := t.TempDir()
@@ -25,6 +69,7 @@ func TestSourcesAndRestoreRootsIncludeSecurityKeyMaterial(t *testing.T) {
 func TestSourcesWithConfigIncludesOnlyReferencedTLSFiles(t *testing.T) {
 	configDir := t.TempDir()
 	dataDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("server: {}\n"), 0600))
 	sslDir := filepath.Join(configDir, "ssl")
 	require.NoError(t, os.MkdirAll(sslDir, 0700))
 	cacheCA := filepath.Join(sslDir, "cache-ca.pem")
@@ -33,7 +78,7 @@ func TestSourcesWithConfigIncludesOnlyReferencedTLSFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(externalCert, []byte("cert"), 0644))
 	externalKey := filepath.Join(t.TempDir(), "manual.key")
 	require.NoError(t, os.WriteFile(externalKey, []byte("key"), 0600))
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Cache.TLSCA = "cache-ca.pem"
 	cfg.Server.SSL.Cert = externalCert
 	cfg.Server.SSL.Key = externalKey
@@ -47,23 +92,25 @@ func TestSourcesWithConfigIncludesOnlyReferencedTLSFiles(t *testing.T) {
 	require.Contains(t, supplemental, SupplementalSource{Path: externalKey, ArchivePath: "ssl-external/key.pem"})
 }
 
-func TestSourcesWithConfigArchivesRemoteSQLiteCacheAsServerDB(t *testing.T) {
+func TestSourcesWithConfigExcludesRemoteDatabaseAndCache(t *testing.T) {
 	configDir := t.TempDir()
 	dataDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("server: {}\n"), 0600))
 	databaseDir := filepath.Join(dataDir, "db")
 	require.NoError(t, os.MkdirAll(databaseDir, 0700))
 	serverDB := filepath.Join(databaseDir, "server.db")
 	cacheDB := filepath.Join(databaseDir, "cache.db")
 	require.NoError(t, os.WriteFile(serverDB, []byte("restored seed"), 0600))
 	require.NoError(t, os.WriteFile(cacheDB, []byte("local cache"), 0600))
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Database.Driver = "turso"
 	cfg.Server.Database.Cache = config.DatabaseCacheConfig{Enabled: true, Path: cacheDB}
 
 	sources, supplemental, err := SourcesWithConfig(cfg, configDir, dataDir, false, false)
 	require.NoError(t, err)
 	require.NotContains(t, sources, serverDB)
-	require.Contains(t, supplemental, SupplementalSource{Path: cacheDB, ArchivePath: "server.db"})
+	require.NotContains(t, supplemental, SupplementalSource{Path: cacheDB, ArchivePath: "server.db"})
+	require.Empty(t, supplemental)
 }
 
 func TestRestoreRewritesExternalTLSPathsAndProtectsKeyMode(t *testing.T) {

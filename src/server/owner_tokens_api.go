@@ -11,15 +11,17 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
+	"github.com/apimgr/api/src/metrics"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 // apiOwnerPrimaryIssueHandler issues an owner token only when the caller has
 // no valid bearer credential, following the API token issuance contract.
-func apiOwnerPrimaryIssueHandler(cfg *config.Config) http.HandlerFunc {
+func apiOwnerPrimaryIssueHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if token := bearerToken(r); token != "" {
@@ -34,14 +36,14 @@ func apiOwnerPrimaryIssueHandler(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 		writeTokenAudit(r, "token.created", credential, map[string]any{"source": "issue"})
-		writeEnvelopeOK(w, http.StatusCreated, map[string]any{"owner_token": token})
+		writeEnvelopeOK(w, http.StatusCreated, responseObject(responseField("owner_token", sanitize.PublicResponseValue{Value: token})))
 	}
 }
 
 // apiOwnerTokensHandler implements the owner-token API mirror. Every
 // management operation requires a primary owner credential; linked tokens
 // retain resource access but cannot manage credentials.
-func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
+func apiOwnerTokensHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		credential, ok := primaryOwnerCredential(w, r, cfg)
@@ -55,15 +57,21 @@ func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
 				return
 			}
 			policy, _ := cfg.Server.Tokens.Normalized()
-			data := map[string]any{"primary": nil, "linked": []ownerTokenAPIItem{}, "max_linked": policy.MaxLinked}
+			var primary *ownerTokenAPIItem
+			linked := make([]ownerTokenAPIItem, 0)
 			for _, token := range tokens {
 				item := ownerTokenAPIItemFrom(token)
 				if token.Kind == "primary" {
-					data["primary"] = item
+					primary = &item
 				} else {
-					data["linked"] = append(data["linked"].([]ownerTokenAPIItem), item)
+					linked = append(linked, item)
 				}
 			}
+			data := responseObject(
+				responseField("primary", primary),
+				responseField("linked", linked),
+				responseField("max_linked", policy.MaxLinked),
+			)
 			writeEnvelopeOK(w, http.StatusOK, data)
 			return
 		}
@@ -113,6 +121,10 @@ func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
 			if err := decodeOwnerTokenBody(w, r, &request); err != nil {
 				return
 			}
+			if request.Scope != nil {
+				writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
+				return
+			}
 			expiryProvided := request.Expires != nil || request.ExpiresOn != nil
 			if request.Name == nil && !expiryProvided {
 				writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
@@ -155,7 +167,7 @@ func apiOwnerTokensHandler(cfg *config.Config) http.HandlerFunc {
 				return
 			}
 			writeTokenAudit(r, "token.revoked", credential, map[string]any{"token_id": id, "token_prefix": targetPrefix})
-			writeEnvelopeOK(w, http.StatusOK, map[string]string{"id": id, "status": "revoked"})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("id", id), responseField("status", "revoked")))
 		default:
 			writeTokenAPIError(w, r, "METHOD_NOT_ALLOWED", "errors.method_not_allowed", http.StatusMethodNotAllowed)
 		}
@@ -166,6 +178,7 @@ type ownerTokenAPIItem struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name,omitempty"`
 	Kind        string     `json:"kind"`
+	Scope       string     `json:"scope"`
 	TokenMasked string     `json:"token_masked"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
@@ -174,9 +187,32 @@ type ownerTokenAPIItem struct {
 	LinkedToken string     `json:"linked_token,omitempty"`
 }
 
+// TaggedResponseFields exposes only the documented token metadata. The
+// linked token is explicitly public only in one-time create, reveal, and
+// rotate responses; list responses never populate it.
+func (item ownerTokenAPIItem) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{
+		{Name: "id", Value: item.ID},
+		{Name: "kind", Value: item.Kind},
+		{Name: "scope", Value: item.Scope},
+		{Name: "token_masked", Value: item.TokenMasked},
+		{Name: "created_at", Value: item.CreatedAt},
+		{Name: "last_used_at", Value: item.LastUsedAt},
+		{Name: "expires_at", Value: item.ExpiresAt},
+		{Name: "status", Value: item.Status},
+	}
+	if item.Name != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "name", Value: item.Name})
+	}
+	if item.LinkedToken != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "linked_token", Value: sanitize.PublicResponseValue{Value: item.LinkedToken}})
+	}
+	return fields
+}
+
 func ownerTokenAPIItemFrom(token database.OwnerToken) ownerTokenAPIItem {
 	return ownerTokenAPIItem{
-		ID: token.ID, Name: token.Name, Kind: token.Kind,
+		ID: token.ID, Name: token.Name, Kind: token.Kind, Scope: token.Scope,
 		TokenMasked: "own_" + strings.Repeat("•", 28) + token.Last4,
 		CreatedAt:   token.CreatedAt, LastUsedAt: token.LastUsed,
 		ExpiresAt: token.ExpiresAt, Status: token.Status,
@@ -197,7 +233,7 @@ func findLinkedToken(ctx context.Context, ownerID, id string) (ownerTokenAPIItem
 }
 
 // apiOwnerPrimaryHandler serves reveal, rotate, and delete of the primary.
-func apiOwnerPrimaryHandler(cfg *config.Config, action string) http.HandlerFunc {
+func apiOwnerPrimaryHandler(cfg *config.ServerConfig, action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		credential, ok := primaryOwnerCredential(w, r, cfg)
@@ -212,7 +248,7 @@ func apiOwnerPrimaryHandler(cfg *config.Config, action string) http.HandlerFunc 
 				return
 			}
 			writeTokenAudit(r, "token.revealed", credential, map[string]any{"token_id": credential.TokenID, "token_prefix": ownerTokenPrefix(token)})
-			writeEnvelopeOK(w, http.StatusOK, map[string]string{"owner_token": token})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("owner_token", sanitize.PublicResponseValue{Value: token})))
 		case "rotate":
 			token, err := database.RotateOwnerToken(r.Context(), database.GetServerDB(), ownerEncryptionKey(cfg), credential.OwnerID, credential.TokenID)
 			if err != nil {
@@ -220,21 +256,21 @@ func apiOwnerPrimaryHandler(cfg *config.Config, action string) http.HandlerFunc 
 				return
 			}
 			writeTokenAudit(r, "token.rotated", credential, map[string]any{"token_id": credential.TokenID, "token_prefix": ownerTokenPrefix(token)})
-			writeEnvelopeOK(w, http.StatusOK, map[string]string{"owner_token": token})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("owner_token", sanitize.PublicResponseValue{Value: token})))
 		case "revoke":
 			if err := database.RevokeOwner(r.Context(), database.GetServerDB(), credential.OwnerID); err != nil {
 				writeTokenAPIError(w, r, "INTERNAL_ERROR", "errors.server_error", http.StatusInternalServerError)
 				return
 			}
 			writeTokenAudit(r, "token.revoked", credential, map[string]any{"owner_id": credential.OwnerID})
-			writeEnvelopeOK(w, http.StatusOK, map[string]bool{"revoked": true})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("revoked", true)))
 		default:
 			writeTokenNotFound(w, r)
 		}
 	}
 }
 
-func apiOwnerLinkedCreate(w http.ResponseWriter, r *http.Request, cfg *config.Config, credential database.OwnerCredential) {
+func apiOwnerLinkedCreate(w http.ResponseWriter, r *http.Request, cfg *config.ServerConfig, credential database.OwnerCredential) {
 	var request ownerTokenExpiryRequest
 	if err := decodeOwnerTokenBody(w, r, &request); err != nil {
 		return
@@ -248,8 +284,16 @@ func apiOwnerLinkedCreate(w http.ResponseWriter, r *http.Request, cfg *config.Co
 		writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
 		return
 	}
+	scope := "read-write"
+	if request.Scope != nil {
+		scope = strings.TrimSpace(*request.Scope)
+	}
+	if scope != "read" && scope != "read-write" {
+		writeTokenAPIError(w, r, "VALIDATION_FAILED", "errors.invalid_format", http.StatusBadRequest)
+		return
+	}
 	policy, _ := cfg.Server.Tokens.Normalized()
-	token, item, err := database.CreateLinkedOwnerToken(r.Context(), database.GetServerDB(), ownerEncryptionKey(cfg), credential.OwnerID, *request.Name, expires, policy.MaxLinked)
+	token, item, err := database.CreateLinkedOwnerToken(r.Context(), database.GetServerDB(), ownerEncryptionKey(cfg), credential.OwnerID, *request.Name, expires, policy.MaxLinked, scope)
 	if err != nil {
 		writeLinkedTokenMutationError(w, r, err)
 		return
@@ -275,6 +319,7 @@ func writeLinkedTokenMutationError(w http.ResponseWriter, r *http.Request, err e
 
 type ownerTokenExpiryRequest struct {
 	Name      *string `json:"name"`
+	Scope     *string `json:"scope"`
 	Expires   *string `json:"expires"`
 	ExpiresOn *string `json:"expires_on"`
 }
@@ -297,7 +342,7 @@ func (request ownerTokenExpiryRequest) parseExpiry() (*time.Time, error) {
 	return parseOwnerTokenExpiry(*request.Expires)
 }
 
-func primaryOwnerCredential(w http.ResponseWriter, r *http.Request, cfg *config.Config) (database.OwnerCredential, bool) {
+func primaryOwnerCredential(w http.ResponseWriter, r *http.Request, cfg *config.ServerConfig) (database.OwnerCredential, bool) {
 	token := bearerToken(r)
 	credential, err := validateConfiguredOwnerToken(r.Context(), cfg, token)
 	if err != nil {
@@ -306,18 +351,25 @@ func primaryOwnerCredential(w http.ResponseWriter, r *http.Request, cfg *config.
 		return database.OwnerCredential{}, false
 	}
 	if credential.Kind != "primary" {
+		w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope"`)
 		writeTokenAPIError(w, r, "FORBIDDEN", "errors.forbidden", http.StatusForbidden)
 		return database.OwnerCredential{}, false
 	}
 	return credential, true
 }
 
-func validateConfiguredOwnerToken(ctx context.Context, cfg *config.Config, token string) (database.OwnerCredential, error) {
+func validateConfiguredOwnerToken(ctx context.Context, cfg *config.ServerConfig, token string) (database.OwnerCredential, error) {
 	operator := ""
 	if cfg != nil {
 		operator = cfg.Server.Token
 	}
-	return database.ValidateOwnerToken(ctx, database.GetServerDB(), token, operator)
+	credential, err := database.ValidateOwnerToken(ctx, database.GetServerDB(), token, operator)
+	status := "success"
+	if err != nil {
+		status = "failed"
+	}
+	metrics.GetMetrics().RecordAuthAttempt("owner_token", status)
+	return credential, err
 }
 
 func bearerToken(r *http.Request) string {
@@ -328,7 +380,7 @@ func bearerToken(r *http.Request) string {
 	return parts[1]
 }
 
-func ownerEncryptionKey(cfg *config.Config) []byte {
+func ownerEncryptionKey(cfg *config.ServerConfig) []byte {
 	if cfg == nil {
 		return nil
 	}
@@ -339,7 +391,7 @@ func ownerEncryptionKey(cfg *config.Config) []byte {
 	return key
 }
 
-func ownerEncryptionKeys(cfg *config.Config) [][]byte {
+func ownerEncryptionKeys(cfg *config.ServerConfig) [][]byte {
 	if cfg == nil {
 		return nil
 	}

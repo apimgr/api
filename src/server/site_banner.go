@@ -25,10 +25,10 @@ type siteAnnouncement struct {
 	Dismissible bool
 }
 
-func siteBannerData(cfg *config.Config, r *http.Request) (bool, string, string, string, string, string, []siteAnnouncement) {
+func siteBannerData(cfg *config.ServerConfig, r *http.Request) (bool, string, string, string, string, string, []siteAnnouncement) {
 	privacy := cfg.Server.Privacy
 	lang := i18n.LangFromRequest(r)
-	consentVisible := privacy.Consent.ShowUntilAcknowledged && !hasValidCookieConsent(r)
+	consentVisible := privacy.Consent.ShowUntilAcknowledged && !hasValidCookieConsent(r) && r.URL.Path != "/server/preferences"
 	policyURL := privacy.Consent.Policy.URL
 	if policyURL == "" || !strings.HasPrefix(policyURL, "/") || strings.HasPrefix(policyURL, "//") {
 		policyURL = "/server/privacy"
@@ -119,7 +119,7 @@ func dismissedAnnouncementIDs(r *http.Request) []string {
 	return ids
 }
 
-func announcementDismissHandler(cfg *config.Config) http.HandlerFunc {
+func announcementDismissHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		_ = r.ParseForm()
@@ -170,7 +170,7 @@ func announcementDismissHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func consentHandler(cfg *config.Config) http.HandlerFunc {
+func consentHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		_ = r.ParseForm()
@@ -184,6 +184,9 @@ func consentHandler(cfg *config.Config) http.HandlerFunc {
 				values.Set("consent_analytics", "on")
 			}
 		case "decline":
+			if cfg.Web.Headers.ClearSiteData.OnConsentWithdrawal {
+				w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+			}
 		default:
 			writeEnvelopeError(w, http.StatusBadRequest, "INVALID_CONSENT_CHOICE", i18n.Translate(i18n.LangFromRequest(r), "errors.bad_request"), nil)
 			return

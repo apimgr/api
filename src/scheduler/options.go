@@ -42,11 +42,11 @@ type TaskOverride struct {
 	RestartOnFail *bool
 }
 
-// Options configures a Scheduler. Every field has a spec default, so the
+// SchedulerOptions configures a Scheduler. Every field has a spec default, so the
 // zero value produces a fully compliant scheduler. There is deliberately no
 // "enabled" field: PART 18 requires the scheduler itself to always run and
 // only allows individual tasks to be toggled.
-type Options struct {
+type SchedulerOptions struct {
 	// Timezone is the IANA zone cron schedules are evaluated in.
 	Timezone string
 	// CatchUpWindow bounds startup catch-up of missed runs.
@@ -87,7 +87,7 @@ type Options struct {
 // resolves the configured timezone. An unknown timezone warns and falls back
 // to the default zone rather than failing, per the config-validation rule in
 // PART 5 ("never fail startup on invalid config").
-func (o Options) normalized() (Options, *time.Location) {
+func (o SchedulerOptions) normalized() (SchedulerOptions, *time.Location) {
 	if o.Timezone == "" {
 		o.Timezone = DefaultTimezone
 	}
@@ -119,7 +119,7 @@ func (o Options) normalized() (Options, *time.Location) {
 
 // backoffFor returns the retry delay for attempt number n (0-based),
 // repeating the final ladder entry once the ladder is exhausted.
-func (o Options) backoffFor(attempt int) time.Duration {
+func (o SchedulerOptions) backoffFor(attempt int) time.Duration {
 	if attempt < 0 {
 		attempt = 0
 	}
@@ -130,7 +130,7 @@ func (o Options) backoffFor(attempt int) time.Duration {
 }
 
 // overrideFor returns the operator override for a task id, if any.
-func (o Options) overrideFor(id string) (TaskOverride, bool) {
+func (o SchedulerOptions) overrideFor(id string) (TaskOverride, bool) {
 	if o.Overrides == nil {
 		return TaskOverride{}, false
 	}
@@ -142,7 +142,7 @@ func (o Options) overrideFor(id string) (TaskOverride, bool) {
 // retries at all, and the delay for the given 0-based attempt. A per-task
 // retry_delay replaces the global ladder; retry_on_fail: false disables
 // retrying entirely for that task.
-func (o Options) retryPolicyFor(id string, attempt int) (time.Duration, bool) {
+func (o SchedulerOptions) retryPolicyFor(id string, attempt int) (time.Duration, bool) {
 	override, ok := o.overrideFor(id)
 	if !ok {
 		return o.backoffFor(attempt), true
@@ -159,7 +159,7 @@ func (o Options) retryPolicyFor(id string, attempt int) (time.Duration, bool) {
 // restartOnFail reports whether a health-check task may restart the component
 // it watches. Absent configuration keeps AI.md PART 18's default of true for
 // tor_health.
-func (o Options) restartOnFail(id string) bool {
+func (o SchedulerOptions) restartOnFail(id string) bool {
 	override, ok := o.overrideFor(id)
 	if !ok || override.RestartOnFail == nil {
 		return true
@@ -167,12 +167,12 @@ func (o Options) restartOnFail(id string) bool {
 	return *override.RestartOnFail
 }
 
-// OptionsFromConfig maps the server.scheduler tree (AI.md PART 18) onto the
-// scheduler's Options. The config is normalized first, so an invalid timezone,
+// SchedulerOptionsFromConfig maps the server.scheduler tree (AI.md PART 18) onto the
+// scheduler's SchedulerOptions. The config is normalized first, so an invalid timezone,
 // window, retry count or backoff strategy degrades to its documented default
 // rather than failing startup. Only the scheduling knobs come from config: the
 // notifier, audit hook and version fields stay caller-supplied.
-func OptionsFromConfig(cfg config.SchedulerConfig) Options {
+func SchedulerOptionsFromConfig(cfg config.SchedulerConfig) SchedulerOptions {
 	normalized := cfg.Normalized()
 
 	overrides := make(map[string]TaskOverride, len(normalized.Tasks))
@@ -196,7 +196,7 @@ func OptionsFromConfig(cfg config.SchedulerConfig) Options {
 		overrides[id] = override
 	}
 
-	return Options{
+	return SchedulerOptions{
 		Timezone:      normalized.Timezone,
 		CatchUpWindow: normalized.CatchUpWindowDuration(),
 		MaxRetries:    normalized.MaxRetries,

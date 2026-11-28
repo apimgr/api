@@ -3,21 +3,24 @@ set -eo pipefail
 
 # Check if incus is available
 if ! command -v incus &>/dev/null; then
-    echo "ERROR: incus not found. Install incus or use tests/docker.sh" >&2
-    exit 69
+  echo "ERROR: incus not found. Install incus or use tests/docker.sh" >&2
+  exit 69
 fi
 if ! command -v docker &>/dev/null; then
-    echo "ERROR: docker not found. tests/incus.sh builds with the Docker Go toolchain" >&2
-    exit 69
+  echo "ERROR: docker not found. tests/incus.sh builds with the Docker Go toolchain" >&2
+  exit 69
 fi
 
 # Usage: tests/incus.sh [systemd|openrc|all]   (default: all)
 # systemd runs in a Debian container, openrc in an Alpine container; each gets the full test run
 MODE="${1:-all}"
 case "$MODE" in
-    systemd|openrc) MODES="$MODE" ;;
-    all) MODES="systemd openrc" ;;
-    *) echo "Usage: $0 [systemd|openrc|all]" >&2; exit 2 ;;
+  systemd | openrc) MODES="$MODE" ;;
+  all) MODES="systemd openrc" ;;
+  *)
+    echo "Usage: $0 [systemd|openrc|all]" >&2
+    exit 2
+    ;;
 esac
 
 # Detect the repository and resolve its frozen service identity from IDEA.md.
@@ -53,20 +56,20 @@ INCUS_INSTALL_TIMEOUT="${INCUS_INSTALL_TIMEOUT:-900}"
 INCUS_RUN_TIMEOUT="${INCUS_RUN_TIMEOUT:-3600}"
 
 cleanup() {
-    local c status=$?
-    for c in "${CONTAINERS[@]}"; do
-        timeout "$INCUS_OP_TIMEOUT" incus delete --force "$c" >/dev/null 2>&1 || {
-            echo "ERROR: failed to delete Incus container $c" >&2
-            status=1
-        }
-    done
-    for c in "${CONTAINERS[@]}"; do
-        if timeout "$INCUS_OP_TIMEOUT" incus info "$c" >/dev/null 2>&1; then
-            echo "ERROR: Incus container $c remains after cleanup" >&2
-            status=1
-        fi
-    done
-    exit "$status"
+  local c status=$?
+  for c in "${CONTAINERS[@]}"; do
+    timeout "$INCUS_OP_TIMEOUT" incus delete --force "$c" >/dev/null 2>&1 || {
+      echo "ERROR: failed to delete Incus container $c" >&2
+      status=1
+    }
+  done
+  for c in "${CONTAINERS[@]}"; do
+    if timeout "$INCUS_OP_TIMEOUT" incus info "$c" >/dev/null 2>&1; then
+      echo "ERROR: Incus container $c remains after cleanup" >&2
+      status=1
+    fi
+  done
+  exit "$status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -79,7 +82,8 @@ API_VERSION="${API_VERSION:-v1}"
 # Build the server and companion client for the host/guest pair with the Docker toolchain.
 make build BINDIR="$BIN_DIR"
 
-REMOTE_LIB=$(cat <<'REMOTE_LIB_EOF'
+REMOTE_LIB=$(
+  cat <<'REMOTE_LIB_EOF'
 INTERNAL_NAME="${INTERNAL_NAME:-$PROJECT_NAME}"
 INTERNAL_ORG="${INTERNAL_ORG:-$PROJECT_ORG}"
 FAILURES=0
@@ -126,7 +130,8 @@ svc_stopped() { ! svc_active; }
 REMOTE_LIB_EOF
 )
 
-REMOTE_MAIN=$(cat <<'REMOTE_MAIN_EOF'
+REMOTE_MAIN=$(
+  cat <<'REMOTE_MAIN_EOF'
 echo "=== [$INIT_MODE] Init system identity ==="
 if [ "$INIT_MODE" = "systemd" ]; then
     check "PID 1 is systemd" test "$(cat /proc/1/comm)" = "systemd"
@@ -361,7 +366,8 @@ echo "=== [$INIT_MODE] Main tests passed ==="
 REMOTE_MAIN_EOF
 )
 
-REMOTE_AFTER=$(cat <<'REMOTE_AFTER_EOF'
+REMOTE_AFTER=$(
+  cat <<'REMOTE_AFTER_EOF'
 echo "=== [$INIT_MODE] Boot persistence (container was restarted) ==="
 check "service still enabled after reboot" svc_enabled
 check "service came back after reboot" wait_for 120 svc_active
@@ -393,95 +399,113 @@ REMOTE_AFTER_EOF
 
 # Every exec step has a ceiling: iexec SECONDS CONTAINER COMMAND...
 iexec() {
-    local secs="$1" container="$2"
-    shift 2
-    timeout "$secs" incus exec "$container" -- "$@"
+  local secs="$1" container="$2"
+  shift 2
+  timeout "$secs" incus exec "$container" -- "$@"
 }
 
 # Run a script inside the container with the init mode and project names
 # Every script fragment is its own argument: printf puts a newline after each one, because $(cat <<EOF) strips the trailing newline of a heredoc
 remote() {
-    local container="$1" init="$2"
-    shift 2
-    printf '%s\n' "$@" | timeout "$INCUS_RUN_TIMEOUT" incus exec "$container" -- env INIT_MODE="$init" PROJECT_NAME="$PROJECT_NAME" PROJECT_ORG="$PROJECT_ORG" \
-        INTERNAL_NAME="$INTERNAL_NAME" INTERNAL_ORG="$INTERNAL_ORG" API_VERSION="$API_VERSION" REQUIRE_OVERLAY="${REQUIRE_OVERLAY:-0}" \
-        TOR_WAIT="${TOR_WAIT:-300}" I2P_WAIT="${I2P_WAIT:-600}" bash -s
+  local container="$1" init="$2"
+  shift 2
+  printf '%s\n' "$@" | timeout "$INCUS_RUN_TIMEOUT" incus exec "$container" -- env INIT_MODE="$init" PROJECT_NAME="$PROJECT_NAME" PROJECT_ORG="$PROJECT_ORG" \
+    INTERNAL_NAME="$INTERNAL_NAME" INTERNAL_ORG="$INTERNAL_ORG" API_VERSION="$API_VERSION" REQUIRE_OVERLAY="${REQUIRE_OVERLAY:-0}" \
+    TOR_WAIT="${TOR_WAIT:-300}" I2P_WAIT="${I2P_WAIT:-600}" bash -s
 }
 
 # Wait until the container accepts commands, its init system finished booting and the network is up
 wait_boot() {
-    local container="$1" init="$2" state
-    for _ in $(seq 1 60); do iexec "$INCUS_OP_TIMEOUT" "$container" true 2>/dev/null && break; sleep 1; done
-    iexec "$INCUS_OP_TIMEOUT" "$container" true 2>/dev/null || { echo "ERROR: $container did not accept commands" >&2; return 1; }
-    if [ "$init" = "systemd" ]; then
-        # "degraded" is normal in a container; only "starting" means boot is unfinished
-        for _ in $(seq 1 90); do
-            state=$(iexec "$INCUS_OP_TIMEOUT" "$container" systemctl is-system-running 2>/dev/null || true)
-            [ -n "$state" ] && [ "$state" != "starting" ] && break
-            sleep 1
-        done
-        if [ -z "$state" ] || [ "$state" = "starting" ]; then
-            echo "ERROR: $container systemd did not finish booting" >&2
-            return 1
-        fi
-    else
-        for _ in $(seq 1 60); do iexec "$INCUS_OP_TIMEOUT" "$container" test -d /run/openrc 2>/dev/null && break; sleep 1; done
-        iexec "$INCUS_OP_TIMEOUT" "$container" test -d /run/openrc 2>/dev/null || { echo "ERROR: $container OpenRC did not finish booting" >&2; return 1; }
+  local container="$1" init="$2" state
+  for _ in $(seq 1 60); do
+    iexec "$INCUS_OP_TIMEOUT" "$container" true 2>/dev/null && break
+    sleep 1
+  done
+  iexec "$INCUS_OP_TIMEOUT" "$container" true 2>/dev/null || {
+    echo "ERROR: $container did not accept commands" >&2
+    return 1
+  }
+  if [ "$init" = "systemd" ]; then
+    # "degraded" is normal in a container; only "starting" means boot is unfinished
+    for _ in $(seq 1 90); do
+      state=$(iexec "$INCUS_OP_TIMEOUT" "$container" systemctl is-system-running 2>/dev/null || true)
+      [ -n "$state" ] && [ "$state" != "starting" ] && break
+      sleep 1
+    done
+    if [ -z "$state" ] || [ "$state" = "starting" ]; then
+      echo "ERROR: $container systemd did not finish booting" >&2
+      return 1
     fi
-    for _ in $(seq 1 60); do iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'ip route | grep "^default" >/dev/null' 2>/dev/null && break; sleep 1; done
-    iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'ip route | grep "^default" >/dev/null' 2>/dev/null || { echo "ERROR: $container has no default route" >&2; return 1; }
+  else
+    for _ in $(seq 1 60); do
+      iexec "$INCUS_OP_TIMEOUT" "$container" test -d /run/openrc 2>/dev/null && break
+      sleep 1
+    done
+    iexec "$INCUS_OP_TIMEOUT" "$container" test -d /run/openrc 2>/dev/null || {
+      echo "ERROR: $container OpenRC did not finish booting" >&2
+      return 1
+    }
+  fi
+  for _ in $(seq 1 60); do
+    iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'ip route | grep "^default" >/dev/null' 2>/dev/null && break
+    sleep 1
+  done
+  iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'ip route | grep "^default" >/dev/null' 2>/dev/null || {
+    echo "ERROR: $container has no default route" >&2
+    return 1
+  }
 }
 
 run_mode() {
-    local init="$1" image container
-    if [ "$init" = "systemd" ]; then image="$INCUS_IMAGE_SYSTEMD"; else image="$INCUS_IMAGE_OPENRC"; fi
-    container="${CONTAINER_PREFIX}-${init}"
-    CONTAINERS+=("$container")
+  local init="$1" image container
+  if [ "$init" = "systemd" ]; then image="$INCUS_IMAGE_SYSTEMD"; else image="$INCUS_IMAGE_OPENRC"; fi
+  container="${CONTAINER_PREFIX}-${init}"
+  CONTAINERS+=("$container")
 
-    echo "=== [$init] Launching Incus container ($image) ==="
-    timeout "$INCUS_OP_TIMEOUT" incus launch "$image" "$container" -c limits.cpu="$INCUS_CPUS" -c limits.memory="$INCUS_MEM" -c limits.cpu.priority="$INCUS_CPU_PRIORITY"
-    wait_boot "$container" "$init"
+  echo "=== [$init] Launching Incus container ($image) ==="
+  timeout "$INCUS_OP_TIMEOUT" incus launch "$image" "$container" -c limits.cpu="$INCUS_CPUS" -c limits.memory="$INCUS_MEM" -c limits.cpu.priority="$INCUS_CPU_PRIORITY"
+  wait_boot "$container" "$init"
 
-    echo "=== [$init] Installing test tools, tor and i2pd ==="
-    if [ "$init" = "systemd" ]; then
-        iexec "$INCUS_INSTALL_TIMEOUT" "$container" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl jq file tor i2pd' >/dev/null
-        # The distro tor/i2pd services are NOT what is tested: the server runs its own dedicated, isolated instances (PART 31)
-        iexec "$INCUS_OP_TIMEOUT" "$container" systemctl disable --now tor.service tor@default.service i2pd.service 2>/dev/null || true
-    else
-        iexec "$INCUS_INSTALL_TIMEOUT" "$container" sh -c 'apk add --no-cache bash curl jq file tor i2pd tzdata ca-certificates' >/dev/null
-        iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'rc-service tor stop; rc-service i2pd stop; rc-update del tor; rc-update del i2pd' 2>/dev/null || true
-    fi
+  echo "=== [$init] Installing test tools, tor and i2pd ==="
+  if [ "$init" = "systemd" ]; then
+    iexec "$INCUS_INSTALL_TIMEOUT" "$container" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl jq file tor i2pd' >/dev/null
+    # The distro tor/i2pd services are NOT what is tested: the server runs its own dedicated, isolated instances (PART 31)
+    iexec "$INCUS_OP_TIMEOUT" "$container" systemctl disable --now tor.service tor@default.service i2pd.service 2>/dev/null || true
+  else
+    iexec "$INCUS_INSTALL_TIMEOUT" "$container" sh -c 'apk add --no-cache bash curl jq file tor i2pd tzdata ca-certificates' >/dev/null
+    iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'rc-service tor stop; rc-service i2pd stop; rc-update del tor; rc-update del i2pd' 2>/dev/null || true
+  fi
 
-    echo "=== [$init] Copying binaries to container ==="
-    timeout "$INCUS_OP_TIMEOUT" incus file push "${BIN_DIR}/${PROJECT_NAME}" "$container/usr/local/bin/"
-    iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}"
-    if [ -f "${BIN_DIR}/${PROJECT_NAME}-cli" ]; then
-        timeout "$INCUS_OP_TIMEOUT" incus file push "${BIN_DIR}/${PROJECT_NAME}-cli" "$container/usr/local/bin/"
-        iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}-cli"
-    fi
+  echo "=== [$init] Copying binaries to container ==="
+  timeout "$INCUS_OP_TIMEOUT" incus file push "${BIN_DIR}/${PROJECT_NAME}" "$container/usr/local/bin/"
+  iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}"
+  if [ -f "${BIN_DIR}/${PROJECT_NAME}-cli" ]; then
+    timeout "$INCUS_OP_TIMEOUT" incus file push "${BIN_DIR}/${PROJECT_NAME}-cli" "$container/usr/local/bin/"
+    iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}-cli"
+  fi
 
-    echo "=== [$init] Running tests in Incus ==="
-    remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_MAIN"
+  echo "=== [$init] Running tests in Incus ==="
+  remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_MAIN"
 
-    echo "=== [$init] Restarting the container (boot persistence) ==="
-    timeout "$INCUS_OP_TIMEOUT" incus restart "$container"
-    wait_boot "$container" "$init"
-    remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_AFTER"
+  echo "=== [$init] Restarting the container (boot persistence) ==="
+  timeout "$INCUS_OP_TIMEOUT" incus restart "$container"
+  wait_boot "$container" "$init"
+  remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_AFTER"
 
-    timeout "$INCUS_OP_TIMEOUT" incus delete --force "$container"
-    if timeout "$INCUS_OP_TIMEOUT" incus info "$container" >/dev/null 2>&1; then
-        echo "ERROR: Incus container $container remains after cleanup" >&2
-        return 1
-    fi
-    CONTAINERS=()
+  timeout "$INCUS_OP_TIMEOUT" incus delete --force "$container"
+  if timeout "$INCUS_OP_TIMEOUT" incus info "$container" >/dev/null 2>&1; then
+    echo "ERROR: Incus container $container remains after cleanup" >&2
+    return 1
+  fi
+  CONTAINERS=()
 }
 
 # One container per init system, run one after the other (never in parallel)
 run_mode_list() {
-    local init
-    for init in $MODES; do
-        run_mode "$init"
-    done
+  local init
+  for init in $MODES; do
+    run_mode "$init"
+  done
 }
 run_mode_list
 

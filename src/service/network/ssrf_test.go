@@ -25,6 +25,9 @@ func TestIsBlockedIP(t *testing.T) {
 		{"cgnat", "100.64.0.1", true},
 		{"cgnat upper bound", "100.127.255.255", true},
 		{"benchmarking", "198.18.0.1", true},
+		{"documentation range 1", "192.0.2.1", true},
+		{"documentation range 2", "198.51.100.1", true},
+		{"documentation range 3", "203.0.113.1", true},
 		{"public v4", "8.8.8.8", false},
 		{"public v6", "2001:4860:4860::8888", false},
 	}

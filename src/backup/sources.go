@@ -55,28 +55,29 @@ func Sources(configDir, dataDir string, includeSSL, includeData bool) []string {
 
 // SourcesWithConfig adds only referenced connection TLS files and external
 // manually supplied certificates to the normal backup source list.
-func SourcesWithConfig(cfg *config.Config, configDir, dataDir string, includeSSL, includeData bool) ([]string, []SupplementalSource, error) {
-	sources := Sources(configDir, dataDir, includeSSL, includeData)
+func SourcesWithConfig(cfg *config.ServerConfig, configDir, dataDir string, includeSSL, includeData bool) ([]string, []SupplementalSource, error) {
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("backup source configuration is required")
 	}
+	serverConfigPath := filepath.Join(configDir, "server.yml")
+	serverConfigInfo, err := os.Stat(serverConfigPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("required backup source server.yml: %w", err)
+	}
+	if !serverConfigInfo.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("required backup source server.yml is not a regular file")
+	}
+	sources := Sources(configDir, dataDir, includeSSL, includeData)
 	var supplemental []SupplementalSource
-	if isRemoteDatabase(cfg.Server.Database.Driver) && cfg.Server.Database.Cache.Enabled {
-		cachePath := cfg.Server.Database.Cache.Path
-		if !filepath.IsAbs(cachePath) {
-			cachePath = filepath.Join(dataDir, cachePath)
-		}
-		if info, statErr := os.Stat(cachePath); statErr == nil && info.Mode().IsRegular() {
-			serverDBPath := filepath.Join(paths.GetDatabaseDir(dataDir), "server.db")
-			filtered := sources[:0]
-			for _, source := range sources {
-				if filepath.Clean(source) != filepath.Clean(serverDBPath) {
-					filtered = append(filtered, source)
-				}
+	if isRemoteDatabase(cfg.Server.Database.Driver) {
+		serverDBPath := filepath.Join(paths.GetDatabaseDir(dataDir), "server.db")
+		filtered := sources[:0]
+		for _, source := range sources {
+			if filepath.Clean(source) != filepath.Clean(serverDBPath) {
+				filtered = append(filtered, source)
 			}
-			sources = filtered
-			supplemental = append(supplemental, SupplementalSource{Path: cachePath, ArchivePath: "server.db"})
 		}
+		sources = filtered
 	}
 	sslRoot, err := filepath.Abs(filepath.Join(configDir, "ssl"))
 	if err != nil {

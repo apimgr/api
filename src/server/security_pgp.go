@@ -39,7 +39,7 @@ func readSecurityPublicKey() ([]byte, string, error) {
 	return data, strings.ToUpper(hex.EncodeToString(entities[0].PrimaryKey.Fingerprint[:])), nil
 }
 
-func securityPublicKeyHandler(cfg *config.Config) http.HandlerFunc {
+func securityPublicKeyHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg == nil || !cfg.Web.Security.PublishPGPKey {
 			http.NotFound(w, r)

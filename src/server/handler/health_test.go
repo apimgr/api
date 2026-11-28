@@ -39,11 +39,11 @@ func (f fakePinger) PingContext(ctx context.Context) error {
 	return f.err
 }
 
-// testConfig builds a minimal config.Config sufficient for
+// testConfig builds a minimal config.ServerConfig sufficient for
 // BuildHealthResponse/ServerHealthz without touching disk or the paths
 // package singleton.
-func testConfig() *config.Config {
-	cfg := &config.Config{}
+func testConfig() *config.ServerConfig {
+	cfg := &config.ServerConfig{}
 	cfg.Server.Mode = "production"
 	cfg.Server.Branding.Title = "Test API"
 	cfg.Server.Branding.Tagline = "testing things"
@@ -61,7 +61,7 @@ func resetHealthGlobals(t *testing.T) {
 	origI2P := i2pProbe
 	origGeoIP := geoipProbe
 	origStats := statsProvider
-	origMaintenance, origShutdown, origPending, origReason := lifecycleState()
+	origMaintenance, origShutdown, origPending, origReason, origMaintenanceInfo := lifecycleState()
 	t.Cleanup(func() {
 		dbPinger = origPinger
 		schedulerProbe = origSched
@@ -69,7 +69,10 @@ func resetHealthGlobals(t *testing.T) {
 		i2pProbe = origI2P
 		geoipProbe = origGeoIP
 		statsProvider = origStats
-		SetMaintenanceMode(origMaintenance)
+		SetMaintenanceState(origMaintenanceInfo)
+		if origMaintenance && origMaintenanceInfo == nil {
+			SetMaintenanceMode(true)
+		}
 		SetShuttingDown(origShutdown)
 		SetPendingRestart(origPending, origReason)
 	})
@@ -85,6 +88,26 @@ func resetHealthGlobals(t *testing.T) {
 	SetMaintenanceMode(false)
 	SetShuttingDown(false)
 	SetPendingRestart(false, nil)
+}
+
+func TestBuildHealthResponseIncludesMaintenanceGuidance(t *testing.T) {
+	resetHealthGlobals(t)
+	since := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	last := since.Add(time.Minute)
+	next := last.Add(30 * time.Second)
+	SetMaintenanceState(&MaintenanceInfo{
+		Reason: "database_connection", Message: "Database connection failed", Since: since,
+		SelfHealing: SelfHealingInfo{Enabled: true, Attempts: 2, LastAttempt: &last, NextAttempt: &next},
+	})
+	response := BuildHealthResponse(testConfig())
+	assert.Equal(t, StatusMaintenance, response.Status)
+	assert.Equal(t, "error", response.Checks.Database)
+	if assert.NotNil(t, response.Maintenance) {
+		assert.Equal(t, "database_connection", response.Maintenance.Reason)
+		assert.Equal(t, since, response.Maintenance.Since)
+		assert.Equal(t, 2, response.Maintenance.SelfHealing.Attempts)
+		assert.Equal(t, next, *response.Maintenance.SelfHealing.NextAttempt)
+	}
 }
 
 // TestCheckDatabase covers the healthy-ping and failing-ping branches.
@@ -330,7 +353,7 @@ func TestSetPendingRestart_CopiesReason(t *testing.T) {
 	SetPendingRestart(true, reason)
 	reason[0] = "mutated"
 
-	_, _, pending, got := lifecycleState()
+	_, _, pending, got, _ := lifecycleState()
 	assert.True(t, pending)
 	assert.Equal(t, []string{"server.port"}, got)
 }
@@ -351,6 +374,7 @@ func TestBuildHealthResponse(t *testing.T) {
 	assert.NotEmpty(t, resp.Uptime)
 	assert.NotEmpty(t, resp.GoVersion)
 	assert.WithinDuration(t, time.Now().UTC(), resp.Timestamp, 5*time.Second)
+	assert.Zero(t, resp.Timestamp.Nanosecond(), "health timestamps use whole UTC seconds")
 	assert.Contains(t, []string{"healthy", "degraded", "unhealthy"}, resp.Status)
 	assert.Equal(t, "error", resp.Checks.Database, "missing database probe is unavailable")
 	assert.Equal(t, "unhealthy", resp.Status, "missing required database probe must degrade service health")
@@ -480,9 +504,20 @@ func TestServerHealthz_JSON(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
+	raw := rec.Body.String()
 	var resp HealthResponse
-	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.NoError(t, json.NewDecoder(strings.NewReader(raw)).Decode(&resp))
 	assert.Equal(t, "Test API", resp.Project.Name)
+	assert.NotEmpty(t, resp.Features.Tor.State)
+	assert.NotEmpty(t, resp.Features.I2P.State)
+	orderedKeys := []string{`"project"`, `"status"`, `"version"`, `"go_version"`, `"build"`, `"uptime"`, `"mode"`, `"timestamp"`, `"features"`, `"checks"`, `"stats"`}
+	previous := -1
+	for _, key := range orderedKeys {
+		index := strings.Index(raw, key)
+		require.Greater(t, index, previous, "health JSON key %s should appear in canonical order", key)
+		previous = index
+	}
+	assert.Zero(t, resp.Timestamp.Nanosecond())
 }
 
 // TestServerHealthz_Text drives the frontend (htmlDefault=true) handler with
@@ -500,9 +535,11 @@ func TestServerHealthz_Text(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "text/plain; charset=utf-8", rec.Header().Get("Content-Type"))
 	body := rec.Body.String()
-	assert.True(t, strings.Contains(body, "project.name: Test API"))
-	assert.True(t, strings.Contains(body, "status: "))
-	assert.True(t, strings.Contains(body, "checks.database: "))
+	assert.Contains(t, body, "Test API - testing things")
+	assert.Contains(t, body, "Status:")
+	assert.Contains(t, body, "Database:")
+	assert.NotContains(t, body, "project.name:")
+	assert.NotContains(t, body, "checks.database:")
 }
 
 // TestServerHealthz_HTML delegates browser rendering to the server package so
@@ -656,44 +693,32 @@ func TestHealthTextOverlayFields(t *testing.T) {
 	handlerFunc(rec, req)
 
 	body := rec.Body.String()
-	assert.True(t, strings.Contains(body, "features.tor.hostname: example.onion"))
-	assert.True(t, strings.Contains(body, "features.i2p.enabled: false"))
-	assert.True(t, strings.Contains(body, "features.i2p.running: false"))
-	assert.True(t, strings.Contains(body, "features.i2p.status: disabled"))
-	assert.True(t, strings.Contains(body, "features.i2p.hostname: "))
-	assert.True(t, strings.Contains(body, "features.i2p.provider: none"))
-	assert.True(t, strings.Contains(body, "checks.tor: ok"))
-	assert.False(t, strings.Contains(body, "checks.i2p:"), "disabled overlay omits its check line")
+	assert.Contains(t, body, "Tor:")
+	assert.Contains(t, body, "example.onion")
+	assert.Contains(t, body, "I2P:")
+	assert.Contains(t, body, "Component Status")
+	assert.NotContains(t, body, "features.tor.hostname:")
+	assert.NotContains(t, body, "features.i2p.enabled:")
+	assert.NotContains(t, body, "checks.i2p:", "disabled overlay omits its check line")
 }
 
-// TestHandleVersion validates the /api/v1/version handler's JSON body
-// against the package-level Version/CommitID/BuildDate vars, including
-// restoring them afterward so other tests aren't affected.
-func TestHandleVersion(t *testing.T) {
-	origVersion, origCommit, origBuild := Version, CommitID, BuildDate
-	t.Cleanup(func() {
-		Version, CommitID, BuildDate = origVersion, origCommit, origBuild
+func TestAPIHealthTextUsesOneMachineLinePerFeature(t *testing.T) {
+	resetHealthGlobals(t)
+	SetTorProbe(func() TorInfo {
+		return TorInfo{Enabled: true, Running: false, State: "starting", Status: "starting"}
 	})
-	Version = "1.2.3"
-	CommitID = "abcdef0"
-	BuildDate = "2026-01-01"
+	handlerFunc := ServerHealthz(testConfig(), false)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/server/healthz", nil)
+	request.Header.Set("Accept", "text/plain")
+	request.Header.Set("User-Agent", "Mozilla/5.0")
+	recorder := httptest.NewRecorder()
+	handlerFunc(recorder, request)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/version", nil)
-	rec := httptest.NewRecorder()
-
-	HandleVersion(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-
-	var resp VersionResponse
-	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-	assert.Equal(t, "1.2.3", resp.Version)
-	assert.Equal(t, "abcdef0", resp.CommitID)
-	assert.Equal(t, "2026-01-01", resp.BuildDate)
-	assert.NotEmpty(t, resp.GoVersion)
-	assert.NotEmpty(t, resp.Platform)
-	assert.NotEmpty(t, resp.Arch)
+	body := recorder.Body.String()
+	assert.Contains(t, body, "features.tor: starting state=starting")
+	assert.Contains(t, body, "features.i2p: disabled state=disabled")
+	assert.Contains(t, body, "features.geoip: disabled")
+	assert.NotContains(t, body, "features.tor.status:")
 }
 
 // TestGetUptime_Boundaries exercises the days/hours/minutes formatting tiers

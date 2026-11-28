@@ -10,7 +10,7 @@ import (
 
 type allowlistedContextKey struct{}
 
-func allowlistMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func allowlistMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			current := config.Get()

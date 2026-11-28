@@ -60,6 +60,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      - name: Generate OpenAPI superset
+        run: go generate ./src/swagger
       - name: Set build info
         run: |
           echo "VERSION=${{ needs.version.outputs.version }}" >> $FORGEJO_ENV

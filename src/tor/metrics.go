@@ -11,7 +11,7 @@ import (
 // up (running), and bootstrap plus hidden-service hostname publication
 // completed, which means Tor's service is ready.
 func recordStarted() {
-	m := metrics.Get()
+	m := metrics.GetMetrics()
 	m.SetTorEnabled(true)
 	m.SetTorRunning(true)
 	m.SetTorCircuitEstablished(true)
@@ -21,7 +21,7 @@ func recordStarted() {
 // missing binary means Tor support is not enabled on this host at all; any
 // other failure means Tor is enabled but not currently running.
 func recordStartFailed(err error) {
-	m := metrics.Get()
+	m := metrics.GetMetrics()
 	m.SetTorEnabled(!errors.Is(err, ErrBinaryNotFound))
 	m.SetTorRunning(false)
 	m.SetTorCircuitEstablished(false)
@@ -31,7 +31,7 @@ func recordStartFailed(err error) {
 // enabled gauge is left untouched: stopping the process does not remove the
 // Tor binary from the host.
 func recordStopped() {
-	m := metrics.Get()
+	m := metrics.GetMetrics()
 	m.SetTorRunning(false)
 	m.SetTorCircuitEstablished(false)
 }
@@ -40,5 +40,5 @@ func recordStopped() {
 // result. A responsive control connection means the hidden service still has
 // a working circuit; a probe error means it does not.
 func recordHealth(err error) {
-	metrics.Get().SetTorCircuitEstablished(err == nil)
+	metrics.GetMetrics().SetTorCircuitEstablished(err == nil)
 }

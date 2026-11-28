@@ -2,9 +2,9 @@ package server
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 
 	"github.com/apimgr/api/src/config"
@@ -38,67 +38,122 @@ func TestIsTrustedPeer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &config.Config{}
+			cfg := &config.ServerConfig{}
 			cfg.Server.TrustedProxies.Additional = tt.additional
 			assert.Equal(t, tt.want, isTrustedPeer(cfg, tt.addr))
 		})
 	}
 }
 
-// resolveForwardedClientIP must check headers in priority order, extract
-// only the first hop of a comma-separated X-Forwarded-For chain, skip a
-// header whose value fails to parse as an IP, and return "" when no
-// recognized header carries a valid IP.
+func TestIsTrustedPeerIncludesConfiguredListenAddressSubnet(t *testing.T) {
+	cfg := &config.ServerConfig{}
+	cfg.Server.Address = "203.0.113.11"
+	assert.True(t, isTrustedPeer(cfg, "203.0.113.245:8080"))
+	assert.False(t, isTrustedPeer(cfg, "203.0.114.11:8080"))
+	cfg.Server.Address = "0.0.0.0"
+	assert.False(t, isTrustedPeer(cfg, "198.51.100.21:8080"))
+}
+
+// resolveForwardedClientIP must honor configured source order and walk
+// trusted proxy chains from right to left.
 func TestResolveForwardedClientIP(t *testing.T) {
+	cfg := config.DefaultConfig()
 	t.Run("no headers", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		assert.Equal(t, "", resolveForwardedClientIP(req))
+		assert.Equal(t, "", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
 	})
 
-	t.Run("X-Real-IP takes priority over X-Forwarded-For", func(t *testing.T) {
+	t.Run("automatic order prefers X-Forwarded-For", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Real-IP", "198.51.100.1")
 		req.Header.Set("X-Forwarded-For", "203.0.113.2")
-		assert.Equal(t, "198.51.100.1", resolveForwardedClientIP(req))
+		assert.Equal(t, "203.0.113.2", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
 	})
 
-	t.Run("X-Forwarded-For chain uses first hop, trimmed", func(t *testing.T) {
+	t.Run("walks right to left and ignores forged left prefix", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set("X-Forwarded-For", " 203.0.113.2 , 10.0.0.1, 10.0.0.2")
-		assert.Equal(t, "203.0.113.2", resolveForwardedClientIP(req))
+		req.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.2")
+		assert.Equal(t, "203.0.113.2", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
 	})
 
-	t.Run("invalid value in higher-priority header is skipped", func(t *testing.T) {
+	t.Run("RFC Forwarded chain parses quoted IPv6 and ports", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set("X-Real-IP", "not-an-ip")
+		req.Header.Set("Forwarded", `for="[2001:DB8::5]:4711", for=10.0.0.2`)
+		assert.Equal(t, "2001:db8::5", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
+	})
+
+	t.Run("trusted chain hop is skipped", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Forwarded-For", "203.0.113.5, 198.51.100.7")
+		cfg.Server.TrustedProxies.Additional = []string{"198.51.100.0/24"}
+		assert.Equal(t, "203.0.113.5", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
+		cfg.Server.TrustedProxies.Additional = nil
+	})
+
+	t.Run("all trusted chain resolves to leftmost hop", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Forwarded-For", "10.1.1.1, 10.0.0.2")
+		assert.Equal(t, "10.1.1.1", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
+	})
+
+	t.Run("repeated XFF header instances form one chain", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Add("X-Forwarded-For", "203.0.113.9")
+		req.Header.Add("X-Forwarded-For", "198.51.100.7")
+		cfg.Server.TrustedProxies.Additional = []string{"198.51.100.0/24"}
+		assert.Equal(t, "203.0.113.9", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
+		cfg.Server.TrustedProxies.Additional = nil
+	})
+
+	t.Run("invalid hop stops at nearest valid hop to its right", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Forwarded-For", "203.0.113.9, unknown")
+		assert.Equal(t, "10.0.0.1", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
+	})
+
+	t.Run("pinned header ignores other sources", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Forwarded-For", "203.0.113.2")
-		assert.Equal(t, "203.0.113.2", resolveForwardedClientIP(req))
+		req.Header.Set("X-Real-IP", "198.51.100.1")
+		cfg.Server.TrustedProxies.ClientIPHeader = "X-Real-IP"
+		assert.Equal(t, "198.51.100.1", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
+		cfg.Server.TrustedProxies.ClientIPHeader = "auto"
 	})
 
-	t.Run("falls through to CF-Connecting-IP", func(t *testing.T) {
+	t.Run("invalid single address falls through", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set("CF-Connecting-IP", "203.0.113.5")
-		assert.Equal(t, "203.0.113.5", resolveForwardedClientIP(req))
-	})
-
-	t.Run("falls through to True-Client-IP", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("CF-Connecting-IP", "garbage")
 		req.Header.Set("True-Client-IP", "203.0.113.6")
-		assert.Equal(t, "203.0.113.6", resolveForwardedClientIP(req))
+		assert.Equal(t, "203.0.113.6", resolveForwardedClientIP(req, cfg, "10.0.0.1:80"))
 	})
+}
 
-	t.Run("falls through to X-Client-IP", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set("X-Client-IP", "203.0.113.7")
-		assert.Equal(t, "203.0.113.7", resolveForwardedClientIP(req))
-	})
+func TestNormalizeIP(t *testing.T) {
+	tests := []struct{ input, want string }{
+		{"192.0.2.1", "192.0.2.1"},
+		{"192.0.2.1:8080", "192.0.2.1"},
+		{"::ffff:192.0.2.1", "192.0.2.1"},
+		{"[2001:DB8::1]:443", "2001:db8::1"},
+		{"2001:0db8:0000:0000:0000:0000:0000:0001", "2001:db8::1"},
+		{"fe80::1%eth0", "fe80::1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, ok := normalizeIP(tt.input)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, got.String())
+		})
+	}
+	if _, ok := normalizeIP("not-an-ip"); ok {
+		t.Fatal("invalid IP accepted")
+	}
+}
 
-	t.Run("all headers invalid returns empty", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set("X-Real-IP", "garbage")
-		req.Header.Set("X-Forwarded-For", "garbage-too")
-		assert.Equal(t, "", resolveForwardedClientIP(req))
-	})
+func TestIsTrustedPeerUnmapsIPv4MappedIPv6(t *testing.T) {
+	cfg := config.DefaultConfig()
+	assert.True(t, isTrustedPeer(cfg, "[::ffff:127.0.0.1]:8080"))
+	cfg.Server.TrustedProxies.Additional = []string{"2001:db8::6/128"}
+	assert.True(t, isTrustedPeer(cfg, "[2001:0db8::6]:443"))
 }
 
 // realIPMiddleware must only rewrite RemoteAddr when the immediate TCP
@@ -116,7 +171,7 @@ func TestRealIPMiddleware(t *testing.T) {
 	})
 
 	t.Run("trusted peer: RemoteAddr rewritten from header", func(t *testing.T) {
-		cfg := &config.Config{}
+		cfg := &config.ServerConfig{}
 		mw := realIPMiddleware(cfg)(next)
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -132,7 +187,7 @@ func TestRealIPMiddleware(t *testing.T) {
 	})
 
 	t.Run("untrusted peer: RemoteAddr left unmodified", func(t *testing.T) {
-		cfg := &config.Config{}
+		cfg := &config.ServerConfig{}
 		mw := realIPMiddleware(cfg)(next)
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -147,7 +202,7 @@ func TestRealIPMiddleware(t *testing.T) {
 	})
 
 	t.Run("trusted peer with no recognized forwarded header: RemoteAddr unchanged", func(t *testing.T) {
-		cfg := &config.Config{}
+		cfg := &config.ServerConfig{}
 		mw := realIPMiddleware(cfg)(next)
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -227,9 +282,9 @@ func TestTrustedProxyResolverResolveAndTrusts(t *testing.T) {
 	})
 }
 
-func mustParseIP(t *testing.T, s string) net.IP {
+func mustParseIP(t *testing.T, s string) netip.Addr {
 	t.Helper()
-	ip := net.ParseIP(s)
-	require.NotNil(t, ip)
+	ip, err := netip.ParseAddr(s)
+	require.NoError(t, err)
 	return ip
 }

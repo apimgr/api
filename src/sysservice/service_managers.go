@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -297,10 +298,11 @@ LOGFILE=%s/server.log
 case "$1" in
     start)
         echo "Starting $NAME..."
-        mkdir -p $(dirname $PIDFILE) $(dirname $LOGFILE)
-        chown -R $DAEMON_USER:$DAEMON_USER $(dirname $PIDFILE) $(dirname $LOGFILE)
+        mkdir -p $(dirname $LOGFILE)
+        chown -R $DAEMON_USER:$DAEMON_USER $(dirname $LOGFILE)
+        # The binary starts as root and drops privileges after binding ports.
         start-stop-daemon --start --quiet --background --make-pidfile \
-            --pidfile $PIDFILE --chuid $DAEMON_USER --exec $DAEMON \
+            --pidfile $PIDFILE --exec $DAEMON \
             --no-close >> $LOGFILE 2>&1
         ;;
     stop)
@@ -324,11 +326,11 @@ case "$1" in
         ;;
     *)
         echo "Usage: $0 {start|stop|restart|status}"
-        exit 1
+        exit 2
         ;;
 esac
 exit 0
-`, appName, appName, binaryPath, ServiceUserName, paths.DefaultPIDPath(), paths.LogDir())
+`, appName, appName, binaryPath, ServiceUserName, filepath.Join("/var/run", orgName+"-"+appName)+".pid", paths.LogDir())
 
 	scriptPath := fmt.Sprintf("/etc/init.d/%s", appName)
 
@@ -583,9 +585,6 @@ func installLaunchdUser() error {
 	}
 
 	fmt.Printf("LaunchAgent installed at: %s\n", plistPath)
-	fmt.Println()
-	fmt.Println("To load the service:")
-	fmt.Printf("  launchctl load %s\n", plistPath)
 
 	return nil
 }
@@ -607,13 +606,13 @@ func installBSDRC() error {
 name="%s"
 rcvar="%s_enable"
 command="%s"
-pidfile="/var/run/%s.pid"
+pidfile="/var/run/%s-%s.pid"
 
 load_rc_config $name
 : ${%s_enable:="NO"}
 
 run_rc_command "$1"
-`, appName, appName, appName, binaryPath, appName, appName)
+`, appName, appName, appName, binaryPath, orgName, appName, appName)
 
 	if err := os.WriteFile(rcPath, []byte(rcContent), 0755); err != nil {
 		return fmt.Errorf("failed to write rc.d script: %w", err)
@@ -624,10 +623,13 @@ run_rc_command "$1"
 			return fmt.Errorf("failed to copy binary: %w", err)
 		}
 	}
+	if runtime.GOOS == "freebsd" {
+		if err := exec.Command("sysrc", fmt.Sprintf("%s_enable=YES", appName)).Run(); err != nil {
+			return fmt.Errorf("enable BSD rc.d service: %w", err)
+		}
+	}
 
 	fmt.Printf("BSD rc.d script installed at: %s\n", rcPath)
-	fmt.Println()
-	fmt.Printf("Add '%s_enable=\"YES\"' to /etc/rc.conf\n", appName)
 
 	return nil
 }

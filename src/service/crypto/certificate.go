@@ -62,30 +62,44 @@ func GenerateCertificate(commonName string, validDays int) (string, string, erro
 	return string(certPEM), string(keyPEM), nil
 }
 
+// CertificateInfo contains the explicitly serialized details of an X.509 certificate.
+type CertificateInfo struct {
+	Subject            string   `json:"subject"`
+	Issuer             string   `json:"issuer"`
+	SerialNumber       string   `json:"serial_number"`
+	NotBefore          string   `json:"not_before"`
+	NotAfter           string   `json:"not_after"`
+	DNSNames           []string `json:"dns_names"`
+	IsCA               bool     `json:"is_ca"`
+	SignatureAlgorithm string   `json:"signature_algorithm"`
+	PublicKeyAlgorithm string   `json:"public_key_algorithm"`
+	Version            int      `json:"version"`
+}
+
 // ParseCertificate parses a PEM-encoded X.509 certificate and returns its
 // subject, issuer, validity window, serial number, DNS SANs, CA flag, and
-// signature algorithm as a JSON-friendly map.
-func ParseCertificate(certPEM string) (map[string]interface{}, error) {
+// signature algorithm.
+func ParseCertificate(certPEM string) (CertificateInfo, error) {
 	block, _ := pem.Decode([]byte(certPEM))
 	if block == nil || block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("input is not a PEM-encoded certificate")
+		return CertificateInfo{}, fmt.Errorf("input is not a PEM-encoded certificate")
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+		return CertificateInfo{}, fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
-	return map[string]interface{}{
-		"subject":              cert.Subject.String(),
-		"issuer":               cert.Issuer.String(),
-		"serial_number":        cert.SerialNumber.String(),
-		"not_before":           cert.NotBefore.UTC().Format(time.RFC3339),
-		"not_after":            cert.NotAfter.UTC().Format(time.RFC3339),
-		"dns_names":            cert.DNSNames,
-		"is_ca":                cert.IsCA,
-		"signature_algorithm":  cert.SignatureAlgorithm.String(),
-		"public_key_algorithm": cert.PublicKeyAlgorithm.String(),
-		"version":              cert.Version,
+	return CertificateInfo{
+		Subject:            cert.Subject.String(),
+		Issuer:             cert.Issuer.String(),
+		SerialNumber:       cert.SerialNumber.String(),
+		NotBefore:          cert.NotBefore.UTC().Format(time.RFC3339),
+		NotAfter:           cert.NotAfter.UTC().Format(time.RFC3339),
+		DNSNames:           cert.DNSNames,
+		IsCA:               cert.IsCA,
+		SignatureAlgorithm: cert.SignatureAlgorithm.String(),
+		PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
+		Version:            cert.Version,
 	}, nil
 }

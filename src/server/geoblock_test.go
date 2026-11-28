@@ -10,7 +10,7 @@ import (
 
 // newGeoTestHandler wraps a always-200 handler in the geoip middleware for
 // the supplied config.
-func newGeoTestHandler(cfg *config.Config) http.Handler {
+func newGeoTestHandler(cfg *config.ServerConfig) http.Handler {
 	return geoIPMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -18,8 +18,8 @@ func newGeoTestHandler(cfg *config.Config) http.Handler {
 
 // geoTestConfig builds a config with GeoIP enabled or disabled and the given
 // deny list.
-func geoTestConfig(enabled bool, deny []string) *config.Config {
-	cfg := &config.Config{}
+func geoTestConfig(enabled bool, deny []string) *config.ServerConfig {
+	cfg := &config.ServerConfig{}
 	cfg.Server.GeoIP.Enabled = enabled
 	cfg.Server.GeoIP.DenyCountries = deny
 	return cfg

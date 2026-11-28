@@ -1,6 +1,12 @@
-# Infer PROJECT_NAME and PROJECT_ORG from git remote or directory path (NEVER hardcode)
-PROJECT_NAME := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$$|\1|' || basename "$$(pwd)")
-PROJECT_ORG := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
+# IDEA.md project variables win; use the remote and then directory only when a variable is absent.
+PROJECT_NAME := $(shell sed -n 's/^project_name:[[:space:]]*//p' IDEA.md 2>/dev/null | head -n1 | tr -d '[:space:]')
+ifeq ($(PROJECT_NAME),)
+PROJECT_NAME := $(shell remote=$$(git remote get-url origin 2>/dev/null || true); if [ -n "$$remote" ]; then printf '%s\n' "$$remote" | sed -E 's|.*/([^/]+)(\.git)?$$|\1|'; else basename "$$(pwd)"; fi)
+endif
+PROJECT_ORG := $(shell sed -n 's/^project_org:[[:space:]]*//p' IDEA.md 2>/dev/null | head -n1 | tr -d '[:space:]')
+ifeq ($(PROJECT_ORG),)
+PROJECT_ORG := $(shell remote=$$(git remote get-url origin 2>/dev/null || true); if [ -n "$$remote" ]; then printf '%s\n' "$$remote" | sed -E 's|.*[:/]([^/:]+)/[^/]+(\.git)?$$|\1|'; else basename "$$(dirname "$$(pwd)")"; fi)
+endif
 
 # INTERNAL_NAME is the frozen identity from IDEA.md (internal_name); fall back
 # to the project name only before IDEA.md has established that identity.
@@ -60,6 +66,9 @@ DOCKER_CPUS ?= 2
 # CPU weight under contention (Docker's default is 1024): a build never starves the host's other work
 DOCKER_CPU_SHARES ?= 256
 
+# Normalize the local Docker daemon platform to OCI/BuildKit architecture names.
+DOCKER_HOST_PLATFORM ?= $(shell docker info --format '{{.OSType}}/{{.Architecture}}' 2>/dev/null | sed -e 's|/x86_64$$|/amd64|' -e 's|/aarch64$$|/arm64|' -e 's|/armv7l$$|/arm/v7|')
+
 # Hard ceiling in seconds for ONE container run, so a hung step can never hold a container for hours (raise it for a very long cross-compile)
 DOCKER_TIMEOUT ?= 3600
 
@@ -74,6 +83,7 @@ GO_DOCKER_RUN := timeout -k 30 $(DOCKER_TIMEOUT) docker run --rm --no-healthchec
 	-v $(GO_BUILD):/usr/local/share/go/cache \
 	-w /app \
 	-e CGO_ENABLED=0 \
+	-e XDG_CACHE_HOME=/usr/local/share/go/cache \
 	-e GOFLAGS=-buildvcs=false
 GO_DOCKER := $(GO_DOCKER_RUN) casjaysdev/go:latest
 # CGO_ENABLED=0 and GOFLAGS=-buildvcs=false are casjaysdev/go:latest defaults; set explicitly for clarity
@@ -92,6 +102,7 @@ build: clean
 		set -e; \
 		go mod tidy; \
 		go mod download; \
+		go generate ./src/swagger; \
 		echo "Building $(PROJECT_NAME) (local platform)..."; \
 		GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o /build/$(PROJECT_NAME) ./src; \
 		if [ -d src/client ]; then \
@@ -125,6 +136,7 @@ local: clean
 		set -e; \
 		go mod tidy; \
 		go mod download; \
+		go generate ./src/swagger; \
 		echo "Building $(PROJECT_NAME)..."; \
 		GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -trimpath -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR)/$(PROJECT_NAME) ./src; \
 		if [ -d src/client ]; then \
@@ -189,25 +201,19 @@ release: release-check build
 	@echo "Release complete: v$(VERSION)"
 
 # =============================================================================
-# DOCKER - Build and push container to registry (set REGISTRY env var)
+# DOCKER - Build the host-platform image locally (CI/CD handles publishing)
 # =============================================================================
 # Uses multi-stage Dockerfile - Go compilation happens inside Docker
 # No pre-built binaries needed
 docker:
 	@echo "Building Docker image $(VERSION)..."
+	@test -n "$(DOCKER_HOST_PLATFORM)" || { echo "Unable to determine the local Docker platform" >&2; exit 1; }
 
-	# Ensure buildx is available
-	@docker buildx version > /dev/null 2>&1 || (echo "docker buildx required" && exit 1)
-
-	# Create/use the ONE shared builder (never one per project: every builder is a long-lived buildkit container)
-	@docker buildx create --name multiarch-builder --use 2>/dev/null || \
-		docker buildx use multiarch-builder
-
-	# Build multi-arch and push (buildx multi-arch images must be pushed; set REGISTRY first)
+	# Build one local host-platform image so check_image can run it; do not push.
 	@docker buildx build \
 		-f docker/Dockerfile \
-		--platform linux/amd64,linux/arm64 \
-		--push \
+		--platform "$(DOCKER_HOST_PLATFORM)" \
+		--load \
 		--build-arg VERSION="$(VERSION)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg BUILD_EPOCH="$(BUILD_EPOCH)" \
@@ -216,7 +222,6 @@ docker:
 		-t $(REGISTRY):$(VERSION) \
 		-t $(REGISTRY):latest \
 		.
-	@docker pull $(REGISTRY):$(VERSION)
 	@./tests/check_image.sh $(REGISTRY):$(VERSION)
 
 	@echo "Docker build complete: $(REGISTRY):$(VERSION)"
@@ -232,13 +237,22 @@ test:
 		COVDIR=\$$(mktemp -d \"\$${TMPDIR:-/tmp}/$(PROJECT_ORG)/$(INTERNAL_NAME)-XXXXXX\") && \
 		trap 'rm -rf \"\$$COVDIR\"' EXIT && \
 		go mod download && \
-		go test -v -cover -coverprofile=\$$COVDIR/coverage.out ./... && \
-		COVERAGE=\$$(go tool cover -func=\$$COVDIR/coverage.out | grep total | awk '{print \$$3}' | sed 's/%//') && \
+		go generate ./src/swagger && \
+		go vet ./... && \
+		staticcheck ./... && \
+		govulncheck ./... && \
+		if ls tests/*.sh >/dev/null 2>&1; then shellcheck tests/*.sh && shfmt -d -i 2 -ci tests/*.sh; fi && \
+		mkdir -p \$$COVDIR/data && \
+		TMPDIR=\$$COVDIR go test -v -cover ./... -args -test.gocoverdir=\$$COVDIR/data && \
+		go tool covdata textfmt -i=\$$COVDIR/data -o=\$$COVDIR/coverage.out && \
+		COVERAGE=\$$(go tool cover -func=\$$COVDIR/coverage.out | grep '^total:' | awk '{print \$$3}' | sed 's/%//') && \
 		echo \"Coverage: \$$COVERAGE%\" && \
 		if [ \$$(echo \"\$$COVERAGE < 60\" | bc -l) -eq 1 ]; then \
 			echo \"ERROR: Coverage is \$$COVERAGE%, must be >= 60%\"; exit 1; \
 		fi && \
 		echo \"Tests complete - Coverage: \$$COVERAGE% (>= 60% required) ✓\""
+	@echo "Running binary validation (Phase 2 basic tier)..."
+	@./tests/run_tests.sh
 
 # =============================================================================
 # Coverage gates:
@@ -263,6 +277,7 @@ dev:
 		$(GO_DOCKER_RUN) -v $$BUILD_DIR:/build casjaysdev/go:latest sh -c ' \
 			set -e; \
 			go mod tidy; \
+			go generate ./src/swagger; \
 			go build -buildvcs=false -o /build/$(PROJECT_NAME) ./src; \
 			if [ -d src/client ]; then go build -buildvcs=false -o /build/$(PROJECT_NAME)-cli ./src/client; fi' && \
 		echo "Built: $$BUILD_DIR/$(PROJECT_NAME)" && \

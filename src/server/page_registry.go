@@ -77,13 +77,13 @@ func registeredServerPages(language string) serverPageRegistry {
 	return registry
 }
 
-func registerServerPageRoutes(cfg *config.Config, ownerCookieName string, routes func() []swagger.Route, register func(string, http.HandlerFunc)) {
+func registerServerPageRoutes(cfg *config.ServerConfig, ownerCookieName string, routes func() []swagger.Route, register func(string, http.HandlerFunc)) {
 	for _, definition := range serverPageDefinitions {
 		register(definition.path, serverPageHandler(definition.handler, cfg, ownerCookieName, routes))
 	}
 }
 
-func serverPageHandler(kind string, cfg *config.Config, ownerCookieName string, routes func() []swagger.Route) http.HandlerFunc {
+func serverPageHandler(kind string, cfg *config.ServerConfig, ownerCookieName string, routes func() []swagger.Route) http.HandlerFunc {
 	switch kind {
 	case "help-mcp":
 		return helpMCPPageHandler(cfg, routes)

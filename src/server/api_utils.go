@@ -13,7 +13,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
+	appmode "github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/service/convert"
 	"github.com/apimgr/api/src/service/crypto"
 	"github.com/apimgr/api/src/service/datetime"
@@ -65,7 +67,7 @@ func readRequestBody(r *http.Request) ([]byte, error) {
 		return []byte(strings.TrimSpace(body)), nil
 	}
 	limit := int64(1 << 20)
-	if cfg, ok := r.Context().Value(serverConfigKey).(*config.Config); ok && cfg != nil {
+	if cfg, ok := r.Context().Value(serverConfigKey).(*config.ServerConfig); ok && cfg != nil {
 		limit = cfg.Server.Limits.MaxBodySizeBytes()
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
@@ -174,7 +176,7 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		mapping := dockerService.FormatPortMapping(hostPort, containerPort, q.Get("protocol"))
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"mapping": mapping})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mapping", mapping)))
 	case "parse":
 		mapping := q.Get("mapping")
 		if !validateStruct(w, r, dockerPortMappingMappingParams{Mapping: mapping}) {
@@ -185,11 +187,7 @@ func apiDockerPortMappingHandler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MAPPING")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"host_port":      hostPort,
-			"container_port": containerPort,
-			"protocol":       protocol,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("host_port", hostPort), responseField("container_port", containerPort), responseField("protocol", protocol)))
 	}
 }
 
@@ -210,9 +208,7 @@ func apiDockerVolumeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	readOnly := config.IsTruthy(q.Get("readonly"))
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"mount": dockerService.FormatVolumeMount(params.Host, params.Container, readOnly),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mount", dockerService.FormatVolumeMount(params.Host, params.Container, readOnly))))
 }
 
 // dockerfileGenerateParams validates the fields of the decoded
@@ -233,9 +229,7 @@ func apiDockerfileGenerateHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, dockerfileGenerateParams{BaseImage: cfg.BaseImage}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"dockerfile": dockerService.GenerateDockerfile(cfg),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("dockerfile", dockerService.GenerateDockerfile(cfg))))
 }
 
 // dockerLintParams validates the trimmed request body for
@@ -262,9 +256,7 @@ func apiDockerLintHandler(w http.ResponseWriter, r *http.Request) {
 // apiDockerBestPracticesHandler returns the static curated Docker best
 // practices guide, using docker.Service.BestPracticesGuide.
 func apiDockerBestPracticesHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"tips": dockerService.BestPracticesGuide(),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("tips", dockerService.BestPracticesGuide())))
 }
 
 // dockerComposeValidateParams validates the trimmed request body for
@@ -313,7 +305,7 @@ func apiDockerComposeToRunHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COMPOSE")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"command": cmd})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("command", cmd)))
 }
 
 // dockerRunToComposeParams validates the trimmed request body for
@@ -340,7 +332,7 @@ func apiDockerRunToComposeHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COMMAND")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"compose": compose})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("compose", compose)))
 }
 
 // dockerEnvParserParams validates the trimmed request body for
@@ -468,11 +460,7 @@ func apiWeatherForecastHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"location": location,
-		"days":     days,
-		"forecast": forecast,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("location", location), responseField("days", days), responseField("forecast", forecast)))
 }
 
 // apiWeatherAirQualityHandler returns current air quality (AQI and
@@ -497,10 +485,7 @@ func apiWeatherAlertsHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"location": location,
-		"alerts":   alerts,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("location", location), responseField("alerts", alerts)))
 }
 
 // apiWeatherAstronomyHandler returns sunrise/sunset and daylight data for
@@ -538,12 +523,7 @@ func apiWeatherHistoricalHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"location": location,
-		"start":    start,
-		"end":      end,
-		"days":     data,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("location", location), responseField("start", start), responseField("end", end), responseField("days", data)))
 }
 
 // weatherHourlyParams validates the ?hours= query parameter for
@@ -574,11 +554,7 @@ func apiWeatherHourlyHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadGateway, "WEATHER_LOOKUP_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"location": location,
-		"hours":    hours,
-		"hourly":   data,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("location", location), responseField("hours", hours), responseField("hourly", data)))
 }
 
 // apiWeatherMapsHandler is a permanent gap: keyless weather tile/map
@@ -731,10 +707,7 @@ func apiGeoDistanceHandler(w http.ResponseWriter, r *http.Request) {
 		distance = geoService.DistanceInMiles(lat1, lon1, lat2, lon2)
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"distance": distance,
-		"unit":     unit,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("distance", distance), responseField("unit", unit)))
 }
 
 // apiGeoBearingHandler computes the initial compass bearing (in degrees)
@@ -745,9 +718,7 @@ func apiGeoBearingHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_COORDINATES")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]float64{
-		"bearing": geoService.Bearing(lat1, lon1, lat2, lon2),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("bearing", geoService.Bearing(lat1, lon1, lat2, lon2))))
 }
 
 // apiGeoMidpointHandler computes the geographic midpoint between two
@@ -806,10 +777,7 @@ func apiGeoGeocodeHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadGateway, "UPSTREAM_ERROR")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"query":   query,
-		"results": results,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("query", query), responseField("results", results)))
 }
 
 // apiGeoReverseHandler converts coordinates to a human-readable address
@@ -876,10 +844,7 @@ func apiGeoGeohashHandler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_GEOHASH")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"geohash":    hash,
-			"coordinate": coord,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("geohash", hash), responseField("coordinate", coord)))
 		return
 	}
 
@@ -904,12 +869,7 @@ func apiGeoGeohashHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PARAMETERS")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"geohash":   hash,
-		"latitude":  lat,
-		"longitude": lon,
-		"precision": precision,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("geohash", hash), responseField("latitude", lat), responseField("longitude", lon), responseField("precision", precision)))
 }
 
 // apiGeoH3Handler encodes a coordinate to an Uber H3 hexagonal cell index
@@ -951,10 +911,7 @@ func apiGeoPlusCodeHandler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PLUS_CODE")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"code":       code,
-			"coordinate": coord,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("code", sanitize.PublicResponseValue{Value: code}), responseField("coordinate", coord)))
 		return
 	}
 
@@ -969,7 +926,7 @@ func apiGeoPlusCodeHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PARAMETERS")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("code", sanitize.PublicResponseValue{Value: result.Code})))
 }
 
 // geoBBoxParams validates the ?radius= query parameter for
@@ -1079,24 +1036,24 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		switch operation {
 		case "add":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Add(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Add(a, b))))
 		case "subtract":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Subtract(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Subtract(a, b))))
 		case "multiply":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Multiply(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Multiply(a, b))))
 		case "divide":
 			result, err := mathService.Divide(a, b)
 			if err != nil {
 				writeLocalizedAPIError(w, r, http.StatusBadRequest, "DIVISION_BY_ZERO")
 				return
 			}
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": result})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", result)))
 		case "power":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Power(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Power(a, b))))
 		case "percentage_of":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.PercentageOf(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.PercentageOf(a, b))))
 		case "percentage_change":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.PercentageChange(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.PercentageChange(a, b))))
 		}
 	case "modulo", "gcd", "lcm":
 		a, aOK := parseIntParam("a")
@@ -1112,11 +1069,11 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 				writeLocalizedAPIError(w, r, http.StatusBadRequest, "MODULO_BY_ZERO")
 				return
 			}
-			writeEnvelopeOK(w, http.StatusOK, map[string]int64{"result": result})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", result)))
 		case "gcd":
-			writeEnvelopeOK(w, http.StatusOK, map[string]int64{"result": mathService.GCD(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.GCD(a, b))))
 		case "lcm":
-			writeEnvelopeOK(w, http.StatusOK, map[string]int64{"result": mathService.LCM(a, b)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.LCM(a, b))))
 		}
 	case "sqrt", "cbrt", "abs", "round", "floor", "ceil", "log", "log10", "log2", "exp", "sin", "cos", "tan":
 		n, nOK := parseFloatParam("n")
@@ -1131,31 +1088,31 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 				writeLocalizedAPIError(w, r, http.StatusBadRequest, "NEGATIVE_SQUARE_ROOT")
 				return
 			}
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": result})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", result)))
 		case "cbrt":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.CubeRoot(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.CubeRoot(n))))
 		case "abs":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Abs(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Abs(n))))
 		case "round":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Round(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Round(n))))
 		case "floor":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Floor(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Floor(n))))
 		case "ceil":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Ceil(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Ceil(n))))
 		case "log":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Log(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Log(n))))
 		case "log10":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Log10(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Log10(n))))
 		case "log2":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Log2(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Log2(n))))
 		case "exp":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Exp(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Exp(n))))
 		case "sin":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Sin(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Sin(n))))
 		case "cos":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Cos(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Cos(n))))
 		case "tan":
-			writeEnvelopeOK(w, http.StatusOK, map[string]float64{"result": mathService.Tan(n)})
+			writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Tan(n))))
 		}
 	case "factorial":
 		n, nOK := parseIntParam("n")
@@ -1163,7 +1120,7 @@ func apiMathCalculateHandler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "MISSING_OPERAND")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": mathService.Factorial(n).String()})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", mathService.Factorial(n).String())))
 	}
 }
 
@@ -1177,10 +1134,7 @@ func apiMathPrimeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"n":        n,
-		"is_prime": mathService.IsPrime(n),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("n", n), responseField("is_prime", mathService.IsPrime(n))))
 }
 
 // mathRandomParams validates that {max} is not less than {min} for
@@ -1210,11 +1164,7 @@ func apiMathRandomHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"min":    minVal,
-		"max":    maxVal,
-		"result": mathService.RandomInt(minVal, maxVal),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("min", minVal), responseField("max", maxVal), responseField("result", mathService.RandomInt(minVal, maxVal))))
 }
 
 // mathStatsParams validates the ?numbers= query parameter for
@@ -1251,14 +1201,7 @@ func apiMathStatsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"count":   len(numbers),
-		"min":     mathService.Min(numbers),
-		"max":     mathService.Max(numbers),
-		"sum":     mathService.Sum(numbers),
-		"average": mathService.Average(numbers),
-		"median":  mathService.Median(numbers),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("count", len(numbers)), responseField("min", mathService.Min(numbers)), responseField("max", mathService.Max(numbers)), responseField("sum", mathService.Sum(numbers)), responseField("average", mathService.Average(numbers)), responseField("median", mathService.Median(numbers))))
 }
 
 // mathFibonacciParams validates that ?count= is non-negative for
@@ -1295,10 +1238,7 @@ func apiMathFibonacciHandler(w http.ResponseWriter, r *http.Request) {
 		sequence[i] = v.String()
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"count":    count,
-		"sequence": sequence,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("count", count), responseField("sequence", sequence)))
 }
 
 // mathBaseParams validates the ?number=, ?from_base=, and ?to_base= query
@@ -1337,12 +1277,7 @@ func apiMathBaseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"number":    number,
-		"from_base": fromBase,
-		"to_base":   toBase,
-		"result":    result,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("number", number), responseField("from_base", fromBase), responseField("to_base", toBase), responseField("result", result)))
 }
 
 // matrixRequest is the shared JSON body shape for apiMathMatrixHandler:
@@ -1373,21 +1308,21 @@ func apiMathMatrixHandler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MATRIX")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("operation", req.Operation), responseField("result", result)))
 	case "multiply":
 		result, err := mathService.MatrixMultiply(req.A, req.B)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MATRIX")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("operation", req.Operation), responseField("result", result)))
 	case "determinant":
 		result, err := mathService.MatrixDeterminant(req.A)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MATRIX")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{"operation": req.Operation, "result": result})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("operation", req.Operation), responseField("result", result)))
 	}
 }
 
@@ -1438,13 +1373,7 @@ func apiMathSequenceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"type":     seqType,
-		"start":    start,
-		"step":     step,
-		"count":    count,
-		"sequence": values,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("type", seqType), responseField("start", start), responseField("step", step), responseField("count", count), responseField("sequence", values)))
 }
 
 // lengthConversions maps a "from-to" unit pair to the convert.Service
@@ -1482,12 +1411,7 @@ func apiConvertLengthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // temperatureConversions maps a "from-to" unit pair to the convert.Service
@@ -1523,12 +1447,7 @@ func apiConvertTemperatureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // weightConversions maps a "from-to" unit pair to the convert.Service
@@ -1564,12 +1483,7 @@ func apiConvertWeightHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // volumeConversions maps a "from-to" unit pair to the convert.Service
@@ -1603,12 +1517,7 @@ func apiConvertVolumeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // timeConversions maps a "from-to" unit pair to the convert.Service
@@ -1646,12 +1555,7 @@ func apiConvertTimeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // areaConversions maps a "from-to" unit pair to the convert.Service
@@ -1687,12 +1591,7 @@ func apiConvertAreaHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // dataConversions maps a "from-to" unit pair to the convert.Service
@@ -1732,12 +1631,7 @@ func apiConvertDataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // energyConversions maps a "from-to" unit pair to the convert.Service
@@ -1773,12 +1667,7 @@ func apiConvertEnergyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // pressureConversions maps a "from-to" unit pair to the convert.Service
@@ -1816,12 +1705,7 @@ func apiConvertPressureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // speedConversions maps a "from-to" unit pair to the convert.Service
@@ -1859,12 +1743,7 @@ func apiConvertSpeedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": fn(value),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", fn(value))))
 }
 
 // convertColorParams validates the required value/from/to fields for
@@ -1899,12 +1778,7 @@ func apiConvertColorHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"value":  value,
-		"from":   from,
-		"to":     to,
-		"result": result,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("value", value), responseField("from", from), responseField("to", to), responseField("result", result)))
 }
 
 // colorToRGB parses value in the given format ("hex", "rgb", or "hsl")
@@ -2023,7 +1897,7 @@ func apiDatetimeFormatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromMap(result, "unix", "format", "result"))
 }
 
 // apiDatetimeParseHandler parses a free-form date/time string against a
@@ -2037,7 +1911,7 @@ func apiDatetimeParseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromMap(result, "input", "matched_layout", "unix", "iso8601", "date", "time", "year", "month", "day", "day_of_week"))
 }
 
 // apiDatetimeCronHandler parses a standard 5-field cron expression and
@@ -2051,7 +1925,15 @@ func apiDatetimeCronHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, cronResponseFields(result))
+}
+
+func cronResponseFields(result map[string]interface{}) taggedResponseObject {
+	fields := responseFieldsFromMap(result, "expression", "next_runs")
+	if cronFields, ok := result["fields"].(map[string]string); ok {
+		fields = append(fields, responseField("fields", responseObject(responseField("minute", cronFields["minute"]), responseField("hour", cronFields["hour"]), responseField("day_of_month", cronFields["day_of_month"]), responseField("month", cronFields["month"]), responseField("day_of_week", cronFields["day_of_week"]))))
+	}
+	return fields
 }
 
 // apiDatetimeCalendarHandler builds a week-grid calendar for a given
@@ -2078,7 +1960,7 @@ func apiDatetimeCalendarHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromMap(result, "year", "month", "month_name", "days_in_month", "starts_on", "weeks", "is_leap_year"))
 }
 
 // apiDatetimeWorkdaysHandler counts weekdays (Mon-Fri) between two
@@ -2093,7 +1975,7 @@ func apiDatetimeWorkdaysHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromMap(result, "start", "end", "total_days", "workdays", "weekend_days"))
 }
 
 // apiDatetimeSunriseHandler computes sunrise/sunset UTC times for a given
@@ -2122,7 +2004,7 @@ func apiDatetimeSunriseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromMap(result, "date", "latitude", "longitude", "polar_event", "description", "sunrise_utc", "sunset_utc", "sunrise_iso8601", "sunset_iso8601"))
 }
 
 // apiDatetimeMoonHandler computes the current lunar phase for an optional
@@ -2136,7 +2018,7 @@ func apiDatetimeMoonHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromMap(result, "date", "age_days", "phase", "illumination", "illumination_pct", "synodic_month_days"))
 }
 
 // apiGenerateQRHandler renders a QR code PNG for the given data, or for a
@@ -2166,10 +2048,7 @@ func apiValidateEmailHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateEmailParams{Email: email}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"email": email,
-		"valid": validateService.IsEmail(email),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("email", email), responseField("valid", validateService.IsEmail(email))))
 }
 
 // validateCreditCardParams validates the required number field for
@@ -2185,10 +2064,7 @@ func apiValidateCreditCardHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateCreditCardParams{Number: number}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"number": number,
-		"valid":  validateService.IsCreditCard(number),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("number", number), responseField("valid", validateService.IsCreditCard(number))))
 }
 
 // validateDomainParams validates the required domain field for
@@ -2204,10 +2080,7 @@ func apiValidateDomainHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateDomainParams{Domain: domain}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"domain": domain,
-		"valid":  validateService.IsDomain(domain),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("domain", domain), responseField("valid", validateService.IsDomain(domain))))
 }
 
 // validateIPParams validates the required ip field for apiValidateIPHandler.
@@ -2222,12 +2095,7 @@ func apiValidateIPHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateIPParams{IP: ip}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"ip":      ip,
-		"valid":   validateService.IsIP(ip),
-		"is_ipv4": validateService.IsIPv4(ip),
-		"is_ipv6": validateService.IsIPv6(ip),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("ip", ip), responseField("valid", validateService.IsIP(ip)), responseField("is_ipv4", validateService.IsIPv4(ip)), responseField("is_ipv6", validateService.IsIPv6(ip))))
 }
 
 // apiValidateJSONHandler validates that the raw request body is
@@ -2238,9 +2106,7 @@ func apiValidateJSONHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "READ_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"valid": validateService.IsJSON(string(body)),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("valid", validateService.IsJSON(string(body)))))
 }
 
 // validateMACParams validates the required mac field for
@@ -2256,10 +2122,7 @@ func apiValidateMACHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateMACParams{MAC: mac}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"mac":   mac,
-		"valid": validateService.IsMAC(mac),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mac", mac), responseField("valid", validateService.IsMAC(mac))))
 }
 
 // validatePhoneParams validates the required phone field for
@@ -2275,10 +2138,7 @@ func apiValidatePhoneHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validatePhoneParams{Phone: phone}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"phone": phone,
-		"valid": validateService.IsPhone(phone),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("phone", phone), responseField("valid", validateService.IsPhone(phone))))
 }
 
 // validateURLParams validates the required url field for
@@ -2296,10 +2156,7 @@ func apiValidateURLHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateURLParams{URL: rawURL}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"url":   rawURL,
-		"valid": validateService.IsURL(rawURL),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("url", rawURL), responseField("valid", validateService.IsURL(rawURL))))
 }
 
 // validateUUIDParams validates the required uuid field for
@@ -2315,10 +2172,7 @@ func apiValidateUUIDHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateUUIDParams{UUID: uuidStr}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"uuid":  uuidStr,
-		"valid": validateService.IsUUID(uuidStr),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("uuid", uuidStr), responseField("valid", validateService.IsUUID(uuidStr))))
 }
 
 // validateIBANParams validates the required iban field for
@@ -2334,10 +2188,7 @@ func apiValidateIBANHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateIBANParams{IBAN: iban}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"iban":  iban,
-		"valid": validateService.IsIBAN(iban),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("iban", iban), responseField("valid", validateService.IsIBAN(iban))))
 }
 
 // validateISBNParams validates the required isbn field for
@@ -2353,10 +2204,7 @@ func apiValidateISBNHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateISBNParams{ISBN: isbn}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"isbn":  isbn,
-		"valid": validateService.IsISBN(isbn),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("isbn", isbn), responseField("valid", validateService.IsISBN(isbn))))
 }
 
 // validateVATParams validates the required vat field for
@@ -2372,10 +2220,7 @@ func apiValidateVATHandler(w http.ResponseWriter, r *http.Request) {
 	if !validateStruct(w, r, validateVATParams{VAT: vat}) {
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"vat":   vat,
-		"valid": validateService.IsVAT(vat),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("vat", vat), responseField("valid", validateService.IsVAT(vat))))
 }
 
 // apiParseJSONHandler parses the raw JSON document supplied in the
@@ -2391,7 +2236,7 @@ func apiParseJSONHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseXMLParams validates that the request body is non-empty for
@@ -2416,7 +2261,7 @@ func apiParseXMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_XML")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseCSVParams validates that the request body is non-empty for
@@ -2441,7 +2286,7 @@ func apiParseCSVHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CSV")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseEnvParams validates that the request body is non-empty for
@@ -2466,7 +2311,7 @@ func apiParseEnvHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_ENV")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseHTMLParams validates that the request body is non-empty for
@@ -2491,7 +2336,7 @@ func apiParseHTMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_HTML")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseINIParams validates that the request body is non-empty for
@@ -2516,7 +2361,7 @@ func apiParseINIHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_INI")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseLogParams validates that the request body is non-empty for
@@ -2541,7 +2386,7 @@ func apiParseLogHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_LOG")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseMarkdownParams validates that the request body is non-empty for
@@ -2567,7 +2412,7 @@ func apiParseMarkdownHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_MARKDOWN")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseSQLParams validates that the request body is non-empty for
@@ -2593,7 +2438,7 @@ func apiParseSQLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_SQL")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseTOMLParams validates that the request body is non-empty for
@@ -2618,7 +2463,7 @@ func apiParseTOMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_TOML")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // parseYAMLParams validates that the request body is non-empty for
@@ -2643,7 +2488,7 @@ func apiParseYAMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_YAML")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, parsed)
+	writeEnvelopeOK(w, http.StatusOK, sanitize.OpaqueUserJSON{Value: parsed})
 }
 
 // apiParseJWTHandler decodes (never verifies) the header and payload of a
@@ -2671,11 +2516,7 @@ func apiParseJWTHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"header":    header,
-		"payload":   payload,
-		"signature": parts[2],
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("header", sanitize.OpaqueUserJSON{Value: header}), responseField("payload", sanitize.OpaqueUserJSON{Value: payload}), responseField("signature", parts[2])))
 }
 
 // apiLanguageDetectHandler reports that language auto-detection is not
@@ -2767,11 +2608,7 @@ func apiLanguagePhoneticHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"word":      word,
-		"soundex":   languageService.Soundex(word),
-		"metaphone": languageService.Metaphone(word),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("word", word), responseField("soundex", languageService.Soundex(word)), responseField("metaphone", languageService.Metaphone(word))))
 }
 
 // languageWordCountParams validates the required text field for
@@ -2843,9 +2680,7 @@ func apiLanguageKeywordsHandler(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"keywords": languageService.Keywords(text, limit),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("keywords", languageService.Keywords(text, limit))))
 }
 
 // languageReadabilityParams validates the required text field for
@@ -2957,10 +2792,7 @@ func apiTestHTTPHandler(w http.ResponseWriter, r *http.Request) {
 	elapsed := testService.MeasureExecutionTime(func() {
 		mockResponse = testService.GenerateMockAPIResponse()
 	})
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"response":    mockResponse,
-		"duration_ms": elapsed.Milliseconds(),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("response", mockResponse), responseField("duration_ms", elapsed.Milliseconds())))
 }
 
 // testAssertRequest is the JSON body shape accepted by
@@ -3015,11 +2847,7 @@ func apiTestAssertHandler(w http.ResponseWriter, r *http.Request) {
 		result = testService.AssertFalse(body.Value)
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"op":      body.Op,
-		"passed":  result.Passed,
-		"message": result.Message,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("op", body.Op), responseField("passed", result.Passed), responseField("message", result.Message)))
 }
 
 // testFixtureParams is the validated input to apiTestFixtureHandler.
@@ -3036,10 +2864,7 @@ func apiTestFixtureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"type":    fixtureType,
-		"fixture": testService.GenerateFixture(fixtureType),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("type", fixtureType), responseField("fixture", testService.GenerateFixture(fixtureType))))
 }
 
 // testFakeDataParams is the validated input to apiTestFakeDataHandler.
@@ -3065,20 +2890,12 @@ func apiTestFakeDataHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch dataType {
 	case "email":
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"type":  dataType,
-			"email": testService.GenerateTestEmail(prefix),
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("type", dataType), responseField("email", testService.GenerateTestEmail(prefix))))
 	case "username":
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"type":     dataType,
-			"username": testService.GenerateTestUsername(prefix),
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("type", dataType), responseField("username", testService.GenerateTestUsername(prefix))))
 	case "user":
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"type": dataType,
-			"user": testService.GenerateMockUser(),
-		})
+		user := responseFieldsFromMap(testService.GenerateMockUser(), "id", "username", "email", "name", "active", "created")
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("type", dataType), responseField("user", user)))
 	}
 }
 
@@ -3198,12 +3015,7 @@ func apiTestAPIClientHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	golang := fmt.Sprintf("req, _ := http.NewRequest(%q, %q, %s)\n%s\nresp, _ := http.DefaultClient.Do(req)", spec.Method, spec.URL, goBody, strings.Join(goHeaderLines, "\n"))
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"curl":       buildCurlCommand(spec),
-		"javascript": javascript,
-		"python":     python,
-		"go":         golang,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("curl", buildCurlCommand(spec)), responseField("javascript", javascript), responseField("python", python), responseField("go", golang)))
 }
 
 // apiTestCurlGeneratorHandler renders a caller-described HTTP request as a
@@ -3215,9 +3027,7 @@ func apiTestCurlGeneratorHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"curl": buildCurlCommand(spec),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("curl", buildCurlCommand(spec))))
 }
 
 // postmanCollection is a minimal Postman Collection v2.1 document
@@ -3308,14 +3118,7 @@ func apiTestRequestInspectorHandler(w http.ResponseWriter, r *http.Request) {
 		query[key] = r.URL.Query().Get(key)
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"method":      r.Method,
-		"path":        r.URL.Path,
-		"query":       query,
-		"headers":     headers,
-		"body":        string(bodyBytes),
-		"remote_addr": r.RemoteAddr,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("method", r.Method), responseField("path", r.URL.Path), responseField("query", query), responseField("headers", headers), responseField("body", string(bodyBytes)), responseField("remote_addr", r.RemoteAddr)))
 }
 
 // httpStatusDescriptions supplements net/http.StatusText with a one-line
@@ -3358,9 +3161,7 @@ func apiTestStatusCodesHandler(w http.ResponseWriter, r *http.Request) {
 				"description": httpStatusDescriptions[code],
 			}
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"codes": table,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("codes", table)))
 		return
 	}
 
@@ -3374,11 +3175,7 @@ func apiTestStatusCodesHandler(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		description = ""
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"code":        code,
-		"text":        http.StatusText(code),
-		"description": description,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("code", code), responseField("text", http.StatusText(code)), responseField("description", description)))
 }
 
 // apiTestResponseGeneratorHandler generates a mock API response fixture.
@@ -3388,7 +3185,14 @@ func apiTestStatusCodesHandler(w http.ResponseWriter, r *http.Request) {
 // parameterized (arbitrary status/header/body) response builder that
 // IDEA.md does not declare.
 func apiTestResponseGeneratorHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeOK(w, http.StatusOK, testService.GenerateMockAPIResponse())
+	fixture := testService.GenerateMockAPIResponse()
+	data := responseObject(responseField("test", "value"))
+	writeEnvelopeOK(w, http.StatusOK, responseObject(
+		responseField("success", fixture["success"]),
+		responseField("message", fixture["message"]),
+		responseField("data", data),
+		responseField("timestamp", fixture["timestamp"]),
+	))
 }
 
 // apiTestWebhookHandler accepts a caller-submitted webhook POST and echoes
@@ -3400,21 +3204,33 @@ func apiTestResponseGeneratorHandler(w http.ResponseWriter, r *http.Request) {
 func apiTestWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, _ := readRequestBody(r)
 
-	headers := make(map[string]string, len(r.Header))
-	for key := range r.Header {
-		headers[key] = r.Header.Get(key)
+	type headerEntry struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
 	}
+	headers := make([]headerEntry, 0, len(r.Header))
+	for key := range r.Header {
+		value := r.Header.Get(key)
+		normalizedName := strings.ReplaceAll(strings.ToLower(key), "-", "_")
+		if sanitize.IsCredentialKey(normalizedName) {
+			value = sanitize.RedactedPlaceholder
+		}
+		headers = append(headers, headerEntry{Name: key, Value: value})
+	}
+	sort.Slice(headers, func(i, j int) bool { return headers[i].Name < headers[j].Name })
 
 	var parsedBody interface{}
-	jsonValid := len(bodyBytes) > 0 && json.Unmarshal(bodyBytes, &parsedBody) == nil
+	jsonValid := len(bodyBytes) > 0 && json.Valid(bodyBytes)
+	if jsonValid {
+		if sanitized, err := sanitize.SanitizeResponseJSON(bodyBytes, appmode.IsAppModeProd()); err == nil {
+			parsedBody = strings.TrimSpace(string(sanitized))
+		} else {
+			jsonValid = false
+			parsedBody = nil
+		}
+	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"method":      r.Method,
-		"headers":     headers,
-		"raw_body":    string(bodyBytes),
-		"parsed_body": parsedBody,
-		"json_valid":  jsonValid,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("method", r.Method), responseField("headers", headers), responseField("raw_body", string(bodyBytes)), responseField("parsed_body", parsedBody), responseField("json_valid", jsonValid)))
 }
 
 // apiTestLoadTestHandler is a permanent gap: a real load-test tool must
@@ -3460,22 +3276,10 @@ func apiOsintEmailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	mxRecords, err := osintService.DNSLookup(parts.Domain, "MX")
 	if err != nil {
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"email":          email,
-			"domain":         parts.Domain,
-			"valid_format":   true,
-			"has_mx_records": false,
-			"mx_records":     []string{},
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("email", email), responseField("domain", parts.Domain), responseField("valid_format", true), responseField("has_mx_records", false), responseField("mx_records", []string{})))
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"email":          email,
-		"domain":         parts.Domain,
-		"valid_format":   true,
-		"has_mx_records": len(mxRecords) > 0,
-		"mx_records":     mxRecords,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("email", email), responseField("domain", parts.Domain), responseField("valid_format", true), responseField("has_mx_records", len(mxRecords) > 0), responseField("mx_records", mxRecords)))
 }
 
 // osintDomainParams is the validated input to apiOsintDomainHandler.
@@ -3529,7 +3333,7 @@ func apiOsintCertHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadGateway, "CERT_LOOKUP_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, info)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromMap(info, "subject", "issuer", "not_before", "not_after", "dns_names", "serial_number", "version", "signature_algorithm", "is_expired"))
 }
 
 // osintSubdomainParams is the validated input to apiOsintSubdomainHandler.
@@ -3551,10 +3355,7 @@ func apiOsintSubdomainHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "SUBDOMAIN_ENUM_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"domain":     domain,
-		"subdomains": found,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("domain", domain), responseField("subdomains", found)))
 }
 
 // osintTechStackParams is the validated input to apiOsintTechStackHandler.
@@ -3674,10 +3475,7 @@ func apiResearchCitationHandler(w http.ResponseWriter, r *http.Request) {
 		{Title: body.Title, Author: body.Author, Year: body.Year, Source: body.Source},
 	}, body.Style)
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"style":    body.Style,
-		"citation": citations[0],
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("style", body.Style), responseField("citation", citations[0])))
 }
 
 // researchDoiParams is the validated input to apiResearchDOIHandler.
@@ -3704,11 +3502,7 @@ func apiResearchDOIHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_DOI")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"doi":   doi,
-		"valid": valid,
-		"url":   researchService.FormatDOI(doi),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("doi", doi), responseField("valid", valid), responseField("url", researchService.FormatDOI(doi))))
 }
 
 // apiResearchExtractHandler reports that citation extraction from
@@ -3843,10 +3637,7 @@ func apiFunJokeHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "JOKE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"type": jokeType,
-		"text": text,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("type", jokeType), responseField("text", text)))
 }
 
 // apiFunFortuneHandler returns a single random fortune-cookie style saying
@@ -3857,7 +3648,7 @@ func apiFunFortuneHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "FORTUNE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunDadJokeHandler returns a single random dad joke from the curated
@@ -3868,7 +3659,7 @@ func apiFunDadJokeHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "DAD_JOKE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunProgrammingJokeHandler returns a single random programming joke from
@@ -3879,7 +3670,7 @@ func apiFunProgrammingJokeHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "PROGRAMMING_JOKE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunQuoteHandler returns a single random inspirational quote from the
@@ -3890,7 +3681,7 @@ func apiFunQuoteHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "QUOTE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunFactHandler returns a single random fact from the curated built-in
@@ -3901,7 +3692,7 @@ func apiFunFactHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "FACT_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunRiddleHandler returns a single random riddle question/answer pair
@@ -3934,7 +3725,7 @@ func apiFunMotivationalHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "MOTIVATIONAL_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunInsultHandler returns a single random playful mock-insult from the
@@ -3945,7 +3736,7 @@ func apiFunInsultHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "INSULT_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunComplimentHandler returns a single random compliment from the
@@ -3956,7 +3747,7 @@ func apiFunComplimentHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "COMPLIMENT_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiFunMemeHandler returns a single random text-only meme caption from the
@@ -3967,7 +3758,7 @@ func apiFunMemeHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "MEME_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"text": text})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("text", text)))
 }
 
 // apiLoremPersonHandler generates a fake person (name/email/phone).
@@ -3977,7 +3768,7 @@ func apiLoremPersonHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, person)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromStringMap(person, "name", "email", "phone"))
 }
 
 // apiLoremAddressHandler generates a fake street address.
@@ -3987,7 +3778,7 @@ func apiLoremAddressHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, address)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromStringMap(address, "street", "city", "state", "zip"))
 }
 
 // apiLoremCompanyHandler generates a fake company name and catchphrase.
@@ -3997,7 +3788,7 @@ func apiLoremCompanyHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, company)
+	writeEnvelopeOK(w, http.StatusOK, responseFieldsFromStringMap(company, "name", "industry"))
 }
 
 // apiDevFormatJSONHandler pretty-prints the raw JSON document supplied in
@@ -4032,7 +3823,7 @@ func apiDevBase64Handler(w http.ResponseWriter, r *http.Request) {
 		if urlSafe {
 			result = text.Base64URLEncode(string(raw))
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", result)))
 	case "decode":
 		var (
 			result string
@@ -4047,7 +3838,7 @@ func apiDevBase64Handler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BASE64")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", result)))
 	}
 }
 
@@ -4076,14 +3867,14 @@ func apiDevURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "encode":
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": text.URLEncode(string(raw))})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", text.URLEncode(string(raw)))))
 	case "decode":
 		result, err := text.URLDecode(string(raw))
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_URL_ENCODING")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"result": result})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("result", result)))
 	}
 }
 
@@ -4098,7 +3889,7 @@ func apiDevFormatJSONHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", formatted)))
 }
 
 // apiDevCronHandler parses a 5-field cron expression, reusing the same
@@ -4110,7 +3901,7 @@ func apiDevCronHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_CRON")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, result)
+	writeEnvelopeOK(w, http.StatusOK, cronResponseFields(result))
 }
 
 // apiDevJWTHandler decodes (never verifies) the header and payload of a
@@ -4134,11 +3925,7 @@ func apiDevJWTHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_JWT_PAYLOAD")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"header":    header,
-		"payload":   payload,
-		"signature": parts[2],
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("header", sanitize.OpaqueUserJSON{Value: header}), responseField("payload", sanitize.OpaqueUserJSON{Value: payload}), responseField("signature", parts[2])))
 }
 
 // apiDevEchoHandler reflects the caller's own request details back as
@@ -4161,14 +3948,7 @@ func apiDevEchoHandler(w http.ResponseWriter, r *http.Request) {
 		query[name] = strings.Join(values, ", ")
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"method":      r.Method,
-		"path":        r.URL.Path,
-		"query":       query,
-		"headers":     headers,
-		"remote_addr": r.RemoteAddr,
-		"body":        string(body),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("method", r.Method), responseField("path", r.URL.Path), responseField("query", query), responseField("headers", headers), responseField("remote_addr", r.RemoteAddr), responseField("body", string(body))))
 }
 
 // apiDevFormatCSSHandler formats (or, with ?minify=true, minifies) the raw
@@ -4180,10 +3960,10 @@ func apiDevFormatCSSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if config.IsTruthy(r.URL.Query().Get("minify")) {
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.MinifyCSS(string(raw))})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", devService.MinifyCSS(string(raw)))))
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatCSS(string(raw))})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", devService.FormatCSS(string(raw)))))
 }
 
 // apiDevFormatHTMLHandler formats (or, with ?minify=true, minifies) the raw
@@ -4195,10 +3975,10 @@ func apiDevFormatHTMLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if config.IsTruthy(r.URL.Query().Get("minify")) {
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.MinifyHTML(string(raw))})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", devService.MinifyHTML(string(raw)))))
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatHTML(string(raw))})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", devService.FormatHTML(string(raw)))))
 }
 
 // apiDevFormatJSHandler formats (or, with ?minify=true, minifies) the raw
@@ -4210,10 +3990,10 @@ func apiDevFormatJSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if config.IsTruthy(r.URL.Query().Get("minify")) {
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.MinifyJS(string(raw))})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", devService.MinifyJS(string(raw)))))
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatJS(string(raw))})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", devService.FormatJS(string(raw)))))
 }
 
 // apiDevFormatSQLHandler formats the raw SQL query supplied in the request
@@ -4225,7 +4005,7 @@ func apiDevFormatSQLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_BODY")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": devService.FormatSQL(string(raw))})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", devService.FormatSQL(string(raw)))))
 }
 
 // apiDevFormatXMLHandler formats (or, with ?minify=true, minifies) the raw
@@ -4242,7 +4022,7 @@ func apiDevFormatXMLHandler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_XML")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", formatted)))
 		return
 	}
 	formatted, err := devService.FormatXML(string(raw))
@@ -4250,7 +4030,7 @@ func apiDevFormatXMLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_XML")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{"formatted": formatted})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("formatted", formatted)))
 }
 
 // imagePlaceholderParams validates the {width}/{height} path parameters
@@ -4854,11 +4634,7 @@ func apiCryptoJWTDecodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"header":    header,
-		"payload":   payload,
-		"signature": parts[2],
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("header", sanitize.OpaqueUserJSON{Value: header}), responseField("payload", sanitize.OpaqueUserJSON{Value: payload}), responseField("signature", parts[2])))
 }
 
 // apiNetworkDNSHandler queries DNS records for a domain via the system
@@ -4877,11 +4653,7 @@ func apiNetworkDNSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"domain":  domain,
-		"type":    strings.ToUpper(recordType),
-		"records": records,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("domain", domain), responseField("type", strings.ToUpper(recordType)), responseField("records", records)))
 }
 
 // textCompressRequest is the JSON body shape accepted by
@@ -4934,11 +4706,7 @@ func apiTextCompressHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"mode":      body.Mode,
-		"algorithm": body.Algorithm,
-		"result":    result,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("algorithm", body.Algorithm), responseField("result", result)))
 }
 
 // textDiffRequest is the JSON body shape accepted by apiTextDiffHandler.
@@ -4956,9 +4724,7 @@ func apiTextDiffHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"diff": text.Diff(body.Text1, body.Text2),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("diff", text.Diff(body.Text1, body.Text2))))
 }
 
 // textExtractRequest is the JSON body shape accepted by
@@ -5002,24 +4768,17 @@ func apiTextExtractHandler(w http.ResponseWriter, r *http.Request) {
 		matches = text.ExtractPhones(body.Text)
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"type":    body.Type,
-		"matches": matches,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("type", body.Type), responseField("matches", matches)))
 }
 
 // apiTextNanoIDHandler returns a newly generated NanoID via text.NanoID.
 func apiTextNanoIDHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"nanoid": text.NanoID(),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("nanoid", text.NanoID())))
 }
 
 // apiTextULIDHandler returns a newly generated ULID via text.ULID.
 func apiTextULIDHandler(w http.ResponseWriter, r *http.Request) {
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"ulid": text.ULID(),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("ulid", text.ULID())))
 }
 
 // textRegexRequest is the JSON body shape accepted by apiTextRegexHandler,
@@ -5062,25 +4821,16 @@ func apiTextRegexHandler(w http.ResponseWriter, r *http.Request) {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PATTERN")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":    body.Mode,
-			"matches": matches,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("matches", matches)))
 	case "replace":
 		result, err := text.RegexReplace(body.Pattern, body.Text, body.Replacement)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "INVALID_PATTERN")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":   body.Mode,
-			"result": result,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("result", result)))
 	case "explain":
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":        body.Mode,
-			"explanation": text.RegexExplain(body.Pattern),
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("explanation", text.RegexExplain(body.Pattern))))
 	}
 }
 
@@ -5118,10 +4868,7 @@ func apiCryptoEncryptHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"ciphertext": ciphertext,
-		"algorithm":  "AES-256-GCM",
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("ciphertext", ciphertext), responseField("algorithm", "AES-256-GCM")))
 }
 
 // cryptoDecryptParams validates the ciphertext/key fields accepted by
@@ -5149,9 +4896,7 @@ func apiCryptoDecryptHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"plaintext": plaintext,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("plaintext", plaintext)))
 }
 
 // cryptoRSARequest is the JSON body shape accepted by apiCryptoRSAHandler.
@@ -5202,37 +4947,26 @@ func apiCryptoRSAHandler(w http.ResponseWriter, r *http.Request) {
 		if bits == 0 {
 			bits = 2048
 		}
-		privateKey, publicKey, err := crypto.GenerateRSAKeys(bits)
+		_, publicKey, err := crypto.GenerateRSAKeys(bits)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATE_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":        body.Mode,
-			"private_key": privateKey,
-			"public_key":  publicKey,
-			"bits":        bits,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("public_key", publicKey), responseField("bits", bits)))
 	case "encrypt":
 		ciphertext, err := crypto.RSAEncrypt(body.Plaintext, body.PublicKey)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "ENCRYPT_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":       body.Mode,
-			"ciphertext": ciphertext,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("ciphertext", ciphertext)))
 	case "decrypt":
 		plaintext, err := crypto.RSADecrypt(body.Ciphertext, body.PrivateKey)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "DECRYPT_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":      body.Mode,
-			"plaintext": plaintext,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("plaintext", plaintext)))
 	}
 }
 
@@ -5271,10 +5005,7 @@ func apiCryptoHMACHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"algorithm": strings.ToLower(body.Algorithm),
-		"hmac":      mac,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("algorithm", strings.ToLower(body.Algorithm)), responseField("hmac", mac)))
 }
 
 // cryptoCertificateRequest is the JSON body shape accepted by
@@ -5316,24 +5047,31 @@ func apiCryptoCertificateHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch strings.ToLower(body.Mode) {
 	case "generate":
-		certPEM, keyPEM, err := crypto.GenerateCertificate(body.CommonName, body.ValidDays)
+		certPEM, _, err := crypto.GenerateCertificate(body.CommonName, body.ValidDays)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "GENERATE_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":        body.Mode,
-			"certificate": certPEM,
-			"private_key": keyPEM,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("certificate", certPEM)))
 	case "parse":
 		details, err := crypto.ParseCertificate(body.Certificate)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "PARSE_FAILED")
 			return
 		}
-		details["mode"] = body.Mode
-		writeEnvelopeOK(w, http.StatusOK, details)
+		writeEnvelopeOK(w, http.StatusOK, responseObject(
+			responseField("mode", body.Mode),
+			responseField("subject", details.Subject),
+			responseField("issuer", details.Issuer),
+			responseField("serial_number", details.SerialNumber),
+			responseField("not_before", details.NotBefore),
+			responseField("not_after", details.NotAfter),
+			responseField("dns_names", details.DNSNames),
+			responseField("is_ca", details.IsCA),
+			responseField("signature_algorithm", details.SignatureAlgorithm),
+			responseField("public_key_algorithm", details.PublicKeyAlgorithm),
+			responseField("version", details.Version),
+		))
 	}
 }
 
@@ -5383,36 +5121,26 @@ func apiCryptoEd25519Handler(w http.ResponseWriter, r *http.Request) {
 
 	switch strings.ToLower(body.Mode) {
 	case "generate":
-		privateKey, publicKey, err := crypto.GenerateEd25519Keys()
+		_, publicKey, err := crypto.GenerateEd25519Keys()
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusInternalServerError, "GENERATE_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":        body.Mode,
-			"private_key": privateKey,
-			"public_key":  publicKey,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("public_key", publicKey)))
 	case "sign":
 		signature, err := crypto.Ed25519Sign(body.Message, body.PrivateKey)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "SIGN_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":      body.Mode,
-			"signature": signature,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("signature", signature)))
 	case "verify":
 		valid, err := crypto.Ed25519Verify(body.Message, body.Signature, body.PublicKey)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "VERIFY_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":  body.Mode,
-			"valid": valid,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("valid", valid)))
 	}
 }
 
@@ -5465,36 +5193,26 @@ func apiCryptoPGPHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch strings.ToLower(body.Mode) {
 	case "generate":
-		publicKey, privateKey, err := crypto.GeneratePGPKeys(body.Name, body.Email)
+		publicKey, _, err := crypto.GeneratePGPKeys(body.Name, body.Email)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "GENERATE_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":        body.Mode,
-			"public_key":  publicKey,
-			"private_key": privateKey,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("public_key", publicKey)))
 	case "encrypt":
 		ciphertext, err := crypto.PGPEncrypt(body.Plaintext, body.PublicKey)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "ENCRYPT_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":       body.Mode,
-			"ciphertext": ciphertext,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("ciphertext", ciphertext)))
 	case "decrypt":
 		plaintext, err := crypto.PGPDecrypt(body.Ciphertext, body.PrivateKey)
 		if err != nil {
 			writeLocalizedAPIError(w, r, http.StatusBadRequest, "DECRYPT_FAILED")
 			return
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"mode":      body.Mode,
-			"plaintext": plaintext,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("mode", body.Mode), responseField("plaintext", plaintext)))
 	}
 }
 
@@ -5593,9 +5311,7 @@ func apiGenerateDockerfileHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "DOCKERFILE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"dockerfile": dockerfile,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("dockerfile", dockerfile)))
 }
 
 // apiGenerateGitignoreHandler renders a union of curated .gitignore
@@ -5608,9 +5324,7 @@ func apiGenerateGitignoreHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "GITIGNORE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"gitignore": gitignore,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("gitignore", gitignore)))
 }
 
 // apiGenerateLicenseHandler renders canonical license text for ?type=
@@ -5627,9 +5341,7 @@ func apiGenerateLicenseHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "LICENSE_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"license": license,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("license", license)))
 }
 
 // apiGenerateConfigHandler renders a configuration-file scaffold in the
@@ -5653,9 +5365,7 @@ func apiGenerateConfigHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "CONFIG_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"config": config,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("config", config)))
 }
 
 // apiGenerateSQLHandler decodes a JSON {"table": "...", "columns": [...]}
@@ -5676,24 +5386,18 @@ func apiGenerateSQLHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "SQL_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"sql": sql,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("sql", sql)))
 }
 
 // apiGenerateSSHKeyHandler generates a stateless Ed25519 SSH key pair and
-// returns both keys in the JSON envelope; nothing is persisted, so the
-// private key is returned in full (this is the only time it is available).
+// returns only the public key in the JSON envelope.
 func apiGenerateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
 	keyPair, err := generateService.SSHKey()
 	if err != nil {
 		writeLocalizedAPIError(w, r, http.StatusInternalServerError, "SSH_KEY_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"private_key": keyPair.PrivateKey,
-		"public_key":  keyPair.PublicKey,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("public_key", keyPair.PublicKey)))
 }
 
 // requestBaseURL builds the absolute public origin using BuildURL's
@@ -5719,9 +5423,7 @@ func apiGenerateAPIDocsHandler(w http.ResponseWriter, r *http.Request) {
 		writeLocalizedAPIError(w, r, http.StatusBadRequest, "API_DOCS_GENERATION_FAILED")
 		return
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]string{
-		"docs": docs,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("docs", docs)))
 }
 
 // apiGeneratePlaceholderHandler generates a placeholder image of

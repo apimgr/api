@@ -28,3 +28,9 @@ func TestResolveDPOFallsBackWhenOnlyWebhookIsConfigured(t *testing.T) {
 	}
 	assert.Equal(t, cfg.General, cfg.ResolveDPO())
 }
+
+func TestDefaultContactConfigDoesNotInventAdminMailbox(t *testing.T) {
+	cfg := defaultContactConfig("example.test")
+	assert.Empty(t, cfg.Admin.Email)
+	assert.Equal(t, "security@example.test", cfg.Security.Email)
+}

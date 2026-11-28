@@ -445,7 +445,7 @@ func TestJSONError_ContentType(t *testing.T) {
 // the JSON content type and serializes arbitrary data.
 func TestJSONResponse_ContentType(t *testing.T) {
 	rec := httptest.NewRecorder()
-	jsonResponse(rec, map[string]string{"ok": "yes"})
+	jsonResponse(rec, responseObject(responseField("ok", "yes")))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))

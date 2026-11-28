@@ -47,9 +47,9 @@ const (
 	ServiceS6
 )
 
-// Status reports the current install/run/autostart state of the service,
+// ServiceStatus reports the current install/run/autostart state of the service,
 // along with its PID when known. Populated by GetStatus.
-type Status struct {
+type ServiceStatus struct {
 	Installed bool
 	Running   bool
 	Enabled   bool
@@ -155,6 +155,9 @@ func Install() error {
 	if err := writeServiceDefinition(); err != nil {
 		return err
 	}
+	if !paths.IsElevated() {
+		return startUserService()
+	}
 	return Start()
 }
 
@@ -164,6 +167,9 @@ func Install() error {
 // AI.md PART 23 requires explicit and testable.
 func writeServiceDefinition() error {
 	if !paths.IsElevated() {
+		if err := PrepareRuntimeDirs(); err != nil {
+			return fmt.Errorf("prepare user runtime directories: %w", err)
+		}
 		return installUserService()
 	}
 
@@ -216,14 +222,36 @@ func installUserService() error {
 	}
 }
 
+func startUserService() error {
+	switch runtime.GOOS {
+	case "linux":
+		return exec.Command("systemctl", "--user", "start", appName).Run()
+	case "darwin":
+		plistPath := userLaunchAgentPath()
+		if plistPath == "" {
+			return fmt.Errorf("failed to resolve home directory for LaunchAgent")
+		}
+		target := fmt.Sprintf("gui/%d", os.Getuid())
+		if exec.Command("launchctl", "print", target+"/"+plistName).Run() == nil {
+			return nil
+		}
+		return exec.Command("launchctl", "bootstrap", target, plistPath).Run()
+	default:
+		return fmt.Errorf("user-level service installation is not supported on %s", runtime.GOOS)
+	}
+}
+
 // Uninstall stops, disables, and completely removes the service
 // definition, then deletes every directory the service owns (config,
-// data, cache, log, backup), the PID file, and finally the dedicated
-// system user/group. This is destructive and irreversible. When assumeYes
+// data, cache, log, backup), the PID file, and any system user/group
+// recorded as created by this application. This is destructive and irreversible. When assumeYes
 // is false it prompts interactively on stdin and aborts (returning nil)
 // unless answered "y"/"yes"; pass assumeYes=true only when the caller
 // already obtained confirmation through its own UI.
 func Uninstall(assumeYes bool) error {
+	if !paths.IsElevated() {
+		return fmt.Errorf("service uninstall requires root/Administrator; unprivileged installs may remove their user service manually")
+	}
 	if !assumeYes {
 		confirmed, err := confirmDestructive("This will delete ALL data, configs, and the system user. Continue? [y/N] ")
 		if err != nil {
@@ -304,6 +332,9 @@ func confirmDestructive(prompt string) (bool, error) {
 // service file, config/data/log directories, and system user in place.
 // Re-enable with Install.
 func Disable() error {
+	if err := requireElevatedServiceControl(); err != nil {
+		return err
+	}
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		if err := exec.Command("systemctl", systemctlArgs("stop")...).Run(); err != nil {
@@ -360,6 +391,9 @@ func Disable() error {
 
 // Start starts the service
 func Start() error {
+	if err := requireElevatedServiceControl(); err != nil {
+		return err
+	}
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("start")...).Run()
@@ -384,6 +418,9 @@ func Start() error {
 
 // Stop stops the service
 func Stop() error {
+	if err := requireElevatedServiceControl(); err != nil {
+		return err
+	}
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("stop")...).Run()
@@ -408,6 +445,9 @@ func Stop() error {
 
 // Restart restarts the service
 func Restart() error {
+	if err := requireElevatedServiceControl(); err != nil {
+		return err
+	}
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("restart")...).Run()
@@ -443,6 +483,9 @@ func Restart() error {
 // Reload sends a configuration reload to the service where supported,
 // falling back to a full Restart otherwise.
 func Reload() error {
+	if err := requireElevatedServiceControl(); err != nil {
+		return err
+	}
 	switch DetectServiceManager() {
 	case ServiceSystemd:
 		return exec.Command("systemctl", systemctlArgs("reload")...).Run()
@@ -459,12 +502,19 @@ func Reload() error {
 	}
 }
 
+func requireElevatedServiceControl() error {
+	if paths.IsElevated() {
+		return nil
+	}
+	return fmt.Errorf("managing a system service requires root/Administrator; this installation can use a per-user service")
+}
+
 // GetStatus queries the detected service manager for the current service
 // state. Failed/absent lookups are reported as false/0 rather than
 // errors, since "not installed" is expected, common, and not itself a
 // failure.
-func GetStatus() Status {
-	var st Status
+func GetStatus() ServiceStatus {
+	var st ServiceStatus
 
 	switch DetectServiceManager() {
 	case ServiceSystemd:
@@ -495,7 +545,7 @@ func GetStatus() Status {
 	case ServiceLaunchd:
 		st.Installed = fileExists(fmt.Sprintf("/Library/LaunchDaemons/%s.plist", plistName)) || fileExists(userLaunchAgentPath())
 		st.Running = exec.Command("launchctl", "list", plistName).Run() == nil
-		st.Enabled = st.Running
+		st.Enabled = st.Installed
 	case ServiceWindows:
 		out, err := exec.Command("sc.exe", "query", appName).Output()
 		st.Installed = err == nil
@@ -599,11 +649,17 @@ func (s ServiceType) String() string {
 // (possibly renamed) binary name so help always reflects how it was invoked.
 func HelpText(binaryName, lang string) string {
 	st := GetStatus()
+	stateKey := "cli.service_state_disabled"
+	if st.Running {
+		stateKey = "cli.service_state_running"
+	} else if st.Enabled {
+		stateKey = "cli.service_state_stopped"
+	}
 	values := map[string]string{
 		"binary_name":     binaryName,
 		"service_manager": fmt.Sprint(DetectServiceManager()),
 		"installed":       i18n.Translate(lang, boolTranslationKey(st.Installed)),
-		"running":         i18n.Translate(lang, boolTranslationKey(st.Running)),
+		"state":           i18n.Translate(lang, stateKey),
 		"enabled":         i18n.Translate(lang, boolTranslationKey(st.Enabled)),
 		"pid_line":        "",
 	}

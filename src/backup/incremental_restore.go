@@ -11,7 +11,48 @@ import (
 	"time"
 )
 
-func restoreIncrementalWithLimits(path, password string, limits RestoreLimits, roots []string, manifest *Manifest) (returnErr error) {
+func readAppSecretsPayload(path, password string, limits RestoreLimits, manifest *Manifest) (payload []byte, returnErr error) {
+	workspace, err := scratchDir("app-secrets-restore")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { returnErr = errors.Join(returnErr, os.RemoveAll(workspace)) }()
+	root := filepath.Join(workspace, "files")
+	if err := os.Mkdir(root, 0700); err != nil {
+		return nil, err
+	}
+	typeName := manifest.Type
+	if typeName == "" {
+		typeName = manifestType(manifest.Kind)
+	}
+	budget := &treeExtractionBudget{}
+	if typeName == "incremental" {
+		base := filepath.Join(filepath.Dir(path), manifest.BaseBackup)
+		if err := extractArchiveTree(base, password, limits, root, budget); err != nil {
+			return nil, err
+		}
+	}
+	if err := extractArchiveTree(path, password, limits, root, budget); err != nil {
+		return nil, err
+	}
+	if typeName == "incremental" {
+		for _, deleted := range manifest.Deleted {
+			if err := checkArchivePath(deleted); err != nil {
+				return nil, err
+			}
+			if err := os.Remove(filepath.Join(root, filepath.FromSlash(deleted))); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
+		}
+	}
+	payload, err = os.ReadFile(filepath.Join(root, "app_secrets.json"))
+	if err != nil {
+		return nil, fmt.Errorf("backup is missing required app_secrets.json: %w", err)
+	}
+	return payload, nil
+}
+
+func restoreIncrementalWithLimits(path, password string, limits RestoreLimits, roots []string, manifest *Manifest, commit, rollbackCommit func() error) (returnErr error) {
 	basePath := filepath.Join(filepath.Dir(path), manifest.BaseBackup)
 	baseManifest, err := VerifyWithLimits(basePath, password, limits)
 	if err != nil {
@@ -50,12 +91,14 @@ func restoreIncrementalWithLimits(path, password string, limits RestoreLimits, r
 	}()
 	merged := filepath.Join(workspace, "merged")
 	if err := os.Mkdir(merged, 0700); err != nil {
+		reportCriticalWriteError(err)
 		return err
 	}
-	if err := extractArchiveTree(basePath, password, limits.MaxArchiveSize, merged); err != nil {
+	budget := &treeExtractionBudget{}
+	if err := extractArchiveTree(basePath, password, limits, merged, budget); err != nil {
 		return err
 	}
-	if err := extractArchiveTree(path, password, limits.MaxArchiveSize, merged); err != nil {
+	if err := extractArchiveTree(path, password, limits, merged, budget); err != nil {
 		return err
 	}
 	for _, deleted := range manifest.Deleted {
@@ -97,7 +140,7 @@ func restoreIncrementalWithLimits(path, password string, limits RestoreLimits, r
 	}
 	combinedLimits := limits
 	combinedLimits.MaxArchiveSize = combinedInfo.Size()
-	return RestoreWithLimits(combinedPath, passwordForArchive(combinedPath, password), combinedLimits, roots...)
+	return restoreWithLimits(combinedPath, passwordForArchive(combinedPath, password), combinedLimits, commit, rollbackCommit, roots...)
 }
 
 func passwordForArchive(path, password string) string {
@@ -107,9 +150,24 @@ func passwordForArchive(path, password string) string {
 	return ""
 }
 
-func extractArchiveTree(path, password string, maxArchiveSize int64, destination string) error {
+type treeExtractionBudget struct {
+	expanded    int64
+	archiveSize int64
+	count       int
+}
+
+func extractArchiveTree(path, password string, limits RestoreLimits, destination string, budget *treeExtractionBudget) error {
+	limits = limits.normalized()
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.Size() <= 0 || info.Size() > limits.MaxArchiveSize || budget.archiveSize > limits.MaxArchiveSize-info.Size() {
+		return errors.New("incremental reconstruction exceeds configured archive-size limit")
+	}
+	budget.archiveSize += info.Size()
 	archivePassword := passwordForArchive(path, password)
-	file, gz, reader, err := openTarArchive(path, archivePassword, maxArchiveSize)
+	file, gz, reader, err := openTarArchive(path, archivePassword, limits.MaxArchiveSize)
 	if err != nil {
 		return err
 	}
@@ -129,22 +187,34 @@ func extractArchiveTree(path, password string, maxArchiveSize int64, destination
 		if header.Typeflag != tar.TypeReg || header.Size < 0 {
 			return errors.New("refusing invalid entry while reconstructing incremental backup")
 		}
+		budget.count++
+		if header.Size > limits.MaxFileSize || budget.count > limits.MaxFiles || budget.expanded > limits.MaxExpandedSize-header.Size {
+			return errors.New("incremental reconstruction exceeds configured extraction limits")
+		}
+		budget.expanded += header.Size
 		if err := checkArchivePath(header.Name); err != nil {
 			return err
 		}
 		target := filepath.Join(destination, relativeArchivePath(header.Name))
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+			reportCriticalWriteError(err)
 			return err
 		}
 		output, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 		if err != nil {
+			reportCriticalWriteError(err)
 			return err
 		}
-		_, copyErr := io.Copy(output, io.LimitReader(reader, header.Size))
+		written, copyErr := io.Copy(criticalWriteReporter{writer: output}, io.LimitReader(reader, header.Size+1))
+		if copyErr == nil && written != header.Size {
+			copyErr = errors.New("incremental archive entry is truncated or oversized")
+		}
 		if copyErr == nil {
 			copyErr = output.Chmod(os.FileMode(header.Mode & 0777))
+			reportCriticalWriteError(copyErr)
 		}
 		closeErr := output.Close()
+		reportCriticalWriteError(closeErr)
 		if err := errors.Join(copyErr, closeErr); err != nil {
 			return err
 		}
@@ -154,6 +224,9 @@ func extractArchiveTree(path, password string, maxArchiveSize int64, destination
 		}
 		if err := os.Chtimes(target, modTime, modTime); err != nil {
 			return err
+		}
+		if exceedsRatio(budget.expanded, budget.archiveSize, limits.MaxRatio) {
+			return errors.New("incremental reconstruction exceeds configured compression-ratio limit")
 		}
 	}
 }

@@ -33,7 +33,7 @@ func TestDNSCredentialCipherRoundTripAndRotationKey(t *testing.T) {
 
 func TestProtectDNSCredentialsEncryptsSecretsAndReturnsPlaintext(t *testing.T) {
 	configDir := t.TempDir()
-	paths.Init(configDir, t.TempDir(), t.TempDir())
+	paths.SetApplicationPathOverrides(configDir, t.TempDir(), t.TempDir())
 	key := base64.StdEncoding.EncodeToString([]byte("01234567890123456789012345678901"))
 	merged := map[string]interface{}{
 		"server": map[string]interface{}{
@@ -66,15 +66,16 @@ func TestProtectDNSCredentialsEncryptsSecretsAndReturnsPlaintext(t *testing.T) {
 
 func TestRotateEncryptionKeyReencryptsDNSCredentials(t *testing.T) {
 	configDir := t.TempDir()
-	paths.Init(configDir, t.TempDir(), t.TempDir())
+	paths.SetApplicationPathOverrides(configDir, t.TempDir(), t.TempDir())
 	oldKey := base64.StdEncoding.EncodeToString([]byte("01234567890123456789012345678901"))
 	cfg := defaultConfig()
 	cfg.Server.Security.EncryptionKey = oldKey
 	cfg.Server.Security.EncryptionKeyVersion = 1
 	cfg.Server.SSL.LetsEncrypt.DNSCredentials = map[string]string{"CF_DNS_API_TOKEN": "dns-secret"}
+	cfg.Server.Backup.EncryptionPassword = "backup-secret"
 	require.NoError(t, Save(cfg))
 
-	loaded, err := Load()
+	loaded, err := Load(nil)
 	require.NoError(t, err)
 	require.Equal(t, "dns-secret", loaded.Server.SSL.LetsEncrypt.DNSCredentials["CF_DNS_API_TOKEN"])
 	oldKey = loaded.Server.Security.EncryptionKey
@@ -94,8 +95,17 @@ func TestRotateEncryptionKeyReencryptsDNSCredentials(t *testing.T) {
 	require.Equal(t, "dns-secret", plain)
 	_, err = DecryptDNSCredential(stored, oldKey, "")
 	require.Error(t, err)
+	backupStoredValue, ok := getConfigPath(secrets, "server.backup.encryption_password")
+	require.True(t, ok)
+	backupStored, ok := backupStoredValue.(string)
+	require.True(t, ok)
+	backupPlain, err := DecryptAtRestSecret(backupStored, newKey, "")
+	require.NoError(t, err)
+	require.Equal(t, "backup-secret", backupPlain)
+	_, err = DecryptAtRestSecret(backupStored, oldKey, "")
+	require.Error(t, err)
 
-	reloaded, err := Load()
+	reloaded, err := Load(nil)
 	require.NoError(t, err)
 	require.Equal(t, "dns-secret", reloaded.Server.SSL.LetsEncrypt.DNSCredentials["CF_DNS_API_TOKEN"])
 }

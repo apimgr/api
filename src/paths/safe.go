@@ -53,13 +53,16 @@ func SafePath(input string) (string, error) {
 // SafeResourcePath validates relative file and resource names without
 // lowercasing or rewriting their case and extensions.
 func SafeResourcePath(input string) (string, error) {
-	if len(input) > 2048 || strings.Contains(input, "..") || strings.Contains(input, `\`) {
+	if len(input) > 2048 || strings.Contains(input, `\`) {
 		return "", ErrPathTraversal
 	}
 	var kept []string
 	for _, segment := range strings.Split(strings.Trim(input, "/"), "/") {
 		if segment == "" {
 			continue
+		}
+		if segment == "." || segment == ".." {
+			return "", ErrPathTraversal
 		}
 		if len(segment) > 255 || !validFileSegment.MatchString(segment) {
 			return "", ErrInvalidPath
@@ -85,7 +88,7 @@ func SafeDirPath(input string) (string, error) {
 		}
 	}
 	for _, segment := range strings.Split(filepath.ToSlash(input), "/") {
-		if segment == ".." {
+		if segment == "." || segment == ".." {
 			return "", ErrPathTraversal
 		}
 	}

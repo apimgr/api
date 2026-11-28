@@ -44,7 +44,7 @@ func operatorHTML(r *http.Request, name string) template.HTML {
 	if !ok || strings.TrimSpace(body) == "" {
 		return ""
 	}
-	cfg, _ := r.Context().Value(serverConfigKey).(*config.Config)
+	cfg, _ := r.Context().Value(serverConfigKey).(*config.ServerConfig)
 	if cfg == nil {
 		return ""
 	}
@@ -67,13 +67,13 @@ func operatorHTML(r *http.Request, name string) template.HTML {
 
 // LogConfiguredPageContent previews every configured language during startup
 // and after the configuration watcher applies a reload.
-func LogConfiguredPageContent(cfg *config.Config) {
+func LogConfiguredPageContent(cfg *config.ServerConfig) {
 	logConfiguredPageContent(cfg)
 }
 
 // logConfiguredPageContent previews every configured language during server
 // initialization, before any request renders the operator-supplied fragment.
-func logConfiguredPageContent(cfg *config.Config) {
+func logConfiguredPageContent(cfg *config.ServerConfig) {
 	if cfg == nil {
 		return
 	}
@@ -163,7 +163,7 @@ func operatorContentSource(r *http.Request, name string) (string, string, bool) 
 	if !operatorContentEntries[name] {
 		return "", "", false
 	}
-	cfg, _ := r.Context().Value(serverConfigKey).(*config.Config)
+	cfg, _ := r.Context().Value(serverConfigKey).(*config.ServerConfig)
 	if cfg == nil {
 		return "", "", false
 	}
@@ -243,7 +243,7 @@ func plainTextHTML(value string) string {
 	return strings.Join(paragraphs, "\n")
 }
 
-func replacePageContentVariables(value string, cfg *config.Config) string {
+func replacePageContentVariables(value string, cfg *config.ServerConfig) string {
 	variables := map[string]string{
 		"{app_name}":        cfg.Server.Branding.Title,
 		"{project_name}":    paths.ProjectName,

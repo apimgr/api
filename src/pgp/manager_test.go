@@ -20,8 +20,9 @@ import (
 func initPGPTestEnvironment(t *testing.T) context.Context {
 	t.Helper()
 	configDir, dataDir := t.TempDir(), t.TempDir()
-	paths.Init(configDir, dataDir, t.TempDir())
-	require.NoError(t, database.Init(config.DatabaseConfig{Driver: "sqlite"}, dataDir))
+	paths.SetApplicationPathOverrides(configDir, dataDir, t.TempDir())
+	t.Setenv("DATABASE_DIR", filepath.Join(dataDir, "db"))
+	require.NoError(t, database.InitDatabase(config.DatabaseConfig{Driver: "sqlite"}, dataDir))
 	t.Cleanup(func() {
 		require.NoError(t, database.Close())
 	})
@@ -33,7 +34,7 @@ func initPGPTestEnvironment(t *testing.T) context.Context {
 func TestRotateReencryptsStoredReportsAndPreservesActiveKeyOnFailure(t *testing.T) {
 	t.Run("retained PGP reports decrypt with the replacement key", func(t *testing.T) {
 		ctx := initPGPTestEnvironment(t)
-		cfg := &config.Config{}
+		cfg := &config.ServerConfig{}
 		cfg.Server.Branding.Title = "API"
 		cfg.Server.Contact.Security.Email = "security@example.invalid"
 
@@ -100,7 +101,7 @@ func TestRotateReencryptsStoredReportsAndPreservesActiveKeyOnFailure(t *testing.
 
 	t.Run("a report that cannot be decrypted leaves the active key untouched", func(t *testing.T) {
 		ctx := initPGPTestEnvironment(t)
-		cfg := &config.Config{}
+		cfg := &config.ServerConfig{}
 		cfg.Server.Branding.Title = "API"
 		cfg.Server.Contact.Security.Email = "security@example.invalid"
 		metadata, err := Generate(ctx, cfg)
@@ -146,7 +147,7 @@ func TestRotateReencryptsStoredReportsAndPreservesActiveKeyOnFailure(t *testing.
 
 func TestRecoverRotationDiscardsUncommittedStage(t *testing.T) {
 	ctx := initPGPTestEnvironment(t)
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Branding.Title = "API"
 	cfg.Server.Contact.Security.Email = "security@example.invalid"
 	oldMetadata, err := Generate(ctx, cfg)
@@ -173,7 +174,7 @@ func TestRecoverRotationDiscardsUncommittedStage(t *testing.T) {
 
 func TestRecoverRotationCompletesCommittedStageFromRecipientKeyID(t *testing.T) {
 	ctx := initPGPTestEnvironment(t)
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Branding.Title = "API"
 	cfg.Server.Contact.Security.Email = "security@example.invalid"
 	oldMetadata, err := Generate(ctx, cfg)
@@ -242,7 +243,7 @@ func TestRecoverRotationCompletesCommittedStageFromRecipientKeyID(t *testing.T) 
 
 func TestRecoverRotationUsesMetadataWhenNoPGPReportsExist(t *testing.T) {
 	ctx := initPGPTestEnvironment(t)
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Branding.Title = "API"
 	cfg.Server.Contact.Security.Email = "security@example.invalid"
 	_, err := Generate(ctx, cfg)
@@ -265,7 +266,7 @@ func TestRecoverRotationUsesMetadataWhenNoPGPReportsExist(t *testing.T) {
 	}
 }
 
-func prepareStagedRotation(ctx context.Context, cfg *config.Config) (database.SecurityPGPMetadata, string, string, string, error) {
+func prepareStagedRotation(ctx context.Context, cfg *config.ServerConfig) (database.SecurityPGPMetadata, string, string, string, error) {
 	oldPrivate, err := ReadPrivate(ctx)
 	if err != nil {
 		return database.SecurityPGPMetadata{}, "", "", "", err
@@ -343,7 +344,7 @@ func TestDeleteKeyMaterialRollsBackPartialRemoval(t *testing.T) {
 	for i, path := range filePaths {
 		require.NoError(t, os.WriteFile(path, []byte{byte('a' + i)}, 0600))
 	}
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Web.Security.PublishPGPKey = true
 	originalMetadata := database.SecurityPGPMetadata{Fingerprint: strings.Repeat("a", 40), Revoked: false}
 	metadataWrites := []bool{}
@@ -351,7 +352,7 @@ func TestDeleteKeyMaterialRollsBackPartialRemoval(t *testing.T) {
 	removeCalls := 0
 	wantErr := errors.New("injected remove failure")
 	err := deleteKeyMaterial(cfg, originalMetadata, filePaths,
-		func(value *config.Config) error {
+		func(value *config.ServerConfig) error {
 			configWrites = append(configWrites, value.Web.Security.PublishPGPKey)
 			return nil
 		},
@@ -385,13 +386,13 @@ func TestDeleteKeyMaterialRestoresAfterConfigOrMetadataFailure(t *testing.T) {
 			for i, path := range filePaths {
 				require.NoError(t, os.WriteFile(path, []byte{byte('a' + i)}, 0600))
 			}
-			cfg := &config.Config{}
+			cfg := &config.ServerConfig{}
 			cfg.Web.Security.PublishPGPKey = true
 			metadata := database.SecurityPGPMetadata{Fingerprint: strings.Repeat("b", 40)}
 			configCalls, metadataCalls := 0, 0
 			wantErr := errors.New("injected " + failAt + " failure")
 			err := deleteKeyMaterial(cfg, metadata, filePaths,
-				func(value *config.Config) error {
+				func(value *config.ServerConfig) error {
 					configCalls++
 					if failAt == "config" && configCalls == 1 {
 						return wantErr
@@ -445,7 +446,7 @@ func TestGeneratedKeyFingerprintExpiryAndEncryptedBackupPair(t *testing.T) {
 
 func TestReencryptPrivateKeyForSecretRotationUsesNewSecretAndIsIdempotent(t *testing.T) {
 	configDir := t.TempDir()
-	paths.Init(configDir, t.TempDir(), t.TempDir())
+	paths.SetApplicationPathOverrides(configDir, t.TempDir(), t.TempDir())
 	_, privateKey, _, err := servicecrypto.GenerateSecurityPGPKeys("API Security", "security@example.invalid", time.Now().UTC())
 	require.NoError(t, err)
 	oldSecret := []byte("0123456789abcdef0123456789abcdef")
@@ -471,7 +472,7 @@ func TestReencryptPrivateKeyForSecretRotationUsesNewSecretAndIsIdempotent(t *tes
 
 func TestKeyserverRetryAndRotationStatePersistence(t *testing.T) {
 	configDir := t.TempDir()
-	paths.Init(configDir, "", "")
+	paths.SetApplicationPathOverrides(configDir, "", "")
 	created := time.Date(2026, 7, 8, 9, 10, 11, 0, time.UTC)
 	state := persistedState{Version: 1, Keys: map[string]map[string]keyserverEntry{
 		"FINGERPRINT": {"keys.example.invalid": {Attempts: 3, NextAttempt: created.Add(time.Hour), LastError: "temporary failure"}},

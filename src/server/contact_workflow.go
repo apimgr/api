@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/requestid"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/email"
@@ -94,7 +95,7 @@ type contactRouteMatcherContextKey struct{}
 
 // contactWorkflowHandler serves the server-rendered report form and its
 // submit/review/confirm flow. The route registration is owned by server.go.
-func contactWorkflowHandler(cfg *config.Config, router chi.Router) http.HandlerFunc {
+func contactWorkflowHandler(cfg *config.ServerConfig, router chi.Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
 			http.Error(w, i18n.Translate(i18n.LangFromRequest(r), "errors.method_not_allowed"), http.StatusMethodNotAllowed)
@@ -113,7 +114,7 @@ func contactWorkflowHandler(cfg *config.Config, router chi.Router) http.HandlerF
 	}
 }
 
-func contactWorkflowGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+func contactWorkflowGet(cfg *config.ServerConfig, w http.ResponseWriter, r *http.Request) {
 	securityID := strings.TrimSpace(r.URL.Query().Get("security_id"))
 	window, valid, err := validSecurityID(r.Context(), securityID, time.Now().UTC())
 	if err != nil {
@@ -178,7 +179,7 @@ func contactWorkflowGet(cfg *config.Config, w http.ResponseWriter, r *http.Reque
 	_ = window
 }
 
-func contactWorkflowPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+func contactWorkflowPost(cfg *config.ServerConfig, w http.ResponseWriter, r *http.Request) {
 	var err error
 	settings := contactAntispamConfig(cfg)
 	settings.RouteExists = func(path string) bool {
@@ -481,7 +482,7 @@ func normalizeResearcherKey(ctx context.Context, value string) (string, error) {
 		transport.CloseIdleConnections()
 		return "", err
 	}
-	response, err := client.Do(request)
+	response, err := requestid.DoOutboundRequestWithID(client, request)
 	if err != nil {
 		transport.CloseIdleConnections()
 		return "", err
@@ -794,7 +795,7 @@ func requestScheme(r *http.Request) string {
 	return "http"
 }
 
-func acceptSecurityReport(cfg *config.Config, ctx context.Context, r *http.Request, fields map[string]string, idWindow int64) (string, bool, error) {
+func acceptSecurityReport(cfg *config.ServerConfig, ctx context.Context, r *http.Request, fields map[string]string, idWindow int64) (string, bool, error) {
 	trackingBytes := make([]byte, 8)
 	if _, err := rand.Read(trackingBytes); err != nil {
 		return "", false, err
@@ -888,7 +889,7 @@ func acceptSecurityReport(cfg *config.Config, ctx context.Context, r *http.Reque
 	return trackingID, acknowledged, nil
 }
 
-func dispatchSecurityReportWebhooks(cfg *config.Config, r *http.Request, trackingID, reportSeverity, component string) {
+func dispatchSecurityReportWebhooks(cfg *config.ServerConfig, r *http.Request, trackingID, reportSeverity, component string) {
 	for _, delivery := range securityReportWebhookDeliveries(cfg, r, trackingID, reportSeverity, component) {
 		notify.Dispatch(delivery.webhook, delivery.event)
 	}
@@ -899,7 +900,7 @@ type securityReportWebhookDelivery struct {
 	event   notify.Event
 }
 
-func securityReportWebhookDeliveries(cfg *config.Config, r *http.Request, trackingID, reportSeverity, component string) []securityReportWebhookDelivery {
+func securityReportWebhookDeliveries(cfg *config.ServerConfig, r *http.Request, trackingID, reportSeverity, component string) []securityReportWebhookDelivery {
 	securityWebhooks := cfg.Server.Contact.Security.Webhooks
 	adminWebhooks := cfg.Server.Contact.Admin.Webhooks
 	transports := make(map[string]struct{}, len(securityWebhooks)+len(adminWebhooks))
@@ -991,7 +992,7 @@ func encryptContactData(key, plaintext []byte) ([]byte, error) {
 	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
-func contactWorkflowGetWithValues(cfg *config.Config, w http.ResponseWriter, r *http.Request, values map[string]string, errorKey string) {
+func contactWorkflowGetWithValues(cfg *config.ServerConfig, w http.ResponseWriter, r *http.Request, values map[string]string, errorKey string) {
 	typeName := values["type"]
 	fieldList, titleKey := contactFieldsForType(typeName, values)
 	page := contactWorkflowPageData{PageData: newPageData(cfg, r, "contact"), Type: typeName, TitleKey: titleKey, Fields: fieldList, SecurityID: values["security_id"], ErrorKey: errorKey}
@@ -1271,7 +1272,7 @@ func contactDuplicate(fields map[string]string, configured ...contactAntispamSet
 	return false
 }
 
-func sendOrdinaryContact(cfg *config.Config, typeName string, fields map[string]string) error {
+func sendOrdinaryContact(cfg *config.ServerConfig, typeName string, fields map[string]string) error {
 	client := email.Get()
 	if client == nil || !client.Config().Enabled {
 		return fmt.Errorf("email is unavailable")
@@ -1294,7 +1295,7 @@ func sendOrdinaryContact(cfg *config.Config, typeName string, fields map[string]
 
 // SendSecurityStatusNotification emails only the tracking ID and new status.
 // It decrypts the contact blob locally and never exposes report content.
-func SendSecurityStatusNotification(cfg *config.Config, ctx context.Context, trackingID string, report database.SecurityReport) (bool, error) {
+func SendSecurityStatusNotification(cfg *config.ServerConfig, ctx context.Context, trackingID string, report database.SecurityReport) (bool, error) {
 	client := email.Get()
 	if client == nil || !client.Config().Enabled {
 		return false, nil

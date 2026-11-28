@@ -6,6 +6,7 @@
 <meta name="offline-title" content="{{.OfflineTitle}}">
 <meta name="offline-heading" content="{{.OfflineHeading}}">
 <meta name="offline-message" content="{{.OfflineMessage}}">
+<meta name="offline-reload" content="{{.OfflineReload}}">
 <meta name="description" content="{{if .PageDescription}}{{.PageDescription}}{{else}}{{.SiteDescription}}{{end}}">
 <meta name="robots" content="{{if .NoIndex}}noindex, nofollow{{else}}index, follow{{end}}">
 {{if .SEOKeywords}}<meta name="keywords" content="{{.SEOKeywords}}">{{end}}
@@ -65,6 +66,7 @@
 {{if .SEOTwitterCreator}}<meta name="twitter:creator" content="{{.SEOTwitterCreator}}">{{end}}
 {{end}}
 <script type="application/ld+json">{{.SEOJSONLD}}</script>
+{{.TrackingTags}}
 
 {{block "head-extra" .}}{{end}}
 {{end}}

@@ -1,6 +1,8 @@
 package backup
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,7 +37,8 @@ func (a *auditRecorder) has(event string) bool {
 }
 
 // newTestManager builds a Manager over a temp backup dir with a small source
-// tree to archive.
+// tree to archive. The maximum threshold keeps shared runner disk usage out of
+// ordinary backup tests; the disk-full test sets its own failing threshold.
 func newTestManager(t *testing.T, password string, retention config.BackupRetentionConfig) (*Manager, *auditRecorder, string) {
 	t.Helper()
 
@@ -43,13 +46,15 @@ func newTestManager(t *testing.T, password string, retention config.BackupRetent
 	require.NoError(t, os.WriteFile(filepath.Join(source, "server.yml"), []byte("server:\n  port: 8080\n"), 0600))
 
 	recorder := &auditRecorder{}
-	manager := NewManager(Options{
-		Dir:        t.TempDir(),
-		Sources:    []string{source},
-		Password:   password,
-		Retention:  retention,
-		AppVersion: "1.2.3",
-		Audit:      recorder.record,
+	manager := NewManager(BackupManagerOptions{
+		Dir:              t.TempDir(),
+		Sources:          []string{source},
+		ExportAppSecrets: func(context.Context) ([]byte, error) { return []byte("[]"), nil },
+		Password:         password,
+		Retention:        retention,
+		DiskThreshold:    100,
+		AppVersion:       "1.2.3",
+		Audit:            recorder.record,
 	})
 
 	return manager, recorder, source
@@ -68,6 +73,98 @@ func TestManagerRunDailyCreatesAndVerifies(t *testing.T) {
 	assert.True(t, recorder.has(EventCreated))
 	assert.False(t, recorder.has(EventDailyUpdated))
 	assert.False(t, recorder.has(EventVerificationFailed))
+}
+
+func TestSnapshotIncludesAppSecretsAndRedactsOnlyBackupCopy(t *testing.T) {
+	configDir := t.TempDir()
+	secretsPath := filepath.Join(configDir, "secrets.yml")
+	original := []byte("server:\n  token: operator-secret\n  backup:\n    encryption_password: backup-secret\n    other: retained\n")
+	require.NoError(t, os.WriteFile(secretsPath, original, 0600))
+	manager := NewManager(BackupManagerOptions{
+		Dir:     t.TempDir(),
+		Sources: []string{secretsPath},
+		ExportAppSecrets: func(context.Context) ([]byte, error) {
+			return []byte(`[{"name":"installation_secret","value":"encoded","updated_at":"2026-01-02T03:04:05Z"}]`), nil
+		},
+	})
+	options, workspace, err := manager.snapshotSourcesAtRunStart()
+	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(workspace) }()
+	require.Len(t, options.SnapshotFiles, 2)
+	var archiveSecret, appSecret string
+	for _, file := range options.SnapshotFiles {
+		switch file.ArchivePath {
+		case "secrets.yml":
+			data, readErr := os.ReadFile(file.Path)
+			require.NoError(t, readErr)
+			archiveSecret = string(data)
+		case "app_secrets.json":
+			data, readErr := os.ReadFile(file.Path)
+			require.NoError(t, readErr)
+			appSecret = string(data)
+		}
+	}
+	require.NotContains(t, archiveSecret, "operator-secret")
+	require.NotContains(t, archiveSecret, "backup-secret")
+	require.Contains(t, archiveSecret, "other: retained")
+	require.Contains(t, appSecret, "installation_secret")
+	unchanged, err := os.ReadFile(secretsPath)
+	require.NoError(t, err)
+	require.Equal(t, original, unchanged)
+}
+
+func TestRemoteAppSecretsAreCapturedBeforeFilesystemSources(t *testing.T) {
+	sourceDir := t.TempDir()
+	sourcePath := filepath.Join(sourceDir, "server.yml")
+	require.NoError(t, os.WriteFile(sourcePath, []byte("server: old\n"), 0600))
+	manager := NewManager(BackupManagerOptions{
+		Dir:     t.TempDir(),
+		Sources: []string{sourcePath},
+		ExportAppSecrets: func(context.Context) ([]byte, error) {
+			return []byte("[]\n"), os.WriteFile(sourcePath, []byte("server: after-db-snapshot\n"), 0600)
+		},
+	})
+	options, workspace, err := manager.snapshotSourcesAtRunStart()
+	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(workspace) }()
+
+	var captured []byte
+	for _, file := range options.SnapshotFiles {
+		if file.ArchivePath == "server.yml" {
+			captured, err = os.ReadFile(file.Path)
+			require.NoError(t, err)
+		}
+	}
+	assert.Equal(t, []byte("server: after-db-snapshot\n"), captured)
+}
+
+func TestManagerRestoreAppliesAppSecretsPayloadAfterVerification(t *testing.T) {
+	root := t.TempDir()
+	serverYAML := filepath.Join(root, "server.yml")
+	secretsJSON := filepath.Join(root, "app_secrets.json")
+	require.NoError(t, os.WriteFile(serverYAML, []byte("server: {}\n"), 0600))
+	wantSecrets := []byte(`[{"name":"installation_secret","value":"encoded","updated_at":"2026-01-02T03:04:05Z"}]`)
+	require.NoError(t, os.WriteFile(secretsJSON, wantSecrets, 0600))
+	archive := filepath.Join(t.TempDir(), "restore.tar.gz")
+	_, err := CreateWithOptions(archive, CreateOptions{Kind: KindFull, SnapshotFiles: []SnapshotFile{
+		{ArchivePath: "server.yml", Path: serverYAML},
+		{ArchivePath: "app_secrets.json", Path: secretsJSON},
+	}})
+	require.NoError(t, err)
+	var restored []byte
+	output := filepath.Join(t.TempDir(), "config")
+	manager := NewManager(BackupManagerOptions{
+		Dir:          t.TempDir(),
+		RestoreRoots: []string{output},
+		RestoreAppSecrets: func(_ context.Context, data []byte) error {
+			restored = append([]byte(nil), data...)
+			return nil
+		},
+	})
+	require.NoError(t, manager.Restore(Caller{FirstRun: true}, archive, ""))
+	require.Equal(t, wantSecrets, restored)
+	require.FileExists(t, filepath.Join(output, "server.yml"))
+	require.NoFileExists(t, filepath.Join(output, "app_secrets.json"))
 }
 
 // Encrypted runs must produce .enc archives that verify with the password.
@@ -106,7 +203,7 @@ func TestManagerRunDailyAppliesRetention(t *testing.T) {
 // Compliance mode blocks backups entirely until a password is configured.
 func TestManagerComplianceRequiresPassword(t *testing.T) {
 	recorder := &auditRecorder{}
-	manager := NewManager(Options{
+	manager := NewManager(BackupManagerOptions{
 		Dir:               t.TempDir(),
 		Sources:           []string{t.TempDir()},
 		ComplianceEnabled: true,
@@ -164,6 +261,17 @@ func TestManagerRestoreVerifiesFirst(t *testing.T) {
 
 	assert.FileExists(t, filepath.Join(source, "server.yml"))
 	assert.True(t, recorder.has(EventRestored))
+}
+
+func TestManagerRestoreRollsBackFilesWhenAppSecretsCommitFails(t *testing.T) {
+	manager, _, source := newTestManager(t, "", config.BackupRetentionConfig{MaxBackups: 1, MaxTotalSize: "0"})
+	path, err := manager.CreateManual("", time.Date(2026, 8, 3, 9, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(filepath.Join(source, "server.yml")))
+	manager.restoreAppSecrets = func(context.Context, []byte) error { return errors.New("database write failed") }
+	err = manager.Restore(Caller{FirstRun: true}, path, "")
+	require.Error(t, err)
+	assert.NoFileExists(t, filepath.Join(source, "server.yml"))
 }
 
 // A corrupted archive fails verification and is never restored.

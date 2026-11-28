@@ -1,0 +1,186 @@
+package app
+
+import (
+	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/database"
+	"github.com/apimgr/api/src/paths"
+	"github.com/apimgr/api/src/pgp"
+	"golang.org/x/term"
+)
+
+// manualRotationSecrets maps the secret names that AI.md PART 11 allows to be
+// rotated by hand to the audit event each rotation records. cookie_signing_key
+// and csrf_token_secret are auto-rotated only and are rejected here.
+var manualRotationSecrets = map[string]string{
+	database.SecretInstallationSecret: "security.installation_secret_rotated",
+	"encryption_key":                  "security.encryption_key_rotated",
+}
+
+// handleSecretCommand implements `--maintenance secret rotate <name>`, the
+// only supported path for manual secret rotation (AI.md PART 11: there is no
+// web UI and no admin API route). Authorization follows PART 5's sensitive
+// operations flow: root, or a re-prompt for the operator token.
+func handleSecretCommand(args []string, binaryName string) {
+	if len(args) < 2 || strings.ToLower(args[0]) != "rotate" {
+		printSecretHelp(binaryName)
+		os.Exit(exUsage)
+	}
+
+	name := strings.ToLower(args[1])
+	event, ok := manualRotationSecrets[name]
+	if !ok {
+		switch name {
+		case database.SecretCookieSigningKey, database.SecretCSRFTokenSecret:
+			cprintf("❌ %s is rotated automatically and cannot be rotated by hand\n", name)
+		default:
+			cprintf("❌ Unknown secret: %s\n", name)
+		}
+		printSecretHelp(binaryName)
+		os.Exit(exUsage)
+	}
+
+	cfg, err := config.Load(nil)
+	if err != nil {
+		cprintf("❌ Failed to load configuration: %v\n", err)
+		os.Exit(exConfig)
+	}
+
+	actor, err := authorizeSensitiveOperation(cfg)
+	if err != nil {
+		cprintf("❌ %v\n", err)
+		os.Exit(exUsage)
+	}
+
+	if !confirmSecretRotation(name) {
+		cprintln("Aborted; no secret was rotated.")
+		os.Exit(0)
+	}
+
+	if err := database.InitDatabase(cfg.Server.Database, paths.DataDir()); err != nil {
+		cprintf("❌ Failed to initialize database: %v\n", err)
+		os.Exit(exUnavailable)
+	}
+	defer func() { _ = database.Close() }()
+
+	ctx := context.Background()
+	if err := database.EnsureAppSecrets(ctx); err != nil {
+		cprintf("❌ Failed to initialize project secrets: %v\n", err)
+		os.Exit(exUnavailable)
+	}
+	if err := resumeEncryptionKeyRotation(ctx, cfg); err != nil {
+		cprintf("❌ Failed to finish encryption-key rotation before maintenance: %v\n", err)
+		os.Exit(exUnavailable)
+	}
+	if name == database.SecretInstallationSecret {
+		if err := pgp.RotateInstallationSecret(ctx); err != nil {
+			cprintf("❌ Failed to rotate %s: %v\n", name, err)
+			os.Exit(1)
+		}
+		cprintln("✅ installation_secret rotated; the previous value stays valid for 7 days")
+	} else {
+		currentKey, err := decodeAtRestKey(cfg.Server.Security.EncryptionKey)
+		if err != nil {
+			cprintf("❌ Failed to read current encryption key: %v\n", err)
+			os.Exit(exConfig)
+		}
+		if _, err := database.LoadPreviousEncryptionKey(ctx, currentKey, time.Now().UTC()); err == nil {
+			cprintln("❌ An encryption-key grace period is still active; retry after it expires.")
+			os.Exit(exUnavailable)
+		} else if !errors.Is(err, database.ErrSecretNotFound) {
+			cprintf("❌ Failed to check encryption-key rotation state: %v\n", err)
+			os.Exit(exUnavailable)
+		}
+		if err := config.RotateEncryptionKey(cfg, func(previousKey, nextKey []byte, until time.Time) error {
+			if err := database.StorePendingEncryptionKey(ctx, previousKey, nextKey, until); err != nil {
+				return err
+			}
+			return database.StorePreviousEncryptionKey(ctx, previousKey, nextKey, until)
+		}); err != nil {
+			cprintf("❌ Failed to rotate %s: %v\n", name, err)
+			os.Exit(1)
+		}
+		if err := database.DeletePendingEncryptionKey(ctx); err != nil {
+			cprintf("❌ Encryption key changed, but pending rotation state could not be cleared: %v\n", err)
+			os.Exit(exUnavailable)
+		}
+		if err := resumeEncryptionKeyRotation(ctx, cfg); err != nil {
+			cprintf("❌ Encryption key changed, but dependent data migration is incomplete: %v\n", err)
+			os.Exit(exUnavailable)
+		}
+		cprintln("✅ encryption_key rotated; the previous key stays valid for 30 days")
+	}
+
+	if err := database.WriteAuditEventWithSource(ctx, event, actor, "", "cli", map[string]any{
+		"secret": name,
+	}); err != nil {
+		cprintf("⚠️ Rotation succeeded but the audit entry failed: %v\n", err)
+	}
+}
+
+// authorizeSensitiveOperation authorizes a sensitive maintenance operation.
+// Running as root is sufficient; otherwise the operator token is re-prompted
+// and compared in constant time against the configured server.token.
+func authorizeSensitiveOperation(cfg *config.ServerConfig) (string, error) {
+	return authorizeSensitiveOperationWithWriter(cfg, os.Stdout)
+}
+
+func authorizeSensitiveOperationWithWriter(cfg *config.ServerConfig, writer io.Writer) (string, error) {
+	if os.Geteuid() == 0 {
+		return "root", nil
+	}
+	if cfg.Server.Token == "" {
+		return "", fmt.Errorf("server.token is not set; run this command as root")
+	}
+
+	if _, err := fmt.Fprint(writer, "Operator token: "); err != nil {
+		return "", fmt.Errorf("failed to write the operator token prompt: %w", err)
+	}
+	entered, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if _, writeErr := fmt.Fprintln(writer); writeErr != nil {
+		return "", fmt.Errorf("failed to finish the operator token prompt: %w", writeErr)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to read the operator token: %w", err)
+	}
+
+	supplied := sha256.Sum256([]byte(strings.TrimSpace(string(entered))))
+	expected := sha256.Sum256([]byte(cfg.Server.Token))
+	if subtle.ConstantTimeCompare(supplied[:], expected[:]) != 1 {
+		return "", fmt.Errorf("operator token rejected")
+	}
+	return "operator", nil
+}
+
+// confirmSecretRotation requires the operator to type the secret name back,
+// since rotation is irreversible for anything already past its grace window.
+func confirmSecretRotation(name string) bool {
+	cprintf("Rotating %s is irreversible. Type the secret name to confirm: ", name)
+	var typed string
+	if _, err := fmt.Scanln(&typed); err != nil {
+		return false
+	}
+	return strings.TrimSpace(typed) == name
+}
+
+// printSecretHelp documents the secret subcommand surface.
+func printSecretHelp(binaryName string) {
+	cprintf(`Secret Rotation
+
+  %s --maintenance secret rotate installation_secret
+  %s --maintenance secret rotate encryption_key
+
+Requires root or the operator token (server.token).
+cookie_signing_key and csrf_token_secret rotate automatically and cannot be
+rotated by hand.
+`, binaryName, binaryName)
+}

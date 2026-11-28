@@ -20,6 +20,7 @@ RUN go mod download
 # Copy source and build
 # BuildDate is NOT embedded - it is derived from BuildEpoch at process start
 COPY . .
+RUN go generate ./src/swagger
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOFLAGS=-buildvcs=false go build \
     -buildvcs=false -trimpath \
     -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildEpoch=${BUILD_EPOCH}' -X 'main.OfficialSite=${OFFICIAL_SITE}'" \

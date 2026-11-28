@@ -33,6 +33,8 @@ func TestSafeResourcePathPreservesFileNames(t *testing.T) {
 		"/static/css/main.css": "static/css/main.css",
 		"/robots.txt":          "robots.txt",
 		"Report_2024.PDF":      "Report_2024.PDF",
+		"report..pdf":          "report..pdf",
+		"reports..old/file":    "reports..old/file",
 		"//assets//logo.svg//": "assets/logo.svg",
 	} {
 		got, err := SafeResourcePath(input)
@@ -43,7 +45,7 @@ func TestSafeResourcePathPreservesFileNames(t *testing.T) {
 }
 
 func TestSafeResourcePathRejectsUnsafeNames(t *testing.T) {
-	for _, input := range []string{"", ".secret", "../secret", "reports..old/file", `assets\\logo.svg`, "bad name.txt", strings.Repeat("a", 256)} {
+	for _, input := range []string{"", ".secret", "../secret", "reports/../secret", `assets\\logo.svg`, "bad name.txt", strings.Repeat("a", 256)} {
 		if _, err := SafeResourcePath(input); err == nil {
 			t.Errorf("SafeResourcePath(%q) unexpectedly succeeded", input)
 		}

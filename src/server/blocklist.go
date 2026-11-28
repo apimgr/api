@@ -20,7 +20,7 @@ import (
 	"github.com/apimgr/api/src/securitydata"
 )
 
-func blocklistMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func blocklistMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	securitydata.DefaultBlocklists.Reload(cfg, time.Now().UTC())
 	securitydata.RegisterHealthChecks(cfg)
 	var configMu sync.Mutex

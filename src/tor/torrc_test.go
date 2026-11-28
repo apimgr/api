@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func testTorrc(cfg Config) string {
+func testTorrc(cfg TorConfig) string {
 	return generateTorrc(cfg, "/data/tor", "/data/tor/site", 64001)
 }
 

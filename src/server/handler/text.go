@@ -1,11 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/sanitize"
+	"github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/service/text"
 	"github.com/go-chi/chi/v5"
 )
@@ -13,7 +15,7 @@ import (
 // Helper functions for JSON responses
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(data)
+	writeJSONValue(w, data)
 }
 
 func jsonError(w http.ResponseWriter, r *http.Request, messageKey string, status int) {
@@ -22,12 +24,52 @@ func jsonError(w http.ResponseWriter, r *http.Request, messageKey string, status
 	if status >= http.StatusInternalServerError {
 		errorCode = "INTERNAL_ERROR"
 	}
+	body, err := sanitize.MarshalTaggedResponse(sanitize.TaggedObject{
+		{Name: "ok", Value: false},
+		{Name: "error", Value: errorCode},
+		{Name: "message", Value: i18n.Translate(i18n.LangFromRequest(r), messageKey)},
+	}, mode.IsAppModeProd())
+	if err != nil {
+		slog.Error("failed to encode JSON error response", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	body, err = sanitize.FormatResponseJSON(body)
+	if err != nil {
+		slog.Error("failed to format JSON error response", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":      false,
-		"error":   errorCode,
-		"message": i18n.Translate(i18n.LangFromRequest(r), messageKey),
-	})
+	if _, err := w.Write(body); err != nil {
+		slog.Error("failed to write JSON error response", "error", err)
+	}
+}
+
+func responseObject(fields ...sanitize.TaggedField) sanitize.TaggedObject {
+	return sanitize.TaggedObject(fields)
+}
+
+func responseField(name string, value interface{}) sanitize.TaggedField {
+	return sanitize.TaggedField{Name: name, Value: value}
+}
+
+func writeJSONValue(w http.ResponseWriter, value interface{}) {
+	body, err := sanitize.MarshalTaggedResponse(value, mode.IsAppModeProd())
+	if err != nil {
+		slog.Error("failed to encode JSON response", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	body, err = sanitize.FormatResponseJSON(body)
+	if err != nil {
+		slog.Error("failed to format JSON response", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if _, err := w.Write(body); err != nil {
+		slog.Error("failed to write JSON response", "error", err)
+	}
 }
 
 // UUID generates a UUID
@@ -49,10 +91,7 @@ func TextUUIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"uuid":    result,
-		"version": version,
-	})
+	jsonResponse(w, responseObject(responseField("uuid", result), responseField("version", version)))
 }
 
 // UUIDs generates multiple UUIDs
@@ -79,11 +118,7 @@ func TextUUIDsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"uuids":   result,
-		"count":   len(result),
-		"version": version,
-	})
+	jsonResponse(w, responseObject(responseField("uuids", result), responseField("count", len(result)), responseField("version", version)))
 }
 
 // Hash computes a hash
@@ -112,11 +147,7 @@ func TextHashHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"hash":      result,
-		"algorithm": algorithm,
-		"input":     input,
-	})
+	jsonResponse(w, responseObject(responseField("hash", result), responseField("algorithm", algorithm), responseField("input", input)))
 }
 
 // HashAll computes all common hashes
@@ -135,9 +166,7 @@ func TextHashAllHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := text.HashAll(input)
-	result["input"] = input
-
-	jsonResponse(w, result)
+	jsonResponse(w, responseObject(responseField("md5", result["md5"]), responseField("sha1", result["sha1"]), responseField("sha256", result["sha256"]), responseField("sha384", result["sha384"]), responseField("sha512", result["sha512"]), responseField("input", input)))
 }
 
 // Base64 encode
@@ -157,10 +186,7 @@ func TextBase64EncodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	result := text.Base64Encode(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"encoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("encoded", result), responseField("input", input)))
 }
 
 // Base64 decode
@@ -184,10 +210,7 @@ func TextBase64DecodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"decoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("decoded", result), responseField("input", input)))
 }
 
 // Base64URL encode
@@ -207,10 +230,7 @@ func TextBase64URLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	result := text.Base64URLEncode(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"encoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("encoded", result), responseField("input", input)))
 }
 
 // Base64URL decode
@@ -234,10 +254,7 @@ func TextBase64URLDecodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"decoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("decoded", result), responseField("input", input)))
 }
 
 // Base32 encode
@@ -257,10 +274,7 @@ func TextBase32EncodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	result := text.Base32Encode(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"encoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("encoded", result), responseField("input", input)))
 }
 
 // Base32 decode
@@ -284,10 +298,7 @@ func TextBase32DecodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"decoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("decoded", result), responseField("input", input)))
 }
 
 // Hex encode
@@ -307,10 +318,7 @@ func TextHexEncodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	result := text.HexEncode(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"encoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("encoded", result), responseField("input", input)))
 }
 
 // Hex decode
@@ -334,10 +342,7 @@ func TextHexDecodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"decoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("decoded", result), responseField("input", input)))
 }
 
 // URL encode
@@ -357,10 +362,7 @@ func TextURLEncodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	result := text.URLEncode(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"encoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("encoded", result), responseField("input", input)))
 }
 
 // URL decode
@@ -384,10 +386,7 @@ func TextURLDecodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"decoded": result,
-		"input":   input,
-	})
+	jsonResponse(w, responseObject(responseField("decoded", result), responseField("input", input)))
 }
 
 // Case conversion handlers
@@ -403,7 +402,7 @@ func TextCaseLowerHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.ToLower(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.ToLower(input)), responseField("input", input)))
 }
 
 // @Summary Convert to uppercase
@@ -418,7 +417,7 @@ func TextCaseUpperHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.ToUpper(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.ToUpper(input)), responseField("input", input)))
 }
 
 // @Summary Convert to title case
@@ -433,7 +432,7 @@ func TextCaseTitleHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.ToTitle(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.ToTitle(input)), responseField("input", input)))
 }
 
 // @Summary Convert to camelCase
@@ -448,7 +447,7 @@ func TextCaseCamelHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.ToCamelCase(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.ToCamelCase(input)), responseField("input", input)))
 }
 
 // @Summary Convert to snake_case
@@ -463,7 +462,7 @@ func TextCaseSnakeHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.ToSnakeCase(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.ToSnakeCase(input)), responseField("input", input)))
 }
 
 // @Summary Convert to kebab-case
@@ -478,7 +477,7 @@ func TextCaseKebabHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.ToKebabCase(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.ToKebabCase(input)), responseField("input", input)))
 }
 
 // @Summary Reverse text
@@ -493,7 +492,7 @@ func TextReverseHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.Reverse(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.Reverse(input)), responseField("input", input)))
 }
 
 // @Summary Text statistics
@@ -508,7 +507,8 @@ func TextStatsHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, text.Stats(input))
+	stats := text.Stats(input)
+	jsonResponse(w, responseObject(responseField("characters", stats["characters"]), responseField("characters_no_space", stats["characters_no_space"]), responseField("words", stats["words"]), responseField("lines", stats["lines"]), responseField("bytes", stats["bytes"])))
 }
 
 // @Summary ROT13 encode/decode
@@ -523,7 +523,7 @@ func TextROT13Handler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, r, "errors.required", http.StatusBadRequest)
 		return
 	}
-	jsonResponse(w, map[string]interface{}{"result": text.ROT13(input), "input": input})
+	jsonResponse(w, responseObject(responseField("result", text.ROT13(input)), responseField("input", input)))
 }
 
 // Lorem handlers
@@ -539,7 +539,7 @@ func TextLoremWordsHandler(w http.ResponseWriter, r *http.Request) {
 		count = 10
 	}
 	result := text.LoremWords(count)
-	jsonResponse(w, map[string]interface{}{"words": result, "count": len(result)})
+	jsonResponse(w, responseObject(responseField("words", result), responseField("count", len(result))))
 }
 
 // @Summary Generate lorem sentences
@@ -554,7 +554,7 @@ func TextLoremSentencesHandler(w http.ResponseWriter, r *http.Request) {
 		count = 5
 	}
 	result := text.LoremSentences(count)
-	jsonResponse(w, map[string]interface{}{"sentences": result, "count": len(result)})
+	jsonResponse(w, responseObject(responseField("sentences", result), responseField("count", len(result))))
 }
 
 // @Summary Generate lorem paragraphs
@@ -569,7 +569,7 @@ func TextLoremParagraphsHandler(w http.ResponseWriter, r *http.Request) {
 		count = 3
 	}
 	result := text.LoremParagraphs(count)
-	jsonResponse(w, map[string]interface{}{"paragraphs": result, "count": len(result)})
+	jsonResponse(w, responseObject(responseField("paragraphs", result), responseField("count", len(result))))
 }
 
 // ID generators
@@ -579,7 +579,7 @@ func TextLoremParagraphsHandler(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/text/ulid [get]
 func TextULIDHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{"ulid": text.ULID()})
+	jsonResponse(w, responseObject(responseField("ulid", text.ULID())))
 }
 
 // @Summary Generate NanoID
@@ -588,7 +588,7 @@ func TextULIDHandler(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/text/nanoid [get]
 func TextNanoIDHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{"nanoid": text.NanoID()})
+	jsonResponse(w, responseObject(responseField("nanoid", text.NanoID())))
 }
 
 // @Summary Generate KSUID
@@ -597,7 +597,7 @@ func TextNanoIDHandler(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/text/ksuid [get]
 func TextKSUIDHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{"ksuid": text.KSUID()})
+	jsonResponse(w, responseObject(responseField("ksuid", text.KSUID())))
 }
 
 // RegisterTextRoutes registers all text service routes

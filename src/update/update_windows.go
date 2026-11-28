@@ -7,6 +7,7 @@
 package update
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,7 +22,9 @@ func replaceBinary(currentPath, newBinaryPath string) error {
 	oldPath := currentPath + ".old"
 
 	// Remove any existing .old file left over from a previous update.
-	os.Remove(oldPath)
+	if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove previous update backup: %w", err)
+	}
 
 	// Rename the running binary to .old - this works on Windows even while
 	// the process is executing from it.
@@ -31,17 +34,37 @@ func replaceBinary(currentPath, newBinaryPath string) error {
 
 	// Move the new binary into place.
 	if err := os.Rename(newBinaryPath, currentPath); err != nil {
-		// Best-effort restore of the original binary.
-		os.Rename(oldPath, currentPath)
-		return fmt.Errorf("failed to move new binary: %w", err)
+		restoreErr := os.Rename(oldPath, currentPath)
+		return errors.Join(fmt.Errorf("failed to move new binary: %w", err), restoreErr)
 	}
 
 	// Schedule the old binary for deletion on reboot.
 	oldPathPtr, err := windows.UTF16PtrFromString(oldPath)
-	if err == nil {
-		windows.MoveFileEx(oldPathPtr, nil, windows.MOVEFILE_DELAY_UNTIL_REBOOT)
+	if err != nil {
+		return fmt.Errorf("encode old binary path for deletion: %w", err)
+	}
+	if err := windows.MoveFileEx(oldPathPtr, nil, windows.MOVEFILE_DELAY_UNTIL_REBOOT); err != nil {
+		rollbackErr := restoreOldBinary(currentPath, oldPath)
+		return errors.Join(fmt.Errorf("schedule old binary deletion: %w", err), rollbackErr)
 	}
 
+	return nil
+}
+
+func restoreOldBinary(currentPath, oldPath string) error {
+	failedPath := currentPath + ".failed"
+	if err := os.Remove(failedPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove failed replacement: %w", err)
+	}
+	if err := os.Rename(currentPath, failedPath); err != nil {
+		return fmt.Errorf("move failed replacement aside: %w", err)
+	}
+	if err := os.Rename(oldPath, currentPath); err != nil {
+		return errors.Join(fmt.Errorf("restore original binary: %w", err), os.Rename(failedPath, currentPath))
+	}
+	if err := os.Remove(failedPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove failed replacement: %w", err)
+	}
 	return nil
 }
 

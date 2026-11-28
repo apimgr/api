@@ -1,18 +1,23 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	credentialSanitize "github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
-	"github.com/apimgr/api/src/mode"
+	"github.com/apimgr/api/src/critical"
+	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/paths"
 )
 
@@ -23,10 +28,28 @@ type Logger struct {
 	errorLog    *log.Logger
 	appLog      *log.Logger
 	authLog     *log.Logger
-	auditLog    *log.Logger
 	securityLog *log.Logger
 	debugLog    *log.Logger
 	config      *config.LogsConfig
+}
+
+type criticalLogWriter struct {
+	writer io.Writer
+	mu     sync.Mutex
+	failed bool
+}
+
+func (w *criticalLogWriter) Write(data []byte) (int, error) {
+	n, err := w.writer.Write(data)
+	w.mu.Lock()
+	if err != nil && !w.failed {
+		w.failed = true
+		go critical.ReportWriteFailure("file_write")
+	} else if err == nil {
+		w.failed = false
+	}
+	w.mu.Unlock()
+	return n, err
 }
 
 // sensitiveQueryParams are the query parameter names redacted from logged
@@ -131,11 +154,6 @@ func NewLogger(cfg *config.LogsConfig) (*Logger, error) {
 		return nil, err
 	}
 
-	// Initialize audit log
-	if err := logger.initAuditLog(logDir); err != nil {
-		return nil, err
-	}
-
 	// Initialize security log
 	if err := logger.initSecurityLog(logDir); err != nil {
 		return nil, err
@@ -159,7 +177,7 @@ func (l *Logger) initAccessLog(logDir string) error {
 		return fmt.Errorf("failed to open access log: %w", err)
 	}
 
-	l.accessLog = log.New(f, "", 0)
+	l.accessLog = log.New(&criticalLogWriter{writer: f}, "", 0)
 	return nil
 }
 
@@ -171,7 +189,7 @@ func (l *Logger) initServerLog(logDir string) error {
 		return fmt.Errorf("failed to open server log: %w", err)
 	}
 
-	l.serverLog = log.New(f, "", 0)
+	l.serverLog = log.New(&criticalLogWriter{writer: f}, "", 0)
 	return nil
 }
 
@@ -183,7 +201,7 @@ func (l *Logger) initErrorLog(logDir string) error {
 		return fmt.Errorf("failed to open error log: %w", err)
 	}
 
-	l.errorLog = log.New(f, "", 0)
+	l.errorLog = log.New(&criticalLogWriter{writer: f}, "", 0)
 	return nil
 }
 
@@ -195,7 +213,7 @@ func (l *Logger) initAppLog(logDir string) error {
 		return fmt.Errorf("failed to open app log: %w", err)
 	}
 
-	l.appLog = log.New(f, "", 0)
+	l.appLog = log.New(&criticalLogWriter{writer: f}, "", 0)
 	return nil
 }
 
@@ -207,19 +225,7 @@ func (l *Logger) initAuthLog(logDir string) error {
 		return fmt.Errorf("failed to open auth log: %w", err)
 	}
 
-	l.authLog = log.New(f, "", 0)
-	return nil
-}
-
-// initAuditLog initializes the audit log (JSON only)
-func (l *Logger) initAuditLog(logDir string) error {
-	logPath := filepath.Join(logDir, l.config.Audit.Filename)
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open audit log: %w", err)
-	}
-
-	l.auditLog = log.New(f, "", 0)
+	l.authLog = log.New(&criticalLogWriter{writer: f}, "", 0)
 	return nil
 }
 
@@ -231,7 +237,7 @@ func (l *Logger) initSecurityLog(logDir string) error {
 		return fmt.Errorf("failed to open security log: %w", err)
 	}
 
-	l.securityLog = log.New(f, "", 0)
+	l.securityLog = log.New(&criticalLogWriter{writer: f}, "", 0)
 	return nil
 }
 
@@ -243,7 +249,7 @@ func (l *Logger) initDebugLog(logDir string) error {
 		return fmt.Errorf("failed to open debug log: %w", err)
 	}
 
-	l.debugLog = log.New(f, "", 0)
+	l.debugLog = log.New(&criticalLogWriter{writer: f}, "", 0)
 	return nil
 }
 
@@ -253,9 +259,9 @@ func (l *Logger) LogAccess(r *http.Request, status int, size int, duration time.
 		return
 	}
 
-	// Suppress successful health-check requests unless debug mode is
-	// enabled or the response was not a 2xx
-	if status >= 200 && status < 300 && !mode.IsDebugEnabled() && isHealthCheckPath(r.URL.Path) {
+	// Suppress successful health-check requests in every mode. Failures
+	// remain visible in the access log.
+	if status >= 200 && status < 300 && isHealthCheckPath(r.URL.Path) {
 		return
 	}
 
@@ -284,7 +290,7 @@ func (l *Logger) LogAccess(r *http.Request, status int, size int, duration time.
 			referer,
 			userAgent,
 		)
-		l.accessLog.Println(logLine)
+		l.accessLog.Println(credentialSanitize.SanitizeLogText(logLine))
 
 	case "nginx":
 		// Nginx Common Log Format
@@ -298,7 +304,7 @@ func (l *Logger) LogAccess(r *http.Request, status int, size int, duration time.
 			status,
 			size,
 		)
-		l.accessLog.Println(logLine)
+		l.accessLog.Println(credentialSanitize.SanitizeLogText(logLine))
 
 	case "json":
 		// Structured JSON format
@@ -315,18 +321,19 @@ func (l *Logger) LogAccess(r *http.Request, status int, size int, duration time.
 			"referer":    r.Header.Get("Referer"),
 			"request_id": r.Header.Get("X-Request-ID"),
 		}
-		data, _ := json.Marshal(entry)
+		data, _ := json.Marshal(credentialSanitize.SanitizeLogFields(entry))
 		l.accessLog.Println(string(data))
 
 	case "custom":
 		// Custom format using variables
 		logLine := l.formatCustom(l.config.Access.Custom, r, status, size, duration)
-		l.accessLog.Println(logLine)
+		l.accessLog.Println(credentialSanitize.SanitizeLogText(logLine))
 	}
 }
 
 // LogServer logs application events
 func (l *Logger) LogServer(level, message string) {
+	level, message = credentialSanitize.SanitizeLogText(level), credentialSanitize.SanitizeLogText(message)
 	globalRecentLog.add(level, message, map[string]string{"log": "server"})
 	if l.serverLog == nil {
 		return
@@ -343,14 +350,19 @@ func (l *Logger) LogServer(level, message string) {
 			"level": level,
 			"msg":   message,
 		}
-		data, _ := json.Marshal(entry)
+		data, _ := json.Marshal(credentialSanitize.SanitizeLogFields(entry))
 		l.serverLog.Println(string(data))
 	}
 }
 
 // LogError logs error messages
 func (l *Logger) LogError(err error, context map[string]interface{}) {
-	globalRecentLog.add("ERROR", err.Error(), map[string]string{"log": "error"})
+	if err == nil {
+		return
+	}
+	errMessage := credentialSanitize.SanitizeLogText(err.Error())
+	context = credentialSanitize.SanitizeLogFields(context)
+	globalRecentLog.add("ERROR", errMessage, map[string]string{"log": "error"})
 	if l.errorLog == nil {
 		return
 	}
@@ -358,19 +370,19 @@ func (l *Logger) LogError(err error, context map[string]interface{}) {
 	switch l.config.Error.Format {
 	case "text":
 		timestamp := time.Now().Format("2006-01-02 15:04:05")
-		l.errorLog.Printf("%s [ERROR] %s", timestamp, err.Error())
+		l.errorLog.Printf("%s [ERROR] %s", timestamp, errMessage)
 
 	case "json":
 		entry := map[string]interface{}{
 			"time":  time.Now().UTC().Format(time.RFC3339),
 			"level": "ERROR",
-			"error": err.Error(),
+			"error": errMessage,
 		}
 		// Merge context
 		for k, v := range context {
 			entry[k] = v
 		}
-		data, _ := json.Marshal(entry)
+		data, _ := json.Marshal(credentialSanitize.SanitizeLogFields(entry))
 		l.errorLog.Println(string(data))
 	}
 }
@@ -378,6 +390,8 @@ func (l *Logger) LogError(err error, context map[string]interface{}) {
 // LogApp logs general application events (info/warn) in logfmt
 // Example: time=2026-05-13T10:58:00-04:00 level=INFO msg="user created" id=abc123 ip=1.2.3.4
 func (l *Logger) LogApp(level, message string, fields map[string]interface{}) {
+	level, message = credentialSanitize.SanitizeLogText(level), credentialSanitize.SanitizeLogText(message)
+	fields = credentialSanitize.SanitizeLogFields(fields)
 	globalRecentLog.add(level, message, map[string]string{"log": "app"})
 	if l.appLog == nil {
 		return
@@ -401,7 +415,9 @@ func (l *Logger) LogAuth(fields map[string]interface{}) {
 		return
 	}
 
+	fields = credentialSanitize.SanitizeLogFields(fields)
 	hostname, _ := os.Hostname()
+	hostname = credentialSanitize.SanitizeLogText(hostname)
 	timestamp := time.Now().Format("Jan _2 15:04:05")
 
 	var b strings.Builder
@@ -416,23 +432,12 @@ func (l *Logger) LogAuth(fields map[string]interface{}) {
 
 // LogAudit logs audit events (JSON only)
 func (l *Logger) LogAudit(event string, details map[string]interface{}) {
-	if l.auditLog == nil || !l.config.Audit.Enabled {
+	if l == nil || l.config == nil || !l.config.Audit.Enabled {
 		return
 	}
-
-	// Audit log is ALWAYS JSON
-	entry := map[string]interface{}{
-		"time":  time.Now().UTC().Format(time.RFC3339),
-		"event": event,
+	if err := database.WriteAuditEvent(context.Background(), event, "", "", details); err != nil {
+		log.Printf("audit: write %s failed: %s", credentialSanitize.SanitizeLogText(event), credentialSanitize.SanitizeLogText(err.Error()))
 	}
-
-	// Merge details
-	for k, v := range details {
-		entry[k] = v
-	}
-
-	data, _ := json.Marshal(entry)
-	l.auditLog.Println(string(data))
 }
 
 // LogSecurity logs security events
@@ -441,6 +446,8 @@ func (l *Logger) LogSecurity(event string, ip string, details map[string]interfa
 		return
 	}
 
+	event, ip = credentialSanitize.SanitizeLogText(event), credentialSanitize.SanitizeLogText(ip)
+	details = credentialSanitize.SanitizeLogFields(details)
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
 	switch l.config.Security.Format {
@@ -451,6 +458,7 @@ func (l *Logger) LogSecurity(event string, ip string, details map[string]interfa
 	case "syslog":
 		// RFC 5424 syslog format
 		hostname, _ := os.Hostname()
+		hostname = credentialSanitize.SanitizeLogText(hostname)
 		l.securityLog.Printf("<%d>1 %s %s api - - - %s ip=%s",
 			14, // facility=user, severity=info
 			time.Now().UTC().Format(time.RFC3339),
@@ -477,7 +485,7 @@ func (l *Logger) LogSecurity(event string, ip string, details map[string]interfa
 		for k, v := range details {
 			entry[k] = v
 		}
-		data, _ := json.Marshal(entry)
+		data, _ := json.Marshal(credentialSanitize.SanitizeLogFields(entry))
 		l.securityLog.Println(string(data))
 
 	case "text":
@@ -491,6 +499,8 @@ func (l *Logger) LogDebug(message string, context map[string]interface{}) {
 		return
 	}
 
+	message = credentialSanitize.SanitizeLogText(message)
+	context = credentialSanitize.SanitizeLogFields(context)
 	switch l.config.Debug.Format {
 	case "text":
 		timestamp := time.Now().Format("2006-01-02 15:04:05")
@@ -505,7 +515,7 @@ func (l *Logger) LogDebug(message string, context map[string]interface{}) {
 		for k, v := range context {
 			entry[k] = v
 		}
-		data, _ := json.Marshal(entry)
+		data, _ := json.Marshal(credentialSanitize.SanitizeLogFields(entry))
 		l.debugLog.Println(string(data))
 	}
 }
@@ -537,7 +547,7 @@ func (l *Logger) formatCustom(format string, r *http.Request, status int, size i
 		result = strings.ReplaceAll(result, key, value)
 	}
 
-	return result
+	return credentialSanitize.SanitizeLogText(result)
 }
 
 // Global logger instance

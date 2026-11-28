@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/common/requestid"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/health"
 	"github.com/apimgr/api/src/paths"
@@ -80,7 +81,7 @@ func blocklistUpdateTask() error {
 	return fmt.Errorf("blocklist update failed: %w", lastErr)
 }
 
-func updateBlocklistSource(source config.BlocklistSource, cfg *config.Config, directory string) error {
+func updateBlocklistSource(source config.BlocklistSource, cfg *config.ServerConfig, directory string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), feedDownloadTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source.URL, nil)
@@ -88,7 +89,7 @@ func updateBlocklistSource(source config.BlocklistSource, cfg *config.Config, di
 		return err
 	}
 	req.Header.Set("User-Agent", "api/scheduler")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(http.DefaultClient, req)
 	if err != nil {
 		return err
 	}
@@ -233,7 +234,7 @@ func trivyPullToken(ctx context.Context, registry, repository string) (string, e
 		return "", fmt.Errorf("build token request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(http.DefaultClient, req)
 	if err != nil {
 		return "", fmt.Errorf("request pull token: %w", err)
 	}
@@ -275,7 +276,7 @@ func trivyLayerDigestWithClient(ctx context.Context, client *http.Client, token,
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json")
 
-	resp, err := client.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(client, req)
 	if err != nil {
 		return "", fmt.Errorf("fetch manifest: %w", err)
 	}
@@ -320,7 +321,7 @@ func installTrivyDatabase(ctx context.Context, client *http.Client, blobURL, tok
 		return fmt.Errorf("build Trivy blob request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := client.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(client, req)
 	if err != nil {
 		return fmt.Errorf("fetch Trivy database layer: %w", err)
 	}
@@ -441,7 +442,7 @@ func dataConfigBool(data map[string]interface{}, section, key string) bool {
 	return value
 }
 
-func securityDataDirectory(cfg *config.Config) string {
+func securityDataDirectory(cfg *config.ServerConfig) string {
 	if cfg != nil {
 		if configured, ok := cfg.Data["security_dir"].(string); ok && strings.TrimSpace(configured) != "" {
 			return strings.TrimSpace(configured)

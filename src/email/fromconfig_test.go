@@ -47,10 +47,18 @@ func TestClientConfigFromConfig_DefaultSender(t *testing.T) {
 	assert.Equal(t, "ops@example.com", got.ReplyTo)
 }
 
-func TestClientConfigFromConfig_NoFQDNFallsBackToLocalhost(t *testing.T) {
+func TestClientConfigFromConfig_NoFQDNDisablesEmail(t *testing.T) {
 	var cfg config.EmailConfig
-	got := ClientConfigFromConfig(cfg, "My App", "", false)
-	assert.Equal(t, "no-reply@localhost", got.FromEmail)
+	got := ClientConfigFromConfig(cfg, "My App", "", true)
+	assert.Empty(t, got.FromEmail)
+	assert.False(t, got.Enabled)
+}
+
+func TestClientConfigFromConfig_NoFQDNDisablesEvenExplicitSender(t *testing.T) {
+	var cfg config.EmailConfig
+	cfg.From.Email = "ops@example.com"
+	got := ClientConfigFromConfig(cfg, "My App", "", true)
+	assert.Equal(t, "ops@example.com", got.FromEmail)
 	assert.False(t, got.Enabled)
 }
 

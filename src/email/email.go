@@ -27,8 +27,8 @@ import (
 	xhtml "golang.org/x/net/html"
 )
 
-// Config holds email configuration
-type Config struct {
+// EmailConfig holds email configuration
+type EmailConfig struct {
 	Enabled   bool
 	SMTPHost  string
 	SMTPPort  int
@@ -37,7 +37,7 @@ type Config struct {
 	FromName  string
 	FromEmail string
 	// TLS selects the transport security mode for outbound mail, per
-	// AI.md PART 17 "SMTP Config": auto, starttls, tls, none.
+	// AI.md PART 17 "SMTP EmailConfig": auto, starttls, tls, none.
 	TLS string
 	// ReplyTo is server.notifications.email.reply_to. When non-empty it
 	// is emitted as the Reply-To header on every message and supplies the
@@ -46,7 +46,7 @@ type Config struct {
 	ReplyTo string
 }
 
-// TLS mode values accepted by Config.TLS (AI.md PART 17 "SMTP Config").
+// TLS mode values accepted by EmailConfig.TLS (AI.md PART 17 "SMTP EmailConfig").
 const (
 	TLSModeAuto     = "auto"
 	TLSModeSTARTTLS = "starttls"
@@ -85,16 +85,16 @@ type Attachment struct {
 
 // Client represents an email client
 type Client struct {
-	config      Config
+	config      EmailConfig
 	dialTimeout time.Duration
 }
 
 // NewClient creates a new email client
-func NewClient(config Config) *Client {
+func NewClient(config EmailConfig) *Client {
 	return newClient(config, true)
 }
 
-func newClient(config Config, logTLSPolicy bool) *Client {
+func newClient(config EmailConfig, logTLSPolicy bool) *Client {
 	mode := strings.ToLower(strings.TrimSpace(config.TLS))
 	if mode == "" {
 		mode = TLSModeAuto
@@ -108,11 +108,11 @@ func newClient(config Config, logTLSPolicy bool) *Client {
 	}
 }
 
-// Config returns a copy of the client's configuration so callers outside
+// EmailConfig returns a copy of the client's configuration so callers outside
 // this package can inspect the resolved SMTP settings (host/port for
 // status output, ReplyTo for the {notification_reply_to} variable)
 // without the package exposing its mutable internals.
-func (c *Client) Config() Config {
+func (c *Client) Config() EmailConfig {
 	return c.config
 }
 
@@ -491,7 +491,7 @@ func (c *Client) Send(msg Message) error {
 
 	from := c.config.FromEmail
 	if from == "" {
-		from = "no-reply@localhost"
+		return fmt.Errorf("email is not enabled: sender address requires a configured FQDN")
 	}
 	for _, recipient := range msg.To {
 		if err := c.sendOne(msg, from, recipient); err != nil {
@@ -557,20 +557,20 @@ const autoDetectDialTimeout = time.Second
 // TestConnection tests an SMTP endpoint using tls:auto, including the
 // port-specific STARTTLS behavior used during SMTP autodetection.
 func TestConnection(host string, port int) error {
-	return testConnectionWithConfig(Config{SMTPHost: host, SMTPPort: port, TLS: TLSModeAuto}, false)
+	return testConnectionWithConfig(EmailConfig{SMTPHost: host, SMTPPort: port, TLS: TLSModeAuto}, false)
 }
 
 // TestConnectionWithConfig checks the SMTP session using the same TLS mode
 // and certificate policy as actual delivery.
-func TestConnectionWithConfig(config Config) error {
+func TestConnectionWithConfig(config EmailConfig) error {
 	return testConnectionWithConfig(config, false)
 }
 
-func testConnectionWithConfig(config Config, logTLSPolicy bool) error {
+func testConnectionWithConfig(config EmailConfig, logTLSPolicy bool) error {
 	return testConnectionWithTimeout(config, logTLSPolicy, dialTimeout)
 }
 
-func testConnectionWithTimeout(config Config, logTLSPolicy bool, timeout time.Duration) error {
+func testConnectionWithTimeout(config EmailConfig, logTLSPolicy bool, timeout time.Duration) error {
 	smtpClient := newClient(config, logTLSPolicy)
 	smtpClient.dialTimeout = timeout
 	client, conn, err := smtpClient.dialSMTPWithConn()
@@ -625,7 +625,7 @@ func AutoDetectSMTPFor(fqdn string) (host string, port int, found bool) {
 
 	for _, h := range detectionHosts(fqdn) {
 		for _, p := range ports {
-			if err := testConnectionWithTimeout(Config{SMTPHost: h, SMTPPort: p, TLS: TLSModeAuto}, false, autoDetectDialTimeout); err == nil {
+			if err := testConnectionWithTimeout(EmailConfig{SMTPHost: h, SMTPPort: p, TLS: TLSModeAuto}, false, autoDetectDialTimeout); err == nil {
 				log.Printf("Email: Auto-detected SMTP at %s:%d", h, p)
 				return h, p, true
 			}

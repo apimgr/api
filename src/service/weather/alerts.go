@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // Alert is a normalized weather alert/warning, uniform across every
@@ -213,7 +215,7 @@ func fetchMeteoAlarmAlerts(ctx context.Context, loc *Location) ([]*Alert, error)
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := httpClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("MeteoAlarm alerts lookup failed: %w", err)
 	}

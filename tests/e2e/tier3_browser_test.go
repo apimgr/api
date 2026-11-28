@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
 
@@ -55,10 +56,11 @@ func assertClean(t *testing.T, ctx context.Context, path string, rec *pageRecord
 // console errors and zero failed assets or XHRs.
 func TestTier3PagesLoadCleanly(t *testing.T) {
 	paths := []string{"/", "/categories"}
+	categories, tools := requireFeatureInventory(t)
 	for _, c := range categories {
 		paths = append(paths, c.path)
 	}
-	for _, tool := range toolPages {
+	for _, tool := range tools {
 		paths = append(paths, tool.path)
 	}
 	for _, srv := range serverPages {
@@ -86,6 +88,7 @@ func TestTier3PagesLoadCleanly(t *testing.T) {
 // link it can reach and fails on dead links and server errors.
 func TestTier3InternalLinkCrawl(t *testing.T) {
 	seeds := []string{"/", "/categories"}
+	categories, _ := requireFeatureInventory(t)
 	for _, c := range categories {
 		seeds = append(seeds, c.path)
 	}
@@ -366,10 +369,11 @@ func TestTier3UUIDToolInteraction(t *testing.T) {
 	assertClean(t, ctx, "/text/uuid", rec)
 }
 
-// TestTier3ToolFormsAreWired asserts every representative tool form is wired
+// TestTier3ToolFormsAreWired asserts every registered tool form is wired
 // to something that can produce a result in the browser.
 func TestTier3ToolFormsAreWired(t *testing.T) {
-	for _, tool := range toolPages {
+	_, tools := requireFeatureInventory(t)
+	for _, tool := range tools {
 		t.Run(tool.path, func(t *testing.T) {
 			ctx, rec, html := visitAndRecord(t, tool.path)
 			if !strings.Contains(html, "<form") {
@@ -399,6 +403,37 @@ func TestTier3ToolFormsAreWired(t *testing.T) {
 			if !wired {
 				saveArtifacts(t, ctx, "tier3-form"+strings.ReplaceAll(tool.path, "/", "-"))
 				t.Errorf("%s: the form is wired to neither an API endpoint nor a native action", tool.path)
+			}
+			assertClean(t, ctx, tool.path, rec)
+		})
+	}
+}
+
+// TestTier3ToolFeatureInteractions submits every registered tool form in the
+// scripted browser and requires the page to reach its API endpoint and render
+// a result or a user-facing error.
+func TestTier3ToolFeatureInteractions(t *testing.T) {
+	_, tools := requireFeatureInventory(t)
+	for _, tool := range tools {
+		t.Run(tool.path, func(t *testing.T) {
+			ctx, rec, html := visitAndRecord(t, tool.path)
+			if !strings.Contains(html, `class="tool-form`) {
+				t.Skipf("%s: page has no registered interactive tool form", tool.path)
+			}
+			if err := submitToolForm(ctx, rec, false, tool.path, html); err != nil {
+				saveArtifacts(t, ctx, "tier3-submit"+strings.ReplaceAll(tool.path, "/", "-"))
+				t.Fatalf("%s: interact with tool form: %v", tool.path, err)
+			}
+			if !recordedAPIRequest(rec) {
+				t.Errorf("%s: tool interaction did not reach an API endpoint", tool.path)
+			}
+			var main string
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector("main")?.outerHTML ?? ""`, &main)); err != nil {
+				t.Fatalf("%s: inspect tool response: %v", tool.path, err)
+			}
+			if !strings.Contains(main, `class="tool-result`) && !strings.Contains(main, `class="tool-result-image`) && !strings.Contains(main, `class="tool-server-result-error"`) && !strings.Contains(main, `role="alert"`) {
+				saveArtifacts(t, ctx, "tier3-result"+strings.ReplaceAll(tool.path, "/", "-"))
+				t.Errorf("%s: browser interaction rendered neither a result nor an error (responses: %v)", tool.path, rec.responseSummaries(tool.path))
 			}
 			assertClean(t, ctx, tool.path, rec)
 		})
@@ -458,5 +493,29 @@ func TestTier3ErrorPageThemed(t *testing.T) {
 	}
 	for _, msg := range rec.consoleErrors() {
 		t.Errorf("404 page: JavaScript console error: %s", msg)
+	}
+}
+
+func TestTier3ProtectedDebug500PageThemed(t *testing.T) {
+	ctx, rec := newTab(t, false)
+	var html string
+	if err := chromedp.Run(ctx,
+		network.SetExtraHTTPHeaders(network.Headers{"Authorization": "Bearer " + suite.operatorToken}),
+		chromedp.Navigate(suite.browserURL+"/debug/error500"),
+		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.OuterHTML("html", &html),
+	); err != nil {
+		saveArtifacts(t, ctx, "tier3-500")
+		t.Fatalf("load the protected debug 500 page: %v", err)
+	}
+	if !strings.Contains(html, "500") || !strings.Contains(html, `<link rel="stylesheet"`) {
+		saveArtifacts(t, ctx, "tier3-500")
+		t.Error("protected debug 500 response is not a themed 500 page")
+	}
+	if strings.Contains(html, "goroutine") || strings.Contains(html, "panic:") {
+		t.Error("protected debug 500 page leaks a stack trace")
+	}
+	for _, msg := range rec.consoleErrors() {
+		t.Errorf("500 page: JavaScript console error: %s", msg)
 	}
 }

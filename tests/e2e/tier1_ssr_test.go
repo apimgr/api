@@ -3,11 +3,24 @@
 package e2e
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	stdhtml "html"
+	"io"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/database"
 )
 
 // category couples a IDEA.md tool category with the frontend route that lists
@@ -17,53 +30,164 @@ type category struct {
 	heading string
 }
 
-// categories enumerates every user-facing tool category shipped by the
-// project (IDEA.md "Business logic"), each of which has a landing page.
-var categories = []category{
-	{path: "/text", heading: "Text Utilities"},
-	{path: "/crypto", heading: "Cryptography"},
-	{path: "/network", heading: "Network Tools"},
-	{path: "/datetime", heading: "Date &amp; Time"},
-	{path: "/convert", heading: "Unit Conversion"},
-	{path: "/dev", heading: "Developer Tools"},
-	{path: "/docker", heading: "Docker Tools"},
-	{path: "/fun", heading: "Fun &amp; Content"},
-	{path: "/generate", heading: "Generators"},
-	{path: "/geo", heading: "Geolocation"},
-	{path: "/image", heading: "Images"},
-	{path: "/language", heading: "Language Tools"},
-	{path: "/lorem", heading: "Lorem &amp; Fake Data"},
-	{path: "/math", heading: "Math &amp; Numbers"},
-	{path: "/osint", heading: "OSINT Tools"},
-	{path: "/parse", heading: "Parsers"},
-	{path: "/research", heading: "Research Tools"},
-	{path: "/system", heading: "Health &amp; System"},
-	{path: "/testing", heading: "Testing Tools"},
-	{path: "/validate", heading: "Validators"},
-	{path: "/weather", heading: "Weather"},
-}
-
-// toolPage couples a representative tool page with domain content that must be
-// present in the initial HTML response.
+// toolPage couples a registered frontend route with its rendered title.
 type toolPage struct {
-	path    string
-	title   string
-	content string
+	path  string
+	title string
 }
 
-// toolPages are the representative per-category tool pages the suite drives in
-// every tier. They are chosen to avoid outbound network dependencies so the
-// suite stays hermetic.
-var toolPages = []toolPage{
-	{path: "/text/uuid", title: "UUID Generator", content: "uuid-form"},
-	{path: "/text/hash", title: "Hash", content: "tool-form"},
-	{path: "/crypto/password", title: "Password", content: "password-form"},
-	{path: "/crypto/hash", title: "Hash", content: "tool-card"},
-	{path: "/datetime/now", title: "Current", content: "datetime-form"},
-	{path: "/network/ip", title: "IP", content: "network-ip-form"},
-	{path: "/network/subnet", title: "Subnet", content: "tool-card"},
-	{path: "/geo/distance", title: "Distance", content: "tool-card"},
-	{path: "/convert/length", title: "Length", content: "tool-card"},
+var (
+	inventoryOnce     sync.Once
+	categoryInventory []category
+	toolInventory     []toolPage
+	inventoryError    error
+	anchorPattern     = regexp.MustCompile(`(?is)<a\b([^>]*)>(.*?)</a>`)
+	attributePattern  = regexp.MustCompile(`(?i)([a-z][a-z0-9_-]*)\s*=\s*"([^"]*)"`)
+	h1Pattern         = regexp.MustCompile(`(?is)<h1\b[^>]*>(.*?)</h1>`)
+	tagPattern        = regexp.MustCompile(`(?s)<[^>]*>`)
+)
+
+type inventoryLink struct{ href, class string }
+
+// registeredFeatureInventory follows links rendered by the server's registered
+// page catalog instead of maintaining a second list of category and tool routes.
+func registeredFeatureInventory() ([]category, []toolPage, error) {
+	inventoryOnce.Do(func() {
+		categoryHTML, err := inventoryPage("/categories")
+		if err != nil {
+			inventoryError = err
+			return
+		}
+		for _, link := range inventoryLinks(categoryHTML) {
+			if !hasClass(link.class, "category-card") {
+				continue
+			}
+			parsed, err := url.Parse(link.href)
+			if err != nil || !strings.HasPrefix(parsed.Path, "/") || strings.Count(strings.Trim(parsed.Path, "/"), "/") != 0 {
+				continue
+			}
+			page, err := inventoryPage(parsed.Path)
+			if err != nil {
+				inventoryError = err
+				return
+			}
+			categoryInventory = append(categoryInventory, category{path: parsed.Path, heading: inventoryHeading(page)})
+		}
+		sort.Slice(categoryInventory, func(i, j int) bool { return categoryInventory[i].path < categoryInventory[j].path })
+		for _, c := range categoryInventory {
+			page, err := inventoryPage(c.path)
+			if err != nil {
+				inventoryError = err
+				return
+			}
+			for _, link := range inventoryLinks(page) {
+				if !hasClass(link.class, "category-card") && !hasClass(link.class, "tool-card-link") {
+					continue
+				}
+				parsed, err := url.Parse(link.href)
+				if err != nil {
+					continue
+				}
+				path := strings.TrimSuffix(parsed.Path, "/")
+				prefix := strings.TrimSuffix(c.path, "/") + "/"
+				if !strings.HasPrefix(path, prefix) || strings.Contains(strings.TrimPrefix(path, prefix), "/") {
+					continue
+				}
+				toolHTML, err := inventoryPage(path)
+				if err != nil {
+					inventoryError = err
+					return
+				}
+				title := inventoryHeading(toolHTML)
+				if title == "" {
+					inventoryError = fmt.Errorf("registered tool page %s has no h1", path)
+					return
+				}
+				toolInventory = append(toolInventory, toolPage{path: path, title: title})
+			}
+		}
+		toolInventory = uniqueToolPages(toolInventory)
+		if len(categoryInventory) == 0 || len(toolInventory) == 0 {
+			inventoryError = fmt.Errorf("registered page inventory is empty: categories=%d tools=%d", len(categoryInventory), len(toolInventory))
+		}
+	})
+	return append([]category(nil), categoryInventory...), append([]toolPage(nil), toolInventory...), inventoryError
+}
+
+func inventoryPage(path string) (string, error) {
+	request, err := http.NewRequest(http.MethodGet, suite.localURL+path, nil)
+	if err != nil {
+		return "", fmt.Errorf("build GET %s: %w", path, err)
+	}
+	request.Header.Set("Accept", "text/html,application/xhtml+xml")
+	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) e2e-suite")
+	resp, err := httpClient().Do(request)
+	if err != nil {
+		return "", fmt.Errorf("GET %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET %s: HTTP %d", path, resp.StatusCode)
+	}
+	return string(body), nil
+}
+
+func inventoryLinks(body string) []inventoryLink {
+	var links []inventoryLink
+	for _, anchor := range anchorPattern.FindAllStringSubmatch(body, -1) {
+		attrs := make(map[string]string)
+		for _, attr := range attributePattern.FindAllStringSubmatch(anchor[1], -1) {
+			attrs[strings.ToLower(attr[1])] = stdhtml.UnescapeString(attr[2])
+		}
+		if attrs["href"] != "" {
+			links = append(links, inventoryLink{href: attrs["href"], class: attrs["class"]})
+		}
+	}
+	return links
+}
+
+func hasClass(class, target string) bool {
+	for _, value := range strings.Fields(class) {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func inventoryHeading(body string) string {
+	match := h1Pattern.FindStringSubmatch(body)
+	if len(match) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(stdhtml.UnescapeString(tagPattern.ReplaceAllString(match[1], "")))
+}
+
+func uniqueToolPages(pages []toolPage) []toolPage {
+	seen := make(map[string]struct{}, len(pages))
+	unique := make([]toolPage, 0, len(pages))
+	for _, page := range pages {
+		if _, ok := seen[page.path]; ok {
+			continue
+		}
+		seen[page.path] = struct{}{}
+		unique = append(unique, page)
+	}
+	sort.Slice(unique, func(i, j int) bool { return unique[i].path < unique[j].path })
+	return unique
+}
+
+func requireFeatureInventory(t *testing.T) ([]category, []toolPage) {
+	t.Helper()
+	categories, pages, err := registeredFeatureInventory()
+	if err != nil {
+		t.Fatalf("discover registered feature pages: %v", err)
+	}
+	return categories, pages
 }
 
 // serverPage is a standard informational page required by PART 16.
@@ -78,7 +202,9 @@ var serverPages = []serverPage{
 	{path: "/server/help/mcp", content: "Connect an AI assistant"},
 	{path: "/server/privacy", content: "Privacy Policy"},
 	{path: "/server/contact", content: "Contact"},
+	{path: "/server/preferences/tokens", content: "Owner tokens"},
 	{path: "/categories", content: "category-grid"},
+	{path: "/server/healthz", content: `class="status-banner`},
 	{path: "/server/docs/swagger", content: `id="swagger-ui"`},
 	{path: "/server/docs/graphql", content: `id="graphiql"`},
 }
@@ -104,15 +230,38 @@ func TestTier1HomePageSSR(t *testing.T) {
 }
 
 // TestTier1DocumentMetadata asserts the document-level metadata required by
-// PART 28 SSR correctness on every representative page.
+// PART 28 SSR correctness on every registered page and tool route.
 func TestTier1DocumentMetadata(t *testing.T) {
-	paths := []string{"/", "/categories", "/text", "/text/uuid", "/server/about", "/server/docs/swagger"}
+	paths := []string{"/"}
+	categories, tools := requireFeatureInventory(t)
+	for _, category := range categories {
+		paths = append(paths, category.path)
+	}
+	for _, tool := range tools {
+		paths = append(paths, tool.path)
+	}
+	for _, page := range serverPages {
+		paths = append(paths, page.path)
+	}
+	paths = append(paths,
+		"/server/preferences",
+		"/server/preferences/sync",
+		"/server/terms",
+		"/server/dpo",
+		"/server/security",
+		"/server/security/policy",
+		"/server/security/thanks",
+		securityReportMetadataPath(t),
+	)
+	paths = uniqueStrings(paths)
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
 			resp, body := getHTML(t, path)
 			requireStatus(t, resp, path, http.StatusOK)
 			requireContains(t, body, `<html lang="en"`, path+" lang attribute")
-			requireContains(t, body, `<meta charset="UTF-8">`, path+" charset")
+			if !regexp.MustCompile(`(?i)<meta\s+charset=(?:"?utf-8"?)`).MatchString(body) {
+				t.Errorf("%s: missing UTF-8 charset declaration in response: %q", path, body[:min(len(body), 240)])
+			}
 			requireContains(t, body, `name="viewport"`, path+" viewport")
 			requireContains(t, body, "</title>", path+" title element")
 			requireContains(t, body, `name="description"`, path+" description meta")
@@ -120,14 +269,62 @@ func TestTier1DocumentMetadata(t *testing.T) {
 	}
 }
 
+func securityReportMetadataPath(t *testing.T) string {
+	t.Helper()
+
+	dataDir := filepath.Join(suite.artifactDir, "data")
+	databaseDir := filepath.Join(dataDir, "db", "sqlite")
+	t.Setenv("DATABASE_DIR", databaseDir)
+	if err := database.InitDatabase(config.DatabaseConfig{Driver: "sqlite"}, dataDir); err != nil {
+		t.Fatalf("open E2E database for security-report metadata fixture: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := database.Close(); err != nil {
+			t.Errorf("close E2E database metadata fixture: %v", err)
+		}
+	})
+
+	const trackingID = "sec_0123456789abcdef"
+	const token = "e2e-security-status-token"
+	tokenHash := sha256.Sum256([]byte(token))
+	if err := database.StoreSecurityReport(context.Background(), database.SecurityReportInput{
+		TrackingID: trackingID,
+		Severity:   "low",
+		Component:  "E2E metadata fixture",
+		Body:       []byte("fixture ciphertext"),
+		BodyAlg:    "aes-256-gcm",
+		Contact:    []byte("fixture ciphertext"),
+		CreditPref: "no",
+		TokenHash:  hex.EncodeToString(tokenHash[:]),
+	}); err != nil {
+		t.Fatalf("create E2E security-report metadata fixture: %v", err)
+	}
+	return "/server/security/report/" + trackingID + "?token=" + url.QueryEscape(token)
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	sort.Strings(unique)
+	return unique
+}
+
 // TestTier1CategoryPagesSSR gives every IDEA.md tool category a Tier 1
 // assertion: its landing page renders its own heading and links to its tools.
 func TestTier1CategoryPagesSSR(t *testing.T) {
+	categories, _ := requireFeatureInventory(t)
 	for _, c := range categories {
 		t.Run(c.path, func(t *testing.T) {
 			resp, body := getHTML(t, c.path)
 			requireStatus(t, resp, c.path, http.StatusOK)
-			requireContains(t, body, c.heading, c.path+" heading")
+			requireContains(t, body, stdhtml.EscapeString(c.heading), c.path+" heading")
 			if !strings.Contains(body, `class="category-card"`) && !strings.Contains(body, `class="tool-card-link"`) {
 				t.Errorf("%s: category page lists no tool links", c.path)
 			}
@@ -135,16 +332,21 @@ func TestTier1CategoryPagesSSR(t *testing.T) {
 	}
 }
 
-// TestTier1ToolPagesSSR asserts each representative tool page ships its real
-// domain content in the initial response.
+// TestTier1ToolPagesSSR asserts every registered tool page ships its title,
+// labeled form, and processing endpoint in the initial response.
 func TestTier1ToolPagesSSR(t *testing.T) {
-	for _, page := range toolPages {
+	_, pages := requireFeatureInventory(t)
+	for _, page := range pages {
 		t.Run(page.path, func(t *testing.T) {
 			resp, body := getHTML(t, page.path)
 			requireStatus(t, resp, page.path, http.StatusOK)
-			requireContains(t, body, page.title, page.path+" tool title")
-			requireContains(t, body, page.content, page.path+" tool body")
-			requireContains(t, body, "/api/v1/", page.path+" documented API endpoint")
+			requireContains(t, body, stdhtml.EscapeString(page.title), page.path+" tool title")
+			requireContains(t, body, `<main id="main-content"`, page.path+" main landmark")
+			requireContains(t, body, `class="tool-form`, page.path+" server-rendered tool form")
+			requireContains(t, body, "<label", page.path+" labeled domain input")
+			if !strings.Contains(body, "data-endpoint=") && !strings.Contains(body, "data-api-endpoint=") && !strings.Contains(body, "action=") {
+				t.Errorf("%s: server-rendered tool page declares no processing endpoint", page.path)
+			}
 		})
 	}
 }
@@ -184,6 +386,19 @@ func TestTier1HealthEndpoints(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTier1ProtectedDebug500Page(t *testing.T) {
+	resp, body := fetch(t, "/debug/error500", map[string]string{
+		"Accept":        "text/html",
+		"Authorization": "Bearer " + suite.operatorToken,
+	}, nil)
+	requireStatus(t, resp, "/debug/error500", http.StatusInternalServerError)
+	requireContains(t, body, "500", "debug 500 error code")
+	requireContains(t, body, `<link rel="stylesheet"`, "debug 500 theme stylesheet")
+	if strings.Contains(body, "goroutine") || strings.Contains(body, "panic:") {
+		t.Error("debug 500 page leaks a stack trace")
 	}
 }
 

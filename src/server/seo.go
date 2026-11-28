@@ -61,7 +61,10 @@ func validSEOAttribute(value string) bool {
 		return false
 	}
 	for _, character := range value {
-		if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || strings.ContainsRune(":_.-", character)) {
+		if (character < 'a' || character > 'z') &&
+			(character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') &&
+			!strings.ContainsRune(":_.-", character) {
 			return false
 		}
 	}
@@ -114,7 +117,7 @@ func publicIndexableRoute(path string) bool {
 	return false
 }
 
-func robotsTagMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func robotsTagMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if publicIndexableRoute(r.URL.Path) && (cfg == nil || !cfg.Server.SEO.NoIndex) {
@@ -204,7 +207,7 @@ type rssItem struct {
 	GUID  string `xml:"guid"`
 }
 
-func sitemapHandler(cfg *config.Config) http.HandlerFunc {
+func sitemapHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		lastmod := ""
@@ -265,7 +268,7 @@ func publicSitemapPaths() []string {
 	return paths
 }
 
-func robotsAllowsPath(cfg *config.Config, path string) bool {
+func robotsAllowsPath(cfg *config.ServerConfig, path string) bool {
 	allowed := false
 	for _, rule := range cfg.Web.Robots.Allow {
 		rule = strings.TrimSpace(rule)
@@ -286,7 +289,7 @@ func robotsAllowsPath(cfg *config.Config, path string) bool {
 	return true
 }
 
-func feedHandler(cfg *config.Config, rss bool) http.HandlerFunc {
+func feedHandler(cfg *config.ServerConfig, rss bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		origin := BuildURL(r, "")

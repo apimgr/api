@@ -37,9 +37,20 @@ DOCKER_CPU_SHARES="${DOCKER_CPU_SHARES:-256}"
 DOCKER_TIMEOUT="${DOCKER_TIMEOUT:-3600}"
 NETWORK_NAME="${PROJECT_NAME}-test-${RUN_ID}"
 NETWORK_CREATED=0
+TEST_ROOT=""
 
 __cleanup() {
   local status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "=== Server diagnostics ===" >&2
+    if [ -n "$TEST_ROOT" ]; then
+      for diagnostic in "$TEST_ROOT/server.log" "$TEST_ROOT/log/app.log"; do
+        if [ -s "$diagnostic" ]; then
+          tail -n 80 "$diagnostic" >&2
+        fi
+      done
+    fi
+  fi
   if [ "$NETWORK_CREATED" -eq 1 ]; then
     timeout "$DOCKER_TIMEOUT" docker network rm "$NETWORK_NAME" >/dev/null || status=1
   fi
@@ -170,11 +181,11 @@ else
 fi
 
 echo "=== Starting isolated server ==="
-"$SERVER" --debug --config "$TEST_ROOT/config" --data "$TEST_ROOT/data" --cache "$TEST_ROOT/cache" --log "$TEST_ROOT/log" --port "$TEST_PORT" >"$TEST_ROOT/server.log" 2>&1 &
+DATABASE_DIR="$TEST_ROOT/data/db/sqlite" "$SERVER" --debug --config "$TEST_ROOT/config" --data "$TEST_ROOT/data" --backup "$TEST_ROOT/data/backups/api" --cache "$TEST_ROOT/cache" --log "$TEST_ROOT/log" --port "$TEST_PORT" >"$TEST_ROOT/server.log" 2>&1 &
 SERVER_PID=$!
 READY=0
 for _ in $(seq 1 60); do
-  if curl -q -LsS --max-time 2 -o /dev/null "http://127.0.0.1:${TEST_PORT}/server/healthz"; then
+  if curl -q -fLsS --max-time 2 -o /dev/null "http://127.0.0.1:${TEST_PORT}/server/healthz"; then
     READY=1
     break
   fi
@@ -182,6 +193,9 @@ for _ in $(seq 1 60); do
 done
 if [ "$READY" -ne 1 ]; then
   cat "$TEST_ROOT/server.log" >&2
+  if [ -s "$TEST_ROOT/log/app.log" ]; then
+    tail -n 80 "$TEST_ROOT/log/app.log" >&2
+  fi
   fail "server did not start"
   exit 1
 fi
@@ -213,10 +227,11 @@ else
 fi
 
 echo "=== Owner-token authentication checks ==="
-TOKEN_RESPONSE="$(curl -q -LsS --max-time 10 -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{}' "http://127.0.0.1:${TEST_PORT}/api/v1/server/preferences/tokens/primary" || true)"
-OWNER_TOKEN="$(jq -r '.data.owner_token // empty' <<<"$TOKEN_RESPONSE" 2>/dev/null || true)"
+TOKEN_CODE="$(curl -q -LsS --max-time 10 -o "$TEST_ROOT/primary-token.json" -w '%{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{}' "http://127.0.0.1:${TEST_PORT}/api/v1/server/preferences/tokens/primary" || true)"
+OWNER_TOKEN="$(jq -r '.data.owner_token // empty' "$TEST_ROOT/primary-token.json" 2>/dev/null || true)"
 if [ -z "$OWNER_TOKEN" ]; then
-  fail "anonymous primary owner token issuance"
+  TOKEN_FIELDS="$(jq -r 'paths(scalars) | map(tostring) | join(".")' "$TEST_ROOT/primary-token.json" 2>/dev/null | tr '\n' ',')"
+  fail "anonymous primary owner token issuance returned HTTP ${TOKEN_CODE} (response fields: ${TOKEN_FIELDS:-none})"
 else
   CODE="$(curl -q -LsS -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer invalid-token' "http://127.0.0.1:${TEST_PORT}/api/v1/server/preferences/tokens" || true)"
   [ "$CODE" = 401 ] && pass "invalid owner token rejected" || fail "invalid owner token returned HTTP ${CODE}"
@@ -235,7 +250,7 @@ else
     else
       fail "CLI authenticated health request returned unexpected output"
     fi
-    CLI_READ="$("$CLIENT" --server "http://127.0.0.1:${TEST_PORT}" --token "$LINKED_TOKEN" raw get /api/v1/version 2>/dev/null || true)"
+    CLI_READ="$("$CLIENT" --server "http://127.0.0.1:${TEST_PORT}" --token "$LINKED_TOKEN" raw get /api/autodiscover 2>/dev/null || true)"
     if [ -n "$CLI_READ" ] && grep -qi 'version' <<<"$CLI_READ"; then
       pass "CLI authenticated read request"
     else

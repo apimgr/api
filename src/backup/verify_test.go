@@ -76,7 +76,28 @@ func TestVerifyAcceptsFreshArchive(t *testing.T) {
 	assert.Equal(t, "1.2.3", manifest.AppVersion)
 	assert.Equal(t, KindFull, manifest.Kind)
 	assert.False(t, manifest.Encrypted)
-	assert.NotEmpty(t, manifest.Checksum)
+	assert.NotEmpty(t, manifest.SHA256)
+}
+
+func TestVerifyRejectsIncrementalChangedAndDeletedOverlap(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "config")
+	require.NoError(t, os.MkdirAll(source, 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(source, "server.yml"), []byte("server: {}\n"), 0600))
+	basePath := filepath.Join(root, "base.tar.gz")
+	_, err := CreateWithOptions(basePath, CreateOptions{Sources: []string{source}, Kind: KindFull})
+	require.NoError(t, err)
+	base, err := Verify(basePath, "")
+	require.NoError(t, err)
+	incrementalPath := filepath.Join(root, "incremental.tar.gz")
+	_, err = CreateWithOptions(incrementalPath, CreateOptions{
+		Kind: KindDailyIncremental, BaseBackup: filepath.Base(basePath), BaseSHA256: base.SHA256,
+		SnapshotFiles: []SnapshotFile{{ArchivePath: "config/server.yml", Path: filepath.Join(source, "server.yml")}},
+		Deleted:       []string{"config/server.yml"},
+	})
+	require.NoError(t, err)
+	_, err = Verify(incrementalPath, "")
+	require.ErrorContains(t, err, "both changed and deleted")
 }
 
 // A missing file fails the file-exists check.

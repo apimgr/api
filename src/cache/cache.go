@@ -1,8 +1,9 @@
 // Package cache implements the server.cache.* backend documented in AI.md
-// PART 12 "Cache Configuration". It provides a single Store abstraction
-// used for sliding-window rate-limit counters (and, in future, general
-// response/session caching): "memory" (default, in-process, lost on
-// restart) or "valkey"/"redis" (shared, persists across restarts).
+// PART 12 "Cache Configuration". It provides a Store abstraction for
+// sliding-window rate-limit counters and a separate ValueStore abstraction
+// for TTL-cached derived runtime data. Both use "memory" (default,
+// in-process, lost on restart) or "valkey"/"redis" (shared, persists across
+// restarts) according to configuration.
 package cache
 
 import (
@@ -46,17 +47,17 @@ func New(cfg config.CacheConfig) Store {
 		if err != nil {
 			slog.Warn("cache: falling back to in-process memory store", "type", cfg.Type, "error", err)
 			SetHealthStatus("backend", "degraded")
-			return newMemoryStore()
+			return newMemoryStore(cfg)
 		}
 		SetHealthStatus("backend", "ok")
 		return store
 	case "none", "memory", "":
 		SetHealthStatus("backend", "ok")
-		return newMemoryStore()
+		return newMemoryStore(cfg)
 	default:
 		slog.Warn("cache: unknown server.cache.type, using memory", "type", cfg.Type)
 		SetHealthStatus("backend", "degraded")
-		return newMemoryStore()
+		return newMemoryStore(cfg)
 	}
 }
 

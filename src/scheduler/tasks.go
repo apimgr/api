@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -102,9 +101,18 @@ func (s *Scheduler) RegisterDefaultTasks() {
 
 	s.register(&Task{
 		Name:      "token_cleanup",
-		Title:     "Remove expired tokens and sessions",
+		Title:     "Clean expired challenges and inactive owner tokens",
 		Schedule:  "@every 15m",
 		Func:      tokenCleanupTask,
+		Enabled:   true,
+		Skippable: false,
+	})
+
+	s.register(&Task{
+		Name:      "ip_block_cleanup",
+		Title:     "Expire temporary IP blocks and release allowlisted addresses",
+		Schedule:  "@every 1m",
+		Func:      ipBlockCleanupTask,
 		Enabled:   true,
 		Skippable: false,
 	})
@@ -204,17 +212,36 @@ func (s *Scheduler) RegisterDefaultTasks() {
 			Skippable: false,
 		})
 	}
-	s.logRegisteredTasks()
 }
 
-func (s *Scheduler) logRegisteredTasks() {
-	tasks := s.GetTasks()
-	names := make([]string, 0, len(tasks))
-	for _, task := range tasks {
-		names = append(names, task.Name)
+func ipBlockCleanupTask() error {
+	cfg := config.Get()
+	if cfg == nil {
+		return nil
 	}
-	sort.Strings(names)
-	log.Printf("Scheduler: Registered tasks: %s", strings.Join(names, ", "))
+	allowlist := make([]string, 0, len(cfg.Server.Security.Allowlist))
+	for _, entry := range cfg.Server.Security.Allowlist {
+		allowlist = append(allowlist, entry.CIDR)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	now := time.Now().UTC()
+	removed, err := database.CleanupTemporaryIPBlocks(ctx, now, allowlist)
+	if err != nil {
+		return fmt.Errorf("IP block cleanup: %w", err)
+	}
+	for _, block := range removed {
+		reason := "expired"
+		if block.ExpiresAt.After(now) {
+			reason = "allowlisted"
+		}
+		if err := database.WriteAuditEventWithSource(ctx, "security.ip_unblocked", "", block.IP, "scheduler", map[string]any{
+			"reason": reason, "auto_blocked": block.AutoBlocked, "expires_at": block.ExpiresAt,
+		}); err != nil {
+			log.Printf("Scheduler: could not audit release of temporary IP block: %v", err)
+		}
+	}
+	return nil
 }
 
 func (s *Scheduler) i2pHealthTask() error {
@@ -382,10 +409,20 @@ func (s *Scheduler) hourlyBackupTask() error {
 // directory is resolved once here and cached by the Manager, so retention can
 // never target a different path than the archive just written (AI.md PART 21).
 func (s *Scheduler) backupManager() (*backup.Manager, error) {
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	if err != nil {
 		log.Printf("Scheduler: Backup skipped, failed to load config: %v", err)
 		return nil, err
+	}
+	if cfg.Server.Backup.EncryptionPasswordUnreadable {
+		details := map[string]interface{}{"setting": "server.backup.encryption_password"}
+		if s.opts.Audit != nil {
+			s.opts.Audit("backup.password_unreadable", details)
+		}
+		if auditErr := database.WriteAuditEventWithSource(context.Background(), "backup.password_unreadable", "system", "", "scheduler", details); auditErr != nil {
+			log.Printf("Scheduler: Failed to audit unreadable backup password: %v", auditErr)
+		}
+		return nil, config.ErrBackupPasswordUnreadable
 	}
 
 	// Scheduled backups use the configured secret; no password flag or
@@ -411,18 +448,21 @@ func (s *Scheduler) backupManager() (*backup.Manager, error) {
 		return nil, err
 	}
 
-	return backup.NewManager(backup.Options{
-		Dir:                 backupDir,
-		Sources:             sources,
-		SupplementalSources: supplementalSources,
-		SQLiteSourcePath:    sqliteSourcePath,
-		SnapshotSQLite:      snapshotSQLite,
-		RestoreRoots:        backup.RestoreRoots(paths.ConfigDir(), paths.DataDir(), false, false),
-		Password:            password,
-		Retention:           cfg.Server.Backup.Retention,
-		ComplianceEnabled:   cfg.Server.Compliance.Enabled,
-		AppVersion:          s.opts.Version,
-		Audit:               s.opts.Audit,
+	return backup.NewManager(backup.BackupManagerOptions{
+		Dir:                                backupDir,
+		Sources:                            sources,
+		SupplementalSources:                supplementalSources,
+		SQLiteSourcePath:                   sqliteSourcePath,
+		SnapshotSQLite:                     snapshotSQLite,
+		ExportAppSecrets:                   database.ExportAppSecretsSnapshot,
+		ExportAppSecretsFromSQLiteSnapshot: database.ExportAppSecretsFromSQLiteSnapshot,
+		RestoreRoots:                       backup.RestoreRoots(paths.ConfigDir(), paths.DataDir(), false, false),
+		Password:                           password,
+		Retention:                          cfg.Server.Backup.Retention,
+		DiskThreshold:                      s.backupDiskThreshold,
+		ComplianceEnabled:                  cfg.Server.Compliance.AnyEnabled(),
+		AppVersion:                         s.opts.Version,
+		Audit:                              s.opts.Audit,
 		// The scheduler owns the execution id PART 17's suppression rule
 		// keys on, so it sends backup_failed itself from notifyFailure.
 		SuppressFailureNotify: true,
@@ -436,7 +476,7 @@ func (s *Scheduler) backupManager() (*backup.Manager, error) {
 func sslRenewalTask(renew func() error, managedCertificatePath, managedDomain string) error {
 	log.Println("Scheduler: Checking SSL certificates...")
 
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	if err != nil {
 		log.Printf("Scheduler: SSL renewal check skipped, failed to load config: %v", err)
 		return err
@@ -487,7 +527,7 @@ func sslRenewalTask(renew func() error, managedCertificatePath, managedDomain st
 			log.Println("Scheduler: DNS-01 certificate renewal completed")
 			return nil
 		}
-		manager := ssl.NewManager(ssl.Config{
+		manager := ssl.NewManager(ssl.SSLConfig{
 			CertPath: sslCertPath,
 			LetsEncrypt: ssl.LetsEncryptConfig{
 				Enabled:        cfg.Server.SSL.LetsEncrypt.Enabled,
@@ -536,7 +576,7 @@ func geoipUpdateTask() error {
 
 	// The download honours the GeoIP enabled flag and always refreshes the
 	// complete fixed dataset set in the PART 19 directory.
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	if err != nil {
 		log.Printf("Scheduler: GeoIP update failed to load config: %v", err)
 		return err
@@ -706,7 +746,7 @@ func databaseCheckTask() error {
 	return nil
 }
 
-func sanitizeDatabaseError(message string, cfg *config.Config) string {
+func sanitizeDatabaseError(message string, cfg *config.ServerConfig) string {
 	if cfg != nil {
 		if token := strings.TrimSpace(cfg.Server.Database.Token); token != "" {
 			message = strings.ReplaceAll(message, token, "[redacted]")

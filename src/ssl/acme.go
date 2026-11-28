@@ -30,10 +30,12 @@ func CheckCertificateExpiry(certPath string) (int, error) {
 	return days, nil
 }
 
-// ShouldRenew determines if a certificate should be renewed.
-// Renews if within 7 days of expiry, per AI.md PART 15.
+const renewalWindowDays = 30
+
+// ShouldRenew determines if an app-managed certificate is within the fixed
+// 30-day renewal window required by AI.md PART 15.
 func ShouldRenew(daysUntilExpiry int) bool {
-	return daysUntilExpiry <= 7
+	return daysUntilExpiry <= renewalWindowDays
 }
 
 // expiryWarnDays is the point from which AI.md PART 17 wants an expiry

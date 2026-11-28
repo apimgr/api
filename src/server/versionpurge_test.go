@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // findCookie returns the Set-Cookie entry with the given name, or nil.
@@ -180,4 +181,24 @@ func TestAssetStamp(t *testing.T) {
 
 	Version, CommitID = "1.2.3", "abcdef0"
 	assert.Equal(t, "1.2.3-abcdef0", assetStamp())
+}
+
+func TestAppBootWatchdogSourceContract(t *testing.T) {
+	source, err := staticFS.ReadFile("static/js/app.js")
+	require.NoError(t, err)
+	for _, contract := range []string{
+		"setTimeout(recoverStalledBoot, 10000)",
+		"document.addEventListener('DOMContentLoaded', finishFirstRender",
+		"sessionStorage.setItem(bootRecoveryKey, 'boot-recovery')",
+		"navigator.serviceWorker.getRegistrations()",
+		"caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))",
+		"withBootTimeout(Promise.allSettled(cleanup), 2000, null)",
+		"withBootTimeout(readStoredOfflineStrings(), 500, bootRecoveryDefaults)",
+		"window.location.reload()",
+		"async function showBootRecoveryFailure()",
+		"document.body.replaceChildren(main)",
+		"offline-strings.json",
+	} {
+		assert.Contains(t, string(source), contract)
+	}
 }

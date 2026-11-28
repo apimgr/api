@@ -93,12 +93,18 @@ func TestSiteBannerLayoutRendersConsentAndAnnouncementBeforeHeader(t *testing.T)
 	data.ActivePage = "preferences"
 	data.CurrentPath = "/server/preferences"
 	data.PreferencesHubPath = "/server/preferences"
+	data.ConsentVisible = false
 	output.Reset()
 	require.NoError(t, pageTemplates["preferences"].ExecuteTemplate(&output, "public.tmpl", data))
 	html = output.String()
 	assert.NotContains(t, html, `class="cookie-banner`)
 	assert.NotContains(t, html, `action="/server/consent"`)
+	assert.Contains(t, html, `class="site-banner site-banner-warning"`)
 	assert.NotContains(t, html, `class="site-banner-dismiss"`)
+	assert.NotContains(t, html, `action="/announcements/dismiss"`)
+	assert.NotContains(t, html, `class="theme-toggle-form"`)
+	assert.Equal(t, 1, strings.Count(html, `method="POST"`))
+	assert.Equal(t, 1, strings.Count(html, `id="preferences-form"`))
 }
 
 func TestPageDataLocalizesDefaultPrivacyCopy(t *testing.T) {
@@ -132,6 +138,21 @@ func TestSiteBannerDataLocalizesSoldMessage(t *testing.T) {
 	assert.Equal(t, i18n.Translate("fr", "cookie_consent.message_if_sold"), message)
 }
 
+func TestSiteBannerDataOmitsConsentOnPreferencesPage(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.Server.Privacy.Consent.ShowUntilAcknowledged = true
+
+	for _, path := range []string{"/", "/server/privacy"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		visible, _, _, _, _, _, _ := siteBannerData(cfg, request)
+		assert.True(t, visible, path)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/server/preferences?lang=fr", nil)
+	visible, _, _, _, _, _, _ := siteBannerData(cfg, request)
+	assert.False(t, visible)
+}
+
 func TestConsentHandlerStoresAcceptAndDeclineChoices(t *testing.T) {
 	for _, test := range []struct {
 		name        string
@@ -152,6 +173,10 @@ func TestConsentHandlerStoresAcceptAndDeclineChoices(t *testing.T) {
 
 			assert.Equal(t, http.StatusSeeOther, response.Code)
 			assert.Equal(t, "/server/about", response.Header().Get("Location"))
+			if test.choice == "decline" {
+				assert.Equal(t, `"cache", "storage"`, response.Header().Get("Clear-Site-Data"))
+				assert.NotContains(t, response.Header().Get("Clear-Site-Data"), "cookies")
+			}
 			cookie := response.Result().Cookies()[0]
 			request = httptest.NewRequest(http.MethodGet, "/", nil)
 			request.AddCookie(cookie)
@@ -166,7 +191,7 @@ func TestConsentHandlerStoresAcceptAndDeclineChoices(t *testing.T) {
 func TestConsentHandlerAuditsAnonymousChoiceWithPolicyVersionAndAnonymizedIP(t *testing.T) {
 	cfg := newTestConfig(t)
 	cfg.Server.Privacy.Consent.Policy.Version = "v2"
-	require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+	require.NoError(t, database.InitDatabase(cfg.Server.Database, paths.DataDir()))
 	t.Cleanup(func() { _ = database.Close() })
 
 	form := url.Values{"choice": {"decline"}, "return_to": {"/server/about"}}
@@ -179,7 +204,6 @@ func TestConsentHandlerAuditsAnonymousChoiceWithPolicyVersionAndAnonymizedIP(t *
 
 	rows, err := database.GetServerDB().Query(`SELECT details FROM audit_log WHERE event = 'compliance.consent_updated' ORDER BY id`)
 	require.NoError(t, err)
-	defer rows.Close()
 	var events []map[string]any
 	for rows.Next() {
 		var raw string
@@ -189,6 +213,7 @@ func TestConsentHandlerAuditsAnonymousChoiceWithPolicyVersionAndAnonymizedIP(t *
 		events = append(events, details)
 	}
 	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
 	require.Len(t, events, 2)
 	for _, details := range events {
 		assert.Equal(t, "anonymous", details["actor.type"])

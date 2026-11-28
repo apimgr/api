@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // Service provides research utilities
@@ -81,7 +83,7 @@ func (s *Service) ArxivLookup(ctx context.Context, id string) (*ArxivResult, err
 	req.Header.Set("Accept", "application/atom+xml")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := httpClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("arxiv provider request failed: %w", err)
 	}
@@ -168,7 +170,7 @@ func (s *Service) ISBNLookup(ctx context.Context, isbn string) (*ISBNResult, err
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := httpClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("open library request failed: %w", err)
 	}

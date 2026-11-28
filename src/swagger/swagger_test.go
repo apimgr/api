@@ -26,7 +26,7 @@ func TestGenerateSpec(t *testing.T) {
 	assert.NotContains(t, spec.Paths, "/healthz")
 	assert.Contains(t, spec.Paths, "/api/v1/server/healthz")
 	assert.Contains(t, spec.Paths, "/api/healthz")
-	assert.Contains(t, spec.Paths, "/api/v1/version")
+	assert.NotContains(t, spec.Paths, "/api/v1/version")
 
 	// Text endpoints.
 	assert.Contains(t, spec.Paths, "/api/v1/text/uuid")
@@ -96,6 +96,10 @@ func TestServeSpec(t *testing.T) {
 	assert.Equal(t, "9.9.9", decoded.Info.Version)
 	require.Len(t, decoded.Servers, 1)
 	assert.Equal(t, "https://example.com", decoded.Servers[0].URL)
+	operation := decoded.Paths["/api/v1/text/uuid"].Get
+	require.NotNil(t, operation)
+	require.Contains(t, operation.Responses, "200")
+	assert.Equal(t, "Operation completed", operation.Responses["200"].Description)
 }
 
 func TestServeSpecIncludesRouteTextMetadata(t *testing.T) {
@@ -114,4 +118,73 @@ func TestServeSpecIncludesRouteTextMetadata(t *testing.T) {
 	require.NotNil(t, operation)
 	assert.Equal(t, "text", operation.Primary)
 	assert.Equal(t, "Retrieved successfully", operation.TextMessage)
+	assert.Equal(t, "always", operation.MountedWhen)
+}
+
+func TestGenerateSupersetSpecCarriesMountConditions(t *testing.T) {
+	spec := GenerateSupersetSpec("1.0.0", "", "v1", []Route{{
+		Method:      http.MethodGet,
+		Path:        "/api/v1/optional",
+		MountedWhen: "feature.enabled",
+	}})
+	operation := spec.Paths["/api/v1/optional"].Get
+	require.NotNil(t, operation)
+	assert.Equal(t, "feature.enabled", operation.MountedWhen)
+}
+
+func TestEmbeddedSupersetIsImmutableWhenDisabledOperationsAreFiltered(t *testing.T) {
+	superset, err := EmbeddedSuperset("1.0.0", "https://api.example.test", "v1")
+	require.NoError(t, err)
+	var conditionalPath string
+	var conditionalCondition string
+	for path, item := range superset.Paths {
+		for _, operation := range []*Operation{item.Get, item.Head, item.Post, item.Put, item.Patch, item.Delete, item.Options} {
+			if operation != nil && operation.MountedWhen != "" && operation.MountedWhen != "always" {
+				conditionalPath = path
+				conditionalCondition = operation.MountedWhen
+				break
+			}
+		}
+		if conditionalPath != "" {
+			break
+		}
+	}
+	require.NotEmpty(t, conditionalPath, "build-generated superset must retain conditional operations")
+	assert.Contains(t, superset.Paths, conditionalPath)
+
+	handler := ServeEmbeddedSuperset("1.0.0", "https://api.example.test", "v1", func(condition string) bool {
+		return condition != conditionalCondition
+	})
+	recorder := httptest.NewRecorder()
+	handler(recorder, httptest.NewRequest(http.MethodGet, "/api/swagger", nil))
+	var served Spec
+	require.NoError(t, json.NewDecoder(recorder.Body).Decode(&served))
+	assert.NotContains(t, served.Paths, conditionalPath)
+	assert.Contains(t, superset.Paths, conditionalPath, "filtering must not mutate the embedded superset")
+}
+
+func TestServeSpecFiltersDisabledMountedCondition(t *testing.T) {
+	handler := ServeSpecWithRoutesAndCondition("1.0.0", "", "v1", []Route{{
+		Method:      http.MethodGet,
+		Path:        "/api/v1/optional",
+		MountedWhen: "feature.enabled",
+	}, {
+		Method: http.MethodGet,
+		Path:   "/api/v1/always",
+	}}, func(condition string) bool { return condition == "always" })
+	recorder := httptest.NewRecorder()
+	handler(recorder, httptest.NewRequest(http.MethodGet, "/api/swagger", nil))
+	var spec Spec
+	require.NoError(t, json.NewDecoder(recorder.Body).Decode(&spec))
+	assert.NotContains(t, spec.Paths, "/api/v1/optional")
+	assert.Contains(t, spec.Paths, "/api/v1/always")
+}
+
+func TestGenerateSupersetSpecOmitsInternalRoutes(t *testing.T) {
+	spec := GenerateSupersetSpec("1.0.0", "", "v1", []Route{{
+		Method:   http.MethodGet,
+		Path:     "/api/v1/internal",
+		Internal: true,
+	}})
+	assert.NotContains(t, spec.Paths, "/api/v1/internal")
 }

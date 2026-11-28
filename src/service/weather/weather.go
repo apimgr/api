@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // Service provides weather utilities
@@ -141,7 +143,7 @@ func fetchJSONWithClient(ctx context.Context, endpoint string, out interface{}, 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := client.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(client, req)
 	if err != nil {
 		return fmt.Errorf("weather provider request failed: %w", err)
 	}

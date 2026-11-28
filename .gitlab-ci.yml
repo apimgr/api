@@ -26,6 +26,7 @@ default:
 lint:
   stage: lint
   script:
+    - go generate ./src/swagger
     - go vet ./...
     - staticcheck ./...
   rules:
@@ -34,6 +35,7 @@ lint:
 build:
   stage: build
   script:
+    - go generate ./src/swagger
     - |
       set -eu
       COMMIT_ID="$(git rev-parse --short=7 HEAD)"
@@ -59,9 +61,12 @@ build:
 test:
   stage: test
   script:
+    - go generate ./src/swagger
     - mkdir -p "/tmp/${PROJECT_ORG}"
     - COVDIR="$(mktemp -d "/tmp/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")"
-    - go test -cover -coverprofile="$COVDIR/coverage.out" ./...
+    - mkdir -p "$COVDIR/data"
+    - TMPDIR="$COVDIR" go test -cover ./... -args -test.gocoverdir="$COVDIR/data"
+    - go tool covdata textfmt -i="$COVDIR/data" -o="$COVDIR/coverage.out"
     - |
       THRESHOLD=60
       PCT="$(go tool cover -func="$COVDIR/coverage.out" | awk '/^total:/ {gsub("%","",$3); print int($3)}')"
@@ -116,6 +121,7 @@ workflow-policy:
 vuln-scan:
   stage: security
   script:
+    - go generate ./src/swagger
     - govulncheck ./...
   rules:
     - exists:
@@ -289,6 +295,7 @@ docker:devel:
 release-build:
   stage: release
   script:
+    - go generate ./src/swagger
     - |
       set -eu
       VERSION="${CI_COMMIT_TAG#v}"

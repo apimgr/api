@@ -1,31 +1,52 @@
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/mode"
+	"github.com/google/uuid"
 )
 
 // requestIDMiddleware generates a unique request ID for each request
 func requestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if request ID already exists (from load balancer/proxy)
-		requestID := r.Header.Get("X-Request-ID")
+		requestID := ""
+		invalidHeader := ""
+		for _, header := range []string{"X-Request-ID", "X-Correlation-ID", "X-Trace-ID"} {
+			candidate := strings.TrimSpace(r.Header.Get(header))
+			if candidate == "" {
+				continue
+			}
+			if isValidRequestUUID(candidate) {
+				requestID = strings.ToLower(candidate)
+			} else {
+				invalidHeader = header
+			}
+			break
+		}
 		if requestID == "" {
-			// Generate new request ID
-			b := make([]byte, 16)
-			rand.Read(b)
-			requestID = hex.EncodeToString(b)
+			generated, err := uuid.NewRandom()
+			if err != nil {
+				slog.Error("secure request ID generation failed", "error", err)
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+				return
+			}
+			requestID = generated.String()
+		}
+		if invalidHeader != "" {
+			slog.Warn("invalid request ID; generating a new UUIDv4", "header", invalidHeader, "request_id", requestID)
 		}
 
 		// Add to response headers
 		w.Header().Set("X-Request-ID", requestID)
+		r.Header.Set("X-Request-ID", requestID)
 
 		// Add to context for use in handlers
 		ctx := r.Context()
@@ -33,6 +54,11 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func isValidRequestUUID(value string) bool {
+	id, err := uuid.Parse(value)
+	return err == nil && len(value) == 36 && id.Version() == 4 && id.Variant() == uuid.RFC4122 && strings.EqualFold(value, id.String())
 }
 
 // hasBearerToken reports whether the request carries an Authorization:
@@ -53,22 +79,19 @@ func hasBearerToken(r *http.Request) bool {
 // Validation is present-and-bad reject only: an absent Sec-Fetch-* header
 // is always treated as legacy-browser pass-through, never a rejection.
 //
-// The CSRF token check itself lives in csrfMiddleware and owns the
-// `server.csrf.exempt_paths` allow-list; this layer stays deliberately
-// simpler and does not consult it, so a path exempted from the token check
-// is still subject to Sec-Fetch-Site rejection unless it presents a bearer
-// credential. Similarly, there is no per-path `frame-ancestors` config — the
-// CSP frame-ancestors directive defaults to 'self' plus any auto-detected
-// {learned_origins} (DOMAIN env + reverse-proxy-detected hosts, see PART 11
-// → "Content Security Policy" → "Auto-detection") in securityHeadersMiddleware.
-// The Sec-Fetch-Dest check here is deliberately stricter than that CSP
-// directive: it rejects ALL cross-site iframe embeds outright, since this
-// project has no per-path allow-list config to check a learned origin
-// against.
-func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+// API and compatibility routes are excluded because this validation only
+// protects browser-facing frontend handlers. Sec-Fetch-Site also shares the
+// configured CSRF exempt-path list. This project has no browser flow
+// authenticated by the operator token, so Sec-Fetch-User has no applicable
+// route; owner-token pages do not use operator credentials.
+func secFetchValidationMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !cfg.Web.Headers.SecFetchValidation {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if isPublicAPIPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -77,49 +100,20 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 				r.Method == http.MethodPatch || r.Method == http.MethodDelete
 
 			if stateChanging {
-				// Sec-Fetch-Site: reject a cross-site state-changer unless
-				// the caller proved possession of a Bearer credential (a
-				// browser cannot auto-attach that the way it auto-attaches
-				// cookies). The CSRF exempt_paths allow-list is not
-				// consulted here (see doc comment above).
-				if r.Header.Get("Sec-Fetch-Site") == "cross-site" && !hasBearerToken(r) {
+				// Sec-Fetch-Site rejects cross-site frontend state changes
+				// unless the route is exempt or the caller presents a Bearer
+				// credential that the browser cannot attach automatically.
+				if r.Header.Get("Sec-Fetch-Site") == "cross-site" && !hasBearerToken(r) &&
+					!csrfPathExempt(r.URL.Path, cfg.Server.CSRF.ExemptPaths) {
 					writeSecFetchRejected(w, r)
 					return
-				}
-
-				// Sec-Fetch-Mode: block form-based navigation CSRF against
-				// the JSON API surface. GET/HEAD navigations are excluded
-				// by the stateChanging gate above — opening an API URL in
-				// a browser still returns JSON normally.
-				if r.Header.Get("Sec-Fetch-Mode") == "navigate" && strings.HasPrefix(r.URL.Path, "/api/") {
-					writeSecFetchRejected(w, r)
-					return
-				}
-
-				// Sec-Fetch-User: only meaningful for authenticated
-				// state-changing navigations (spec: "sensitive
-				// operator-token flows only"). This project has no
-				// accounts/sessions, so a Bearer credential is the closest
-				// available "authenticated" signal. The check only runs
-				// once Sec-Fetch-Mode confirms the browser participates in
-				// the Sec-Fetch-* family (present as "navigate"), so a
-				// missing/bad Sec-Fetch-User here is present-and-bad for a
-				// confirmed-participating browser, not a legacy omission.
-				if hasBearerToken(r) && r.Header.Get("Sec-Fetch-Mode") == "navigate" {
-					if user := r.Header.Get("Sec-Fetch-User"); user != "" && user != "?1" {
-						writeSecFetchRejected(w, r)
-						return
-					}
 				}
 			}
 
-			// Sec-Fetch-Dest: block a cross-site iframe embed attempt. This
-			// check is intentionally stricter than the CSP frame-ancestors
-			// directive (which now also allows auto-detected
-			// {learned_origins} — see doc comment above): there's no
-			// per-path allow-list here, so any cross-site framing
-			// destination is outright disallowed.
-			if r.Header.Get("Sec-Fetch-Dest") == "iframe" && r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+			// Sec-Fetch-Dest follows the same origin set as CSP
+			// frame-ancestors. A learned or same-origin parent is permitted;
+			// an iframe with no verifiable allowed parent is rejected.
+			if r.Header.Get("Sec-Fetch-Dest") == "iframe" && !frameAncestorAllowed(cfg, r) {
 				writeSecFetchRejected(w, r)
 				return
 			}
@@ -127,6 +121,44 @@ func secFetchValidationMiddleware(cfg *config.Config) func(http.Handler) http.Ha
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func frameAncestorAllowed(cfg *config.ServerConfig, r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Site") == "same-origin" {
+		return true
+	}
+	parentOrigin, ok := canonicalHTTPOrigin(r.Referer())
+	if !ok {
+		return false
+	}
+	if selfOrigin, ok := canonicalHTTPOrigin(requestBaseURL(r)); ok && parentOrigin == selfOrigin {
+		return true
+	}
+	for _, origin := range learnedOrigins(cfg, r) {
+		if allowed, ok := canonicalHTTPOrigin(origin); ok && parentOrigin == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalHTTPOrigin(value string) (string, bool) {
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		return "", false
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	host := strings.ToLower(parsed.Hostname())
+	port := parsed.Port()
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return scheme + "://" + host, true
 }
 
 // writeSecFetchRejected writes the canonical PART 14 error envelope for a
@@ -152,14 +184,21 @@ func cspDirective(name, def, extra, override string) string {
 // AI.md PART 11 → "Security Headers" / "Content Security Policy" /
 // "Permissions-Policy Configuration", fully driven by cfg.Web.* so
 // server.yml can tighten or extend every directive without a code change.
-func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func securityHeadersMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r = requestWithServerConfig(r, cfg)
 			reportsURL := BuildURL(r, APIBasePath(cfg)+"/server/reports/default")
+			nelURL := BuildURL(r, APIBasePath(cfg)+"/server/reports/nel")
 			cspReportURI := BuildURL(r, APIBasePath(cfg)+"/server/reports/csp")
 
 			csp := cfg.Web.CSP
+			if trackingAllowed(cfg, r) {
+				tracking := buildTrackingOutput(cfg.Server.Tracking)
+				csp.ScriptSrcExtra = appendCSPSource(csp.ScriptSrcExtra, tracking.ScriptHost)
+				csp.ConnectSrcExtra = appendCSPSource(csp.ConnectSrcExtra, tracking.ConnectHost)
+				csp.ImgSrcExtra = appendCSPSource(csp.ImgSrcExtra, tracking.ImageHost)
+			}
 			if csp.Enabled {
 				// Auto-detection per AI.md PART 11 → "Content Security
 				// Policy" → "Auto-detection": connect-src, frame-ancestors,
@@ -277,14 +316,13 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 				w.Header().Set("Permissions-Policy", permissions)
 			}
 
-			// Reporting API (modern + legacy) and Network Error Logging —
-			// same endpoint referenced by the CSP report-to/report-uri
-			// directives above
-			w.Header().Set("Reporting-Endpoints", fmt.Sprintf(`default="%s"`, reportsURL))
-			w.Header().Set("Report-To", fmt.Sprintf(`{"group":"default","max_age":10886400,"endpoints":[{"url":"%s"}]}`, reportsURL))
+			// Reporting API (modern + legacy) and Network Error Logging use
+			// separate groups so NEL reports reach their dedicated endpoint.
+			w.Header().Set("Reporting-Endpoints", fmt.Sprintf(`default="%s", nel="%s"`, reportsURL, nelURL))
+			w.Header().Set("Report-To", fmt.Sprintf(`{"group":"default","max_age":10886400,"endpoints":[{"url":"%s"}]}, {"group":"nel","max_age":10886400,"endpoints":[{"url":"%s"}]}`, reportsURL, nelURL))
 			if headers.NEL.Enabled {
 				w.Header().Set("NEL", fmt.Sprintf(
-					`{"report_to":"default","max_age":%d,"include_subdomains":%t,"success_fraction":%s,"failure_fraction":%s}`,
+					`{"report_to":"nel","max_age":%d,"include_subdomains":%t,"success_fraction":%s,"failure_fraction":%s}`,
 					headers.NEL.MaxAgeSeconds, headers.NEL.IncludeSubdomains,
 					strconv.FormatFloat(headers.NEL.SampleRate, 'g', -1, 64),
 					strconv.FormatFloat(headers.NEL.SampleRate, 'g', -1, 64),
@@ -325,4 +363,19 @@ func securityHeadersMiddleware(cfg *config.Config) func(http.Handler) http.Handl
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func appendCSPSource(existing, source string) string {
+	if strings.TrimSpace(source) == "" {
+		return existing
+	}
+	for _, current := range strings.Fields(existing) {
+		if current == source {
+			return existing
+		}
+	}
+	if strings.TrimSpace(existing) == "" {
+		return source
+	}
+	return strings.TrimSpace(existing) + " " + source
 }

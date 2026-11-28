@@ -78,7 +78,7 @@ func TestCleanupOldSchedulerHistory(t *testing.T) {
 	for i := 0; i < total; i++ {
 		started := base.Add(time.Duration(i) * time.Minute)
 		execTestWrite(t, `INSERT INTO scheduler_history (task_id, started_at, status) VALUES (?, ?, ?)`,
-			taskID, started, "success")
+			taskID, started.Unix(), "success")
 	}
 
 	deleted, err := CleanupOldSchedulerHistory()

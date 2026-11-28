@@ -5,6 +5,7 @@
   {{template "head" .}}
 </head>
 <body>
+  {{.TrackingNoscript}}
   {{/* Skip links per PART 30: the first focusable elements on every page,
        off-screen until focused. Pure anchors - no JavaScript involved. */}}
   <a href="#main-content" class="skip-link">{{t .Lang "a11y.skip_to_content"}}</a>

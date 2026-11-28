@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -25,6 +24,13 @@ type CaptchaDescriptor struct {
 	Provider  string `json:"provider"`
 	CaptchaID string `json:"captcha_id"`
 	Question  string `json:"question"`
+}
+
+type captchaErrorResponse struct {
+	OK    bool `json:"ok"`
+	Error struct {
+		Code string `json:"code"`
+	} `json:"error"`
 }
 
 // AttachSimpleCaptcha creates a fresh simple challenge for a server-rendered
@@ -118,7 +124,7 @@ func CaptchaDescriptorHandler() http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		if err := json.NewEncoder(w).Encode(map[string]any{"captcha": descriptor}); err != nil {
+		if err := writeTaggedJSON(w, responseObject(responseField("captcha", descriptor))); err != nil {
 			log.Printf("CAPTCHA descriptor response write failed: %v", err)
 		}
 	}
@@ -128,7 +134,9 @@ func writeCaptchaError(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": map[string]string{"code": code}}); err != nil {
+	response := captchaErrorResponse{OK: false}
+	response.Error.Code = code
+	if err := writeTaggedJSON(w, response); err != nil {
 		log.Printf("CAPTCHA error response write failed: %v", err)
 	}
 }

@@ -14,20 +14,24 @@ import (
 
 type healthPageData struct {
 	PageData
-	Health          handler.HealthResponse
-	StatusClass     string
-	StatusIcon      string
-	StatusLabel     string
-	RestartReasons  string
-	TimestampText   string
-	BuildDateText   string
-	BuildDateISO    string
-	ModeLabel       string
-	Features        []healthFeatureRow
-	Checks          []healthCheckRow
-	RequestTotal    string
-	Request24h      string
-	ActiveConns     string
+	Health                 handler.HealthResponse
+	StatusClass            string
+	StatusIcon             string
+	StatusLabel            string
+	RestartReasons         string
+	MaintenanceSince       string
+	MaintenanceMessage     string
+	MaintenanceNextAttempt string
+	TimestampText          string
+	TimestampISO           string
+	BuildDateText          string
+	BuildDateISO           string
+	ModeLabel              string
+	Features               []healthFeatureRow
+	Checks                 []healthCheckRow
+	RequestTotal           string
+	Request24h             string
+	ActiveConns            string
 }
 
 type healthFeatureRow struct {
@@ -46,7 +50,7 @@ type healthCheckRow struct {
 	StatusIcon  string
 }
 
-func renderHealthPage(cfg *config.Config) func(http.ResponseWriter, *http.Request, int, handler.HealthResponse) {
+func renderHealthPage(cfg *config.ServerConfig) func(http.ResponseWriter, *http.Request, int, handler.HealthResponse) {
 	return func(w http.ResponseWriter, r *http.Request, code int, response handler.HealthResponse) {
 		data := newHealthPageData(cfg, r, response)
 		data.DocumentTitle = paths.ProjectName + " - " + i18n.Translate(data.Lang, "health.title")
@@ -60,25 +64,37 @@ func renderHealthPage(cfg *config.Config) func(http.ResponseWriter, *http.Reques
 	}
 }
 
-func newHealthPageData(cfg *config.Config, r *http.Request, response handler.HealthResponse) healthPageData {
+func newHealthPageData(cfg *config.ServerConfig, r *http.Request, response handler.HealthResponse) healthPageData {
 	page := newPageData(cfg, r, "healthz")
 	statusClass, statusIcon, statusKey := handler.HealthStatusPresentation(response.Status)
 	data := healthPageData{
-		PageData:        page,
-		Health:          response,
-		StatusClass:     statusClass,
-		StatusIcon:      statusIcon,
-		StatusLabel:     i18n.Translate(page.Lang, statusKey),
-		RestartReasons:  strings.Join(response.RestartReason, ", "),
-		TimestampText:   response.Timestamp.UTC().Format(time.RFC3339),
-		ModeLabel:       healthModeLabel(page.Lang, response.Mode),
-		RequestTotal:    formatHealthCount(response.Stats.RequestsTotal),
-		Request24h:      formatHealthCount(response.Stats.Requests24h),
-		ActiveConns:     formatHealthCount(int64(response.Stats.ActiveConns)),
+		PageData:       page,
+		Health:         response,
+		StatusClass:    statusClass,
+		StatusIcon:     statusIcon,
+		StatusLabel:    i18n.Translate(page.Lang, statusKey),
+		RestartReasons: strings.Join(response.RestartReason, ", "),
+		TimestampText:  response.Timestamp.UTC().Format("January 02, 2006 at 15:04:05 MST"),
+		TimestampISO:   response.Timestamp.UTC().Format(time.RFC3339),
+		ModeLabel:      healthModeLabel(page.Lang, response.Mode),
+		RequestTotal:   formatHealthCount(response.Stats.RequestsTotal),
+		Request24h:     formatHealthCount(response.Stats.Requests24h),
+		ActiveConns:    formatHealthCount(int64(response.Stats.ActiveConns)),
+	}
+	if response.Maintenance != nil {
+		data.MaintenanceSince = response.Maintenance.Since.UTC().Format(time.RFC3339)
+		maintenanceKey := "health.maintenance_reason." + response.Maintenance.Reason
+		data.MaintenanceMessage = i18n.Translate(page.Lang, maintenanceKey)
+		if data.MaintenanceMessage == maintenanceKey {
+			data.MaintenanceMessage = response.Maintenance.Message
+		}
+		if response.Maintenance.SelfHealing.NextAttempt != nil {
+			data.MaintenanceNextAttempt = response.Maintenance.SelfHealing.NextAttempt.UTC().Format(time.RFC3339)
+		}
 	}
 	if builtAt, err := time.Parse(time.RFC3339, response.Build.Date); err == nil {
 		data.BuildDateISO = builtAt.UTC().Format(time.RFC3339)
-		data.BuildDateText = data.BuildDateISO
+		data.BuildDateText = builtAt.UTC().Format("January 02, 2006 at 15:04:05 MST")
 	} else {
 		data.BuildDateText = response.Build.Date
 		data.BuildDateISO = response.Build.Date

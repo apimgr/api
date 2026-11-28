@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	cfg := Config{
+	cfg := EmailConfig{
 		Enabled:   true,
 		SMTPHost:  "smtp.example.com",
 		SMTPPort:  587,
@@ -28,15 +28,22 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestSend_DisabledReturnsError(t *testing.T) {
-	client := NewClient(Config{Enabled: false})
+	client := NewClient(EmailConfig{Enabled: false})
 
 	err := client.Send(Message{To: []string{"a@example.com"}, Subject: "hi", Body: "body"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not enabled")
 }
 
+func TestSend_EnabledWithoutFQDNSenderDoesNotInventLocalhost(t *testing.T) {
+	client := NewClient(EmailConfig{Enabled: true})
+	err := client.Send(Message{To: []string{"ops@example.com"}, Subject: "notice", Body: "body"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sender address requires a configured FQDN")
+}
+
 func TestSend_EnabledButUnreachableHostFails(t *testing.T) {
-	client := NewClient(Config{
+	client := NewClient(EmailConfig{
 		Enabled:  true,
 		SMTPHost: "127.0.0.1",
 		// Port 1 is a privileged, essentially-never-listening port, so the
@@ -102,7 +109,7 @@ func TestTestConnection_SilentSMTPGreetingIsBounded(t *testing.T) {
 	require.NoError(t, err)
 
 	started := time.Now()
-	err = testConnectionWithTimeout(Config{SMTPHost: "127.0.0.1", SMTPPort: port, TLS: TLSModeNone}, false, 100*time.Millisecond)
+	err = testConnectionWithTimeout(EmailConfig{SMTPHost: "127.0.0.1", SMTPPort: port, TLS: TLSModeNone}, false, 100*time.Millisecond)
 	require.Error(t, err)
 	assert.Less(t, time.Since(started), time.Second)
 	select {
@@ -126,14 +133,14 @@ func TestAutoDetectSMTP_NoServerFound(t *testing.T) {
 }
 
 func TestSend_DisabledClientNeverAttempts(t *testing.T) {
-	client := NewClient(Config{Enabled: false})
+	client := NewClient(EmailConfig{Enabled: false})
 
 	err := client.Send(Message{To: []string{"a@example.com"}, Subject: "subject", Body: "body"})
 	require.Error(t, err)
 }
 
 func TestBuildMessage_HeaderOrderAndReplyTo(t *testing.T) {
-	client := NewClient(Config{
+	client := NewClient(EmailConfig{
 		Enabled:   true,
 		FromName:  "api",
 		FromEmail: "no-reply@example.com",
@@ -155,7 +162,7 @@ func TestBuildMessage_HeaderOrderAndReplyTo(t *testing.T) {
 }
 
 func TestBuildMessage_OmitsReplyToWhenUnset(t *testing.T) {
-	client := NewClient(Config{Enabled: true, FromEmail: "no-reply@example.com"})
+	client := NewClient(EmailConfig{Enabled: true, FromEmail: "no-reply@example.com"})
 	raw := mustBuildMessage(t, client, Message{
 		To:      []string{"a@example.com"},
 		Subject: "Hello",
@@ -166,7 +173,7 @@ func TestBuildMessage_OmitsReplyToWhenUnset(t *testing.T) {
 }
 
 func TestBuildMessage_HTMLContentType(t *testing.T) {
-	client := NewClient(Config{Enabled: true, FromEmail: "no-reply@example.com"})
+	client := NewClient(EmailConfig{Enabled: true, FromEmail: "no-reply@example.com"})
 	raw := mustBuildMessage(t, client, Message{
 		To:      []string{"a@example.com"},
 		Subject: "Hello",
@@ -180,7 +187,7 @@ func TestBuildMessage_HTMLContentType(t *testing.T) {
 }
 
 func TestBuildMessage_EncryptedAttachmentIsBase64MIMEPart(t *testing.T) {
-	client := NewClient(Config{Enabled: true, FromEmail: "no-reply@example.com"})
+	client := NewClient(EmailConfig{Enabled: true, FromEmail: "no-reply@example.com"})
 	raw := mustBuildMessage(t, client, Message{
 		To:      []string{"security@example.com"},
 		Subject: "Encrypted report",
@@ -209,7 +216,7 @@ func mustBuildMessage(t *testing.T, client *Client, msg Message) string {
 }
 
 func TestBuildMessage_RFC5322HeadersAndEncodedNames(t *testing.T) {
-	client := NewClient(Config{FromName: "Système API", FromEmail: "no-reply@example.com"})
+	client := NewClient(EmailConfig{FromName: "Système API", FromEmail: "no-reply@example.com"})
 	raw := mustBuildMessage(t, client, Message{
 		To: []string{"one@example.com"}, Subject: "Mise à jour réussie", Body: "Message body",
 	})
@@ -242,7 +249,7 @@ func TestBuildMessage_RejectsHeaderInjectionAndEmptySubject(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			msg := base
 			msg.To = append([]string(nil), base.To...)
-			client := NewClient(Config{FromName: "API", FromEmail: "no-reply@example.com"})
+			client := NewClient(EmailConfig{FromName: "API", FromEmail: "no-reply@example.com"})
 			mutate(&msg, client)
 			_, err := client.buildMessage(msg, client.config.FromEmail, msg.To[0])
 			require.Error(t, err)

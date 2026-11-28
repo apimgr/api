@@ -15,7 +15,7 @@ import (
 // frontendJSONMiddleware maps explicit JSON requests to the paired API route.
 // The downstream API handler owns the response contract, so frontend
 // negotiation cannot drift from the documented endpoint.
-func frontendJSONMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func frontendJSONMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			accept := strings.ToLower(r.Header.Get("Accept"))

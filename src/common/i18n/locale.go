@@ -8,6 +8,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"regexp"
 	"sort"
 	"strings"
@@ -54,21 +55,20 @@ type languageRegistration struct {
 	pluralCategories                  []string
 	required                          bool
 	tag                               language.Tag
-	dateLayout, timeLayout            string
 }
 
 // languageRegistry is the single source of supported-language metadata.
 // Locale files, runtime negotiation, formatters, and the language selector
 // are checked against these registrations.
 var languageRegistry = []languageRegistration{
-	{code: "en", name: "English", nativeName: "English", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.AmericanEnglish, dateLayout: "01/02/2006", timeLayout: "3:04 PM"},
-	{code: "es", name: "Spanish", nativeName: "Español", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.Spanish, dateLayout: "02/01/2006", timeLayout: "15:04"},
-	{code: "zh", name: "Chinese", nativeName: "中文", direction: "ltr", pluralCategories: []string{"other"}, tag: language.SimplifiedChinese, dateLayout: "2006/01/02", timeLayout: "15:04"},
-	{code: "fr", name: "French", nativeName: "Français", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.French, dateLayout: "02/01/2006", timeLayout: "15:04"},
-	{code: "ar", name: "Arabic", nativeName: "العربية", direction: "rtl", pluralCategories: []string{"zero", "one", "two", "few", "many", "other"}, required: true, tag: language.Arabic, dateLayout: "02/01/2006", timeLayout: "15:04"},
-	{code: "de", name: "German", nativeName: "Deutsch", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.German, dateLayout: "02.01.2006", timeLayout: "15:04"},
-	{code: "it", name: "Italian", nativeName: "Italiano", direction: "ltr", pluralCategories: []string{"one", "many", "other"}, required: true, tag: language.Italian, dateLayout: "02/01/2006", timeLayout: "15:04"},
-	{code: "ja", name: "Japanese", nativeName: "日本語", direction: "ltr", pluralCategories: []string{"other"}, tag: language.Japanese, dateLayout: "2006/01/02", timeLayout: "15:04"},
+	{code: "en", name: "English", nativeName: "English", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.AmericanEnglish},
+	{code: "es", name: "Spanish", nativeName: "Español", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.Spanish},
+	{code: "zh", name: "Chinese", nativeName: "中文", direction: "ltr", pluralCategories: []string{"other"}, tag: language.SimplifiedChinese},
+	{code: "fr", name: "French", nativeName: "Français", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.French},
+	{code: "ar", name: "Arabic", nativeName: "العربية", direction: "rtl", pluralCategories: []string{"zero", "one", "two", "few", "many", "other"}, required: true, tag: language.Arabic},
+	{code: "de", name: "German", nativeName: "Deutsch", direction: "ltr", pluralCategories: []string{"one", "other"}, required: true, tag: language.German},
+	{code: "it", name: "Italian", nativeName: "Italiano", direction: "ltr", pluralCategories: []string{"one", "many", "other"}, required: true, tag: language.Italian},
+	{code: "ja", name: "Japanese", nativeName: "日本語", direction: "ltr", pluralCategories: []string{"other"}, tag: language.Japanese},
 }
 
 func registeredLanguage(code string) (languageRegistration, bool) {
@@ -101,32 +101,50 @@ func RequiredLanguageCodes() []string { return languageCodes(true) }
 var supportedLanguages = languageCodes(false)
 
 var locales map[string]*locale
+var localeJSON map[string][]byte
 
 func init() {
 	MustLoad()
 }
 
-// MustLoad loads and validates every locale file embedded in the binary. It
-// panics if any locale file is missing, malformed, or fails validation
-// against the canonical en.json key set. It is called automatically at
-// package init time; it is exported so callers (and tests) can force a
-// reload/re-validation deterministically.
+// MustLoad loads embedded locale files, falling back to English when an
+// optional locale is missing or malformed. Validate remains the explicit
+// diagnostic for build and test checks; a broken translation must not prevent
+// the server or CLI from starting.
 func MustLoad() {
-	if err := validateEmbeddedRegistry(); err != nil {
-		panic(fmt.Sprintf("i18n: embedded locale registry validation failed: %v", err))
+	loaded, files := loadLocales(localeFS)
+	locales = loaded
+	localeJSON = files
+}
+
+func loadLocales(source fs.FS) (map[string]*locale, map[string][]byte) {
+	english, englishErr := loadLocaleFrom(source, DefaultLanguage)
+	if englishErr != nil {
+		english = &locale{meta: Meta{Language: DefaultLanguage, Name: "English", NativeName: "English", Direction: "ltr"}, flat: map[string]string{}, plain: map[string]interface{}{}}
 	}
 	loaded := make(map[string]*locale, len(supportedLanguages))
+	jsonByLanguage := make(map[string][]byte, len(supportedLanguages))
+	englishJSON, _ := fs.ReadFile(source, "locales/"+DefaultLanguage+".json")
 	for _, lang := range supportedLanguages {
-		l, err := loadLocale(lang)
-		if err != nil {
-			panic(fmt.Sprintf("i18n: failed to load locale %q: %v", lang, err))
+		l := english
+		data := englishJSON
+		if lang == DefaultLanguage && englishErr == nil {
+			l = english
+		} else if lang != DefaultLanguage {
+			localized, err := loadLocaleFrom(source, lang)
+			if err == nil {
+				l = localized
+				data, err = fs.ReadFile(source, "locales/"+lang+".json")
+				if err != nil {
+					l = english
+					data = englishJSON
+				}
+			}
 		}
 		loaded[lang] = l
+		jsonByLanguage[lang] = append([]byte(nil), data...)
 	}
-	locales = loaded
-	if err := validateLocales(locales); err != nil {
-		panic(fmt.Sprintf("i18n: locale validation failed: %v", err))
-	}
+	return loaded, jsonByLanguage
 }
 
 func validateEmbeddedRegistry() error {
@@ -153,8 +171,8 @@ func validateEmbeddedRegistry() error {
 	return nil
 }
 
-func loadLocale(lang string) (*locale, error) {
-	data, err := localeFS.ReadFile("locales/" + lang + ".json")
+func loadLocaleFrom(source fs.FS, lang string) (*locale, error) {
+	data, err := fs.ReadFile(source, "locales/"+lang+".json")
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +240,11 @@ func LocaleJSON(lang string) ([]byte, error) {
 	if !IsSupported(lang) {
 		return nil, fmt.Errorf("unsupported locale %q", lang)
 	}
-	return localeFS.ReadFile("locales/" + lang + ".json")
+	data, ok := localeJSON[lang]
+	if !ok || len(data) == 0 {
+		return nil, fmt.Errorf("locale %q and English fallback are unavailable", lang)
+	}
+	return append([]byte(nil), data...), nil
 }
 
 // resolveLocale returns the locale for lang, falling back to English when

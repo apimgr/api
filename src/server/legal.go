@@ -31,7 +31,7 @@ Good-faith research that follows this policy, avoids privacy violations and serv
 Use the private reporting channels at [{app_name} security](/server/security). Do not disclose vulnerability details publicly before coordinating with the maintainers.
 `
 
-func securityPolicyContent(cfg *config.Config, r *http.Request) string {
+func securityPolicyContent(cfg *config.ServerConfig, r *http.Request) string {
 	content := strings.TrimSpace(cfg.Web.Security.Policy)
 	if content == "" {
 		content = securityPolicyMarkdown
@@ -66,7 +66,7 @@ func termsMarkdown(appName string) string {
 	return strings.ReplaceAll(defaultTermsMarkdown, "{app_name}", appName)
 }
 
-func termsPageHandler(cfg *config.Config) http.HandlerFunc {
+func termsPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		data := newPageData(cfg, r, "terms")
@@ -81,7 +81,7 @@ func termsPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func termsAPIHandler(cfg *config.Config) http.HandlerFunc {
+func termsAPIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		lang := i18n.LangFromRequest(r)
@@ -97,15 +97,11 @@ func termsAPIHandler(cfg *config.Config) http.HandlerFunc {
 				format = "text"
 			}
 		}
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{
-			"title":   i18n.Translate(lang, "nav.terms"),
-			"content": content,
-			"format":  format,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("title", i18n.Translate(lang, "nav.terms")), responseField("content", content), responseField("format", format)))
 	}
 }
 
-func securityPolicyPageHandler(cfg *config.Config) http.HandlerFunc {
+func securityPolicyPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		data := newPageData(cfg, r, "security-policy")
@@ -116,9 +112,9 @@ func securityPolicyPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func securityPolicyAPIHandler(cfg *config.Config) http.HandlerFunc {
+func securityPolicyAPIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{"policy": securityPolicyContent(cfg, r), "format": "markdown"})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("policy", securityPolicyContent(cfg, r)), responseField("format", "markdown")))
 	}
 }

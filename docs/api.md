@@ -12,10 +12,12 @@ Use the method shown in the route table. Path and query values are supplied in t
 - `GET /api/{api_version}/cli/binaries/{api-cli-os-arch}` serves an operator-provisioned CLI release binary after verifying its published checksum. Downloads are public by default; `cli.binary_download.require_auth` requires a valid Bearer token.
 - `GET /server/i2p/status` is a loopback-only status endpoint for the server CLI and does not expose key material.
 
-- `GET /api/{api_version}/version` returns version/build metadata.
 - `GET /server/healthz` and `GET /api/{api_version}/server/healthz` report server health. `/healthz` is an optional HTML health alias controlled by `server.healthz.root.enabled`; `/api/healthz` is the unversioned API alias.
 - Health statistics expose aggregate request totals and rolling 24-hour counts; totals are persisted in `server.db`, while health and metrics probes are excluded from those request counters.
 - `GET /server/about`, `/server/privacy`, `/server/dpo`, `/server/contact`, `/server/help`, `/server/terms`, `/server/security`, and `/server/security/policy` serve the public server pages.
+- `GET /api/{api_version}/server/about` returns the About page as JSON (`title`, Markdown or configured `content`, and `format`); content is never rendered HTML.
+- `GET /api/{api_version}/server/privacy` returns the public privacy information as JSON, including cookie categories, collection, use, security, sharing, retention, rights, third parties, DPO contact, and resolved page URLs.
+- `GET /api/{api_version}/server/auth/check` is a machine-only Bearer-token check: `200` returns the credential `kind` (`operator` or `owner`), and `401` reports an invalid or missing token without echoing it.
 - `GET /server/tracking.js` serves the configured same-origin analytics loader only after analytics consent; it returns `404` when disabled, unconsented, or requested over Tor/I2P.
 - `GET /api/{api_version}/server/help` and `/api/{api_version}/server/help/mcp` return JSON help documents; `/server/help/mcp` is the corresponding HTML page.
 - `GET`/`POST /api/{api_version}/server/contact` expose the public contact form contract and two-step submit/review flow. A valid `security_id` selects the coordinated-disclosure fields; the response includes a fresh CAPTCHA descriptor and form token.

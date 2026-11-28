@@ -15,7 +15,7 @@ import (
 
 const maxNormalizedRequestBody = 1 << 20
 
-func inputNormalizationMiddleware(next http.Handler, configs ...*config.Config) http.Handler {
+func inputNormalizationMiddleware(next http.Handler, configs ...*config.ServerConfig) http.Handler {
 	limit := int64(maxNormalizedRequestBody)
 	if len(configs) > 0 && configs[0] != nil {
 		limit = configs[0].Server.Limits.MaxBodySizeBytes()

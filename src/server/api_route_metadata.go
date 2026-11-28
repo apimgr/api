@@ -11,11 +11,28 @@ import (
 // apiRouteDefinition attaches the PART 14 text-response metadata to the same
 // registered route records consumed by Swagger, llms.txt, and MCP discovery.
 func apiRouteDefinition(method, path string) swagger.Route {
+	return BuildAPIRouteMetadata(method, path)
+}
+
+// BuildAPIRouteMetadata returns the canonical route metadata used by API
+// catalogs and generated discovery documents.
+func BuildAPIRouteMetadata(method, path string) swagger.Route {
+	mountedWhen := "always"
+	switch {
+	case path == "/healthz":
+		mountedWhen = "server.healthz.root.enabled"
+	case path == "/metrics" || strings.HasPrefix(path, "/metrics/"):
+		mountedWhen = "server.metrics.root.enabled"
+	case strings.HasPrefix(path, "/api/metrics") || strings.Contains(path, "/server/metrics"):
+		mountedWhen = "server.metrics.enabled"
+	}
 	return swagger.Route{
 		Method:      method,
 		Path:        path,
 		Primary:     apiPrimaryValue(path),
 		TextMessage: apiRouteMessage(method, ""),
+		MountedWhen: mountedWhen,
+		Internal:    isInternalAPIRoute(path),
 	}
 }
 

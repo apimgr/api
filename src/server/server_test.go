@@ -28,14 +28,14 @@ import (
 // directories and loads a real default config through it, so New() and
 // the handlers under test see production-shaped config values instead of
 // a hand-rolled struct that could drift from defaultConfig().
-func newTestConfig(t *testing.T) *config.Config {
+func newTestConfig(t *testing.T) *config.ServerConfig {
 	t.Helper()
 	configDir := t.TempDir()
 	dataDir := t.TempDir()
 	logDir := t.TempDir()
-	paths.Init(configDir, dataDir, logDir)
+	paths.SetApplicationPathOverrides(configDir, dataDir, logDir)
 
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 	return cfg
@@ -85,7 +85,7 @@ func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]interfa
 // all of which now have a corresponding template/page/*.tmpl file, so
 // New() no longer panics; the recover here guards against a future
 // regression reintroducing a template-wiring gap.
-func newTestServer(t *testing.T, cfg *config.Config) *http.Server {
+func newTestServer(t *testing.T, cfg *config.ServerConfig) *http.Server {
 	t.Helper()
 	if db := database.GetServerDB(); db != nil {
 		handler.SetDatabase(db)
@@ -102,7 +102,7 @@ func newTestServer(t *testing.T, cfg *config.Config) *http.Server {
 				t.Fatalf("New(cfg) panicked: %v", r)
 			}
 		}()
-		srv = New(cfg)
+		srv = NewHTTPServer(cfg)
 	}()
 	return srv
 }
@@ -113,7 +113,7 @@ func newTestServer(t *testing.T, cfg *config.Config) *http.Server {
 // health/version, and a nested API route registration all at once.
 func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 	cfg := newTestConfig(t)
-	require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+	require.NoError(t, database.InitDatabase(cfg.Server.Database, paths.DataDir()))
 	defer func() { _ = database.Close() }()
 	require.NoError(t, database.EnsureAppSecrets(t.Context()))
 	require.NoError(t, database.EnsureCaptchaSchema(t.Context()))
@@ -166,8 +166,9 @@ func TestNew_RouterServesCoreEndpoints(t *testing.T) {
 		// Per-service bearer tokens are mandatory (PART 20); the test config
 		// leaves them empty, which disables the service and answers 403.
 		{"metrics without token", http.MethodGet, "/metrics", http.StatusUnauthorized},
-		{"unknown cli release artifact", http.MethodGet, "/cli/binaries/api-cli-linux-amd64", http.StatusNotFound},
+		{"unknown cli release artifact", http.MethodGet, "/api/v1/cli/binaries/api-cli-linux-amd64", http.StatusNotFound},
 		{"unversioned autodiscover", http.MethodGet, "/api/autodiscover", http.StatusOK},
+		{"versioned API root", http.MethodGet, "/api/v1", http.StatusOK},
 		{"api v1 uuid", http.MethodGet, "/api/v1/text/uuid", http.StatusOK},
 		{"api terms page", http.MethodGet, "/api/v1/server/terms", http.StatusOK},
 		{"api security policy page", http.MethodGet, "/api/v1/server/security/policy", http.StatusOK},
@@ -545,9 +546,11 @@ func TestNew_SecurityHeadersApplied(t *testing.T) {
 func TestNew_HealthzRootAlias(t *testing.T) {
 	t.Run("enabled", func(t *testing.T) {
 		cfg := newTestConfig(t)
-		require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+		require.NoError(t, database.InitDatabase(cfg.Server.Database, paths.DataDir()))
 		t.Cleanup(func() { _ = database.Close() })
 		cfg.Server.Healthz.Root.Enabled = true
+		cfg.Server.RateLimit.Health.Requests = 10000
+		cfg.Server.RateLimit.GlobalBurst = 10000
 		srv := newTestServer(t, cfg)
 
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -572,7 +575,7 @@ func TestNew_HealthzRootAlias(t *testing.T) {
 // templates.
 func TestNewPageData(t *testing.T) {
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.FQDN = "configured.example"
 	cfg.Server.Port = "8080"
 	cfg.Server.Branding.Title = "Test Title"
@@ -594,7 +597,7 @@ func TestNewPageData(t *testing.T) {
 // falls back to the configured listen port when the public host has none.
 func TestBuildURLUsesConfiguredServerPort(t *testing.T) {
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Port = "8080"
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "api.example.com"
@@ -1500,7 +1503,7 @@ func TestApiConvertTimezoneHandler(t *testing.T) {
 // TestRobotsHandler covers that configured Allow/Deny paths are emitted
 // and the sitemap line is present.
 func TestRobotsHandler(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.FQDN = "example.com"
 	cfg.Server.Port = "8080"
 	cfg.Web.Robots.Allow = []string{"/"}
@@ -1520,10 +1523,10 @@ func TestRobotsHandler(t *testing.T) {
 // /api/swagger and /api/v1/server/swagger routes: OpenAPI is JSON-only,
 // there is no YAML route or redirect.
 func TestApiSwaggerSpecHandler_ServesJSON(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	req := httptest.NewRequest(http.MethodGet, "/api/swagger", nil)
 	rec := httptest.NewRecorder()
-	apiSwaggerSpecHandler(cfg, nil)(rec, req)
+	apiSwaggerSpecHandler(cfg)(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
@@ -1568,6 +1571,7 @@ func TestMCPAliasesUseOneJSONHandler(t *testing.T) {
 }
 
 func TestHelpAPIMirrorsExposeRegisteredPagesAndMCPData(t *testing.T) {
+	t.Setenv("DOMAIN", "example.com")
 	cfg := newTestConfig(t)
 	srv := newTestServer(t, cfg)
 	ts := httptest.NewServer(srv.Handler)
@@ -1629,7 +1633,7 @@ func TestHealthPageUsesSharedPublicShellAndTranslatedSections(t *testing.T) {
 	cfg := newTestConfig(t)
 	cfg.Server.Branding.Title = "Health Test"
 	cfg.Server.Branding.Tagline = "Status overview"
-	srv := New(cfg)
+	srv := NewHTTPServer(cfg)
 	req := httptest.NewRequest(http.MethodGet, "/server/healthz?lang=es", nil)
 	req.Header.Set("Accept", "text/html")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
@@ -1680,8 +1684,10 @@ func TestHealthPageDatasetLabelsAndDates(t *testing.T) {
 	}
 	data := newHealthPageData(cfg, req, response)
 
-	assert.Equal(t, "2025-02-03T19:34:56Z", data.TimestampText)
-	assert.Equal(t, "2025-02-03T19:34:56Z", data.BuildDateText)
+	assert.Equal(t, "February 03, 2025 at 19:34:56 UTC", data.TimestampText)
+	assert.Equal(t, "2025-02-03T19:34:56Z", data.TimestampISO)
+	assert.Equal(t, "February 03, 2025 at 19:34:56 UTC", data.BuildDateText)
+	assert.Equal(t, "2025-02-03T19:34:56Z", data.BuildDateISO)
 	require.Len(t, data.Checks, 4)
 	assert.Equal(t, "Données de vulnérabilités NVD", data.Checks[0].Label)
 	assert.Equal(t, "Base de données de vulnérabilités Trivy", data.Checks[1].Label)

@@ -3,15 +3,16 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/i2p"
 	"github.com/apimgr/api/src/paths"
@@ -24,14 +25,14 @@ type autodiscoverResponse struct {
 }
 
 type autodiscoverData struct {
-	Name          string                `json:"name"`
-	Version       string                `json:"version"`
-	API           autodiscoverAPI       `json:"api"`
-	URLs          []string              `json:"urls"`
-	CLIVersions   map[string]cliRelease `json:"cli_versions"`
-	CLIMinVersion string                `json:"cli_min_version,omitempty"`
-	Onion         string                `json:"onion,omitempty"`
-	I2P           string                `json:"i2p,omitempty"`
+	Name          string                  `json:"name"`
+	Version       string                  `json:"version"`
+	API           autodiscoverAPI         `json:"api"`
+	URLs          []string                `json:"urls"`
+	CLIVersions   autodiscoverCLIReleases `json:"cli_versions"`
+	CLIMinVersion string                  `json:"cli_min_version,omitempty"`
+	Onion         string                  `json:"onion,omitempty"`
+	I2P           string                  `json:"i2p,omitempty"`
 }
 
 type autodiscoverAPI struct {
@@ -43,15 +44,35 @@ type cliRelease struct {
 	SHA256  string `json:"sha256"`
 }
 
-func autodiscoverHandler(cfg *config.Config) http.HandlerFunc {
+type autodiscoverCLIReleases map[string]cliRelease
+
+func (releases autodiscoverCLIReleases) TaggedResponseFields() sanitize.TaggedObject {
+	platforms := make([]string, 0, len(releases))
+	for platform := range releases {
+		platforms = append(platforms, platform)
+	}
+	sort.Strings(platforms)
+	fields := make(sanitize.TaggedObject, 0, len(platforms))
+	for _, platform := range platforms {
+		fields = append(fields, sanitize.TaggedField{Name: platform, Value: releases[platform]})
+	}
+	return fields
+}
+
+func autodiscoverHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := autodiscoverData{
 			Name:          paths.ProjectName,
 			Version:       Version,
 			API:           autodiscoverAPI{CurrentVersion: strings.TrimPrefix(APIBasePath(cfg), "/api/")},
-			CLIVersions:   discoverCLIVersions(cfg),
+			CLIVersions:   autodiscoverCLIReleases(discoverCLIVersions(cfg)),
 			CLIMinVersion: strings.TrimSpace(cfg.Server.Update.CLIMinVersion),
 			URLs:          autodiscoverOrigins(cfg, r),
+		}
+		if IsTorRequest(r) {
+			// Overlay addresses are disclosed only in their dedicated fields;
+			// never return a clearnet origin to a Tor visitor.
+			data.URLs = []string{}
 		}
 		if cfg.Server.Tor.Expose {
 			if manager := tor.Get(); manager != nil {
@@ -69,13 +90,15 @@ func autodiscoverHandler(cfg *config.Config) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=60")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		_ = json.NewEncoder(w).Encode(autodiscoverResponse{OK: true, Data: data})
+		if err := writeTaggedJSON(w, autodiscoverResponse{OK: true, Data: data}); err != nil {
+			log.Printf("autodiscover response write failed: %v", err)
+		}
 	}
 }
 
 // autodiscoverOrigins returns the request's public origin first, followed by
 // configured DOMAIN origins and hosts learned from trusted reverse proxies.
-func autodiscoverOrigins(cfg *config.Config, r *http.Request) []string {
+func autodiscoverOrigins(cfg *config.ServerConfig, r *http.Request) []string {
 	proto, host := "http", ""
 	if r != nil {
 		host = r.Host
@@ -119,7 +142,7 @@ func autodiscoverOrigins(cfg *config.Config, r *http.Request) []string {
 	return result
 }
 
-func discoverCLIVersions(cfg *config.Config) map[string]cliRelease {
+func discoverCLIVersions(cfg *config.ServerConfig) map[string]cliRelease {
 	dir := strings.TrimSpace(cfg.CLI.BinaryDownload.Dir)
 	if dir == "" {
 		dir = filepath.Join(paths.DataDir(), "cli")

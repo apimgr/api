@@ -55,7 +55,7 @@ func TestInputNormalizationRejectsPasswordWhitespace(t *testing.T) {
 }
 
 func TestInputNormalizationUsesConfiguredBodyLimit(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Limits.MaxBodySize = "4B"
 	handler := inputNormalizationMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("oversized request body must be rejected")

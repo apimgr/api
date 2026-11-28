@@ -13,8 +13,8 @@ import (
 	"github.com/apimgr/api/src/common/terminal"
 )
 
-// Config contains the application data needed to render a startup banner.
-type Config struct {
+// BannerConfig contains the application data needed to render a startup banner.
+type BannerConfig struct {
 	AppName     string
 	Version     string
 	AppMode     string
@@ -29,7 +29,7 @@ type Config struct {
 }
 
 // PrintStartup writes a responsive startup banner to the configured writer.
-func PrintStartup(cfg Config) error {
+func PrintStartup(cfg BannerConfig) error {
 	if cfg.Writer == nil {
 		return nil
 	}
@@ -67,7 +67,7 @@ func writeRendered(writer io.Writer, rendered []byte) error {
 	return nil
 }
 
-func printPlain(w io.Writer, cfg Config) {
+func printPlain(w io.Writer, cfg BannerConfig) {
 	_, _ = fmt.Fprintf(w, "%s v%s\n", cfg.AppName, cfg.Version)
 	_, _ = fmt.Fprintf(w, "%s: %s\n", i18n.Translate(cfg.Lang, "cli.running_in_mode_label"), cfg.AppMode)
 	if cfg.Debug {
@@ -82,7 +82,7 @@ func printPlain(w io.Writer, cfg Config) {
 	_, _ = fmt.Fprintln(w)
 }
 
-func printFull(w io.Writer, cfg Config) {
+func printFull(w io.Writer, cfg BannerConfig) {
 	_, _ = fmt.Fprintf(w, "╭───────────────────────────────────────────────────────────╮\n│  %s\n├───────────────────────────────────────────────────────────┤\n", style(fmt.Sprintf("🚀 %s · 📦 %s", cfg.AppName, cfg.Version), "36", cfg))
 	printMode(w, cfg, true, true)
 	for _, address := range cfg.URLs {
@@ -94,7 +94,7 @@ func printFull(w io.Writer, cfg Config) {
 	_, _ = fmt.Fprintln(w, "╰───────────────────────────────────────────────────────────╯")
 }
 
-func printCompact(w io.Writer, cfg Config) {
+func printCompact(w io.Writer, cfg BannerConfig) {
 	_, _ = fmt.Fprintln(w, style(fmt.Sprintf("🚀 %s v%s", cfg.AppName, cfg.Version), "36", cfg))
 	printMode(w, cfg, true, false)
 	for _, address := range cfg.URLs {
@@ -105,14 +105,14 @@ func printCompact(w io.Writer, cfg Config) {
 	}
 }
 
-func printMinimal(w io.Writer, cfg Config) {
+func printMinimal(w io.Writer, cfg BannerConfig) {
 	_, _ = fmt.Fprintf(w, "%s %s\n%s\n", cfg.AppName, cfg.Version, cfg.AppMode)
 	for _, address := range cfg.URLs {
 		_, _ = fmt.Fprintln(w, hostPort(address))
 	}
 }
 
-func printMicro(w io.Writer, cfg Config) {
+func printMicro(w io.Writer, cfg BannerConfig) {
 	if len(cfg.URLs) == 0 {
 		_, _ = fmt.Fprintln(w, cfg.AppName)
 		return
@@ -120,7 +120,7 @@ func printMicro(w io.Writer, cfg Config) {
 	_, _ = fmt.Fprintf(w, "%s %s\n", cfg.AppName, hostPort(cfg.URLs[0]))
 }
 
-func printMode(w io.Writer, cfg Config, icons, framed bool) {
+func printMode(w io.Writer, cfg BannerConfig, icons, framed bool) {
 	icon := ""
 	if icons {
 		switch strings.ToLower(cfg.AppMode) {
@@ -152,7 +152,7 @@ func hostPort(raw string) string {
 	return u.Host
 }
 
-func style(text, code string, cfg Config) string {
+func style(text, code string, cfg BannerConfig) string {
 	if !cfg.Colors || !display.CanUseANSI(cfg.Terminal) {
 		return text
 	}

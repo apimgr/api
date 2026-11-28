@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/apimgr/api/src/common/sanitize"
+	"github.com/apimgr/api/src/service/crypto"
 	"github.com/apimgr/api/src/service/weather"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -1297,7 +1299,7 @@ func TestAPIParseJSONHandler(t *testing.T) {
 	})
 
 	t.Run("valid json", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/json", strings.NewReader(`{"a":1}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/json", strings.NewReader(`{"a":1,"nested":{"password":"secret"}}`))
 		w := httptest.NewRecorder()
 
 		apiParseJSONHandler(w, req)
@@ -1305,6 +1307,12 @@ func TestAPIParseJSONHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
 		assert.Equal(t, true, env["ok"])
+		data, ok := env["data"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, float64(1), data["a"])
+		nested, ok := data["nested"].(map[string]interface{})
+		require.True(t, ok)
+		assert.NotContains(t, nested, "password")
 	})
 }
 
@@ -1451,7 +1459,7 @@ func TestAPIParseINIHandler(t *testing.T) {
 	})
 
 	t.Run("valid ini", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/ini", strings.NewReader("[section]\nkey=value\n"))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/ini", strings.NewReader("[section]\nsetting=value\n"))
 		w := httptest.NewRecorder()
 		apiParseINIHandler(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -1460,7 +1468,7 @@ func TestAPIParseINIHandler(t *testing.T) {
 		require.True(t, ok)
 		section, ok := data["section"].(map[string]interface{})
 		require.True(t, ok)
-		assert.Equal(t, "value", section["key"])
+		assert.Equal(t, "value", section["setting"])
 	})
 }
 
@@ -1564,7 +1572,7 @@ func TestAPIParseTOMLHandler(t *testing.T) {
 	})
 
 	t.Run("valid toml", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/toml", strings.NewReader("[table]\nkey = \"value\"\n"))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/toml", strings.NewReader("[table]\nsetting = \"value\"\n"))
 		w := httptest.NewRecorder()
 		apiParseTOMLHandler(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -1573,7 +1581,7 @@ func TestAPIParseTOMLHandler(t *testing.T) {
 		require.True(t, ok)
 		table, ok := data["table"].(map[string]interface{})
 		require.True(t, ok)
-		assert.Equal(t, "value", table["key"])
+		assert.Equal(t, "value", table["setting"])
 	})
 }
 
@@ -1590,14 +1598,14 @@ func TestAPIParseYAMLHandler(t *testing.T) {
 	})
 
 	t.Run("valid yaml", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/yaml", strings.NewReader("key: value\nlist:\n  - one\n  - two\n"))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/parse/yaml", strings.NewReader("setting: value\nlist:\n  - one\n  - two\n"))
 		w := httptest.NewRecorder()
 		apiParseYAMLHandler(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 		env := decodeEnvelope(t, w.Body.Bytes())
 		data, ok := env["data"].(map[string]interface{})
 		require.True(t, ok)
-		assert.Equal(t, "value", data["key"])
+		assert.Equal(t, "value", data["setting"])
 		list, ok := data["list"].([]interface{})
 		require.True(t, ok)
 		require.Len(t, list, 2)
@@ -2109,6 +2117,7 @@ func TestAPITestWebhookHandler(t *testing.T) {
 	t.Run("valid json", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/test/webhook", strings.NewReader(`{"event":"example"}`))
 		req.Header.Set("X-Hub-Signature", "abc123")
+		req.Header.Set("Authorization", "Bearer webhook-secret")
 		w := httptest.NewRecorder()
 		apiTestWebhookHandler(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -2116,9 +2125,24 @@ func TestAPITestWebhookHandler(t *testing.T) {
 		data, ok := env["data"].(map[string]interface{})
 		require.True(t, ok)
 		assert.Equal(t, true, data["json_valid"])
-		headers, ok := data["headers"].(map[string]interface{})
+		headers, ok := data["headers"].([]interface{})
 		require.True(t, ok)
-		assert.Equal(t, "abc123", headers["X-Hub-Signature"])
+		var signatureValue, authorizationValue string
+		for _, item := range headers {
+			header, ok := item.(map[string]interface{})
+			require.True(t, ok)
+			switch header["name"] {
+			case "X-Hub-Signature":
+				signatureValue, _ = header["value"].(string)
+			case "Authorization":
+				authorizationValue, _ = header["value"].(string)
+			}
+		}
+		assert.Equal(t, "abc123", signatureValue)
+		assert.Equal(t, sanitize.RedactedPlaceholder, authorizationValue)
+		parsedBody, ok := data["parsed_body"].(string)
+		require.True(t, ok)
+		assert.JSONEq(t, `{"event":"example"}`, parsedBody)
 	})
 
 	t.Run("non-json body", func(t *testing.T) {
@@ -3746,7 +3770,7 @@ func TestAPICryptoRSAHandler(t *testing.T) {
 		env := decodeEnvelope(t, w.Body.Bytes())
 		data, ok := env["data"].(map[string]interface{})
 		require.True(t, ok)
-		assert.NotEmpty(t, data["private_key"])
+		assert.NotContains(t, data, "private_key")
 		assert.NotEmpty(t, data["public_key"])
 	})
 
@@ -3803,15 +3827,17 @@ func TestAPICryptoRSAHandler(t *testing.T) {
 		genEnv := decodeEnvelope(t, genW.Body.Bytes())
 		genData, ok := genEnv["data"].(map[string]interface{})
 		require.True(t, ok)
-		privateKey, ok := genData["private_key"].(string)
-		require.True(t, ok)
+		assert.NotContains(t, genData, "private_key")
+		privateKey, roundTripPublicKey, err := crypto.GenerateRSAKeys(2048)
+		require.NoError(t, err)
 		publicKey, ok := genData["public_key"].(string)
 		require.True(t, ok)
+		assert.NotEmpty(t, publicKey)
 
 		encBody, err := json.Marshal(map[string]string{
 			"mode":       "encrypt",
 			"plaintext":  "Hello World",
-			"public_key": publicKey,
+			"public_key": roundTripPublicKey,
 		})
 		require.NoError(t, err)
 		encReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/rsa", strings.NewReader(string(encBody)))
@@ -3913,6 +3939,7 @@ func TestAPICryptoCertificateHandler(t *testing.T) {
 		genEnv := decodeEnvelope(t, genW.Body.Bytes())
 		genData, ok := genEnv["data"].(map[string]interface{})
 		require.True(t, ok)
+		assert.NotContains(t, genData, "private_key")
 		certPEM, ok := genData["certificate"].(string)
 		require.True(t, ok)
 		require.NotEmpty(t, certPEM)
@@ -3951,7 +3978,7 @@ func TestAPICryptoEd25519Handler(t *testing.T) {
 		env := decodeEnvelope(t, w.Body.Bytes())
 		data, ok := env["data"].(map[string]interface{})
 		require.True(t, ok)
-		assert.NotEmpty(t, data["private_key"])
+		assert.NotContains(t, data, "private_key")
 		assert.NotEmpty(t, data["public_key"])
 	})
 
@@ -3972,10 +3999,12 @@ func TestAPICryptoEd25519Handler(t *testing.T) {
 		genEnv := decodeEnvelope(t, genW.Body.Bytes())
 		genData, ok := genEnv["data"].(map[string]interface{})
 		require.True(t, ok)
-		privateKey, ok := genData["private_key"].(string)
-		require.True(t, ok)
+		assert.NotContains(t, genData, "private_key")
+		privateKey, roundTripPublicKey, err := crypto.GenerateEd25519Keys()
+		require.NoError(t, err)
 		publicKey, ok := genData["public_key"].(string)
 		require.True(t, ok)
+		assert.NotEmpty(t, publicKey)
 
 		signBody, err := json.Marshal(map[string]string{
 			"mode":        "sign",
@@ -3998,7 +4027,7 @@ func TestAPICryptoEd25519Handler(t *testing.T) {
 			"mode":       "verify",
 			"message":    "Hello World",
 			"signature":  signature,
-			"public_key": publicKey,
+			"public_key": roundTripPublicKey,
 		})
 		require.NoError(t, err)
 		verifyReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/ed25519", strings.NewReader(string(verifyBody)))
@@ -4041,15 +4070,15 @@ func TestAPICryptoPGPHandler(t *testing.T) {
 		require.True(t, ok)
 		publicKey, ok := genData["public_key"].(string)
 		require.True(t, ok)
-		privateKey, ok := genData["private_key"].(string)
-		require.True(t, ok)
+		assert.NotContains(t, genData, "private_key")
+		roundTripPublicKey, privateKey, err := crypto.GeneratePGPKeys("Jane Doe", "jane@example.com")
+		require.NoError(t, err)
 		require.NotEmpty(t, publicKey)
-		require.NotEmpty(t, privateKey)
 
 		encBody, err := json.Marshal(map[string]string{
 			"mode":       "encrypt",
 			"plaintext":  "Hello World",
-			"public_key": publicKey,
+			"public_key": roundTripPublicKey,
 		})
 		require.NoError(t, err)
 		encReq := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/pgp", strings.NewReader(string(encBody)))
@@ -4499,7 +4528,7 @@ func TestAPIGenerateSSHKeyHandler(t *testing.T) {
 	env := decodeEnvelope(t, w.Body.Bytes())
 	data, ok := env["data"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Contains(t, data["private_key"], "BEGIN OPENSSH PRIVATE KEY")
+	assert.NotContains(t, data, "private_key")
 	assert.Contains(t, data["public_key"], "ssh-ed25519")
 }
 

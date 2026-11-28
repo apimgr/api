@@ -13,7 +13,7 @@ import (
 
 func TestSecurityHandlerIncludesRequiredRFC9116Fields(t *testing.T) {
 	cfg := newTestConfig(t)
-	if err := database.Init(cfg.Server.Database, paths.DataDir()); err != nil {
+	if err := database.InitDatabase(cfg.Server.Database, paths.DataDir()); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = database.Close() }()

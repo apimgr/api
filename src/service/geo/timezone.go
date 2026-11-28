@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // openMeteoForecastEndpoint reuses the same free, keyless Open-Meteo
@@ -52,7 +54,7 @@ func (s *Service) Timezone(lat, lon float64) (*TimezoneResult, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := httpClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("open-meteo request failed: %w", err)
 	}

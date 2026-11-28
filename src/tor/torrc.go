@@ -8,8 +8,8 @@ import (
 )
 
 // generateTorrc renders the torrc content for the dedicated Tor process
-// from Config, including Tor-owned persistent hidden-service state.
-func generateTorrc(cfg Config, dataDir, hiddenServiceDir string, backendPort int) string {
+// from TorConfig, including Tor-owned persistent hidden-service state.
+func generateTorrc(cfg TorConfig, dataDir, hiddenServiceDir string, backendPort int) string {
 	// Control connection always uses a runtime-selected localhost port -
 	// never the system Tor default (9051), never hardcoded.
 	controlConfig := "ControlPort 127.0.0.1:auto"

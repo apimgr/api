@@ -148,7 +148,7 @@ func TestNotifier_SendTestEmailRequiresSMTP(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not enabled")
 
-	n.SetClient(NewClient(Config{Enabled: false}))
+	n.SetClient(NewClient(EmailConfig{Enabled: false}))
 	err = n.SendTestEmail(nil)
 	require.Error(t, err)
 }

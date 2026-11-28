@@ -30,17 +30,17 @@ type sqlRewriteRule struct {
 }
 
 type libSQLCache struct {
-	store       *Store
-	remote      *sql.DB
-	interval    time.Duration
-	maxAge      time.Duration
-	offlineMode bool
-	offlineOnly bool
+	store           *Store
+	remote          *sql.DB
+	interval        time.Duration
+	maxAge          time.Duration
+	offlineMode     bool
+	offlineOnly     bool
 	restoreSeedPath string
-	stop        chan struct{}
-	done        chan struct{}
-	mu          sync.RWMutex
-	lastSync    time.Time
+	stop            chan struct{}
+	done            chan struct{}
+	mu              sync.RWMutex
+	lastSync        time.Time
 }
 
 var serverCache *libSQLCache
@@ -802,7 +802,7 @@ func rewriteSQLTables(query string) string {
 		tables := []string{
 			"config", "config_meta", "app_secrets", "owners", "api_tokens", "audit_log",
 			"scheduler_tasks", "scheduler_history", "backups", "security_reports", "security_thanks",
-			"rate_limits", "captcha_challenges", "security_pgp_metadata", "security_pgp_exports",
+			"rate_limits", "server_stats", "server_request_hours", "captcha_challenges", "security_pgp_metadata", "security_pgp_exports",
 		}
 		for _, table := range tables {
 			quoted := regexp.QuoteMeta(table)

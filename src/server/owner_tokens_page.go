@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -46,7 +47,7 @@ func ownerTokenPageTemplate() (*template.Template, error) {
 }
 
 // ownerTokensPageHandler renders the cookie-authenticated token-management page.
-func ownerTokensPageHandler(cfg *config.Config, cookieName, projectName string) http.HandlerFunc {
+func ownerTokensPageHandler(cfg *config.ServerConfig, cookieName, projectName string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validOwnerCookieName(cookieName, projectName) {
 			http.Error(w, i18n.Translate(i18n.LangFromRequest(r), "errors.server_error"), http.StatusInternalServerError)
@@ -108,13 +109,16 @@ func ownerTokensPageHandler(cfg *config.Config, cookieName, projectName string) 
 			http.Error(w, i18n.Translate(data.Lang, "errors.server_error"), http.StatusInternalServerError)
 			return
 		}
-		if err := tmpl.ExecuteTemplate(w, "public.tmpl", data); err != nil {
+		var rendered bytes.Buffer
+		if err := tmpl.ExecuteTemplate(&rendered, "public.tmpl", data); err != nil {
+			renderServerError(w, data.PageData)
 			return
 		}
+		_, _ = w.Write(rendered.Bytes())
 	}
 }
 
-func ownerTokensActionHandler(cfg *config.Config, cookieName, projectName, action string) http.HandlerFunc {
+func ownerTokensActionHandler(cfg *config.ServerConfig, cookieName, projectName, action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validOwnerCookieName(cookieName, projectName) {
 			http.Error(w, i18n.Translate(i18n.LangFromRequest(r), "errors.server_error"), http.StatusInternalServerError)
@@ -201,8 +205,12 @@ func ownerTokensActionHandler(cfg *config.Config, cookieName, projectName, actio
 				status = "error"
 				break
 			}
+			scope := strings.TrimSpace(r.FormValue("scope"))
+			if scope == "" {
+				scope = "read-write"
+			}
 			policy, _ := cfg.Server.Tokens.Normalized()
-			raw, item, err := database.CreateLinkedOwnerToken(r.Context(), db, ownerEncryptionKey(cfg), credential.OwnerID, r.FormValue("name"), exp, policy.MaxLinked)
+			raw, item, err := database.CreateLinkedOwnerToken(r.Context(), db, ownerEncryptionKey(cfg), credential.OwnerID, r.FormValue("name"), exp, policy.MaxLinked, scope)
 			if err != nil {
 				status = "error"
 			} else {
@@ -259,7 +267,7 @@ func validOwnerCookieName(cookieName, projectName string) bool {
 	return err == nil && derived == cookieName
 }
 
-func webOwnerCredential(r *http.Request, cfg *config.Config, cookieName string) (database.OwnerCredential, string, error) {
+func webOwnerCredential(r *http.Request, cfg *config.ServerConfig, cookieName string) (database.OwnerCredential, string, error) {
 	c, err := r.Cookie(cookieName)
 	if err != nil || c.Value == "" {
 		return database.OwnerCredential{}, "", database.ErrInvalidOwnerToken

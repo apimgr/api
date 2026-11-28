@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/service/text"
 	"github.com/apimgr/api/src/swagger"
@@ -40,6 +41,17 @@ type mcpHelpResponse struct {
 	Project string           `json:"project"`
 }
 
+func (response mcpHelpResponse) TaggedResponseFields() sanitize.TaggedObject {
+	return sanitize.TaggedObject{
+		{Name: "enabled", Value: response.Enabled},
+		{Name: "url", Value: response.URL},
+		{Name: "aliases", Value: response.Aliases},
+		{Name: "auth", Value: sanitize.PublicResponseValue{Value: response.Auth}},
+		{Name: "tools", Value: response.Tools},
+		{Name: "project", Value: response.Project},
+	}
+}
+
 type mcpHelpAuth struct {
 	Scheme string `json:"scheme"`
 }
@@ -53,7 +65,7 @@ func helpPageRegistry(language string) []helpPageInfo {
 	return registeredServerPages(language).Help
 }
 
-func helpMCPPageHandler(cfg *config.Config, routes func() []swagger.Route) http.HandlerFunc {
+func helpMCPPageHandler(cfg *config.ServerConfig, routes func() []swagger.Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "help-mcp")
 		data.PageTitle = i18n.Translate(data.Lang, "help.mcp.title")
@@ -63,20 +75,20 @@ func helpMCPPageHandler(cfg *config.Config, routes func() []swagger.Route) http.
 	}
 }
 
-func helpAPIHandler(cfg *config.Config) http.HandlerFunc {
+func helpAPIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		language := i18n.LangFromRequest(r)
-		data := map[string]any{
-			"title":   i18n.Translate(language, "help.title"),
-			"content": helpMarkdown(cfg),
-			"format":  "markdown",
-			"pages":   helpPageRegistry(language),
-		}
+		data := responseObject(
+			responseField("title", i18n.Translate(language, "help.title")),
+			responseField("content", helpMarkdown(cfg)),
+			responseField("format", "markdown"),
+			responseField("pages", helpPageRegistry(language)),
+		)
 		writeEnvelopeOK(w, http.StatusOK, data)
 	}
 }
 
-func mcpHelpAPIHandler(cfg *config.Config, routes func() []swagger.Route) http.HandlerFunc {
+func mcpHelpAPIHandler(cfg *config.ServerConfig, routes func() []swagger.Route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		page := buildMCPHelpPageData(cfg, r, routes())
 		response := mcpHelpResponse{
@@ -93,7 +105,7 @@ func mcpHelpAPIHandler(cfg *config.Config, routes func() []swagger.Route) http.H
 	}
 }
 
-func buildMCPHelpPageData(cfg *config.Config, r *http.Request, routes []swagger.Route) *mcpHelpPageData {
+func buildMCPHelpPageData(cfg *config.ServerConfig, r *http.Request, routes []swagger.Route) *mcpHelpPageData {
 	request := requestWithServerConfig(r, cfg)
 	tools := sortedMCPTools(mcpTools(cfg, routes))
 	project := mcpProjectHelp(cfg, tools)
@@ -110,14 +122,14 @@ func buildMCPHelpPageData(cfg *config.Config, r *http.Request, routes []swagger.
 	return page
 }
 
-func helpMarkdown(cfg *config.Config) string {
+func helpMarkdown(cfg *config.ServerConfig) string {
 	if content := nestedPageText(cfg, "content"); content != "" {
 		return content
 	}
 	return "Use the category pages to choose a tool, or call the REST API documented in `/server/docs/swagger`. This service also provides an authenticated MCP endpoint for compatible assistants."
 }
 
-func mcpProjectHelp(cfg *config.Config, tools []mcpTool) string {
+func mcpProjectHelp(cfg *config.ServerConfig, tools []mcpTool) string {
 	if content := nestedPageText(cfg, "mcp"); content != "" {
 		return content
 	}
@@ -133,7 +145,7 @@ func mcpProjectHelp(cfg *config.Config, tools []mcpTool) string {
 	return content.String()
 }
 
-func nestedPageText(cfg *config.Config, key string) string {
+func nestedPageText(cfg *config.ServerConfig, key string) string {
 	if cfg == nil || cfg.Server.Pages == nil {
 		return ""
 	}

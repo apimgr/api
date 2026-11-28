@@ -36,18 +36,18 @@ func AuthMiddleware(token string, allowUnauthenticated bool, next http.Handler) 
 
 		// Every bearer check is an authentication attempt: the method label
 		// is the fixed mechanism name and the status label is only
-		// success/failure, never the specific reason the check failed.
-		m := Get()
+		// success/failed, never the specific reason the check failed.
+		m := GetMetrics()
 
 		auth := r.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, bearerPrefix) {
-			m.RecordAuthAttempt("api_token", "failure")
+			m.RecordAuthAttempt("api_token", "failed")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		supplied := auth[len(bearerPrefix):]
 		if len(supplied) != len(token) || subtle.ConstantTimeCompare([]byte(supplied), []byte(token)) != 1 {
-			m.RecordAuthAttempt("api_token", "failure")
+			m.RecordAuthAttempt("api_token", "failed")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

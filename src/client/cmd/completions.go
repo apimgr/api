@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/apimgr/api/src/common/i18n"
 )
 
 // binName is the program name completions are generated for.
@@ -48,8 +50,6 @@ func detectShell() string {
 
 func normalizeShell(shell string) string {
 	switch shell {
-	case "sh", "dash", "ksh":
-		return "sh"
 	case "pwsh", "powershell":
 		return "powershell"
 	default:
@@ -65,7 +65,8 @@ Usage:
   %s --shell init [SHELL]          Print the line to add to your shell rc file
   %s --shell help                  Show this help
 
-Supported SHELL values: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
+Completions: bash, zsh, fish, powershell, pwsh
+Init: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
 If SHELL is omitted, it is detected from $SHELL.
 `, binName, binName, binName, binName)
 }
@@ -78,8 +79,8 @@ func printInitSnippet(shell string) error {
 		fmt.Printf("source <(%s --shell completions zsh)\n", binName)
 	case "fish":
 		fmt.Printf("%s --shell completions fish | source\n", binName)
-	case "sh":
-		fmt.Printf(". <(%s --shell completions sh)\n", binName)
+	case "sh", "dash", "ksh":
+		fmt.Printf("# %s: %s has no programmable completion, nothing to load\n", binName, shell)
 	case "powershell":
 		fmt.Printf("%s --shell completions powershell | Out-String | Invoke-Expression\n", binName)
 	default:
@@ -89,6 +90,7 @@ func printInitSnippet(shell string) error {
 }
 
 func completionScript(shell string) (string, error) {
+	shell = normalizeShell(shell)
 	words := completionWords()
 
 	switch shell {
@@ -98,12 +100,13 @@ func completionScript(shell string) (string, error) {
 		return zshCompletionScript(words), nil
 	case "fish":
 		return fishCompletionScript(words), nil
-	case "sh":
-		return shCompletionScript(words), nil
 	case "powershell":
 		return powershellCompletionScript(words), nil
 	default:
-		return "", fmt.Errorf("unsupported shell %q (expected bash, zsh, fish, sh, dash, ksh, powershell, pwsh)", shell)
+		if shell == "sh" || shell == "dash" || shell == "ksh" {
+			return "", fmt.Errorf("%s", i18n.TranslateFormat(outputLanguage, "cli.error_no_completion_shell", map[string]string{"shell": shell}))
+		}
+		return "", fmt.Errorf("unsupported shell %q (completions are available for bash, zsh, fish, powershell, and pwsh)", shell)
 	}
 }
 
@@ -169,23 +172,6 @@ func fishCompletionScript(words []string) string {
 		}
 		seen[first] = true
 		fmt.Fprintf(&b, "complete -c %s -n '__fish_use_subcommand' -a '%s'\n", binName, first)
-	}
-	return b.String()
-}
-
-func shCompletionScript(words []string) string {
-	var b strings.Builder
-	b.WriteString("# POSIX sh has no native completion framework;\n")
-	b.WriteString("# this script only lists valid top-level commands.\n")
-	fmt.Fprintf(&b, "# %s commands:\n", binName)
-	seen := map[string]bool{}
-	for _, w := range words {
-		first := strings.Fields(w)[0]
-		if seen[first] {
-			continue
-		}
-		seen[first] = true
-		fmt.Fprintf(&b, "#   %s\n", first)
 	}
 	return b.String()
 }

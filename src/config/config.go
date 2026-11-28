@@ -3,7 +3,9 @@ package config
 import (
 	"crypto/rand"
 	"fmt"
+	"io"
 	"log"
+	"mime"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -18,14 +20,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the complete server configuration
-type Config struct {
-	Server           ServerConfig           `yaml:"server"`
+// ServerConfig represents the complete server process configuration.
+type ServerConfig struct {
+	Server           ServerSettings         `yaml:"server"`
 	Web              WebConfig              `yaml:"web"`
 	Output           OutputConfig           `yaml:"output"`
 	Data             map[string]interface{} `yaml:"data,omitempty"`
 	CLI              CLIConfig              `yaml:"cli"`
 	GeneratedSecrets []string               `yaml:"-"`
+	Runtime          RuntimeOptions         `yaml:"-"`
+	Build            BuildInfo              `yaml:"-"`
+	FullLoaded       bool                   `yaml:"-"`
+}
+
+// BuildInfo contains metadata embedded in the server binary.
+type BuildInfo struct {
+	Version      string
+	CommitID     string
+	BuildEpoch   string
+	OfficialSite string
+	BuildDate    string
 }
 
 // OutputConfig holds CLI color/emoji output settings per AI.md PART 8
@@ -50,15 +64,18 @@ type CLIBinaryDownloadConfig struct {
 	RequireAuth bool   `yaml:"require_auth"`
 }
 
-// ServerConfig holds server-related settings
-type ServerConfig struct {
-	Port       string             `yaml:"port"`
-	FQDN       string             `yaml:"fqdn"`
-	Address    string             `yaml:"address"`
-	Mode       string             `yaml:"mode"`
-	APIVersion string             `yaml:"api_version"`
-	BaseURL    string             `yaml:"baseurl"`
-	Limits     ServerLimitsConfig `yaml:"limits"`
+// ServerSettings holds settings nested under the server configuration key.
+type ServerSettings struct {
+	Port        string             `yaml:"port"`
+	FQDN        string             `yaml:"fqdn"`
+	Address     string             `yaml:"address"`
+	Mode        string             `yaml:"mode"`
+	PIDFile     bool               `yaml:"pidfile"`
+	Daemonize   bool               `yaml:"daemonize"`
+	APIVersion  string             `yaml:"api_version"`
+	BaseURL     string             `yaml:"baseurl"`
+	Limits      ServerLimitsConfig `yaml:"limits"`
+	Compression CompressionConfig  `yaml:"compression"`
 	// Token is the global operator token (AI.md PART 8 two-tier auth). It
 	// lives only in secrets.yml, is never written to the api_tokens table,
 	// and is validated by constant-time comparison against its SHA-256 hash
@@ -82,6 +99,7 @@ type ServerConfig struct {
 	Metrics        MetricsConfig          `yaml:"metrics"`
 	Backup         BackupConfig           `yaml:"backup"`
 	Restore        RestoreConfig          `yaml:"restore"`
+	Maintenance    MaintenanceConfig      `yaml:"maintenance"`
 	Compliance     ComplianceConfig       `yaml:"compliance"`
 	Notifications  NotificationsConfig    `yaml:"notifications"`
 	Security       ServerSecurityConfig   `yaml:"security"`
@@ -100,6 +118,62 @@ type ServerLimitsConfig struct {
 	ReadTimeout  string `yaml:"read_timeout"`
 	WriteTimeout string `yaml:"write_timeout"`
 	IdleTimeout  string `yaml:"idle_timeout"`
+}
+
+// CompressionConfig controls gzip response compression per AI.md PART 12.
+type CompressionConfig struct {
+	Enabled bool     `yaml:"enabled"`
+	Level   int      `yaml:"level"`
+	Types   []string `yaml:"types"`
+}
+
+// Normalized restores documented defaults for invalid compression settings.
+func (c CompressionConfig) Normalized() (CompressionConfig, []string) {
+	defaults := DefaultCompressionConfig()
+	var warnings []string
+	if c.Level < 1 || c.Level > 9 {
+		c.Level = defaults.Level
+		warnings = append(warnings, "server.compression.level is invalid; using 5")
+	}
+	if len(c.Types) == 0 {
+		c.Types = append([]string(nil), defaults.Types...)
+		warnings = append(warnings, "server.compression.types is empty; using the default MIME types")
+		return c, warnings
+	}
+	types := make([]string, 0, len(c.Types))
+	seen := make(map[string]struct{}, len(c.Types))
+	for _, value := range c.Types {
+		mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(value))
+		if err != nil || !strings.Contains(mediaType, "/") {
+			c.Types = append([]string(nil), defaults.Types...)
+			warnings = append(warnings, "server.compression.types contains an invalid MIME type; using the default MIME types")
+			return c, warnings
+		}
+		mediaType = strings.ToLower(mediaType)
+		if _, exists := seen[mediaType]; exists {
+			continue
+		}
+		seen[mediaType] = struct{}{}
+		types = append(types, mediaType)
+	}
+	c.Types = types
+	return c, warnings
+}
+
+// DefaultCompressionConfig returns the documented response compression
+// defaults.
+func DefaultCompressionConfig() CompressionConfig {
+	return CompressionConfig{
+		Enabled: true,
+		Level:   5,
+		Types: []string{
+			"text/html",
+			"text/css",
+			"text/javascript",
+			"application/json",
+			"application/xml",
+		},
+	}
 }
 
 // DefaultServerLimitsConfig returns the request and connection limits from
@@ -287,11 +361,15 @@ func (c I18NConfig) Normalized() (I18NConfig, []string) {
 }
 
 // BackupConfig holds backup encryption settings per AI.md PART 21
-// "Backup Encryption". Encryption is optional unless Compliance.Enabled is
-// true, in which case EncryptionPassword is mandatory and scheduled backups
-// are blocked until it is set.
+// "Backup Encryption". Encryption is optional unless any compliance standard
+// is enabled, in which case EncryptionPassword is mandatory and scheduled
+// backups are blocked until it is set.
 type BackupConfig struct {
 	Encryption BackupEncryptionConfig `yaml:"encryption"`
+	// EncryptionPasswordUnreadable marks an encrypted backup password that
+	// could not be opened with the configured at-rest keys. The raw ciphertext
+	// is preserved on disk, while backup execution fails closed.
+	EncryptionPasswordUnreadable bool `yaml:"-" json:"-"`
 	// Retention bounds how many archives are kept and how much space they
 	// may occupy (PART 21 "Backup Retention").
 	Retention BackupRetentionConfig `yaml:"retention"`
@@ -300,6 +378,52 @@ type BackupConfig struct {
 	// CLI/WebUI/API restore and manual-backup flows always prompt for this
 	// rather than accepting it as a flag (PART 21 "no password CLI flag").
 	EncryptionPassword string `yaml:"encryption_password"`
+}
+
+// MaintenanceConfig controls the PART 5 recovery monitor. Self-healing is
+// always active; these values configure its retry and cleanup limits.
+type MaintenanceConfig struct {
+	SelfHealing MaintenanceSelfHealingConfig `yaml:"self_healing"`
+	Cleanup     MaintenanceCleanupConfig     `yaml:"cleanup"`
+	Notify      MaintenanceNotifyConfig      `yaml:"notify"`
+}
+
+type MaintenanceSelfHealingConfig struct {
+	RetryInterval string `yaml:"retry_interval"`
+	MaxAttempts   int    `yaml:"max_attempts"`
+}
+
+type MaintenanceCleanupConfig struct {
+	DiskThreshold    int `yaml:"disk_threshold"`
+	LogRetentionDays int `yaml:"log_retention_days"`
+}
+
+type MaintenanceNotifyConfig struct {
+	OnEnter bool `yaml:"on_enter"`
+	OnExit  bool `yaml:"on_exit"`
+}
+
+// Normalized applies PART 5 defaults and bounds malformed maintenance
+// settings without disabling the self-healing monitor.
+func (c MaintenanceConfig) Normalized() (MaintenanceConfig, []string) {
+	var warnings []string
+	if interval, err := time.ParseDuration(c.SelfHealing.RetryInterval); err != nil || interval <= 0 {
+		c.SelfHealing.RetryInterval = "30s"
+		warnings = append(warnings, "server.maintenance.self_healing.retry_interval is invalid; using 30s")
+	}
+	if c.SelfHealing.MaxAttempts < 0 {
+		c.SelfHealing.MaxAttempts = 0
+		warnings = append(warnings, "server.maintenance.self_healing.max_attempts is invalid; using 0")
+	}
+	if c.Cleanup.DiskThreshold < 1 || c.Cleanup.DiskThreshold > 100 {
+		c.Cleanup.DiskThreshold = 90
+		warnings = append(warnings, "server.maintenance.cleanup.disk_threshold is invalid; using 90")
+	}
+	if c.Cleanup.LogRetentionDays < 1 {
+		c.Cleanup.LogRetentionDays = 7
+		warnings = append(warnings, "server.maintenance.cleanup.log_retention_days is invalid; using 7")
+	}
+	return c, warnings
 }
 
 // BackupEncryptionConfig mirrors PART 21's "true if password was set" flag,
@@ -372,7 +496,80 @@ func (r BackupRetentionConfig) SizeCapDisabled() bool {
 // ComplianceConfig gates mandatory backup encryption per AI.md PART 21
 // "Compliance Mode Enforcement" (HIPAA, SOC2, etc.).
 type ComplianceConfig struct {
-	Enabled bool `yaml:"enabled"`
+	GDPR     bool `yaml:"gdpr"`
+	CCPA     bool `yaml:"ccpa"`
+	HIPAA    bool `yaml:"hipaa"`
+	SOC2     bool `yaml:"soc2"`
+	PCIDSS   bool `yaml:"pci_dss"`
+	ISO27001 bool `yaml:"iso27001"`
+	FedRAMP  bool `yaml:"fedramp"`
+	LGPD     bool `yaml:"lgpd"`
+	PIPEDA   bool `yaml:"pipeda"`
+	APPI     bool `yaml:"appi"`
+	PDPA     bool `yaml:"pdpa"`
+}
+
+// AnyEnabled reports whether any individually configured compliance standard
+// is active. Backup policy uses this instead of a separate compliance mode.
+func (c ComplianceConfig) AnyEnabled() bool {
+	return c.GDPR || c.CCPA || c.HIPAA || c.SOC2 || c.PCIDSS || c.ISO27001 || c.FedRAMP || c.LGPD || c.PIPEDA || c.APPI || c.PDPA
+}
+
+// StandardStates returns the stable names and current states of all supported
+// standards for audit and compliance reporting.
+func (c ComplianceConfig) StandardStates() map[string]bool {
+	return map[string]bool{
+		"gdpr": c.GDPR, "ccpa": c.CCPA, "hipaa": c.HIPAA, "soc2": c.SOC2,
+		"pci_dss": c.PCIDSS, "iso27001": c.ISO27001, "fedramp": c.FedRAMP,
+		"lgpd": c.LGPD, "pipeda": c.PIPEDA, "appi": c.APPI, "pdpa": c.PDPA,
+	}
+}
+
+// MinimumAuditRetentionDays reports the longest minimum retention among the
+// enabled standards with a defined audit-log period in AI.md.
+func (c ComplianceConfig) MinimumAuditRetentionDays() int {
+	days := 0
+	for _, requirement := range []struct {
+		enabled bool
+		days    int
+	}{
+		{c.GDPR, 365}, {c.CCPA, 365}, {c.HIPAA, 2190}, {c.SOC2, 365},
+		{c.PCIDSS, 365}, {c.ISO27001, 1095},
+	} {
+		if requirement.enabled && requirement.days > days {
+			days = requirement.days
+		}
+	}
+	return days
+}
+
+// EffectiveAuditRetention applies the longest configured minimum audit
+// retention. Count-only policies cannot guarantee a minimum age and are
+// replaced when a compliance standard requires a time period.
+func (c ComplianceConfig) EffectiveAuditRetention(configured string) string {
+	minimumDays := c.MinimumAuditRetentionDays()
+	if minimumDays == 0 || strings.EqualFold(strings.TrimSpace(configured), "forever") {
+		return configured
+	}
+	value := strings.TrimSpace(strings.ToLower(configured))
+	var amount int
+	var unit string
+	if _, err := fmt.Sscanf(value, "%d%s", &amount, &unit); err == nil && amount > 0 {
+		currentDays := amount
+		switch unit {
+		case "d":
+		case "w":
+			currentDays *= 7
+		case "m":
+			currentDays *= 30
+		default:
+			currentDays = 0
+		}
+		if currentDays >= minimumDays {
+			return configured
+		}
+	}
+	return fmt.Sprintf("%dd", minimumDays)
 }
 
 // MetricsConfig holds metrics settings, per AI.md PART 20. The endpoint
@@ -516,6 +713,7 @@ type UpdateConfig struct {
 // remain accepted on input and are stored as devel.
 func (c UpdateConfig) Normalized() (UpdateConfig, []string) {
 	value := strings.ToLower(strings.TrimSpace(c.Branch))
+	var warnings []string
 	switch value {
 	case "", "stable":
 		c.Branch = "stable"
@@ -524,13 +722,17 @@ func (c UpdateConfig) Normalized() (UpdateConfig, []string) {
 	case "devel", "daily", "rolling", "dev", "development":
 		c.Branch = "devel"
 		if value != "devel" {
-			return c, []string{fmt.Sprintf("server.update.branch alias %q is normalized to devel", value)}
+			warnings = append(warnings, fmt.Sprintf("server.update.branch alias %q is normalized to devel", value))
 		}
 	default:
 		c.Branch = "stable"
-		return c, []string{fmt.Sprintf("server.update.branch %q is invalid; using stable", value)}
+		warnings = append(warnings, fmt.Sprintf("server.update.branch %q is invalid; using stable", value))
 	}
-	return c, nil
+	if c.DeferDays < 0 || c.DeferDays > 365 {
+		c.DeferDays = 0
+		warnings = append(warnings, "server.update.defer_days outside 0-365; using 0")
+	}
+	return c, warnings
 }
 
 // HealthzConfig holds health-check endpoint settings
@@ -551,6 +753,29 @@ type TrustedProxiesConfig struct {
 	// Additional IPs/CIDRs/DNS names to trust beyond the always-trusted
 	// private ranges (RFC 1918, RFC 4193, loopback, link-local)
 	Additional []string `yaml:"additional"`
+	// ClientIPHeader selects the client-address header to read from a trusted
+	// proxy, or auto to detect the first supported header present.
+	ClientIPHeader string `yaml:"client_ip_header"`
+}
+
+// Normalized restores the automatic header selection when the configured
+// client IP header is unsupported and canonicalizes supported header names.
+func (c TrustedProxiesConfig) Normalized() (TrustedProxiesConfig, []string) {
+	if c.ClientIPHeader == "" {
+		c.ClientIPHeader = "auto"
+	}
+	if strings.EqualFold(c.ClientIPHeader, "auto") {
+		c.ClientIPHeader = "auto"
+		return c, nil
+	}
+	for _, header := range []string{"X-Forwarded-For", "Forwarded", "CF-Connecting-IP", "True-Client-IP", "X-Real-IP", "X-Client-IP"} {
+		if strings.EqualFold(c.ClientIPHeader, header) {
+			c.ClientIPHeader = header
+			return c, nil
+		}
+	}
+	c.ClientIPHeader = "auto"
+	return c, []string{"server.trusted_proxies.client_ip_header is unsupported; using auto"}
 }
 
 // BrandingConfig holds branding/SEO settings
@@ -908,6 +1133,7 @@ type AuditLogConfig struct {
 	Rotate   string `yaml:"rotate"`
 	Keep     string `yaml:"keep"`
 	Compress bool   `yaml:"compress"`
+	Group    string `yaml:"group"`
 }
 
 // SecurityLogConfig holds security log settings
@@ -1066,6 +1292,21 @@ type WebReportsConfig struct {
 	RateLimitPerIPBurst int `yaml:"rate_limit_per_ip_burst"`
 }
 
+// Normalized applies the PART 11 default limits to public Reporting API
+// endpoints when an operator supplies a non-positive value.
+func (c WebReportsConfig) Normalized() (WebReportsConfig, []string) {
+	warnings := make([]string, 0, 2)
+	if c.RateLimitPerMinute <= 0 {
+		c.RateLimitPerMinute = 60
+		warnings = append(warnings, "web.reports.rate_limit_per_minute must be positive; using 60")
+	}
+	if c.RateLimitPerIPBurst <= 0 {
+		c.RateLimitPerIPBurst = 10
+		warnings = append(warnings, "web.reports.rate_limit_per_ip_burst must be positive; using 10")
+	}
+	return c, warnings
+}
+
 // CSPConfig holds Content-Security-Policy generation settings (AI.md PART 11
 // "Content Security Policy"). Each `*Extra` field appends to the built-in
 // default directive; each `*Override` field replaces it entirely.
@@ -1156,14 +1397,14 @@ type SecurityConfig struct {
 
 // Global config with mutex for hot reload
 var (
-	currentConfig *Config
+	currentConfig *ServerConfig
 	configMu      sync.RWMutex
 )
 
 // generateRandomPort generates a random port in the 64xxx range
 func generateRandomPort() string {
 	buf := make([]byte, 2)
-	if _, err := rand.Read(buf); err != nil {
+	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
 		// crypto/rand read failure: fall back to a fixed in-range port
 		// rather than silently continuing with a zeroed/partial buffer.
 		return "64000"
@@ -1176,18 +1417,18 @@ func generateRandomPort() string {
 // DefaultConfig returns a fully populated default configuration. Exported
 // for tests and any other caller needing production defaults without going
 // through Load (e.g. security-headers middleware tests).
-func DefaultConfig() *Config {
+func DefaultConfig() *ServerConfig {
 	return defaultConfig()
 }
 
 // defaultConfig returns the default configuration
-func defaultConfig() *Config {
+func defaultConfig() *ServerConfig {
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "localhost"
 	}
 
-	return &Config{
+	return &ServerConfig{
 		Data: map[string]interface{}{
 			"security_dir": filepath.Join(paths.DataDir(), "security"),
 			"cve": map[string]interface{}{
@@ -1200,14 +1441,16 @@ func defaultConfig() *Config {
 				"source":  "ghcr.io/aquasecurity/trivy-db:2",
 			},
 		},
-		Server: ServerConfig{
-			Port:       generateRandomPort(),
-			FQDN:       hostname,
-			Address:    "0.0.0.0",
-			Mode:       "production",
-			APIVersion: "v1",
-			BaseURL:    "/",
-			Limits:     DefaultServerLimitsConfig(),
+		Server: ServerSettings{
+			Port:        generateRandomPort(),
+			FQDN:        hostname,
+			Address:     "0.0.0.0",
+			Mode:        "production",
+			PIDFile:     true,
+			APIVersion:  "v1",
+			BaseURL:     "/",
+			Limits:      DefaultServerLimitsConfig(),
+			Compression: DefaultCompressionConfig(),
 			Branding: BrandingConfig{
 				Title:       "CasTools",
 				Tagline:     "Universal API Toolkit",
@@ -1231,7 +1474,8 @@ func defaultConfig() *Config {
 			},
 			Scheduler: defaultSchedulerConfig(),
 			TrustedProxies: TrustedProxiesConfig{
-				Additional: []string{},
+				Additional:     []string{},
+				ClientIPHeader: "auto",
 			},
 			RateLimit: RateLimitConfig{
 				Read:         RateLimitClassConfig{Requests: 120, Window: 60},
@@ -1307,15 +1551,18 @@ func defaultConfig() *Config {
 				},
 			},
 			Restore: DefaultRestoreConfig(),
-			Compliance: ComplianceConfig{
-				Enabled: false,
+			Maintenance: MaintenanceConfig{
+				SelfHealing: MaintenanceSelfHealingConfig{RetryInterval: "30s", MaxAttempts: 0},
+				Cleanup:     MaintenanceCleanupConfig{DiskThreshold: 90, LogRetentionDays: 7},
+				Notify:      MaintenanceNotifyConfig{OnEnter: true, OnExit: true},
 			},
-			Security: defaultServerSecurityConfig(),
-			GeoIP:    defaultGeoIPConfig(),
-			Contact:  defaultContactConfig(hostname),
-			Privacy:  defaultPrivacyConfig(),
-			Tracking: TrackingConfig{},
-			CSRF:     defaultCSRFConfig(),
+			Compliance: ComplianceConfig{},
+			Security:   defaultServerSecurityConfig(),
+			GeoIP:      defaultGeoIPConfig(),
+			Contact:    defaultContactConfig(hostname),
+			Privacy:    defaultPrivacyConfig(),
+			Tracking:   TrackingConfig{},
+			CSRF:       defaultCSRFConfig(),
 			I18N: I18NConfig{
 				DefaultLanguage:    i18n.DefaultLanguage,
 				AvailableLanguages: i18n.SupportedLanguageCodes(),
@@ -1397,8 +1644,9 @@ func defaultConfig() *Config {
 					Filename: "audit.log",
 					Format:   "json",
 					Rotate:   "daily",
-					Keep:     "90",
+					Keep:     "none",
 					Compress: false,
+					Group:    "",
 				},
 				Security: SecurityLogConfig{
 					Filename: "security.log",
@@ -1508,9 +1756,57 @@ func defaultConfig() *Config {
 	}
 }
 
-// Load loads configuration from file or creates default
-func Load() (*Config, error) {
+// Load parses runtime arguments and resolves paths. A non-nil argument slice
+// performs only the startup-safe early peek; LoadFull completes the merged
+// configuration after PID handling. Nil is retained as a convenience for
+// internal callers that need a complete configuration immediately.
+func Load(arguments []string) (*ServerConfig, error) {
+	runtimeOptions, err := ParseRuntimeOptions(arguments)
+	if err != nil {
+		return nil, err
+	}
+	if runtimeOptions.CommandHelp != "" {
+		cfg := defaultConfig()
+		cfg.Runtime = runtimeOptions
+		return cfg, nil
+	}
+	if err := initializeRuntimePaths(&runtimeOptions); err != nil {
+		return nil, err
+	}
 	cfg := defaultConfig()
+	cfg.Runtime = runtimeOptions
+	if runtimeOptions.Help || runtimeOptions.Version || runtimeOptions.Shell != "" || runtimeOptions.Status || runtimeOptions.Service != "" || runtimeOptions.Maintenance != "" || runtimeOptions.Update != "" || isEmailCommand(runtimeOptions.Args) {
+		return cfg, nil
+	}
+	if arguments != nil {
+		if err := loadEarlyServerSettings(cfg); err != nil {
+			return cfg, err
+		}
+		return cfg, nil
+	}
+	return LoadFull(cfg)
+}
+
+// LoadFull loads and validates the merged configuration after startup's
+// early PID-file stage. Runtime flags, paths, and embedded build metadata are
+// retained from the early configuration object.
+func LoadFull(early *ServerConfig) (*ServerConfig, error) {
+	if early == nil {
+		return nil, fmt.Errorf("early configuration is required")
+	}
+	if early.FullLoaded {
+		return early, nil
+	}
+	cfg := defaultConfig()
+	cfg.Runtime = early.Runtime
+	cfg.Build = early.Build
+	cfg.Server.Port = early.Server.Port
+	cfg.Server.Address = early.Server.Address
+	cfg.Server.PIDFile = early.Server.PIDFile
+	cfg.Server.Daemonize = early.Server.Daemonize
+	if cfg.Runtime.Help || cfg.Runtime.Version || cfg.Runtime.Shell != "" || cfg.Runtime.Status || cfg.Runtime.Service != "" || cfg.Runtime.Maintenance != "" || cfg.Runtime.Update != "" || isEmailCommand(cfg.Runtime.Args) {
+		return early, nil
+	}
 	_, serverFileErr := os.Stat(filepath.Join(paths.ConfigDir(), "server.yml"))
 	firstRun := os.IsNotExist(serverFileErr)
 	data, err := loadMergedConfig(cfg)
@@ -1523,6 +1819,16 @@ func Load() (*Config, error) {
 	if err := cfg.Server.Security.Blocklists.Validate(); err != nil {
 		return cfg, err
 	}
+	var blockedWarnings []string
+	cfg.Server.Security.BlockedIPs, blockedWarnings = cfg.Server.Security.NormalizedBlockedIPs()
+	for _, warning := range blockedWarnings {
+		logConfigWarning(warning)
+	}
+	var allowlistWarnings []string
+	cfg.Server.Security.Allowlist, allowlistWarnings = cfg.Server.Security.NormalizedAllowlist()
+	for _, warning := range allowlistWarnings {
+		logConfigWarning(warning)
+	}
 
 	applyDatabaseEnvOverrides(cfg)
 	applySMTPEnvOverrides(cfg)
@@ -1530,47 +1836,59 @@ func Load() (*Config, error) {
 	var languageWarnings []string
 	cfg.Server.SEO, languageWarnings = cfg.Server.SEO.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.I18N, languageWarnings = cfg.Server.I18N.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.Tokens, languageWarnings = cfg.Server.Tokens.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.Update, languageWarnings = cfg.Server.Update.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.RateLimit, languageWarnings = cfg.Server.RateLimit.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.Debug, languageWarnings = cfg.Server.Debug.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.I2P, languageWarnings = cfg.Server.I2P.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.Tor, languageWarnings = cfg.Server.Tor.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 	cfg.Server.Restore, languageWarnings = cfg.Server.Restore.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
+	}
+	cfg.Server.Maintenance, languageWarnings = cfg.Server.Maintenance.Normalized()
+	for _, warning := range languageWarnings {
+		logConfigWarning(warning)
 	}
 	cfg.Server.Limits, languageWarnings = cfg.Server.Limits.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
+	}
+	cfg.Server.Compression, languageWarnings = cfg.Server.Compression.Normalized()
+	for _, warning := range languageWarnings {
+		logConfigWarning(warning)
+	}
+	cfg.Server.TrustedProxies, languageWarnings = cfg.Server.TrustedProxies.Normalized()
+	for _, warning := range languageWarnings {
+		logConfigWarning(warning)
 	}
 	cfg.Server.Database.Cache, languageWarnings = cfg.Server.Database.Cache.Normalized()
 	for _, warning := range languageWarnings {
-		log.Printf("Warning: %s", warning)
+		logConfigWarning(warning)
 	}
 
 	// First-run IDEA-driven security header defaults must be applied after the
@@ -1581,11 +1899,17 @@ func Load() (*Config, error) {
 
 	// Secrets are generated only after all configuration sources have been
 	// merged, then persisted to secrets.yml before the process serves traffic.
-	if ensureFirstRunSecrets(cfg) {
+	secretsChanged, err := ensureFirstRunSecrets(cfg)
+	if err != nil {
+		return cfg, err
+	}
+	if secretsChanged {
 		if err := Save(cfg); err != nil {
 			return cfg, err
 		}
 	}
+	applyRuntimeOptions(cfg)
+	cfg.FullLoaded = true
 
 	// Store in global
 	configMu.Lock()
@@ -1596,7 +1920,7 @@ func Load() (*Config, error) {
 }
 
 // applyI2PEnvOverrides resolves I2P_ENABLED over server.i2p.enabled.
-func applyI2PEnvOverrides(cfg *Config) {
+func applyI2PEnvOverrides(cfg *ServerConfig) {
 	if value, ok := os.LookupEnv("I2P_ENABLED"); ok {
 		if enabled, err := ParseBool(value, cfg.Server.I2P.Enabled); err == nil {
 			cfg.Server.I2P.Enabled = enabled
@@ -1610,7 +1934,7 @@ func applyI2PEnvOverrides(cfg *Config) {
 // runtime environment variables over the loaded config. These are checked
 // on every load (not just first run), and take priority over the
 // server.yml values when explicitly set.
-func applyDatabaseEnvOverrides(cfg *Config) {
+func applyDatabaseEnvOverrides(cfg *ServerConfig) {
 	if v := os.Getenv("DATABASE_DRIVER"); v != "" {
 		cfg.Server.Database.Driver = v
 	}
@@ -1625,7 +1949,7 @@ func applyDatabaseEnvOverrides(cfg *Config) {
 // (AI.md PART 17 "Environment Variable Priority") over the loaded config.
 // These are checked on every load (not just first run), and take priority
 // over the server.yml values when explicitly set - useful for containers.
-func applySMTPEnvOverrides(cfg *Config) {
+func applySMTPEnvOverrides(cfg *ServerConfig) {
 	smtp := &cfg.Server.Notifications.Email.SMTP
 	from := &cfg.Server.Notifications.Email.From
 
@@ -1655,24 +1979,24 @@ func applySMTPEnvOverrides(cfg *Config) {
 }
 
 // Save saves configuration to file
-func Save(cfg *Config) error {
+func Save(cfg *ServerConfig) error {
 	return saveConfig(cfg)
 }
 
 // Get returns the current configuration (thread-safe)
-func Get() *Config {
+func Get() *ServerConfig {
 	configMu.RLock()
 	cfg := currentConfig
 	configMu.RUnlock()
 	if cfg != nil {
 		return cfg
 	}
-	cfg, _ = Load()
+	cfg, _ = Load(nil)
 	return cfg
 }
 
 // Set updates the current configuration (thread-safe)
-func Set(cfg *Config) {
+func Set(cfg *ServerConfig) {
 	configMu.Lock()
 	defer configMu.Unlock()
 	currentConfig = cfg
@@ -1680,7 +2004,7 @@ func Set(cfg *Config) {
 
 // Reload reloads configuration from file
 func Reload() error {
-	cfg, err := Load()
+	cfg, err := Load(nil)
 	if err != nil {
 		return err
 	}
@@ -1694,29 +2018,29 @@ func GetConfigPath() string {
 }
 
 // Legacy compatibility - expose WebUI and WebRobots from Web config
-func (c *Config) GetWebUI() UIConfig {
+func (c *ServerConfig) GetWebUI() UIConfig {
 	return c.Web.UI
 }
 
-func (c *Config) GetWebRobots() RobotsConfig {
+func (c *ServerConfig) GetWebRobots() RobotsConfig {
 	return c.Web.Robots
 }
 
-func (c *Config) GetWebSecurity() SecurityConfig {
+func (c *ServerConfig) GetWebSecurity() SecurityConfig {
 	return c.Web.Security
 }
 
 // ConfigWatcher watches for config file changes and triggers reload
 type ConfigWatcher struct {
 	path         string
-	callback     func(*Config)
+	callback     func(*ServerConfig)
 	stopCh       chan struct{}
 	lastSnapshot string
 	mu           sync.Mutex
 }
 
 // NewConfigWatcher creates a new config file watcher
-func NewConfigWatcher(callback func(*Config)) *ConfigWatcher {
+func NewConfigWatcher(callback func(*ServerConfig)) *ConfigWatcher {
 	return &ConfigWatcher{
 		path:     GetConfigPath(),
 		callback: callback,
@@ -1758,7 +2082,7 @@ func (w *ConfigWatcher) checkForChanges() {
 	if snapshot != w.lastSnapshot {
 		w.lastSnapshot = snapshot
 		// Reload config
-		cfg, err := Load()
+		cfg, err := Load(nil)
 		if err != nil {
 			return
 		}
@@ -1806,7 +2130,7 @@ func configTreeSnapshot() string {
 
 // OnChange registers a callback for config changes
 // Returns a function to start watching
-func OnChange(callback func(*Config)) func() {
+func OnChange(callback func(*ServerConfig)) func() {
 	watcher := NewConfigWatcher(callback)
 	return func() {
 		watcher.Start()

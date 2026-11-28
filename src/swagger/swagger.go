@@ -1,17 +1,51 @@
 package swagger
 
 import (
+	_ "embed"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sort"
 	"strings"
+
+	"github.com/apimgr/api/src/common/sanitize"
 )
 
 // Route is a method and path collected from the running server router.
 type Route struct {
-	Method      string
-	Path        string
-	Primary     string
-	TextMessage string
+	Method      string `json:"method"`
+	Path        string `json:"path"`
+	Primary     string `json:"primary,omitempty"`
+	TextMessage string `json:"text_message,omitempty"`
+	MountedWhen string `json:"x-mounted-when"`
+	Internal    bool   `json:"internal,omitempty"`
+}
+
+//go:embed openapi_superset.json
+var embeddedOpenAPISuperset []byte
+
+// EmbeddedSuperset returns a fresh configured copy of the build-generated
+// OpenAPI superset. The embedded bytes remain immutable while each server
+// filters its own copy for the routes enabled in that run.
+func EmbeddedSuperset(version, baseURL, apiVersion string) (*Spec, error) {
+	var spec Spec
+	if err := json.Unmarshal(embeddedOpenAPISuperset, &spec); err != nil {
+		return nil, fmt.Errorf("decode embedded OpenAPI superset: %w", err)
+	}
+	spec.Info.Version = version
+	if len(spec.Servers) == 0 {
+		spec.Servers = []Server{{URL: baseURL, Description: "API Server"}}
+	} else {
+		spec.Servers[0].URL = baseURL
+	}
+	if apiVersion != "" && apiVersion != "{api_version}" {
+		paths := make(map[string]PathItem, len(spec.Paths))
+		for path, item := range spec.Paths {
+			paths[strings.ReplaceAll(path, "{api_version}", apiVersion)] = item
+		}
+		spec.Paths = paths
+	}
+	return &spec, nil
 }
 
 // Spec represents the OpenAPI specification structure
@@ -54,6 +88,7 @@ type Server struct {
 // PathItem represents operations available on a path
 type PathItem struct {
 	Get     *Operation `json:"get,omitempty"`
+	Head    *Operation `json:"head,omitempty"`
 	Post    *Operation `json:"post,omitempty"`
 	Put     *Operation `json:"put,omitempty"`
 	Delete  *Operation `json:"delete,omitempty"`
@@ -68,6 +103,7 @@ type Operation struct {
 	OperationID string              `json:"operationId,omitempty"`
 	Primary     string              `json:"x-primary,omitempty"`
 	TextMessage string              `json:"x-text-message,omitempty"`
+	MountedWhen string              `json:"x-mounted-when"`
 	Tags        []string            `json:"tags,omitempty"`
 	Parameters  []Parameter         `json:"parameters,omitempty"`
 	RequestBody *RequestBody        `json:"requestBody,omitempty"`
@@ -116,6 +152,105 @@ type Components struct {
 	Schemas map[string]Schema `json:"schemas,omitempty"`
 }
 
+func (spec Spec) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{{Name: "openapi", Value: spec.OpenAPI}, {Name: "info", Value: spec.Info}, {Name: "servers", Value: spec.Servers}, {Name: "paths", Value: taggedObjectMap(spec.Paths)}}
+	if len(spec.Components.Schemas) > 0 {
+		fields = append(fields, sanitize.TaggedField{Name: "components", Value: spec.Components})
+	}
+	return fields
+}
+
+func (operation Operation) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{}
+	if operation.Summary != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "summary", Value: operation.Summary})
+	}
+	if operation.Description != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "description", Value: operation.Description})
+	}
+	if operation.OperationID != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "operationId", Value: operation.OperationID})
+	}
+	if operation.Primary != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "x-primary", Value: operation.Primary})
+	}
+	if operation.TextMessage != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "x-text-message", Value: operation.TextMessage})
+	}
+	fields = append(fields, sanitize.TaggedField{Name: "x-mounted-when", Value: operation.MountedWhen})
+	if len(operation.Tags) > 0 {
+		fields = append(fields, sanitize.TaggedField{Name: "tags", Value: operation.Tags})
+	}
+	if len(operation.Parameters) > 0 {
+		fields = append(fields, sanitize.TaggedField{Name: "parameters", Value: operation.Parameters})
+	}
+	if operation.RequestBody != nil {
+		fields = append(fields, sanitize.TaggedField{Name: "requestBody", Value: operation.RequestBody})
+	}
+	fields = append(fields, sanitize.TaggedField{Name: "responses", Value: taggedObjectMap(operation.Responses)})
+	return fields
+}
+
+func (body RequestBody) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{}
+	if body.Description != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "description", Value: body.Description})
+	}
+	if body.Required {
+		fields = append(fields, sanitize.TaggedField{Name: "required", Value: true})
+	}
+	fields = append(fields, sanitize.TaggedField{Name: "content", Value: taggedObjectMap(body.Content)})
+	return fields
+}
+
+func (response Response) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{{Name: "description", Value: response.Description}}
+	if len(response.Content) > 0 {
+		fields = append(fields, sanitize.TaggedField{Name: "content", Value: taggedObjectMap(response.Content)})
+	}
+	return fields
+}
+
+func (schema Schema) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{}
+	if schema.Type != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "type", Value: schema.Type})
+	}
+	if schema.Format != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "format", Value: schema.Format})
+	}
+	if len(schema.Properties) > 0 {
+		fields = append(fields, sanitize.TaggedField{Name: "properties", Value: taggedObjectMap(schema.Properties)})
+	}
+	if schema.Items != nil {
+		fields = append(fields, sanitize.TaggedField{Name: "items", Value: schema.Items})
+	}
+	if len(schema.Required) > 0 {
+		fields = append(fields, sanitize.TaggedField{Name: "required", Value: schema.Required})
+	}
+	if schema.Example != nil {
+		fields = append(fields, sanitize.TaggedField{Name: "example", Value: schema.Example})
+	}
+	return fields
+}
+
+func (components Components) TaggedResponseFields() sanitize.TaggedObject {
+	return sanitize.TaggedObject{{Name: "schemas", Value: taggedObjectMap(components.Schemas)}}
+}
+
+func taggedObjectMap[T any](values map[string]T) sanitize.TaggedObject {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	fields := make(sanitize.TaggedObject, 0, len(keys))
+	for _, key := range keys {
+		fields = append(fields, sanitize.TaggedField{Name: key, Value: values[key]})
+	}
+	return fields
+}
+
 // GenerateSpec creates the OpenAPI specification for the API
 func GenerateSpec(version, baseURL string) *Spec {
 	return GenerateSpecForAPIVersion(version, baseURL, "v1")
@@ -125,7 +260,7 @@ func GenerateSpec(version, baseURL string) *Spec {
 // configured API version prefix.
 func GenerateSpecForAPIVersion(version, baseURL, apiVersion string) *Spec {
 	apiBase := "/api/" + apiVersion
-	return &Spec{
+	spec := &Spec{
 		OpenAPI: "3.0.3",
 		Info: Info{
 			Title:       "API Toolkit",
@@ -151,6 +286,11 @@ func GenerateSpecForAPIVersion(version, baseURL, apiVersion string) *Spec {
 			Schemas: generateSchemas(),
 		},
 	}
+	for path, item := range spec.Paths {
+		setMountedWhen(&item, "always")
+		spec.Paths[path] = item
+	}
+	return spec
 }
 
 // generatePaths creates the path definitions
@@ -161,50 +301,20 @@ func generatePaths(apiBase string) map[string]PathItem {
 	// the unversioned API alias. The optional root /healthz frontend alias is
 	// registered only when configured and is not an API route.
 	healthOperation := Operation{
-			Summary:     "Health check",
-			Description: "Returns the health status of the API",
-			Tags:        []string{"Health"},
-			OperationID: "healthCheck",
-			Responses: map[string]Response{
-				"200": {
-					Description: "Service is healthy",
-					Content: map[string]MediaType{
-						"application/json": {
-							Schema: Schema{
-								Type: "object",
-								Properties: map[string]Schema{
-									"status": {Type: "string", Example: "ok"},
-									"uptime": {Type: "number", Example: 3600},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-	paths[apiBase+"/server/healthz"] = PathItem{Get: &healthOperation}
-	apiHealthOperation := healthOperation
-	paths["/api/healthz"] = PathItem{Get: &apiHealthOperation}
-
-	// Version endpoint
-	paths[apiBase+"/version"] = PathItem{
-		Get: &Operation{
-			Summary:     "Get version information",
-			Description: "Returns API version details",
-			Tags:        []string{"System"},
-			OperationID: "getVersion",
-			Responses: map[string]Response{
-				"200": {
-					Description: "Version information",
-					Content: map[string]MediaType{
-						"application/json": {
-							Schema: Schema{
-								Type: "object",
-								Properties: map[string]Schema{
-									"version":    {Type: "string", Example: "1.0.0"},
-									"commit_id":  {Type: "string", Example: "abc123"},
-									"build_date": {Type: "string", Example: "2025-01-01T00:00:00Z"},
-								},
+		Summary:     "Health check",
+		Description: "Returns the health status of the API",
+		Tags:        []string{"Health"},
+		OperationID: "healthCheck",
+		Responses: map[string]Response{
+			"200": {
+				Description: "Service is healthy",
+				Content: map[string]MediaType{
+					"application/json": {
+						Schema: Schema{
+							Type: "object",
+							Properties: map[string]Schema{
+								"status": {Type: "string", Example: "ok"},
+								"uptime": {Type: "number", Example: 3600},
 							},
 						},
 					},
@@ -212,6 +322,9 @@ func generatePaths(apiBase string) map[string]PathItem {
 			},
 		},
 	}
+	paths[apiBase+"/server/healthz"] = PathItem{Get: &healthOperation}
+	apiHealthOperation := healthOperation
+	paths["/api/healthz"] = PathItem{Get: &apiHealthOperation}
 
 	// Text utilities endpoints
 	addTextEndpoints(paths, apiBase)
@@ -397,72 +510,175 @@ func generateSchemas() map[string]Schema {
 
 // ServeSpec serves the OpenAPI specification as JSON
 func ServeSpec(version, baseURL string) http.HandlerFunc {
-	return ServeSpecWithRoutes(version, baseURL, "v1", nil)
+	return ServeEmbeddedSuperset(version, baseURL, "v1", nil)
 }
 
 // ServeSpecWithRoutes serves a spec generated from the configured version and
 // the routes registered by the server.
 func ServeSpecWithRoutes(version, baseURL, apiVersion string, routes []Route) http.HandlerFunc {
+	return ServeSpecWithRoutesAndCondition(version, baseURL, apiVersion, routes, func(string) bool { return true })
+}
+
+// ServeSpecWithRoutesAndCondition builds the embedded superset from the
+// generated API schema and route inventory, then removes operations whose
+// x-mounted-when condition is false for the current server run.
+func ServeSpecWithRoutesAndCondition(version, baseURL, apiVersion string, routes []Route, enabled func(string) bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		spec := GenerateSpecForAPIVersion(version, baseURL, apiVersion)
-		for _, route := range routes {
-			if !strings.HasPrefix(route.Path, "/api/") {
-				continue
-			}
-			path := strings.ReplaceAll(route.Path, "*", "{path}")
-			item := spec.Paths[path]
-			operation := &Operation{
-				Summary:     strings.TrimSpace(strings.ReplaceAll(strings.TrimPrefix(path, "/api/"), "/", " ")),
-				OperationID: strings.ToLower(route.Method + strings.NewReplacer("/", "_", "{", "", "}", "", "-", "_").Replace(path)),
-				Primary:     route.Primary,
-				TextMessage: route.TextMessage,
-				Tags:        []string{"API"},
-				Responses:   map[string]Response{"200": {Description: "Operation completed"}},
-			}
-			var registered *Operation
-			switch strings.ToUpper(route.Method) {
-			case http.MethodGet:
-				if item.Get == nil {
-					item.Get = operation
-				}
-				registered = item.Get
-			case http.MethodPost:
-				if item.Post == nil {
-					item.Post = operation
-				}
-				registered = item.Post
-			case http.MethodPut:
-				if item.Put == nil {
-					item.Put = operation
-				}
-				registered = item.Put
-			case http.MethodPatch:
-				if item.Patch == nil {
-					item.Patch = operation
-				}
-				registered = item.Patch
-			case http.MethodDelete:
-				if item.Delete == nil {
-					item.Delete = operation
-				}
-				registered = item.Delete
-			case http.MethodOptions:
-				if item.Options == nil {
-					item.Options = operation
-				}
-				registered = item.Options
-			default:
-				continue
-			}
-			if registered != nil {
-				registered.Primary = route.Primary
-				registered.TextMessage = route.TextMessage
-			}
-			spec.Paths[path] = item
+		if enabled == nil {
+			enabled = func(string) bool { return true }
 		}
+		spec := GenerateSupersetSpec(version, baseURL, apiVersion, routes)
+		filterSpec(spec, enabled)
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(spec); err != nil {
+		if err := sanitize.WriteTaggedJSON(w, spec, true); err != nil {
 			return
 		}
 	}
+}
+
+// ServeEmbeddedSuperset filters a fresh copy of the generated build-time
+// superset for the current server run and writes JSON only.
+func ServeEmbeddedSuperset(version, baseURL, apiVersion string, enabled func(string) bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		if enabled == nil {
+			enabled = func(string) bool { return true }
+		}
+		spec, err := EmbeddedSuperset(version, baseURL, apiVersion)
+		if err != nil {
+			http.Error(w, "OpenAPI specification unavailable", http.StatusInternalServerError)
+			return
+		}
+		filterSpec(spec, enabled)
+		w.Header().Set("Content-Type", "application/json")
+		if err := sanitize.WriteTaggedJSON(w, spec, true); err != nil {
+			return
+		}
+	}
+}
+
+// GenerateSupersetSpec combines the static generated schema and every route
+// supplied by the server's route inventory. It preserves x-mounted-when on
+// each operation so the served document can be filtered per run.
+func GenerateSupersetSpec(version, baseURL, apiVersion string, routes []Route) *Spec {
+	spec := &Spec{
+		OpenAPI: "3.0.3",
+		Info: Info{
+			Title:       "API Toolkit",
+			Description: "API operations registered by the server router",
+			Version:     version,
+			Contact:     Contact{Name: "API Manager", URL: "https://github.com/apimgr/api"},
+			License:     License{Name: "MIT", URL: "https://opensource.org/licenses/MIT"},
+		},
+		Servers:    []Server{{URL: baseURL, Description: "API Server"}},
+		Paths:      make(map[string]PathItem),
+		Components: Components{Schemas: generateSchemas()},
+	}
+	for _, route := range routes {
+		if route.Internal || (!strings.HasPrefix(route.Path, "/api/") && route.Path != "/healthz" && route.Path != "/mcp") {
+			continue
+		}
+		path := strings.ReplaceAll(route.Path, "*", "{path}")
+		item := spec.Paths[path]
+		operation := &Operation{
+			Summary:     strings.TrimSpace(strings.ReplaceAll(strings.TrimPrefix(path, "/api/"), "/", " ")),
+			OperationID: strings.ToLower(route.Method + strings.NewReplacer("/", "_", "{", "", "}", "", "-", "_").Replace(path)),
+			Primary:     route.Primary,
+			TextMessage: route.TextMessage,
+			MountedWhen: mountedWhen(route.MountedWhen),
+			Tags:        []string{"API"},
+			Responses:   map[string]Response{"200": {Description: "Operation completed"}},
+		}
+		var registered *Operation
+		switch strings.ToUpper(route.Method) {
+		case http.MethodGet:
+			if item.Get == nil {
+				item.Get = operation
+			}
+			registered = item.Get
+		case http.MethodHead:
+			if item.Head == nil {
+				item.Head = operation
+			}
+			registered = item.Head
+		case http.MethodPost:
+			if item.Post == nil {
+				item.Post = operation
+			}
+			registered = item.Post
+		case http.MethodPut:
+			if item.Put == nil {
+				item.Put = operation
+			}
+			registered = item.Put
+		case http.MethodPatch:
+			if item.Patch == nil {
+				item.Patch = operation
+			}
+			registered = item.Patch
+		case http.MethodDelete:
+			if item.Delete == nil {
+				item.Delete = operation
+			}
+			registered = item.Delete
+		case http.MethodOptions:
+			if item.Options == nil {
+				item.Options = operation
+			}
+			registered = item.Options
+		default:
+			continue
+		}
+		if registered != nil {
+			registered.Primary = route.Primary
+			registered.TextMessage = route.TextMessage
+			registered.MountedWhen = mountedWhen(route.MountedWhen)
+		}
+		spec.Paths[path] = item
+	}
+	return spec
+}
+
+func mountedWhen(condition string) string {
+	if strings.TrimSpace(condition) == "" {
+		return "always"
+	}
+	return condition
+}
+
+func setMountedWhen(item *PathItem, condition string) {
+	for _, operation := range []*Operation{item.Get, item.Head, item.Post, item.Put, item.Patch, item.Delete, item.Options} {
+		if operation != nil && operation.MountedWhen == "" {
+			operation.MountedWhen = condition
+		}
+	}
+}
+
+func filterSpec(spec *Spec, enabled func(string) bool) {
+	for path, item := range spec.Paths {
+		changed := false
+		changed = filterOperation(&item.Get, enabled) || changed
+		changed = filterOperation(&item.Head, enabled) || changed
+		changed = filterOperation(&item.Post, enabled) || changed
+		changed = filterOperation(&item.Put, enabled) || changed
+		changed = filterOperation(&item.Patch, enabled) || changed
+		changed = filterOperation(&item.Delete, enabled) || changed
+		changed = filterOperation(&item.Options, enabled) || changed
+		if changed {
+			spec.Paths[path] = item
+		}
+		if item.Get == nil && item.Head == nil && item.Post == nil && item.Put == nil && item.Patch == nil && item.Delete == nil && item.Options == nil {
+			delete(spec.Paths, path)
+		}
+	}
+}
+
+func filterOperation(operation **Operation, enabled func(string) bool) bool {
+	if *operation == nil {
+		return false
+	}
+	if enabled((*operation).MountedWhen) {
+		return true
+	}
+	*operation = nil
+	return true
 }

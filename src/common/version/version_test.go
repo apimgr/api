@@ -3,8 +3,8 @@ package version
 import "testing"
 
 func TestBuildDate(t *testing.T) {
-	if got := (BuildInfo{BuildEpoch: 0}).BuildDate(); got != "unknown" {
-		t.Fatalf("unset build date = %q, want unknown", got)
+	if got := (BuildInfo{BuildEpoch: 0}).BuildDate(); got != "N/A" {
+		t.Fatalf("unset build date = %q, want N/A", got)
 	}
 	if got := (BuildInfo{BuildEpoch: 1765112713}).BuildDate(); got != "2025-12-07T13:05:13Z" {
 		t.Fatalf("build date = %q", got)

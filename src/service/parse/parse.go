@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/config"
 	"golang.org/x/net/html"
 	"gopkg.in/yaml.v3"
 )
@@ -172,15 +173,11 @@ func (s *Service) ParseFloat(str string) (float64, error) {
 }
 
 func (s *Service) ParseBool(str string) (bool, error) {
-	str = strings.ToLower(strings.TrimSpace(str))
-	switch str {
-	case "true", "yes", "1", "on":
-		return true, nil
-	case "false", "no", "0", "off":
-		return false, nil
-	default:
-		return false, fmt.Errorf("invalid boolean value: %s", str)
+	str = strings.TrimSpace(str)
+	if str == "" {
+		return false, fmt.Errorf("invalid boolean value: %q", str)
 	}
+	return config.ParseBool(str, false)
 }
 
 // CSV parsing (simple)

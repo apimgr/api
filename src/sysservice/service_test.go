@@ -136,8 +136,8 @@ func TestHelpText(t *testing.T) {
 		"Current status:",
 		"Service manager:",
 		"Installed:",
-		"Running:",
-		"Enabled at boot:",
+		"State:",
+		"Auto-start:",
 	} {
 		assert.Contains(t, out, want)
 	}

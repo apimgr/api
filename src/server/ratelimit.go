@@ -44,11 +44,10 @@ func newClassLimiter(store cache.Store, class string, limit int, windowSeconds i
 func (cl *classLimiter) allow(clientIP string) (bool, int, int, time.Time) {
 	count, resetTime, err := cl.hit(clientIP)
 	if err != nil {
-		// Fail open on a cache backend error - never let a transient cache
-		// outage take the whole server down; the error is logged so an
-		// operator sees a degraded shared cache.
-		slog.Warn("ratelimit: cache store error, allowing request", "class", cl.prefix, "error", err)
-		return true, cl.limit, cl.limit, time.Time{}
+		// Every configured backend has a memory fallback. If even that path
+		// fails, deny the request rather than silently disabling abuse limits.
+		slog.Warn("ratelimit: cache store error, denying request", "class", cl.prefix, "error", err)
+		return false, 0, cl.limit, time.Now().Add(cl.window)
 	}
 
 	remaining := cl.limit - count
@@ -73,6 +72,7 @@ type RateLimiter struct {
 	global       *classLimiter
 	strict       *classLimiter
 	authFailures *classLimiter
+	reports      *reportsRateLimiter
 }
 
 var activeRateLimitersMu sync.Mutex
@@ -90,12 +90,22 @@ const globalBurstWindowSeconds = 60
 // NewRateLimiter creates a new rate limiter from server.rate_limit config,
 // backed by the server.cache.* store (in-process memory by default, or a
 // shared valkey/redis instance when configured).
-func NewRateLimiter(cfg *config.Config) *RateLimiter {
+func NewRateLimiter(cfg *config.ServerConfig) *RateLimiter {
 	rateLimits, _ := cfg.Server.RateLimit.Normalized()
+	reportLimits, warnings := cfg.Web.Reports.Normalized()
+	for _, warning := range warnings {
+		slog.Warn(warning)
+	}
 	var store cache.Store
 	switch strings.ToLower(cfg.Server.Cache.Type) {
 	case "redis", "valkey":
-		store = newResilientCacheStore(cache.New(cfg.Server.Cache), cache.New(config.CacheConfig{Type: "memory"}))
+		fallback := cache.New(config.CacheConfig{Type: "memory"})
+		if database.GetStore() != nil {
+			fallback = newBufferedRateLimitStore(database.RateLimitStore{})
+		} else if database.GetServerDB() != nil {
+			fallback = newBufferedRateLimitStore(database.RateLimitStore{})
+		}
+		store = newResilientCacheStore(cache.New(cfg.Server.Cache), fallback)
 	default:
 		if database.GetStore() != nil {
 			store = newBufferedRateLimitStore(database.RateLimitStore{})
@@ -113,6 +123,7 @@ func NewRateLimiter(cfg *config.Config) *RateLimiter {
 		global:       newClassLimiter(store, "global", rateLimits.GlobalBurst, globalBurstWindowSeconds),
 		strict:       newClassLimiter(store, "strict", rateLimits.Strict.Requests, rateLimits.Strict.Window),
 		authFailures: newClassLimiter(store, "auth_failures", rateLimits.AuthFailures.Requests, rateLimits.AuthFailures.Window),
+		reports:      newReportsRateLimiter(store, reportLimits.RateLimitPerMinute, reportLimits.RateLimitPerIPBurst),
 	}
 	activeRateLimitersMu.Lock()
 	activeRateLimiters = append(activeRateLimiters, limiter)
@@ -147,7 +158,7 @@ func CloseRateLimiters() error {
 }
 
 // RateLimitMiddleware creates a rate limiting middleware
-func RateLimitMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func RateLimitMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	limiter := NewRateLimiter(cfg)
 
 	return func(next http.Handler) http.Handler {
@@ -187,6 +198,8 @@ func RateLimitMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 					count, reset, failureErr := recordAuthenticationFailure(r)
 					if failureErr != nil {
 						slog.Warn("ratelimit: failed to record authentication failure", "error", failureErr)
+						writeRateLimitExceeded(w, r, limiter.authFailures.limit, time.Now().Add(limiter.authFailures.window))
+						return
 					}
 					if count >= limiter.authFailures.limit {
 						writeRateLimitExceeded(w, r, limiter.authFailures.limit, reset)
@@ -210,18 +223,17 @@ func RateLimitMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 					identityKey = "owner:" + credential.OwnerID
 				}
 				if allowed, _, limit, reset := limiter.strict.allow(identityKey); !allowed {
-					mx := metrics.Get()
-					mx.RecordRateLimitRequest("strict", "limited")
-					mx.RecordRateLimitBlocked("strict")
+					mx := metrics.GetMetrics()
+					mx.RecordRateLimitRequest("per_endpoint", "limited")
+					mx.RecordRateLimitBlocked("per_endpoint")
 					writeRateLimitExceeded(w, r, limit, reset)
 					return
 				}
-				metrics.Get().RecordRateLimitRequest("strict", "allowed")
+				metrics.GetMetrics().RecordRateLimitRequest("per_endpoint", "allowed")
 			}
-			// The limit label carries only the fixed category ("global" or
-			// "per_ip") - the client IP itself is unbounded cardinality and
-			// belongs in the structured logs, never in a metric label.
-			mx := metrics.Get()
+			// The limit label carries only fixed categories, never identities
+			// such as client IPs, which belong in structured logs.
+			mx := metrics.GetMetrics()
 
 			// Absolute ceiling across all endpoint types, checked first
 			if allowed, _, limit, resetTime := limiter.global.allow(identityKey); !allowed {
@@ -231,6 +243,18 @@ func RateLimitMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 				return
 			}
 			mx.RecordRateLimitRequest("global", "allowed")
+			if isReportEndpoint(r.URL.Path) {
+				allowed, reset := limiter.reports.allow(clientIP, now)
+				if !allowed {
+					mx.RecordRateLimitRequest("per_endpoint", "limited")
+					mx.RecordRateLimitBlocked("per_endpoint")
+					writeReportRateLimitExceeded(w, r, reset)
+					return
+				}
+				mx.RecordRateLimitRequest("per_endpoint", "allowed")
+				next.ServeHTTP(w, r)
+				return
+			}
 
 			var class *classLimiter
 			switch {
@@ -264,6 +288,93 @@ func RateLimitMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 }
 
+type reportsBurstState struct {
+	tokens   float64
+	lastSeen time.Time
+	updated  time.Time
+}
+
+type reportsRateLimiter struct {
+	mu    sync.Mutex
+	store cache.Store
+	limit int
+	burst int
+	perIP map[string]reportsBurstState
+}
+
+func newReportsRateLimiter(store cache.Store, perMinute, burst int) *reportsRateLimiter {
+	if perMinute <= 0 {
+		perMinute = 60
+	}
+	if burst <= 0 {
+		burst = 10
+	}
+	return &reportsRateLimiter{store: store, limit: perMinute, burst: burst, perIP: make(map[string]reportsBurstState)}
+}
+
+func (limiter *reportsRateLimiter) allow(ip string, now time.Time) (bool, time.Time) {
+	count, reset, err := limiter.store.SlidingWindow(context.Background(), "reports:"+ip, now, time.Minute)
+	if err != nil {
+		return false, now.Add(time.Minute)
+	}
+	if count > limiter.limit {
+		return false, reset
+	}
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	state, ok := limiter.perIP[ip]
+	if !ok {
+		if len(limiter.perIP) >= 20000 {
+			limiter.evictOldestLocked()
+		}
+		state = reportsBurstState{tokens: float64(limiter.burst), updated: now, lastSeen: now}
+	} else {
+		elapsed := now.Sub(state.updated).Seconds()
+		if elapsed > 0 {
+			state.tokens += elapsed * float64(limiter.limit) / 60
+			if state.tokens > float64(limiter.burst) {
+				state.tokens = float64(limiter.burst)
+			}
+			state.updated = now
+		}
+		state.lastSeen = now
+	}
+	if state.tokens < 1 {
+		limiter.perIP[ip] = state
+		wait := time.Duration((1 - state.tokens) * 60 / float64(limiter.limit) * float64(time.Second))
+		return false, now.Add(wait)
+	}
+	state.tokens--
+	limiter.perIP[ip] = state
+	return true, reset
+}
+
+func (limiter *reportsRateLimiter) evictOldestLocked() {
+	oldestIP := ""
+	var oldest time.Time
+	for ip, state := range limiter.perIP {
+		if oldestIP == "" || state.lastSeen.Before(oldest) {
+			oldestIP, oldest = ip, state.lastSeen
+		}
+	}
+	if oldestIP != "" {
+		delete(limiter.perIP, oldestIP)
+	}
+}
+
+func isReportEndpoint(path string) bool {
+	return strings.Contains(path, "/server/reports/")
+}
+
+func writeReportRateLimitExceeded(w http.ResponseWriter, r *http.Request, reset time.Time) {
+	retryAfter := int(time.Until(reset).Seconds()) + 1
+	if retryAfter < 1 {
+		retryAfter = 1
+	}
+	w.Header().Set("Retry-After", intToString(retryAfter))
+	writeLocalizedAPIError(w, r, http.StatusTooManyRequests, "RATE_LIMITED")
+}
+
 func isStrictRateLimitRequest(r *http.Request) bool {
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	method := r.Method
@@ -289,7 +400,7 @@ func isStrictRateLimitRequest(r *http.Request) bool {
 	return false
 }
 
-func ownerCookieCredential(r *http.Request, cfg *config.Config) (database.OwnerCredential, bool) {
+func ownerCookieCredential(r *http.Request, cfg *config.ServerConfig) (database.OwnerCredential, bool) {
 	prefix := paths.ProjectName + "_owner_token_"
 	for _, cookie := range r.Cookies() {
 		if !strings.HasPrefix(cookie.Name, prefix) || cookie.Value == "" {
@@ -307,7 +418,7 @@ func lockoutCount(ctx context.Context, store cache.Store, key string, now time.T
 	count, reset, err := store.CountWindow(ctx, key, now, window)
 	if err != nil {
 		slog.Warn("ratelimit: failed to read auth-failure lockout state", "error", err)
-		return 0, time.Time{}
+		return int(^uint(0) >> 1), now.Add(window)
 	}
 	return count, reset
 }

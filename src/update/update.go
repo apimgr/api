@@ -13,7 +13,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/apimgr/api/src/common/requestid"
 	"github.com/apimgr/api/src/config"
 )
 
@@ -194,7 +197,7 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string, buildEpo
 		if err != nil {
 			return nil, err
 		}
-		if release == nil || release.TagName == currentVersion {
+		if release == nil || release.TagName == currentVersion || !isStableReleaseTag(release.TagName) || !isNewerRelease(release.TagName, currentVersion) {
 			return nil, nil
 		}
 		return release, nil
@@ -221,7 +224,10 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string, buildEpo
 			}
 			continue
 		}
-		if r.TagName != currentVersion {
+		if sameReleaseTag(r.TagName, currentVersion) {
+			return nil, nil
+		}
+		if isNewerRelease(r.TagName, currentVersion) || releaseFeedContains(releases, currentVersion) {
 			return &r, nil
 		}
 	}
@@ -239,6 +245,9 @@ func CheckForUpdate(ctx context.Context, currentVersion, branch string, buildEpo
 // than currentVersion is returned, so a brand-new release never resets the
 // clock for an older release that has already aged past the window.
 func CheckEligible(ctx context.Context, currentVersion, branch string, buildEpoch int64, deferDays int) (*Release, error) {
+	if deferDays < 0 || deferDays > 365 {
+		return nil, errors.New("defer_days must be between 0 and 365")
+	}
 	canonical, ok := NormalizeBranch(branch)
 	if !ok {
 		return nil, fmt.Errorf("invalid update channel %q", branch)
@@ -252,6 +261,7 @@ func CheckEligible(ctx context.Context, currentVersion, branch string, buildEpoc
 	now := time.Now().UTC()
 	deferWindow := time.Duration(deferDays) * 24 * time.Hour
 
+	currentInFeed := releaseFeedContains(releases, currentVersion)
 	for _, r := range releases {
 		if !matchesBranch(r, branch) {
 			continue
@@ -260,15 +270,36 @@ func CheckEligible(ctx context.Context, currentVersion, branch string, buildEpoc
 			if r.PublishedAt.Unix() <= buildEpoch {
 				continue
 			}
-		} else if r.TagName == currentVersion {
-			continue
+		} else {
+			if sameReleaseTag(r.TagName, currentVersion) {
+				break
+			}
+			if branch != BranchDevel && deferDays > 0 && r.PublishedAt.IsZero() {
+				continue
+			}
+			if !currentInFeed && !isNewerRelease(r.TagName, currentVersion) {
+				continue
+			}
 		}
-		if deferDays > 0 && now.Sub(r.PublishedAt.UTC()) < deferWindow {
+		if branch != BranchDevel && deferDays > 0 && now.Sub(r.PublishedAt.UTC()) < deferWindow {
 			continue
 		}
 		return &r, nil
 	}
 	return nil, nil
+}
+
+func sameReleaseTag(left, right string) bool {
+	return strings.TrimPrefix(strings.TrimPrefix(left, "v"), "V") == strings.TrimPrefix(strings.TrimPrefix(right, "v"), "V")
+}
+
+func releaseFeedContains(releases []Release, version string) bool {
+	for _, release := range releases {
+		if sameReleaseTag(release.TagName, version) {
+			return true
+		}
+	}
+	return false
 }
 
 // Install downloads release's binary for the running platform, verifies its
@@ -293,7 +324,16 @@ func Install(ctx context.Context, release *Release) (retErr error) {
 		return fmt.Errorf("no binary found for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
-	tmpFile, err := os.CreateTemp("", "api-update-*")
+	tmpDir, err := updateTempDir()
+	if err != nil {
+		return fmt.Errorf("failed to create update temp directory: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("remove update temp directory: %w", err))
+		}
+	}()
+	tmpFile, err := os.CreateTemp(tmpDir, "api-update-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -308,6 +348,9 @@ func Install(ctx context.Context, release *Release) (retErr error) {
 
 	if err := downloadTo(ctx, tmpFile, downloadURL); err != nil {
 		return errors.Join(err, tmpFile.Close())
+	}
+	if err := tmpFile.Sync(); err != nil {
+		return errors.Join(fmt.Errorf("sync downloaded update: %w", err), tmpFile.Close())
 	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close downloaded update: %w", err)
@@ -368,6 +411,9 @@ func Stage(ctx context.Context, release *Release, dataDir string) (retErr error)
 	if err := requireDirectory(updateDir); err != nil {
 		return err
 	}
+	if err := os.Chmod(updateDir, 0700); err != nil {
+		return fmt.Errorf("protect update directory: %w", err)
+	}
 	tmp, err := os.CreateTemp(updateDir, ".api.new-*")
 	if err != nil {
 		return fmt.Errorf("create staged update: %w", err)
@@ -380,6 +426,9 @@ func Stage(ctx context.Context, release *Release, dataDir string) (retErr error)
 	}()
 	if err := downloadTo(ctx, tmp, downloadURL); err != nil {
 		return errors.Join(err, tmp.Close())
+	}
+	if err := tmp.Sync(); err != nil {
+		return errors.Join(fmt.Errorf("sync staged update: %w", err), tmp.Close())
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close staged update: %w", err)
@@ -418,13 +467,13 @@ func ApplyStaged(dataDir, currentVersion string) (didStage bool, retErr error) {
 	if _, err := os.Lstat(updateDir); os.IsNotExist(err) {
 		return false, nil
 	} else if err != nil {
-		return true, err
+		return discardStaged(updateDir, "", err)
 	}
 	if err := requireDirectory(updateDir); err != nil {
-		return true, err
+		return discardStaged(updateDir, "", err)
 	}
 	if err := requireRegularFile(metadataPath); err != nil && !os.IsNotExist(err) {
-		return true, err
+		return discardStaged(updateDir, "", err)
 	}
 	data, err := os.ReadFile(metadataPath)
 	if os.IsNotExist(err) {
@@ -434,7 +483,7 @@ func ApplyStaged(dataDir, currentVersion string) (didStage bool, retErr error) {
 		return false, nil
 	}
 	if err != nil {
-		return true, err
+		return discardStaged(updateDir, "", err)
 	}
 	var staged stagedUpdate
 	if err := json.Unmarshal(data, &staged); err != nil {
@@ -454,7 +503,7 @@ func ApplyStaged(dataDir, currentVersion string) (didStage bool, retErr error) {
 	defer cancel()
 	releases, err := fetchReleaseList(ctx, currentVersion)
 	if err != nil {
-		return true, fmt.Errorf("fetch staged release for verification: %w", err)
+		return discardStaged(updateDir, staged.Version, fmt.Errorf("fetch staged release for verification: %w", err))
 	}
 	var release *Release
 	for i := range releases {
@@ -469,7 +518,7 @@ func ApplyStaged(dataDir, currentVersion string) (didStage bool, retErr error) {
 	expectedHash, err := fetchExpectedChecksum(ctx, release, binaryAssetName())
 	if err != nil || !strings.EqualFold(expectedHash, staged.SHA256) {
 		if err != nil {
-			return true, fmt.Errorf("fetch authoritative staged checksum: %w", err)
+			return discardStaged(updateDir, staged.Version, fmt.Errorf("fetch authoritative staged checksum: %w", err))
 		}
 		return discardStaged(updateDir, staged.Version, fmt.Errorf("staged checksum does not match the release checksum"))
 	}
@@ -481,11 +530,11 @@ func ApplyStaged(dataDir, currentVersion string) (didStage bool, retErr error) {
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		return true, err
+		return discardStaged(updateDir, staged.Version, err)
 	}
 	exe, err = filepath.EvalSymlinks(exe)
 	if err != nil {
-		return true, err
+		return discardStaged(updateDir, staged.Version, err)
 	}
 	// Copy from the service-user-writable staging tree into a root-owned
 	// temporary file beside the executable. Re-hash the copied bytes before
@@ -497,7 +546,7 @@ func ApplyStaged(dataDir, currentVersion string) (didStage bool, retErr error) {
 	}
 	installFile, err := os.CreateTemp(filepath.Dir(exe), ".api-update-*")
 	if err != nil {
-		return true, errors.Join(err, stagedFile.Close())
+		return discardStaged(updateDir, staged.Version, errors.Join(err, stagedFile.Close()))
 	}
 	installPath := installFile.Name()
 	defer func() {
@@ -590,7 +639,12 @@ func isNewerRelease(candidate, current string) bool {
 			return av > bv
 		}
 	}
-	return false
+	candidatePrerelease := strings.Contains(clean(candidate), "-")
+	currentPrerelease := strings.Contains(clean(current), "-")
+	if candidatePrerelease != currentPrerelease {
+		return !candidatePrerelease
+	}
+	return candidatePrerelease && clean(candidate) > clean(current)
 }
 
 func replaceStagedFile(source, target string) error {
@@ -611,10 +665,13 @@ func writePrivateFile(path string, content []byte) error {
 	if err != nil {
 		return err
 	}
+	if err := f.Chmod(0600); err != nil {
+		return errors.Join(err, f.Close())
+	}
 	if _, err := f.Write(content); err != nil {
 		return errors.Join(err, f.Close())
 	}
-	return f.Close()
+	return errors.Join(f.Sync(), f.Close())
 }
 
 func writeAtomicPrivateFile(path string, content []byte) (retErr error) {
@@ -646,13 +703,16 @@ func writeAtomicPrivateFile(path string, content []byte) (retErr error) {
 
 // downloadTo streams downloadURL's body into dst.
 func downloadTo(ctx context.Context, dst io.Writer, downloadURL string) (retErr error) {
+	if err := validateReleaseURL(downloadURL); err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("User-Agent", "api-update-client")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doReleaseRequest(req)
 	if err != nil {
 		return err
 	}
@@ -665,6 +725,43 @@ func downloadTo(ctx context.Context, dst io.Writer, downloadURL string) (retErr 
 		return fmt.Errorf("failed to download: %w", err)
 	}
 	return nil
+}
+
+func validateReleaseURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Hostname() == "" || parsed.User != nil {
+		return errors.New("release URL is invalid")
+	}
+	if parsed.Scheme == "https" || (parsed.Scheme == "http" && isLoopbackHost(parsed.Hostname())) {
+		return nil
+	}
+	return errors.New("release URL must use HTTPS")
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func doReleaseRequest(req *http.Request) (*http.Response, error) {
+	client := *http.DefaultClient
+	previousRedirect := client.CheckRedirect
+	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if err := validateReleaseURL(request.URL.String()); err != nil {
+			return err
+		}
+		if previousRedirect != nil {
+			return previousRedirect(request, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("release request exceeded redirect limit")
+		}
+		return nil
+	}
+	return requestid.DoOutboundRequestWithID(&client, req)
 }
 
 // binaryAssetName returns the expected release asset name for this
@@ -691,6 +788,9 @@ func fetchExpectedChecksum(ctx context.Context, release *Release, assetName stri
 	if checksumsURL == "" {
 		return "", fmt.Errorf("release has no sha256.txt asset")
 	}
+	if err := validateReleaseURL(checksumsURL); err != nil {
+		return "", err
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumsURL, nil)
 	if err != nil {
@@ -698,7 +798,7 @@ func fetchExpectedChecksum(ctx context.Context, release *Release, assetName stri
 	}
 	req.Header.Set("User-Agent", "api-update-client")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doReleaseRequest(req)
 	if err != nil {
 		return "", err
 	}
@@ -707,15 +807,22 @@ func fetchExpectedChecksum(ctx context.Context, release *Release, assetName stri
 		return "", fmt.Errorf("checksum download failed: %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
 	if err != nil {
 		return "", err
+	}
+	if len(body) > 1<<20 {
+		return "", errors.New("checksum file exceeds the allowed size")
 	}
 	// Each line is "{sha256}  {filename}".
 	for _, line := range strings.Split(string(body), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 2 && fields[1] == assetName {
-			return fields[0], nil
+			decoded, err := hex.DecodeString(fields[0])
+			if err != nil || len(decoded) != sha256.Size {
+				return "", errors.New("release checksum entry is not a SHA-256 digest")
+			}
+			return strings.ToLower(fields[0]), nil
 		}
 	}
 	return "", fmt.Errorf("no checksum entry for %s", assetName)
@@ -746,9 +853,8 @@ func verifyChecksum(filePath, expectedHash string) (retErr error) {
 // matchesBranch implements the cumulative-channel rule: each channel also
 // accepts every release from all more-stable channels.
 func matchesBranch(r Release, branch string) bool {
-	// Stable releases match every channel.
 	if !r.Prerelease {
-		return true
+		return isStableReleaseTag(r.TagName)
 	}
 	isBeta := strings.HasSuffix(r.TagName, "-beta")
 	// The devel channel is a single rolling release: tag "devel", rebuilt
@@ -764,6 +870,52 @@ func matchesBranch(r Release, branch string) bool {
 	}
 }
 
+func isStableReleaseTag(tag string) bool {
+	value := strings.TrimPrefix(tag, "v")
+	parts := strings.Split(value, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for _, char := range part {
+			if char < '0' || char > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func updateTempDir() (string, error) {
+	root := filepath.Join(os.TempDir(), "apimgr")
+	if err := os.MkdirAll(root, 0755); err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(root)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("update temp namespace is not a real directory")
+	}
+	if info.Mode().Perm() != 0700 {
+		if err := os.Chmod(root, 0700); err != nil {
+			return "", fmt.Errorf("protect update temp namespace: %w", err)
+		}
+	}
+	dir, err := os.MkdirTemp(root, "api-")
+	if err != nil {
+		return "", err
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		return "", errors.Join(err, os.RemoveAll(dir))
+	}
+	return dir, nil
+}
+
 // fetchLatestStableRelease queries the GitHub Releases "latest" endpoint,
 // used only for the stable channel's manual-check fast path. currentVersion
 // is unused beyond documenting intent; callers compare TagName themselves.
@@ -777,7 +929,7 @@ func fetchLatestStableRelease(ctx context.Context, currentVersion string) (relea
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "api-update-client/"+currentVersion)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doReleaseRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -792,7 +944,7 @@ func fetchLatestStableRelease(ctx context.Context, currentVersion string) (relea
 	}
 
 	var release Release
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&release); err != nil {
 		return nil, err
 	}
 	return &release, nil
@@ -812,7 +964,7 @@ func fetchReleaseList(ctx context.Context, currentVersion string) (releaseResult
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "api-update-client/"+currentVersion)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doReleaseRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -826,7 +978,7 @@ func fetchReleaseList(ctx context.Context, currentVersion string) (releaseResult
 	}
 
 	var releases []Release
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&releases); err != nil {
 		return nil, err
 	}
 	return releases, nil
@@ -844,8 +996,7 @@ func VerifyChecksum(filePath, expectedHash string) error {
 }
 
 // ReplaceBinary installs a verified staged binary using a same-filesystem
-// temporary file so atomic replacement works when the download lives in the
-// system temporary directory.
+// temporary file so atomic replacement works across temporary namespaces.
 func ReplaceBinary(currentPath, stagedPath string) (retErr error) {
 	info, err := os.Stat(currentPath)
 	if err != nil {
@@ -872,16 +1023,13 @@ func ReplaceBinary(currentPath, stagedPath string) (retErr error) {
 		}
 	}()
 	if err := tmp.Chmod(info.Mode()); err != nil {
-		_ = tmp.Close()
-		return err
+		return errors.Join(err, tmp.Close())
 	}
 	if _, err := io.Copy(tmp, staged); err != nil {
-		_ = tmp.Close()
-		return err
+		return errors.Join(err, tmp.Close())
 	}
 	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
+		return errors.Join(err, tmp.Close())
 	}
 	if err := tmp.Close(); err != nil {
 		return err

@@ -5,8 +5,11 @@ import (
 	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,13 +22,14 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
 )
 
 // Argon2id key-derivation parameters (PART 21: password -> 256-bit AES-256-GCM key)
 const (
-	argon2Time    = 1
+	argon2Time    = 3
 	argon2Memory  = 64 * 1024
 	argon2Threads = 4
 	argon2KeyLen  = 32
@@ -129,6 +133,7 @@ func CreateWithOptions(backupPath string, opts CreateOptions) (*Manifest, error)
 
 	// Ensure backup directory exists
 	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+		reportCriticalWriteError(err)
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -141,6 +146,10 @@ func CreateWithOptions(backupPath string, opts CreateOptions) (*Manifest, error)
 	} else {
 		snapshotAt = snapshotAt.UTC()
 	}
+	appVersion := opts.AppVersion
+	if strings.TrimSpace(appVersion) == "" {
+		appVersion = "unknown"
+	}
 	backup := Backup{
 		Version:    "1.0",
 		CreatedAt:  snapshotAt,
@@ -152,13 +161,18 @@ func CreateWithOptions(backupPath string, opts CreateOptions) (*Manifest, error)
 		},
 	}
 
+	contents := archiveSourceNames(opts.Sources)
+	if len(contents) == 0 {
+		contents = archiveContentsFromFiles(opts.SnapshotFiles, opts.Deleted)
+	}
 	manifest := &Manifest{
 		Version:    manifestVersion,
 		CreatedAt:  backup.CreatedAt,
 		SnapshotAt: snapshotAt,
 		CreatedBy:  currentOperator(),
-		AppVersion: opts.AppVersion,
-		Contents:   archiveSourceNames(opts.Sources),
+		AppVersion: appVersion,
+		Contents:   contents,
+		Files:      []ManifestFile{},
 		Type:       manifestType(opts.Kind),
 		Encrypted:  encrypted,
 		Kind:       opts.Kind,
@@ -178,6 +192,7 @@ func CreateWithOptions(backupPath string, opts CreateOptions) (*Manifest, error)
 	tmpFile := backupPath + ".tmp"
 	file, err := os.Create(tmpFile)
 	if err != nil {
+		reportCriticalWriteError(err)
 		return nil, fmt.Errorf("failed to create backup file: %w", err)
 	}
 	defer func() {
@@ -186,14 +201,16 @@ func CreateWithOptions(backupPath string, opts CreateOptions) (*Manifest, error)
 		}
 	}()
 	if err := file.Chmod(0600); err != nil {
+		reportCriticalWriteError(err)
 		return nil, errors.Join(fmt.Errorf("failed to set backup permissions: %w", err), file.Close())
 	}
 
-	var writer io.WriteCloser = file
+	fileWriter := criticalFileWriter{file: file}
+	var writer io.WriteCloser = fileWriter
 
 	// Apply encryption if password provided
 	if encrypted {
-		encryptor, err := encrypt(file, opts.Password)
+		encryptor, err := encrypt(fileWriter, opts.Password, opts.BaseBackup)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("failed to setup encryption: %w", err), file.Close())
 		}
@@ -218,7 +235,7 @@ func CreateWithOptions(backupPath string, opts CreateOptions) (*Manifest, error)
 	if encrypted {
 		closeErr = errors.Join(closeErr, writer.Close())
 	} else {
-		closeErr = errors.Join(closeErr, file.Close())
+		closeErr = errors.Join(closeErr, writer.Close())
 	}
 	if err := errors.Join(writeErr, closeErr); err != nil {
 		return nil, err
@@ -226,6 +243,7 @@ func CreateWithOptions(backupPath string, opts CreateOptions) (*Manifest, error)
 
 	// Rename temp file to final name (atomic)
 	if err := replaceBackupFile(tmpFile, backupPath); err != nil {
+		reportCriticalWriteError(err)
 		return nil, fmt.Errorf("failed to finalize backup: %w", err)
 	}
 
@@ -272,8 +290,7 @@ func writeArchive(tarWriter *tar.Writer, backup Backup, manifest *Manifest, opts
 	}
 
 	sort.Slice(manifest.Files, func(i, j int) bool { return manifest.Files[i].Path < manifest.Files[j].Path })
-	manifest.Checksum = digest.Sum()
-	manifest.SHA256 = manifest.Checksum
+	manifest.SHA256 = ManifestSHA256(manifest.Files)
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to encode manifest: %w", err)
@@ -292,6 +309,17 @@ func Restore(backupPath string, password string, allowedRoots ...string) (return
 // RestoreWithLimits verifies archive bounds before writing and enforces them
 // again against the bytes actually streamed to disk.
 func RestoreWithLimits(backupPath string, password string, limits RestoreLimits, allowedRoots ...string) (returnErr error) {
+	return restoreWithLimits(backupPath, password, limits, nil, nil, allowedRoots...)
+}
+
+// restoreWithLimitsTransaction also invokes rollback after restoring the
+// original files when commit fails. rollback is intended for coordinated
+// external state such as reopening the prior database after a file swap.
+func restoreWithLimitsTransaction(backupPath string, password string, limits RestoreLimits, commit, rollbackCommit func() error, allowedRoots ...string) (returnErr error) {
+	return restoreWithLimits(backupPath, password, limits, commit, rollbackCommit, allowedRoots...)
+}
+
+func restoreWithLimits(backupPath string, password string, limits RestoreLimits, commit, rollbackCommit func() error, allowedRoots ...string) (returnErr error) {
 	if len(allowedRoots) == 0 {
 		return errors.New("restore requires at least one permitted destination")
 	}
@@ -305,7 +333,7 @@ func RestoreWithLimits(backupPath string, password string, limits RestoreLimits,
 		typeName = manifestType(manifest.Kind)
 	}
 	if typeName == "incremental" {
-		return restoreIncrementalWithLimits(backupPath, password, limits, allowedRoots, manifest)
+		return restoreIncrementalWithLimits(backupPath, password, limits, allowedRoots, manifest, commit, rollbackCommit)
 	}
 	log.Printf("Backup: Restoring from %s", backupPath)
 	archiveInfo, err := os.Stat(backupPath)
@@ -330,6 +358,7 @@ func RestoreWithLimits(backupPath string, password string, limits RestoreLimits,
 	var count int
 	var createdDirs []string
 	var staged []stagedRestoreFile
+	commitAttempted := false
 	destinations := make(map[string]struct{})
 	rollback := func() error {
 		var rollbackErr error
@@ -339,7 +368,9 @@ func RestoreWithLimits(backupPath string, password string, limits RestoreLimits,
 				if err := os.Remove(item.destination); err != nil && !errors.Is(err, os.ErrNotExist) {
 					rollbackErr = errors.Join(rollbackErr, err)
 				}
-				rollbackErr = errors.Join(rollbackErr, os.Rename(item.backup, item.destination))
+				renameErr := os.Rename(item.backup, item.destination)
+				reportCriticalWriteError(renameErr)
+				rollbackErr = errors.Join(rollbackErr, renameErr)
 			} else if item.committed {
 				if err := os.Remove(item.destination); err != nil && !errors.Is(err, os.ErrNotExist) {
 					rollbackErr = errors.Join(rollbackErr, err)
@@ -356,7 +387,11 @@ func RestoreWithLimits(backupPath string, password string, limits RestoreLimits,
 	}
 	defer func() {
 		if returnErr != nil {
-			returnErr = errors.Join(returnErr, rollback())
+			rollbackErr := rollback()
+			if commitAttempted && rollbackCommit != nil {
+				rollbackErr = errors.Join(rollbackErr, rollbackCommit())
+			}
+			returnErr = errors.Join(returnErr, rollbackErr)
 		}
 	}()
 	defer func() { returnErr = errors.Join(returnErr, gzReader.Close(), file.Close()) }()
@@ -396,6 +431,22 @@ func RestoreWithLimits(backupPath string, password string, limits RestoreLimits,
 			}
 			if written != header.Size {
 				return fmt.Errorf("archive metadata entry is truncated or oversized")
+			}
+			continue
+		}
+		if header.Name == "app_secrets.json" {
+			var fileBytes int64
+			onBytes := func(n int64) error {
+				fileBytes += n
+				extracted += n
+				if fileBytes > limits.MaxFileSize || extracted > limits.MaxExpandedSize || exceedsRatio(extracted, archiveInfo.Size(), limits.MaxRatio) {
+					return fmt.Errorf("backup exceeds configured extraction size limits")
+				}
+				return nil
+			}
+			written, err := io.Copy(archiveBoundWriter{writer: io.Discard, onBytes: onBytes}, io.LimitReader(tarReader, header.Size+1))
+			if err != nil || written != header.Size {
+				return fmt.Errorf("invalid app_secrets.json archive payload")
 			}
 			continue
 		}
@@ -454,7 +505,14 @@ func RestoreWithLimits(backupPath string, password string, limits RestoreLimits,
 		}
 		staged = append(staged, stage)
 	}
-	if err := commitRestoreFiles(staged); err != nil {
+	commitHook := commit
+	if commit != nil {
+		commitHook = func() error {
+			commitAttempted = true
+			return commit()
+		}
+	}
+	if err := commitRestoreFiles(staged, commitHook); err != nil {
 		return err
 	}
 
@@ -557,9 +615,11 @@ func (writer archiveBoundWriter) Write(p []byte) (int, error) {
 
 // encrypt encrypts data using AES-256-GCM
 // Returns an io.WriteCloser that encrypts data as it's written
-func encrypt(w io.Writer, password string) (io.WriteCloser, error) {
-	// Derive key from password using Argon2id
-	salt := make([]byte, 32)
+func encrypt(w io.Writer, password, baseBackup string) (io.WriteCloser, error) {
+	if baseBackup != "" && (filepath.Base(baseBackup) != baseBackup || strings.ContainsAny(baseBackup, `/\\`) || !utf8.ValidString(baseBackup) || len(baseBackup) > 255) {
+		return nil, errors.New("invalid incremental base name for encrypted archive header")
+	}
+	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return nil, err
 	}
@@ -584,28 +644,44 @@ func encrypt(w io.Writer, password string) (io.WriteCloser, error) {
 		return nil, err
 	}
 
-	// Write salt and nonce first (needed for decryption)
-	if _, err := w.Write(salt); err != nil {
-		return nil, err
+	header := make([]byte, 0, 55+len(baseBackup))
+	header = append(header, []byte("BKUP1")...)
+	header = append(header, salt...)
+	var parameter [4]byte
+	for _, value := range []uint32{argon2Memory, argon2Time, argon2Threads} {
+		binary.BigEndian.PutUint32(parameter[:], value)
+		header = append(header, parameter[:]...)
 	}
-	if _, err := w.Write(nonce); err != nil {
+	header = append(header, nonce...)
+	keyIDMAC := hmac.New(sha256.New, key)
+	_, _ = keyIDMAC.Write([]byte("key-id"))
+	keyID := hex.EncodeToString(keyIDMAC.Sum(nil)[:4])
+	header = append(header, keyID...)
+	var baseLength [2]byte
+	binary.BigEndian.PutUint16(baseLength[:], uint16(len(baseBackup)))
+	header = append(header, baseLength[:]...)
+	header = append(header, []byte(baseBackup)...)
+	if _, err := w.Write(header); err != nil {
 		return nil, err
 	}
 
 	// Return encrypted writer with buffering
-	return &encryptedWriter{w: w, gcm: gcm, nonce: nonce, buf: make([]byte, 0, 65536)}, nil
+	return &encryptedWriter{w: w, gcm: gcm, nonce: nonce, header: header, buf: make([]byte, 0, 65536)}, nil
 }
 
 // decrypt decrypts data using AES-256-GCM
 func decrypt(r io.Reader, password string) (io.Reader, error) {
-	// Read salt
-	salt := make([]byte, 32)
-	if _, err := io.ReadFull(r, salt); err != nil {
+	header, salt, nonce, params, keyID, err := readEncryptionHeader(r)
+	if err != nil {
 		return nil, err
 	}
-
-	// Derive key from password using Argon2id
-	key := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
+	key := argon2.IDKey([]byte(password), salt, params.time, params.memory, uint8(params.parallelism), argon2KeyLen)
+	keyIDMAC := hmac.New(sha256.New, key)
+	_, _ = keyIDMAC.Write([]byte("key-id"))
+	derivedID := hex.EncodeToString(keyIDMAC.Sum(nil)[:4])
+	if subtle.ConstantTimeCompare([]byte(derivedID), []byte(keyID)) != 1 {
+		return nil, errors.New("encrypted archive key id does not match the supplied password")
+	}
 
 	// Create AES cipher
 	block, err := aes.NewCipher(key)
@@ -619,22 +695,110 @@ func decrypt(r io.Reader, password string) (io.Reader, error) {
 		return nil, err
 	}
 
-	// Read nonce
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(r, nonce); err != nil {
-		return nil, err
+	if len(nonce) != gcm.NonceSize() {
+		return nil, errors.New("invalid encrypted archive nonce size")
 	}
 
 	// Return a reader that decrypts the buffered ciphertext on first read
-	return &decryptedReader{r: r, gcm: gcm, nonce: nonce}, nil
+	return &decryptedReader{r: r, gcm: gcm, nonce: nonce, header: header}, nil
+}
+
+type argonParameters struct{ memory, time, parallelism uint32 }
+
+func readEncryptionHeader(r io.Reader) ([]byte, []byte, []byte, argonParameters, string, error) {
+	fail := func(err error) ([]byte, []byte, []byte, argonParameters, string, error) {
+		return nil, nil, nil, argonParameters{}, "", err
+	}
+	header := make([]byte, 55)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return fail(fmt.Errorf("read encrypted archive header: %w", err))
+	}
+	if string(header[:5]) != "BKUP1" {
+		return fail(errors.New("invalid encrypted archive magic"))
+	}
+	params := argonParameters{memory: binary.BigEndian.Uint32(header[21:25]), time: binary.BigEndian.Uint32(header[25:29]), parallelism: binary.BigEndian.Uint32(header[29:33])}
+	if params.memory < 8192 || params.memory > 1048576 || params.time < 1 || params.time > 10 || params.parallelism < 1 || params.parallelism > 16 || params.memory < 8*params.parallelism {
+		return fail(errors.New("encrypted archive Argon2id parameters exceed the allowed limits"))
+	}
+	baseLength := binary.BigEndian.Uint16(header[53:55])
+	if baseLength > 255 {
+		return fail(errors.New("encrypted archive base name exceeds 255 bytes"))
+	}
+	if baseLength > 0 {
+		name := make([]byte, int(baseLength))
+		if _, err := io.ReadFull(r, name); err != nil {
+			return fail(errors.New("encrypted archive header ended before the base name"))
+		}
+		baseName := string(name)
+		if !utf8.Valid(name) || filepath.Base(baseName) != baseName || strings.ContainsAny(baseName, `/\\`) {
+			return fail(errors.New("encrypted archive base name is invalid"))
+		}
+		header = append(header, name...)
+	}
+	keyID := string(header[45:53])
+	if _, err := hex.DecodeString(keyID); err != nil || strings.ToLower(keyID) != keyID {
+		return fail(errors.New("encrypted archive key id is invalid"))
+	}
+	return header, append([]byte(nil), header[5:21]...), append([]byte(nil), header[33:45]...), params, keyID, nil
+}
+
+func encryptionPasswordMatches(path, password string) (bool, error) {
+	if !IsEncryptedName(path) {
+		if password != "" {
+			return false, nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return false, err
+		}
+		defer func() { _ = file.Close() }()
+		magic := make([]byte, 5)
+		_, err = io.ReadFull(file, magic)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+			return false, err
+		}
+		if string(magic) == "BKUP1" {
+			return false, errors.New("encrypted header found on an unencrypted backup filename")
+		}
+		return true, nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = file.Close() }()
+	_, salt, _, params, keyID, err := readEncryptionHeader(file)
+	if err != nil {
+		return false, err
+	}
+	key := argon2.IDKey([]byte(password), salt, params.time, params.memory, uint8(params.parallelism), argon2KeyLen)
+	keyMAC := hmac.New(sha256.New, key)
+	_, _ = keyMAC.Write([]byte("key-id"))
+	derivedID := hex.EncodeToString(keyMAC.Sum(nil)[:4])
+	return subtle.ConstantTimeCompare([]byte(derivedID), []byte(keyID)) == 1, nil
+}
+
+func encryptedArchiveBaseName(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = file.Close() }()
+	header, _, _, _, _, err := readEncryptionHeader(file)
+	if err != nil {
+		return "", err
+	}
+	baseLength := int(binary.BigEndian.Uint16(header[53:55]))
+	return string(header[55 : 55+baseLength]), nil
 }
 
 // encryptedWriter wraps a writer with encryption
 type encryptedWriter struct {
-	w     io.Writer
-	gcm   cipher.AEAD
-	nonce []byte
-	buf   []byte
+	w      io.Writer
+	gcm    cipher.AEAD
+	nonce  []byte
+	header []byte
+	buf    []byte
 }
 
 func (ew *encryptedWriter) Write(p []byte) (n int, err error) {
@@ -648,7 +812,7 @@ func (ew *encryptedWriter) Close() error {
 	// GCM always appends an authentication tag, so skipping the write
 	// for zero-length input leaves the stream with no tag at all and
 	// decryption later fails with "message authentication failed".
-	encrypted := ew.gcm.Seal(nil, ew.nonce, ew.buf, nil)
+	encrypted := ew.gcm.Seal(nil, ew.nonce, ew.buf, ew.header)
 	_, writeErr := ew.w.Write(encrypted)
 	var closeErr error
 	if closer, ok := ew.w.(io.Closer); ok {
@@ -662,6 +826,7 @@ type decryptedReader struct {
 	r         io.Reader
 	gcm       cipher.AEAD
 	nonce     []byte
+	header    []byte
 	decrypted []byte
 	pos       int
 }
@@ -676,7 +841,7 @@ func (dr *decryptedReader) Read(p []byte) (n int, err error) {
 		}
 
 		// Decrypt data
-		dr.decrypted, err = dr.gcm.Open(nil, dr.nonce, encrypted, nil)
+		dr.decrypted, err = dr.gcm.Open(nil, dr.nonce, encrypted, dr.header)
 		if err != nil {
 			return 0, fmt.Errorf("decryption failed: %w", err)
 		}
@@ -834,7 +999,7 @@ func addFileToTar(tw *tar.Writer, path, archiveName string, info os.FileInfo, di
 	if _, err := io.Copy(io.MultiWriter(digest.writer(tw), fileHash), file); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", path, err)
 	}
-	*records = append(*records, ManifestFile{Path: archiveName, Size: header.Size, Modified: header.ModTime.UTC(), SHA256: "sha256:" + hex.EncodeToString(fileHash.Sum(nil))})
+	*records = append(*records, ManifestFile{Path: archiveName, Size: header.Size, Modified: header.ModTime.UTC(), SHA256: hex.EncodeToString(fileHash.Sum(nil))})
 
 	log.Printf("Backup: Added %s to archive", path)
 	return nil
@@ -854,15 +1019,17 @@ func extractFromTar(tr *tar.Reader, header *tar.Header, destination string, onBy
 	}
 	file, err := os.CreateTemp(filepath.Dir(destination), ".restore-*.tmp")
 	if err != nil {
+		reportCriticalWriteError(err)
 		return stagedRestoreFile{}, fmt.Errorf("failed to stage restored file %s: %w", filepath.Base(destination), err)
 	}
 	temporary := file.Name()
 	if err := file.Chmod(0600); err != nil {
+		reportCriticalWriteError(err)
 		_ = file.Close()
 		_ = os.Remove(temporary)
 		return stagedRestoreFile{}, err
 	}
-	written, copyErr := io.Copy(archiveBoundWriter{writer: file, onBytes: onBytes}, io.LimitReader(tr, header.Size+1))
+	written, copyErr := io.Copy(archiveBoundWriter{writer: criticalWriteReporter{writer: file}, onBytes: onBytes}, io.LimitReader(tr, header.Size+1))
 	if copyErr != nil {
 		return stagedRestoreFile{}, errors.Join(fmt.Errorf("failed to extract %s: %w", filepath.Base(destination), copyErr), file.Close(), os.Remove(temporary))
 	}
@@ -870,15 +1037,17 @@ func extractFromTar(tr *tar.Reader, header *tar.Header, destination string, onBy
 		return stagedRestoreFile{}, errors.Join(fmt.Errorf("archive entry %s has a truncated or oversized body", filepath.Base(destination)), file.Close(), os.Remove(temporary))
 	}
 	if err := file.Sync(); err != nil {
+		reportCriticalWriteError(err)
 		return stagedRestoreFile{}, errors.Join(err, file.Close(), os.Remove(temporary))
 	}
 	if err := file.Close(); err != nil {
+		reportCriticalWriteError(err)
 		return stagedRestoreFile{}, errors.Join(fmt.Errorf("failed to close staged file %s: %w", filepath.Base(destination), err), os.Remove(temporary))
 	}
 	return stagedRestoreFile{temporary: temporary, destination: destination}, nil
 }
 
-func commitRestoreFiles(files []stagedRestoreFile) error {
+func commitRestoreFiles(files []stagedRestoreFile, commit func() error) error {
 	for i := range files {
 		item := &files[i]
 		if err := checkRestoreTarget(item.destination); err != nil {
@@ -887,10 +1056,12 @@ func commitRestoreFiles(files []stagedRestoreFile) error {
 		if _, err := os.Lstat(item.destination); err == nil {
 			backup, err := os.CreateTemp(filepath.Dir(item.destination), ".restore-backup-*.tmp")
 			if err != nil {
+				reportCriticalWriteError(err)
 				return fmt.Errorf("stage existing restore target: %w", err)
 			}
 			item.backup = backup.Name()
 			if err := backup.Close(); err != nil {
+				reportCriticalWriteError(err)
 				_ = os.Remove(item.backup)
 				item.backup = ""
 				return err
@@ -899,6 +1070,7 @@ func commitRestoreFiles(files []stagedRestoreFile) error {
 				return err
 			}
 			if err := os.Rename(item.destination, item.backup); err != nil {
+				reportCriticalWriteError(err)
 				item.backup = ""
 				return fmt.Errorf("preserve existing restore target: %w", err)
 			}
@@ -906,10 +1078,16 @@ func commitRestoreFiles(files []stagedRestoreFile) error {
 			return err
 		}
 		if err := os.Rename(item.temporary, item.destination); err != nil {
+			reportCriticalWriteError(err)
 			return fmt.Errorf("install restored file %s: %w", filepath.Base(item.destination), err)
 		}
 		item.temporary = ""
 		item.committed = true
+	}
+	if commit != nil {
+		if err := commit(); err != nil {
+			return fmt.Errorf("restore commit hook: %w", err)
+		}
 	}
 	for i := range files {
 		if files[i].backup != "" {
@@ -958,6 +1136,7 @@ func ensureRestoreParents(path string, created *[]string) error {
 	}
 	for i := len(missing) - 1; i >= 0; i-- {
 		if err := os.Mkdir(missing[i], 0700); err != nil {
+			reportCriticalWriteError(err)
 			return err
 		}
 		*created = append(*created, missing[i])
@@ -971,6 +1150,32 @@ func archiveSourceNames(sources []string) []string {
 		names = append(names, filepath.Base(filepath.Clean(source)))
 	}
 	return names
+}
+
+func archiveContentsFromFiles(files []SnapshotFile, deleted []string) []string {
+	seen := make(map[string]struct{})
+	for _, file := range files {
+		addArchiveContentRoot(seen, file.ArchivePath)
+	}
+	for _, file := range deleted {
+		addArchiveContentRoot(seen, file)
+	}
+	contents := make([]string, 0, len(seen))
+	for name := range seen {
+		contents = append(contents, name)
+	}
+	sort.Strings(contents)
+	return contents
+}
+
+func addArchiveContentRoot(seen map[string]struct{}, archivePath string) {
+	if archivePath == "" || archivePath == "app_secrets.json" || strings.HasPrefix(archivePath, "ssl-external/") {
+		return
+	}
+	parts := strings.Split(filepath.ToSlash(archivePath), "/")
+	if parts[0] != "" {
+		seen[parts[0]] = struct{}{}
+	}
 }
 
 func archiveEntryName(root, file string, prefixRoot bool) (string, error) {

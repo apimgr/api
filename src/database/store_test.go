@@ -12,7 +12,57 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/critical"
 )
+
+func TestStoreWriteFailureReportsCriticalDatabaseEvent(t *testing.T) {
+	store, err := OpenSQLite(filepath.Join(t.TempDir(), "maintenance.db"), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`CREATE TABLE unique_values (value TEXT PRIMARY KEY)`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO unique_values (value) VALUES ('one')`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var reason, message string
+	critical.RegisterFailureHandler(func(gotReason, gotMessage string) {
+		reason, message = gotReason, gotMessage
+	})
+	t.Cleanup(func() { critical.RegisterFailureHandler(nil) })
+
+	err = store.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO unique_values (value) VALUES ('one')`)
+		return err
+	})
+	if err == nil {
+		t.Fatal("duplicate insert unexpectedly succeeded")
+	}
+	if reason != "" {
+		t.Fatalf("constraint error incorrectly reported as critical: %q", reason)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err = store.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO unique_values (value) VALUES ('two')`)
+		return err
+	})
+	if err == nil {
+		t.Fatal("write to closed database unexpectedly succeeded")
+	}
+	if reason != "database_write" || message == "" {
+		t.Fatalf("critical write report = %q, %q", reason, message)
+	}
+}
 
 func TestOpenSQLiteUsesSeparatePoolsAndWriteTransactions(t *testing.T) {
 	store, err := OpenSQLite(filepath.Join(t.TempDir(), "store.db"), 4)

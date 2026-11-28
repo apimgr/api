@@ -56,6 +56,8 @@ var knownTables = []string{
 	"app_secrets",
 	"api_tokens",
 	"rate_limits",
+	"server_stats",
+	"server_request_hours",
 	"audit_log",
 	"backups",
 	"config",
@@ -153,7 +155,7 @@ func classifyDBError(err error) string {
 // empty result, not a database error, so it is not counted.
 func observeQuery(query string, start time.Time, err error) {
 	operation, table := queryLabels(query)
-	m := metrics.Get()
+	m := metrics.GetMetrics()
 	duration := time.Since(start)
 	m.RecordDBQuery(operation, table, duration)
 	cfg := config.Get()
@@ -177,7 +179,7 @@ func recordQueryError(query string, err error) {
 		return
 	}
 	operation, _ := queryLabels(query)
-	metrics.Get().RecordDBError(operation, classifyDBError(err))
+	metrics.GetMetrics().RecordDBError(operation, classifyDBError(err))
 }
 
 // execContext runs an INSERT/UPDATE/DELETE/DDL statement with metrics.
@@ -341,7 +343,7 @@ func startStoreConnStatsSampler(store *Store) {
 	startConnStatsSamplerWithSample(func() {
 		write := store.writeDB.Stats()
 		read := store.readDB.Stats()
-		metrics.Get().SetDBConnections(write.OpenConnections+read.OpenConnections, write.InUse+read.InUse)
+		metrics.GetMetrics().SetDBConnections(write.OpenConnections+read.OpenConnections, write.InUse+read.InUse)
 	})
 }
 
@@ -394,5 +396,5 @@ func stopConnStatsSampler() {
 // sampleConnStats copies the current pool counters into the metrics gauges.
 func sampleConnStats(db *sql.DB) {
 	stats := db.Stats()
-	metrics.Get().SetDBConnections(stats.OpenConnections, stats.InUse)
+	metrics.GetMetrics().SetDBConnections(stats.OpenConnections, stats.InUse)
 }

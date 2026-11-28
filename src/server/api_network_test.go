@@ -339,9 +339,10 @@ func TestWriteLocalizedAPIErrorUsesRequestLanguage(t *testing.T) {
 // the value passed cannot be marshaled to JSON (e.g. a channel).
 func TestWriteJSONEnvelopeMarshalFailure(t *testing.T) {
 	w := httptest.NewRecorder()
-	writeJSONEnvelope(w, http.StatusOK, map[string]interface{}{"bad": make(chan int)})
+	writeJSONEnvelope(w, http.StatusOK, responseObject(responseField("bad", make(chan int))))
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Contains(t, w.Body.String(), `"error":"INTERNAL"`)
-	assert.Contains(t, w.Body.String(), `"message":"Internal server error"`)
+	env := decodeEnvelope(t, w.Body.Bytes())
+	assert.Equal(t, "INTERNAL", env["error"])
+	assert.Equal(t, "Internal server error", env["message"])
 }

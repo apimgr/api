@@ -16,7 +16,7 @@ import (
 // llmsHandler serves the route-derived AI discovery document. Links are
 // resolved for the current request so proxy prefixes and overlay hosts stay
 // consistent with the URLs rendered elsewhere by the server.
-func llmsHandler(cfg *config.Config, routes chi.Routes) http.HandlerFunc {
+func llmsHandler(cfg *config.ServerConfig, routes chi.Routes) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		var endpoints []string

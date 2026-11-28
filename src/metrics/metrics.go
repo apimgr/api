@@ -18,11 +18,11 @@ import (
 const namespace = "api"
 
 // defaultDurationBuckets is used for http_request_duration_seconds when
-// Options.DurationBuckets is empty, per AI.md PART 20 default config.
+// MetricsOptions.DurationBuckets is empty, per AI.md PART 20 default config.
 var defaultDurationBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
 // defaultSizeBuckets is used for http_request_size_bytes /
-// http_response_size_bytes when Options.SizeBuckets is empty.
+// http_response_size_bytes when MetricsOptions.SizeBuckets is empty.
 var defaultSizeBuckets = []float64{100, 1000, 10000, 100000, 1000000, 10000000}
 
 // dbDurationBuckets is the fixed bucket set for db_query_duration_seconds
@@ -34,12 +34,12 @@ var dbDurationBuckets = []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1,
 var schedulerDurationBuckets = []float64{0.1, 0.5, 1, 5, 10, 30, 60, 300, 600}
 
 // defaultCollectInterval is how often the periodic system/runtime collector
-// samples values, when Options.CollectInterval is zero.
+// samples values, when MetricsOptions.CollectInterval is zero.
 const defaultCollectInterval = 15 * time.Second
 
-// Options configures optional metric families and operator-tunable
+// MetricsOptions configures optional metric families and operator-tunable
 // histogram buckets, per AI.md PART 20 "Configuration".
-type Options struct {
+type MetricsOptions struct {
 	// DurationBuckets overrides http_request_duration_seconds buckets.
 	DurationBuckets []float64
 	// SizeBuckets overrides http_request_size_bytes / http_response_size_bytes buckets.
@@ -59,7 +59,7 @@ type Options struct {
 // Metrics holds all Prometheus collectors exposed at /server/metrics.
 type Metrics struct {
 	registry *prometheus.Registry
-	opts     Options
+	opts     MetricsOptions
 
 	appInfo           *prometheus.GaugeVec
 	appStartTimestamp prometheus.Gauge
@@ -78,9 +78,8 @@ type Metrics struct {
 	dbBusyTotal        prometheus.Counter
 	dbWriteWait        prometheus.Histogram
 
-	authAttemptsTotal  *prometheus.CounterVec
-	authSessionsActive prometheus.Gauge
-	ownerTokensActive  *prometheus.GaugeVec
+	authAttemptsTotal *prometheus.CounterVec
+	ownerTokensActive *prometheus.GaugeVec
 
 	cacheHitsTotal      *prometheus.CounterVec
 	cacheMissesTotal    *prometheus.CounterVec
@@ -112,34 +111,34 @@ type Metrics struct {
 
 var (
 	globalMetrics *Metrics
-	globalOpts    Options
+	globalOpts    MetricsOptions
 	globalHasOpts bool
 	metricsOnce   sync.Once
 	optsMu        sync.Mutex
 )
 
-// Init records the Options used the first time Get() constructs the
-// singleton. Call it once at startup, before the first Get(), with values
+// InitMetrics records the MetricsOptions used the first time GetMetrics() constructs the
+// singleton. Call it once at startup, before the first GetMetrics(), with values
 // resolved from server.yml. Calling it after the singleton already exists
 // has no effect - metric family registration happens once, at construction.
-func Init(opts Options) {
+func InitMetrics(opts MetricsOptions) {
 	optsMu.Lock()
 	defer optsMu.Unlock()
 	globalOpts = opts
 	globalHasOpts = true
 }
 
-// Get returns the singleton metrics instance, constructing it on first call
-// using the Options passed to Init (or PART 20 defaults if Init was never
+// GetMetrics returns the singleton metrics instance, constructing it on first call
+// using the MetricsOptions passed to InitMetrics (or PART 20 defaults if InitMetrics was never
 // called).
-func Get() *Metrics {
+func GetMetrics() *Metrics {
 	metricsOnce.Do(func() {
 		optsMu.Lock()
 		opts := globalOpts
 		hasOpts := globalHasOpts
 		optsMu.Unlock()
 		if !hasOpts {
-			opts = Options{IncludeSystem: true, IncludeRuntime: true}
+			opts = MetricsOptions{IncludeSystem: true, IncludeRuntime: true}
 		}
 		globalMetrics = newMetricsWithOptions(opts)
 	})
@@ -149,10 +148,10 @@ func Get() *Metrics {
 // newMetrics constructs a fresh, unregistered-to-any-global-state Metrics
 // instance with PART 20 default options. Used directly by tests.
 func newMetrics() *Metrics {
-	return newMetricsWithOptions(Options{})
+	return newMetricsWithOptions(MetricsOptions{})
 }
 
-func newMetricsWithOptions(opts Options) *Metrics {
+func newMetricsWithOptions(opts MetricsOptions) *Metrics {
 	if len(opts.DurationBuckets) == 0 {
 		opts.DurationBuckets = defaultDurationBuckets
 	}
@@ -276,13 +275,6 @@ func newMetricsWithOptions(opts Options) *Metrics {
 			Name:      "attempts_total",
 			Help:      "Total authentication attempts",
 		}, []string{"method", "status"}),
-
-		authSessionsActive: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: "auth",
-			Name:      "sessions_active",
-			Help:      "Number of active sessions",
-		}),
 
 		ownerTokensActive: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -414,7 +406,6 @@ func newMetricsWithOptions(opts Options) *Metrics {
 		m.dbBusyTotal,
 		m.dbWriteWait,
 		m.authAttemptsTotal,
-		m.authSessionsActive,
 		m.ownerTokensActive,
 		m.cacheHitsTotal,
 		m.cacheMissesTotal,

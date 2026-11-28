@@ -36,14 +36,14 @@ func TestBackupRestorePreservesPGPKeyPairAndInstallationSecret(t *testing.T) {
 	configDir := filepath.Join(root, "config")
 	dataDir := filepath.Join(root, "data")
 	require.NoError(t, os.MkdirAll(configDir, 0700))
-	paths.Init(configDir, dataDir, filepath.Join(root, "cache"))
-	require.NoError(t, database.Init(config.DatabaseConfig{Driver: "sqlite"}, dataDir))
+	paths.SetApplicationPathOverrides(configDir, dataDir, filepath.Join(root, "cache"))
+	require.NoError(t, database.InitDatabase(config.DatabaseConfig{Driver: "sqlite"}, dataDir))
 	t.Cleanup(func() { require.NoError(t, database.Close()) })
 	ctx := context.Background()
 	require.NoError(t, database.EnsureAppSecrets(ctx))
 	secret, err := database.LoadSecret(ctx, database.SecretInstallationSecret)
 	require.NoError(t, err)
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Server.Branding.Title = "API"
 	cfg.Server.Contact.Security.Email = "security@example.invalid"
 	_, err = pgp.Generate(ctx, cfg)

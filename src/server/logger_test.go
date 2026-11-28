@@ -7,16 +7,51 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/critical"
+	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type failedLogWriter struct{}
+
+func (failedLogWriter) Write([]byte) (int, error) {
+	return 0, errors.New("disk full")
+}
+
+func TestCriticalLogWriterReportsWriteFailureOnceUntilRecovery(t *testing.T) {
+	events := make(chan [2]string, 2)
+	critical.RegisterFailureHandler(func(reason, message string) {
+		events <- [2]string{reason, message}
+	})
+	t.Cleanup(func() { critical.RegisterFailureHandler(nil) })
+
+	writer := &criticalLogWriter{writer: failedLogWriter{}}
+	_, _ = writer.Write([]byte("first"))
+	_, _ = writer.Write([]byte("second"))
+	select {
+	case event := <-events:
+		if event[0] != "file_write" || event[1] == "" {
+			t.Fatalf("critical log event = %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("critical log write did not trigger maintenance")
+	}
+	select {
+	case event := <-events:
+		t.Fatalf("repeated failed log write emitted another event: %#v", event)
+	case <-time.After(20 * time.Millisecond):
+	}
+}
 
 // redactQuery must leave a query string untouched when it has no
 // sensitive parameters (or is empty/unparseable), and must replace the
@@ -116,7 +151,6 @@ func newTestLogger(cfg *config.LogsConfig) (*Logger, map[string]*bytes.Buffer) {
 		"error":    {},
 		"app":      {},
 		"auth":     {},
-		"audit":    {},
 		"security": {},
 		"debug":    {},
 	}
@@ -127,7 +161,6 @@ func newTestLogger(cfg *config.LogsConfig) (*Logger, map[string]*bytes.Buffer) {
 		errorLog:    log.New(bufs["error"], "", 0),
 		appLog:      log.New(bufs["app"], "", 0),
 		authLog:     log.New(bufs["auth"], "", 0),
-		auditLog:    log.New(bufs["audit"], "", 0),
 		securityLog: log.New(bufs["security"], "", 0),
 		debugLog:    log.New(bufs["debug"], "", 0),
 	}
@@ -228,7 +261,7 @@ func TestLogAccessFormats(t *testing.T) {
 		assert.NotEmpty(t, bufs["access"].String())
 	})
 
-	t.Run("health-check suppression lifted when debug mode enabled", func(t *testing.T) {
+	t.Run("health-check suppression remains in debug mode", func(t *testing.T) {
 		mode.SetDebugEnabled(true)
 		defer mode.SetDebugEnabled(false)
 
@@ -236,7 +269,7 @@ func TestLogAccessFormats(t *testing.T) {
 		l, bufs := newTestLogger(cfg)
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 		l.LogAccess(req, 200, 0, 0)
-		assert.NotEmpty(t, bufs["access"].String())
+		assert.Empty(t, bufs["access"].String())
 	})
 
 	t.Run("nil accessLog is a no-op, never panics", func(t *testing.T) {
@@ -345,30 +378,76 @@ func TestLogAuth(t *testing.T) {
 	})
 }
 
+func TestLoggerSanitizesEveryChannel(t *testing.T) {
+	cfg := &config.LogsConfig{
+		Server:   config.LogConfig{Format: "json"},
+		Error:    config.LogConfig{Format: "json"},
+		Debug:    config.DebugLogConfig{Enabled: true, Format: "json"},
+		Audit:    config.AuditLogConfig{Enabled: true},
+		Security: config.SecurityLogConfig{Format: "json"},
+	}
+	l, bufs := newTestLogger(cfg)
+	unsafeText := "\x1b[31mprivate\x1b[0m 🔥\npassword=hunter2"
+	fields := map[string]interface{}{"api_token": "raw-token", "message": unsafeText}
+
+	l.LogServer("INFO", unsafeText)
+	l.LogError(errors.New(unsafeText), fields)
+	l.LogApp("INFO", unsafeText, fields)
+	l.LogAuth(fields)
+	l.LogAudit("event", fields)
+	l.LogSecurity("event", "127.0.0.1", fields)
+	l.LogDebug(unsafeText, fields)
+
+	for channel, buffer := range bufs {
+		out := buffer.String()
+		if out == "" {
+			continue
+		}
+		assert.NotContains(t, out, "\x1b")
+		assert.NotContains(t, out, "🔥")
+		assert.NotContains(t, out, "hunter2")
+		assert.NotContains(t, out, "raw-token")
+		for _, r := range out {
+			assert.True(t, r == '\n' || (r >= 0x20 && r <= 0x7e), "%s log contains non-ASCII/control character %U", channel, r)
+		}
+	}
+}
+
 // LogAudit must be a no-op unless config.Audit.Enabled is true, must
 // always emit JSON regardless of any format setting, and must merge the
 // details map.
 func TestLogAudit(t *testing.T) {
 	t.Run("disabled: no-op", func(t *testing.T) {
 		cfg := &config.LogsConfig{Audit: config.AuditLogConfig{Enabled: false}}
-		l, bufs := newTestLogger(cfg)
+		l := &Logger{config: cfg}
 		l.LogAudit("user.created", map[string]interface{}{"id": "u1"})
-		assert.Empty(t, bufs["audit"].String())
 	})
 
-	t.Run("enabled: emits JSON with merged details", func(t *testing.T) {
-		cfg := &config.LogsConfig{Audit: config.AuditLogConfig{Enabled: true}}
-		l, bufs := newTestLogger(cfg)
+	t.Run("enabled: writes through the authoritative hash-chained file", func(t *testing.T) {
+		logDir := t.TempDir()
+		previousLogDir := paths.LogDir()
+		paths.SetApplicationPathOverrides("", "", logDir)
+		cfg := &config.LogsConfig{Audit: config.AuditLogConfig{Enabled: true, Filename: "audit.log", Rotate: "never", Keep: "forever"}}
+		require.NoError(t, database.ConfigureAuditFile(cfg.Audit))
+		t.Cleanup(func() {
+			paths.SetApplicationPathOverrides("", "", previousLogDir)
+			_ = database.ConfigureAuditFile(config.AuditLogConfig{Enabled: true, Filename: "audit.log", Rotate: "never", Keep: "forever"})
+		})
+		l := &Logger{config: cfg}
 		l.LogAudit("user.created", map[string]interface{}{"id": "u1"})
 
+		data, err := os.ReadFile(filepath.Join(logDir, "audit.log"))
+		require.NoError(t, err)
 		var entry map[string]interface{}
-		require.NoError(t, json.Unmarshal(bufs["audit"].Bytes(), &entry))
+		require.NoError(t, json.Unmarshal(data, &entry))
 		assert.Equal(t, "user.created", entry["event"])
-		assert.Equal(t, "u1", entry["id"])
+		details := entry["details"].(map[string]interface{})
+		assert.Equal(t, "u1", details["id"])
+		assert.Equal(t, strings.Repeat("0", 64), entry["prev"])
 	})
 
 	t.Run("nil logger no-op", func(t *testing.T) {
-		l := &Logger{config: &config.LogsConfig{Audit: config.AuditLogConfig{Enabled: true}}}
+		var l *Logger
 		assert.NotPanics(t, func() { l.LogAudit("x", nil) })
 	})
 }
@@ -494,8 +573,8 @@ func TestFormatCustom(t *testing.T) {
 // disabled, the debug sub-logger must stay nil.
 func TestNewLogger(t *testing.T) {
 	tmpDir := t.TempDir()
-	paths.Init("", "", tmpDir)
-	t.Cleanup(func() { paths.Init("", "", "") })
+	paths.SetApplicationPathOverrides("", "", tmpDir)
+	t.Cleanup(func() { paths.SetApplicationPathOverrides("", "", "") })
 
 	cfg := &config.LogsConfig{
 		Access:   config.LogConfig{Filename: "access.log", Format: "nginx"},
@@ -520,8 +599,8 @@ func TestNewLogger(t *testing.T) {
 // NewLogger must initialize the debug log when Debug.Enabled is true.
 func TestNewLoggerWithDebugEnabled(t *testing.T) {
 	tmpDir := t.TempDir()
-	paths.Init("", "", tmpDir)
-	t.Cleanup(func() { paths.Init("", "", "") })
+	paths.SetApplicationPathOverrides("", "", tmpDir)
+	t.Cleanup(func() { paths.SetApplicationPathOverrides("", "", "") })
 
 	cfg := &config.LogsConfig{
 		Access:   config.LogConfig{Filename: "access.log"},
@@ -542,8 +621,8 @@ func TestNewLoggerWithDebugEnabled(t *testing.T) {
 // InitLogger/GetLogger must wire the package-level global logger.
 func TestInitAndGetLogger(t *testing.T) {
 	tmpDir := t.TempDir()
-	paths.Init("", "", tmpDir)
-	t.Cleanup(func() { paths.Init("", "", "") })
+	paths.SetApplicationPathOverrides("", "", tmpDir)
+	t.Cleanup(func() { paths.SetApplicationPathOverrides("", "", "") })
 
 	cfg := &config.LogsConfig{
 		Access:   config.LogConfig{Filename: "access.log"},

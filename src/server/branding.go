@@ -69,7 +69,7 @@ func brandingLocalFile(configured string) (string, bool) {
 // brandingImageHandler serves a configured local branding image. It returns
 // 404 when nothing is configured, when the value is a remote URL (the template
 // links to it directly in that case), or when the file is missing.
-func brandingImageHandler(cfg *config.Config, pick func(*config.Config) string) http.HandlerFunc {
+func brandingImageHandler(cfg *config.ServerConfig, pick func(*config.ServerConfig) string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path, ok := brandingLocalFile(pick(cfg))
 		if !ok {
@@ -85,7 +85,7 @@ func brandingImageHandler(cfg *config.Config, pick func(*config.Config) string) 
 // faviconHandler backs the root /favicon.ico that browsers request without
 // being told to. A configured custom favicon wins; otherwise the embedded
 // default is redirected to so it keeps the immutable asset caching.
-func faviconHandler(cfg *config.Config) http.HandlerFunc {
+func faviconHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if path, ok := brandingLocalFile(cfg.Server.Branding.Favicon); ok {
 			w.Header().Set("Cache-Control", "public, max-age=3600")

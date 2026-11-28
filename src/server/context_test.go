@@ -41,8 +41,8 @@ func TestRequestIDFromContext_Missing(t *testing.T) {
 		assert.Equal(t, "", RequestIDFromContext(context.Background()))
 	})
 
-	t.Run("wrong value type under requestIDKey", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), requestIDKey, 12345)
+	t.Run("unrelated context value", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), contextKey("unrelated"), 12345)
 		assert.Equal(t, "", RequestIDFromContext(ctx))
 	})
 }

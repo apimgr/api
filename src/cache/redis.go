@@ -15,9 +15,10 @@ import (
 // values use the same go-redis/v9 client (Valkey is wire-compatible with
 // Redis), per AI.md PART 12 "Cache Configuration".
 type redisStore struct {
-	client  *redis.Client
-	prefix  string
-	timeout time.Duration
+	client     *redis.Client
+	prefix     string
+	timeout    time.Duration
+	defaultTTL time.Duration
 	// name is the low-cardinality `cache` label value reported by the PART 20
 	// cache metrics: the driver name, never a key or any user-supplied value.
 	name string
@@ -54,10 +55,11 @@ func newRedisStore(cfg config.CacheConfig) (*redisStore, error) {
 	}
 
 	return &redisStore{
-		client:  client,
-		prefix:  cfg.Prefix,
-		timeout: timeout,
-		name:    redisCacheName(cfg.Type),
+		client:     client,
+		prefix:     cfg.Prefix,
+		timeout:    timeout,
+		defaultTTL: parseDuration(cfg.TTL, time.Hour),
+		name:       redisCacheName(cfg.Type),
 	}, nil
 }
 
@@ -172,7 +174,7 @@ func (r *redisStore) CountWindow(ctx context.Context, key string, now time.Time,
 // entries the window trim expired out of the set.
 func (r *redisStore) recordLookup(card, trimmed int64) {
 	debugCacheLog(r.name, card > 0, int(trimmed), 0)
-	mx := metrics.Get()
+	mx := metrics.GetMetrics()
 	if card > 1 {
 		mx.RecordCacheHit(r.name)
 	} else {

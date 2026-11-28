@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/paths"
+	"gopkg.in/yaml.v3"
 )
 
 // initTestPaths points the paths package at fresh temp directories for
@@ -24,10 +26,19 @@ func initTestPaths(t *testing.T) {
 	configDir := t.TempDir()
 	dataDir := t.TempDir()
 	logDir := t.TempDir()
-	paths.Init(configDir, dataDir, logDir)
-	paths.InitBackup(t.TempDir())
+	cacheDir := t.TempDir()
+	backupDir := t.TempDir()
+	t.Setenv("CONFIG_DIR", configDir)
+	t.Setenv("DATA_DIR", dataDir)
+	t.Setenv("LOG_DIR", logDir)
+	t.Setenv("CACHE_DIR", cacheDir)
+	t.Setenv("BACKUP_DIR", backupDir)
+	t.Setenv("DATABASE_DIR", filepath.Join(dataDir, "db"))
+	paths.SetApplicationPathOverrides(configDir, dataDir, logDir)
+	paths.InitCache(cacheDir)
+	paths.InitBackup(backupDir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "db"), 0755))
-	require.NoError(t, database.Init(config.DatabaseConfig{Driver: "sqlite"}, dataDir))
+	require.NoError(t, database.InitDatabase(config.DatabaseConfig{Driver: "sqlite"}, dataDir))
 	t.Cleanup(func() { _ = database.Close() })
 }
 
@@ -58,14 +69,14 @@ func TestSanitizeDatabaseErrorRemovesCredentials(t *testing.T) {
 }
 
 // TestBackupTask_CompliancePasswordRequired covers AI.md PART 21's
-// compliance-mode enforcement: when server.compliance.enabled is true and no
+// compliance-mode enforcement: when any server.compliance standard is true and no
 // backup.encryption_password is configured, the scheduled backup must be
 // blocked rather than writing an unencrypted archive.
 func TestBackupTask_CompliancePasswordRequired(t *testing.T) {
 	initTestPaths(t)
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	require.NoError(t, err)
-	cfg.Server.Compliance.Enabled = true
+	cfg.Server.Compliance.HIPAA = true
 	cfg.Server.Backup.EncryptionPassword = ""
 	require.NoError(t, config.Save(cfg))
 
@@ -81,6 +92,34 @@ func TestBackupTask_CompliancePasswordRequired(t *testing.T) {
 	}
 }
 
+func TestBackupTask_UnreadablePasswordFailsClosedAndAudits(t *testing.T) {
+	initTestPaths(t)
+	activeKey := base64.StdEncoding.EncodeToString([]byte("01234567890123456789012345678901"))
+	otherKey := base64.StdEncoding.EncodeToString([]byte("abcdefghijklmnopqrstuvwxyz123456"))
+	sealed, err := config.EncryptAtRestSecret("backup-secret", otherKey)
+	require.NoError(t, err)
+	secrets := map[string]interface{}{}
+	secrets["server"] = map[string]interface{}{
+		"security": map[string]interface{}{"encryption_key": activeKey, "encryption_key_version": 1},
+		"backup":   map[string]interface{}{"encryption_password": sealed},
+	}
+	data, err := yaml.Marshal(secrets)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(paths.ConfigDir(), "secrets.yml"), data, 0600))
+
+	var events []string
+	s := NewWithOptions(SchedulerOptions{Audit: func(event string, _ map[string]interface{}) {
+		events = append(events, event)
+	}})
+	err = s.dailyBackupTask()
+	require.ErrorIs(t, err, config.ErrBackupPasswordUnreadable)
+	assert.Contains(t, events, "backup.password_unreadable")
+	entries, readErr := os.ReadDir(paths.BackupDir())
+	if readErr == nil {
+		assert.Empty(t, entries, "unreadable password must not produce an unencrypted archive")
+	}
+}
+
 // TestBackupTask_InvalidConfigUsesDefaults verifies the scheduler uses the
 // built-in defaults when an unparsable config file is ignored by the loader.
 func TestBackupTask_InvalidConfigUsesDefaults(t *testing.T) {
@@ -88,28 +127,37 @@ func TestBackupTask_InvalidConfigUsesDefaults(t *testing.T) {
 	configFile := filepath.Join(paths.ConfigDir(), "server.yml")
 	require.NoError(t, os.WriteFile(configFile, []byte("not: valid: yaml: content: [["), 0644))
 
-	require.NoError(t, New().dailyBackupTask())
+	s := New()
+	s.backupDiskThreshold = 100
+	require.NoError(t, s.dailyBackupTask())
 }
 
 // TestBackupTask_IgnoresUndocumentedEnvPassword ensures only the configured
 // secrets.yml value controls unattended backup encryption.
 func TestBackupTask_IgnoresUndocumentedEnvPassword(t *testing.T) {
 	initTestPaths(t)
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	require.NoError(t, err)
-	cfg.Server.Compliance.Enabled = false
+	cfg.Server.Compliance.HIPAA = false
 	cfg.Server.Backup.EncryptionPassword = "config-password"
 	require.NoError(t, config.Save(cfg))
+	paths.InitBackup(t.TempDir())
 
 	t.Setenv("API_BACKUP_PASSWORD", "env-password")
 
-	require.NoError(t, New().dailyBackupTask())
+	s := New()
+	s.backupDiskThreshold = 100
+	require.NoError(t, s.dailyBackupTask())
 
 	entries, err := os.ReadDir(paths.BackupDir())
 	require.NoError(t, err)
 	require.NotEmpty(t, entries, "backup archive should be created")
 	for _, entry := range entries {
 		if filepath.Ext(entry.Name()) == ".enc" {
+			_, err := backup.Verify(filepath.Join(paths.BackupDir(), entry.Name()), "config-password")
+			require.NoError(t, err)
+			_, err = backup.Verify(filepath.Join(paths.BackupDir(), entry.Name()), "env-password")
+			require.Error(t, err)
 			return
 		}
 	}
@@ -121,15 +169,18 @@ func TestBackupTask_IgnoresUndocumentedEnvPassword(t *testing.T) {
 // encrypt the scheduled backup.
 func TestBackupTask_UsesConfigPassword(t *testing.T) {
 	initTestPaths(t)
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	require.NoError(t, err)
-	cfg.Server.Compliance.Enabled = false
+	cfg.Server.Compliance.HIPAA = false
 	cfg.Server.Backup.EncryptionPassword = "config-only-password"
 	require.NoError(t, config.Save(cfg))
+	paths.InitBackup(t.TempDir())
 
 	require.NoError(t, os.Unsetenv("API_BACKUP_PASSWORD"))
 
-	require.NoError(t, New().dailyBackupTask())
+	s := New()
+	s.backupDiskThreshold = 100
+	require.NoError(t, s.dailyBackupTask())
 
 	entries, err := os.ReadDir(paths.BackupDir())
 	require.NoError(t, err)
@@ -141,24 +192,36 @@ func TestBackupTask_UsesConfigPassword(t *testing.T) {
 // replaces the first rather than accumulating files.
 func TestHourlyBackupTask_UsesRollingName(t *testing.T) {
 	initTestPaths(t)
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	require.NoError(t, err)
-	cfg.Server.Compliance.Enabled = false
+	cfg.Server.Compliance.HIPAA = false
 	cfg.Server.Backup.EncryptionPassword = ""
 	require.NoError(t, config.Save(cfg))
+	paths.InitBackup(t.TempDir())
 
 	require.NoError(t, os.Unsetenv("API_BACKUP_PASSWORD"))
 
 	s := New()
+	s.backupDiskThreshold = 100
 	require.NoError(t, s.dailyBackupTask())
 	require.NoError(t, s.hourlyBackupTask())
 	require.NoError(t, s.hourlyBackupTask())
 
 	entries, err := os.ReadDir(paths.BackupDir())
 	require.NoError(t, err)
-	require.Len(t, entries, 2, "hourly incremental should add one rolling file alongside its required full base")
-	assert.Equal(t, "api-hourly.tar.gz", entries[0].Name())
-	assert.True(t, strings.HasPrefix(entries[1].Name(), "api_backup_"))
+	require.Len(t, entries, 2, "first run creates only the full base; hourly incremental is the second archive")
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	assert.Contains(t, names, "api-hourly.tar.gz")
+	var fullBackups []string
+	for _, name := range names {
+		if strings.HasPrefix(name, "api_backup_") {
+			fullBackups = append(fullBackups, name)
+		}
+	}
+	assert.Len(t, fullBackups, 1)
 }
 
 // TestRegisterDefaultTasks_MatchesSpec locks the AI.md PART 18 built-in task
@@ -186,6 +249,7 @@ func TestRegisterDefaultTasks_MatchesSpec(t *testing.T) {
 		"cve_update":       {"0 5 * * *", true, true},
 		"update_check":     {"0 6 * * *", true, true},
 		"token_cleanup":    {"@every 15m", true, false},
+		"ip_block_cleanup": {"@every 1m", true, false},
 		"security_cleanup": {"30 3 * * *", true, false},
 		"keyserver_retry":  {"@every 15m", true, false},
 		"disk_check":       {"@every 5m", true, true},

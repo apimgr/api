@@ -6,8 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"sort"
@@ -18,18 +20,24 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-const dnsCredentialCipherPrefix = "enc:v1:"
+const atRestCipherPrefix = "enc:v1:"
+const dnsCredentialCipherPrefix = atRestCipherPrefix
 
-// EncryptDNSCredential protects one provider credential with the configured
-// AES-256-GCM key. Values already encrypted with the active key are preserved.
-func EncryptDNSCredential(value, encryptionKey string) (string, error) {
+// ErrBackupPasswordUnreadable means the configured backup encryption
+// password is ciphertext that cannot be opened with the current key.
+var ErrBackupPasswordUnreadable = errors.New("backup.password_unreadable")
+
+// EncryptAtRestSecret protects a secret with AES-256-GCM under the configured
+// at-rest key. Values already encrypted under that key are preserved.
+func EncryptAtRestSecret(value, encryptionKey string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
-	if strings.HasPrefix(value, dnsCredentialCipherPrefix) {
-		if _, err := DecryptDNSCredential(value, encryptionKey, ""); err == nil {
+	if strings.HasPrefix(value, atRestCipherPrefix) {
+		if _, err := DecryptAtRestSecret(value, encryptionKey, ""); err == nil {
 			return value, nil
 		}
+		return "", errors.New("cannot encrypt invalid encrypted value")
 	}
 	key, err := decodeEncryptionKey(encryptionKey)
 	if err != nil {
@@ -48,20 +56,18 @@ func EncryptDNSCredential(value, encryptionKey string) (string, error) {
 		return "", err
 	}
 	sealed := aead.Seal(nonce, nonce, []byte(value), nil)
-	return dnsCredentialCipherPrefix + base64.StdEncoding.EncodeToString(sealed), nil
+	return atRestCipherPrefix + base64.StdEncoding.EncodeToString(sealed), nil
 }
 
-// DecryptDNSCredential opens an enc:v1 value with the active key or, during
-// the configured grace period, the retained previous key. Errors never
-// include credential material.
-func DecryptDNSCredential(value, encryptionKey, previousKey string) (string, error) {
-	if !strings.HasPrefix(value, dnsCredentialCipherPrefix) {
+// DecryptAtRestSecret opens an enc:v1 value with the active at-rest key or a
+// retained previous key. Plain values are returned unchanged for migration.
+func DecryptAtRestSecret(value, encryptionKey, previousKey string) (string, error) {
+	if !strings.HasPrefix(value, atRestCipherPrefix) {
 		return value, nil
 	}
-	encoded := strings.TrimPrefix(value, dnsCredentialCipherPrefix)
-	sealed, err := base64.StdEncoding.DecodeString(encoded)
+	sealed, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, atRestCipherPrefix))
 	if err != nil {
-		return "", fmt.Errorf("invalid encrypted DNS credential")
+		return "", errors.New("invalid encrypted value")
 	}
 	for _, candidate := range []string{encryptionKey, previousKey} {
 		key, keyErr := decodeEncryptionKey(candidate)
@@ -82,7 +88,24 @@ func DecryptDNSCredential(value, encryptionKey, previousKey string) (string, err
 			return string(plain), nil
 		}
 	}
-	return "", fmt.Errorf("cannot decrypt DNS credential")
+	return "", errors.New("cannot decrypt encrypted value")
+}
+
+// EncryptDNSCredential protects one provider credential with the configured
+// AES-256-GCM key. Values already encrypted with the active key are preserved.
+func EncryptDNSCredential(value, encryptionKey string) (string, error) {
+	return EncryptAtRestSecret(value, encryptionKey)
+}
+
+// DecryptDNSCredential opens an enc:v1 value with the active key or, during
+// the configured grace period, the retained previous key. Errors never
+// include credential material.
+func DecryptDNSCredential(value, encryptionKey, previousKey string) (string, error) {
+	plain, err := DecryptAtRestSecret(value, encryptionKey, previousKey)
+	if err != nil {
+		return "", errors.New("cannot decrypt DNS credential")
+	}
+	return plain, nil
 }
 
 func decodeEncryptionKey(value string) ([]byte, error) {
@@ -132,6 +155,35 @@ type ServerSecurityConfig struct {
 	// EncryptionKeyPreviousExpires is the legacy expiry paired with the
 	// previous key during migration.
 	EncryptionKeyPreviousExpires string `yaml:"encryption_key_previous_expires,omitempty"`
+}
+
+// NormalizedAllowlist drops invalid or overly broad trusted ranges and
+// returns one indexed warning for each rejected CIDR.
+func (s ServerSecurityConfig) NormalizedAllowlist() ([]AllowlistEntry, []string) {
+	entries := make([]AllowlistEntry, 0, len(s.Allowlist))
+	warnings := make([]string, 0)
+	for index, entry := range s.Allowlist {
+		value := strings.TrimSpace(entry.CIDR)
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			address, addressErr := netip.ParseAddr(value)
+			if addressErr != nil {
+				warnings = append(warnings, fmt.Sprintf("server.security.allowlist[%d].cidr is invalid; skipping entry", index))
+				continue
+			}
+			address = address.Unmap()
+			prefix = netip.PrefixFrom(address, address.BitLen())
+		}
+		prefix = prefix.Masked()
+		bits := prefix.Bits()
+		if (prefix.Addr().Is4() && bits <= 7) || (prefix.Addr().Is6() && bits <= 15) {
+			warnings = append(warnings, fmt.Sprintf("server.security.allowlist[%d].cidr is overly broad; skipping entry", index))
+			continue
+		}
+		entry.CIDR = prefix.String()
+		entries = append(entries, entry)
+	}
+	return entries, warnings
 }
 
 type BlocklistsConfig struct {
@@ -198,7 +250,13 @@ const encryptionKeyGrace = 30 * 24 * time.Hour
 
 // RotateEncryptionKey prepares a new AES-256-GCM key, lets the caller persist
 // recovery material, and then saves the key and its dependent config secrets.
-func RotateEncryptionKey(cfg *Config, prepare func(previousKey, nextKey []byte, until time.Time) error) error {
+func RotateEncryptionKey(cfg *ServerConfig, prepare func(previousKey, nextKey []byte, until time.Time) error) error {
+	if cfg == nil {
+		return errors.New("configuration is required")
+	}
+	if cfg.Server.Backup.EncryptionPasswordUnreadable {
+		return ErrBackupPasswordUnreadable
+	}
 	next, err := randomSecretString(encryptionKeyBytes, true)
 	if err != nil {
 		return err
@@ -247,10 +305,33 @@ type AllowlistEntry struct {
 
 // BlockedIPEntry is one permanently blocked IP or CIDR.
 type BlockedIPEntry struct {
-	CIDR    string    `yaml:"cidr" json:"cidr"`
-	Reason  string    `yaml:"reason" json:"reason"`
-	AddedAt time.Time `yaml:"-" json:"added_at"`
-	AddedBy string    `yaml:"-" json:"added_by"`
+	CIDR        string    `yaml:"cidr" json:"cidr"`
+	Description string    `yaml:"description,omitempty" json:"description,omitempty"`
+	AddedAt     time.Time `yaml:"-" json:"added_at"`
+	AddedBy     string    `yaml:"-" json:"added_by"`
+}
+
+// NormalizedBlockedIPs drops invalid permanent-block entries without failing
+// startup and returns one indexed warning for each rejected CIDR.
+func (s ServerSecurityConfig) NormalizedBlockedIPs() ([]BlockedIPEntry, []string) {
+	entries := make([]BlockedIPEntry, 0, len(s.BlockedIPs))
+	warnings := make([]string, 0)
+	for index, entry := range s.BlockedIPs {
+		value := strings.TrimSpace(entry.CIDR)
+		if prefix, err := netip.ParsePrefix(value); err == nil {
+			entry.CIDR = prefix.Masked().String()
+			entries = append(entries, entry)
+			continue
+		}
+		if address, err := netip.ParseAddr(value); err == nil {
+			address = address.Unmap()
+			entry.CIDR = netip.PrefixFrom(address, address.BitLen()).String()
+			entries = append(entries, entry)
+			continue
+		}
+		warnings = append(warnings, fmt.Sprintf("server.security.blocked_ips[%d].cidr is invalid; skipping entry", index))
+	}
+	return entries, warnings
 }
 
 // AbuseDetectionConfig configures automatic abuse detection and response.
@@ -266,7 +347,26 @@ type AbuseDetectionConfig struct {
 // flood, expressed as a multiple of the configured rate limit.
 type RequestFloodConfig struct {
 	Multiplier    int           `yaml:"multiplier"`
+	Window        time.Duration `yaml:"window"`
 	BlockDuration time.Duration `yaml:"block_duration"`
+}
+
+// Normalized applies the mandatory PART 11 request-flood defaults.
+func (c AbuseDetectionConfig) Normalized() (AbuseDetectionConfig, []string) {
+	warnings := make([]string, 0, 3)
+	if c.RequestFlood.Multiplier <= 0 {
+		c.RequestFlood.Multiplier = 10
+		warnings = append(warnings, "server.security.abuse_detection.request_flood.multiplier must be positive; using 10")
+	}
+	if c.RequestFlood.Window <= 0 {
+		c.RequestFlood.Window = 60 * time.Second
+		warnings = append(warnings, "server.security.abuse_detection.request_flood.window must be positive; using 60s")
+	}
+	if c.RequestFlood.BlockDuration <= 0 {
+		c.RequestFlood.BlockDuration = time.Hour
+		warnings = append(warnings, "server.security.abuse_detection.request_flood.block_duration must be positive; using 1h")
+	}
+	return c, warnings
 }
 
 // defaultServerSecurityConfig returns the PART 11 defaults: no allowlist,
@@ -278,6 +378,7 @@ func defaultServerSecurityConfig() ServerSecurityConfig {
 		AbuseDetection: AbuseDetectionConfig{
 			RequestFlood: RequestFloodConfig{
 				Multiplier:    10,
+				Window:        60 * time.Second,
 				BlockDuration: time.Hour,
 			},
 			AutoBlockIP: true,
@@ -293,26 +394,30 @@ func defaultServerSecurityConfig() ServerSecurityConfig {
 // ensureFirstRunSecrets fills the generated credentials after all config
 // sources have merged. The caller persists them only to secrets.yml; values
 // are never logged.
-func ensureFirstRunSecrets(cfg *Config) bool {
+func ensureFirstRunSecrets(cfg *ServerConfig) (bool, error) {
 	changed := false
 	if cfg.Server.Security.EncryptionKey == "" {
-		if key, err := randomSecretString(encryptionKeyBytes, true); err == nil {
-			cfg.Server.Security.EncryptionKey = key
-			cfg.Server.Security.EncryptionKeyVersion = 1
-			cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.security.encryption_key")
-			changed = true
+		key, err := randomSecretString(encryptionKeyBytes, true)
+		if err != nil {
+			return false, fmt.Errorf("generate server security encryption key: %w", err)
 		}
+		cfg.Server.Security.EncryptionKey = key
+		cfg.Server.Security.EncryptionKeyVersion = 1
+		cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.security.encryption_key")
+		changed = true
 	}
 	if cfg.Server.Security.EncryptionKeyVersion == 0 {
 		cfg.Server.Security.EncryptionKeyVersion = 1
 		changed = true
 	}
 	if cfg.Server.Token == "" {
-		if token, err := randomBase62String(operatorTokenBytes); err == nil {
-			cfg.Server.Token = "adm_" + token
-			cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.token")
-			changed = true
+		token, err := randomBase62String(operatorTokenBytes)
+		if err != nil {
+			return false, fmt.Errorf("generate server operator token: %w", err)
 		}
+		cfg.Server.Token = "adm_" + token
+		cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.token")
+		changed = true
 	}
 	metricsTokens := []*string{
 		&cfg.Server.Metrics.Auth.Tokens.Prometheus,
@@ -325,7 +430,7 @@ func ensureFirstRunSecrets(cfg *Config) bool {
 		}
 		generated, err := randomBase62String(32)
 		if err != nil {
-			continue
+			return false, fmt.Errorf("generate metrics %s token: %w", []string{"prometheus", "grafana", "loki"}[i], err)
 		}
 		*token = "mtr_" + generated
 		cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, []string{
@@ -364,14 +469,14 @@ func ensureFirstRunSecrets(cfg *Config) bool {
 			}
 			generated, err := randomSecretString(32, false)
 			if err != nil {
-				continue
+				return false, fmt.Errorf("generate %s webhook secret: %w", role.name, err)
 			}
 			(*role.cfg)[secretKey] = generated
 			cfg.GeneratedSecrets = append(cfg.GeneratedSecrets, "server.contact."+role.name+".webhooks."+secretKey)
 			changed = true
 		}
 	}
-	return changed
+	return changed, nil
 }
 
 func randomBase62String(length int) (string, error) {

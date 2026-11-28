@@ -1,8 +1,10 @@
 package sysservice
 
 import (
+	"errors"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -44,6 +46,46 @@ func TestReservedSystemIDs(t *testing.T) {
 	for _, id := range []int{200, 400, 500, 899, 100, 111, 169, 180, 979, 1000} {
 		assert.False(t, reservedSystemIDs[id], "id %d must not be reserved", id)
 	}
+}
+
+func TestServiceAccountManagementMarkerRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-account-created")
+	want := serviceAccountManagement{userCreated: true, groupCreated: true}
+	require.NoError(t, writeServiceAccountManagementAt(path, want))
+	got, err := readServiceAccountManagementAt(path)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+}
+
+func TestServiceAccountManagementMarkerPreservesExistingGroupOwnership(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-account-created")
+	want := serviceAccountManagement{userCreated: true, groupCreated: false}
+	require.NoError(t, writeServiceAccountManagementAt(path, want))
+	got, err := readServiceAccountManagementAt(path)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestServiceAccountManagementMarkerRejectsInvalidContents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-account-created")
+	require.NoError(t, os.WriteFile(path, []byte("group\n"), 0o600))
+	_, err := readServiceAccountManagementAt(path)
+	assert.Error(t, err)
+	require.NoError(t, os.WriteFile(path, []byte("user\nforeign\n"), 0o600))
+	_, err = readServiceAccountManagementAt(path)
+	assert.Error(t, err)
+}
+
+func TestUnknownIdentityLookupErrorsAreNarrow(t *testing.T) {
+	assert.True(t, isUnknownUserID(user.UnknownUserIdError(245), 245))
+	assert.False(t, isUnknownUserID(user.UnknownUserIdError(246), 245))
+	assert.False(t, isUnknownUserID(errors.New("NSS unavailable"), 245))
+	assert.True(t, isUnknownGroupID(user.UnknownGroupIdError("245"), 245))
+	assert.False(t, isUnknownGroupID(user.UnknownGroupIdError("246"), 245))
+	assert.False(t, isUnknownGroupID(errors.New("NSS unavailable"), 245))
 }
 
 // findAvailableSystemID must return an ID inside the platform's safe range
@@ -104,6 +146,38 @@ func TestResolveServiceIDsWithoutExistingGroup(t *testing.T) {
 func TestNologinShell(t *testing.T) {
 	got := nologinShell()
 	assert.Contains(t, []string{"/sbin/nologin", "/usr/sbin/nologin"}, got)
+}
+
+func TestValidateExistingServiceAccount(t *testing.T) {
+	tests := []struct {
+		name   string
+		uid    string
+		gid    string
+		group  string
+		shell  string
+		wantOK bool
+	}{
+		{name: "system account with matching group", uid: "500", gid: "300", group: "300", shell: "/usr/sbin/nologin", wantOK: true},
+		{name: "false shell", uid: "500", gid: "300", group: "300", shell: "/usr/bin/false", wantOK: true},
+		{name: "root uid", uid: "0", gid: "300", group: "300", shell: "/usr/sbin/nologin"},
+		{name: "root gid", uid: "500", gid: "0", group: "0", shell: "/usr/sbin/nologin"},
+		{name: "human uid", uid: "1000", gid: "300", group: "300", shell: "/usr/sbin/nologin"},
+		{name: "human gid", uid: "500", gid: "1000", group: "1000", shell: "/usr/sbin/nologin"},
+		{name: "login shell", uid: "500", gid: "300", group: "300", shell: "/bin/sh"},
+		{name: "wrong primary group", uid: "500", gid: "300", group: "301", shell: "/usr/sbin/nologin"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := &user.User{Username: ServiceUserName, Uid: tt.uid, Gid: tt.gid}
+			group := &user.Group{Name: ServiceGroupName, Gid: tt.group}
+			err := validateExistingServiceAccount(account, group, tt.shell)
+			if tt.wantOK {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
 }
 
 // DeleteServiceUser must be idempotent - removing an account that is not

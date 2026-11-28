@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 	_ "time/tzdata"
@@ -28,7 +29,7 @@ const (
 
 // Task represents a scheduled task.
 type Task struct {
-	// Name is the task identifier used everywhere (config key, DB task_id,
+	// Name is the task identifier used everywhere (config key, DB id,
 	// CLI argument).
 	Name string
 	// Title is the human-readable description shown by `scheduler list`.
@@ -62,6 +63,22 @@ type Task struct {
 	failure failureKind
 }
 
+// TaskStatus is the serializable runtime status of one scheduled task. It
+// deliberately excludes the task function and scheduler internals.
+type TaskStatus struct {
+	Name       string    `json:"name"`
+	Title      string    `json:"title"`
+	Schedule   string    `json:"schedule"`
+	LastRun    time.Time `json:"last_run,omitempty"`
+	NextRun    time.Time `json:"next_run"`
+	Enabled    bool      `json:"enabled"`
+	Skippable  bool      `json:"skippable"`
+	LastStatus string    `json:"last_status,omitempty"`
+	LastError  string    `json:"last_error,omitempty"`
+	RunCount   int64     `json:"run_count"`
+	FailCount  int64     `json:"fail_count"`
+}
+
 // Scheduler manages periodic tasks. Per AI.md PART 18 the scheduler itself
 // is always running - only individual tasks can be enabled or disabled.
 type Scheduler struct {
@@ -71,17 +88,18 @@ type Scheduler struct {
 	running bool
 	mu      sync.RWMutex
 
-	opts Options
-	loc  *time.Location
+	opts                SchedulerOptions
+	loc                 *time.Location
+	backupDiskThreshold float64
 }
 
 // New creates a new scheduler with AI.md PART 18 defaults.
 func New() *Scheduler {
-	return NewWithOptions(Options{})
+	return NewWithOptions(SchedulerOptions{})
 }
 
 // NewWithOptions creates a scheduler configured from server.scheduler.
-func NewWithOptions(opts Options) *Scheduler {
+func NewWithOptions(opts SchedulerOptions) *Scheduler {
 	normalized, loc := opts.normalized()
 	return &Scheduler{
 		tasks: make(map[string]*Task),
@@ -94,6 +112,13 @@ func NewWithOptions(opts Options) *Scheduler {
 // Timezone returns the IANA timezone cron schedules are evaluated in.
 func (s *Scheduler) Timezone() string {
 	return s.opts.Timezone
+}
+
+// Running reports whether the scheduler loop is active.
+func (s *Scheduler) Running() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.running
 }
 
 // now returns the current time in the scheduler's configured timezone, so
@@ -153,10 +178,8 @@ func (s *Scheduler) register(task *Task) {
 	task.NextRun = parsed.next(s.now())
 
 	if persisted, perr := database.GetSchedulerTask(task.Name); perr == nil && persisted != nil {
-		task.NextRun = persisted.NextRun
-		task.Enabled = persisted.Enabled
-		if !task.Skippable {
-			task.Enabled = true
+		if persisted.Schedule == task.Schedule {
+			task.NextRun = persisted.NextRun
 		}
 		if persisted.LastRun.Valid {
 			task.LastRun = persisted.LastRun.Time
@@ -166,6 +189,13 @@ func (s *Scheduler) register(task *Task) {
 		task.RunCount = int64(persisted.RunCount)
 		task.FailCount = int64(persisted.FailCount)
 	}
+	// Configuration owns schedule and enabled state; persisted scheduler rows
+	// own only execution history and next-run bookkeeping.
+	if !task.Skippable {
+		task.Enabled = true
+	} else if override, ok := s.opts.overrideFor(task.Name); ok && override.Enabled != nil {
+		task.Enabled = *override.Enabled
+	}
 
 	s.tasks[task.Name] = task
 
@@ -173,8 +203,6 @@ func (s *Scheduler) register(task *Task) {
 		log.Printf("Scheduler: Failed to persist task '%s': %v", task.Name, err)
 	}
 
-	log.Printf("Scheduler: Added task '%s' (schedule: %s, next run: %s, enabled: %v)",
-		task.Name, task.Schedule, task.NextRun.Format(time.RFC3339), task.Enabled)
 }
 
 // RemoveTask removes a task from the scheduler
@@ -237,10 +265,7 @@ func (s *Scheduler) Start() {
 
 	s.runCatchUp()
 
-	s.mu.RLock()
-	taskCount := len(s.tasks)
-	s.mu.RUnlock()
-	log.Printf("Scheduler: Started with %d tasks (timezone: %s)", taskCount, s.opts.Timezone)
+	log.Printf("INFO Scheduler: Started timezone=%s registered_tasks=%s", s.opts.Timezone, strings.Join(s.registeredTaskNames(), ","))
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -256,6 +281,17 @@ func (s *Scheduler) Start() {
 			}
 		}
 	}()
+}
+
+func (s *Scheduler) registeredTaskNames() []string {
+	s.mu.RLock()
+	tasks := make([]string, 0, len(s.tasks))
+	for name := range s.tasks {
+		tasks = append(tasks, name)
+	}
+	s.mu.RUnlock()
+	sort.Strings(tasks)
+	return tasks
 }
 
 // runCatchUp runs or reschedules tasks whose next_run has already elapsed.
@@ -303,10 +339,8 @@ func (s *Scheduler) runCatchUp() {
 	go func() {
 		defer s.wg.Done()
 		for i, task := range toRun {
-			log.Printf("Scheduler: Catching up missed run of task '%s' (was due %s)", task.Name, dueAt[i].Format(time.RFC3339))
-			if err := s.execute(task); err != nil {
-				log.Printf("Scheduler: missed task '%s' failed: %v", task.Name, err)
-			}
+			log.Printf("DEBUG Scheduler: Catching up task=%s scheduled_at=%s", task.Name, dueAt[i].Format(time.RFC3339))
+			_ = s.execute(task)
 		}
 	}()
 }
@@ -396,9 +430,7 @@ func (s *Scheduler) runTask(t *Task) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if err := s.execute(t); err != nil {
-			log.Printf("Scheduler: task '%s' failed: %v", t.Name, err)
-		}
+		_ = s.execute(t)
 	}()
 }
 
@@ -411,7 +443,7 @@ func (s *Scheduler) execute(t *Task) error {
 	t.running = true
 	s.mu.Unlock()
 
-	log.Printf("Scheduler: Running task '%s'", t.Name)
+	log.Printf("DEBUG Scheduler: Running task=%s", t.Name)
 	started := time.Now().In(s.loc)
 	executionID := fmt.Sprintf("%s-%d", t.Name, started.UnixNano())
 
@@ -419,7 +451,7 @@ func (s *Scheduler) execute(t *Task) error {
 	// cardinality stays bounded by the registered task set. Every exit path of
 	// this function passes through the matching end call below, so a failed or
 	// retried run still records its duration and an "error" outcome.
-	taskMetrics := metrics.Get()
+	taskMetrics := metrics.GetMetrics()
 	taskMetrics.RecordSchedulerTaskStart(t.Name)
 
 	runErr := executeTaskSafely(t)
@@ -436,7 +468,7 @@ func (s *Scheduler) execute(t *Task) error {
 		status = "failed"
 		t.FailCount++
 		t.LastError = runErr.Error()
-		log.Printf("Scheduler: Task '%s' failed: %v", t.Name, runErr)
+		log.Printf("WARN Scheduler: Task failed task=%s error=%v", t.Name, runErr)
 
 		delay, retryable := s.opts.retryPolicyFor(t.Name, t.retries)
 		if retryable && t.retries < s.opts.MaxRetries {
@@ -448,12 +480,12 @@ func (s *Scheduler) execute(t *Task) error {
 			t.retries = 0
 			t.NextRun = t.sched.next(completed)
 		} else {
-			log.Printf("Scheduler: Task '%s' exhausted %d retries, resuming normal schedule", t.Name, s.opts.MaxRetries)
+			log.Printf("ERROR Scheduler: Task exhausted retries task=%s retries=%d error=%v", t.Name, s.opts.MaxRetries, runErr)
 			t.retries = 0
 			t.NextRun = t.sched.next(completed)
 		}
 	} else {
-		log.Printf("Scheduler: Task '%s' completed", t.Name)
+		log.Printf("DEBUG Scheduler: Task completed task=%s", t.Name)
 		t.retries = 0
 		t.LastError = ""
 		t.NextRun = t.sched.next(completed)
@@ -572,6 +604,24 @@ func (s *Scheduler) GetTasks() []Task {
 		tasks = append(tasks, *t)
 	}
 	return tasks
+}
+
+// Status returns a serializable snapshot for the authenticated debug endpoint.
+func (s *Scheduler) Status() []TaskStatus {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	statuses := make([]TaskStatus, 0, len(s.tasks))
+	for _, task := range s.tasks {
+		statuses = append(statuses, TaskStatus{
+			Name: task.Name, Title: task.Title, Schedule: task.Schedule,
+			LastRun: task.LastRun, NextRun: task.NextRun, Enabled: task.Enabled,
+			Skippable: task.Skippable, LastStatus: task.LastStatus,
+			LastError: task.LastError, RunCount: task.RunCount, FailCount: task.FailCount,
+		})
+	}
+	sort.Slice(statuses, func(i, j int) bool { return statuses[i].Name < statuses[j].Name })
+	return statuses
 }
 
 // Health reports whether the scheduler is operating correctly, for the

@@ -6,7 +6,7 @@ import (
 	"github.com/apimgr/api/src/config"
 )
 
-func serverBodyLimitMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func serverBodyLimitMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	limit := cfg.Server.Limits.MaxBodySizeBytes()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

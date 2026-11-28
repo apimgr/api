@@ -17,7 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func cliBinaryDownloadHandler(cfg *config.Config) http.HandlerFunc {
+func cliBinaryDownloadHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cfg.CLI.BinaryDownload.RequireAuth {
 			token := bearerToken(r)

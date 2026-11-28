@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -21,15 +22,15 @@ type TrackingConfig struct {
 // trackingIDPatterns validates each platform's identifier format per the
 // PART 12 "Supported Analytics Platforms" table.
 var trackingIDPatterns = map[string]*regexp.Regexp{
-	"google":     regexp.MustCompile(`^(UA-\d{4,10}-\d{1,4}|G-[A-Z0-9]{6,15})$`),
+	"google":     regexp.MustCompile(`^(UA-\d+-\d+|G-[A-Z0-9]+)$`),
 	"matomo":     regexp.MustCompile(`^\d+$`),
 	"piwik":      regexp.MustCompile(`^\d+$`),
-	"owa":        regexp.MustCompile(`^[A-Za-z0-9_-]+$`),
-	"fathom":     regexp.MustCompile(`^[A-Za-z]{6,10}$`),
+	"owa":        regexp.MustCompile(`(?s)^.+$`),
+	"fathom":     regexp.MustCompile(`(?s)^.+$`),
 	"plausible":  regexp.MustCompile(`^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`),
 	"umami":      regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`),
-	"simple":     regexp.MustCompile(`^[A-Za-z0-9.-]*$`),
-	"cloudflare": regexp.MustCompile(`^[0-9a-fA-F]{32}$`),
+	"simple":     regexp.MustCompile(`^.*$`),
+	"cloudflare": regexp.MustCompile(`(?s)^.+$`),
 }
 
 // trackingURLRequired lists the self-hosted-only platforms whose URL must
@@ -53,11 +54,20 @@ func (t TrackingConfig) Enabled() bool {
 	if !known {
 		return false
 	}
+	if kind != "simple" && strings.TrimSpace(t.ID) == "" {
+		return false
+	}
 	if !pattern.MatchString(t.ID) {
 		return false
 	}
 	if trackingURLRequired[kind] && strings.TrimSpace(t.URL) == "" {
 		return false
+	}
+	if strings.TrimSpace(t.URL) != "" {
+		parsed, err := url.Parse(strings.TrimSpace(t.URL))
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.User != nil {
+			return false
+		}
 	}
 	return true
 }

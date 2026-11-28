@@ -5,17 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/apimgr/api/src/cache"
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/health"
 	"github.com/apimgr/api/src/i2p"
+	"github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/tor"
 )
 
@@ -36,8 +40,8 @@ var (
 	startTime = time.Now()
 	// Version information (set from main via ldflags)
 	Version   = "dev"
-	CommitID  = "unknown"
-	BuildDate = "unknown"
+	CommitID  = "N/A"
+	BuildDate = "N/A"
 	// dbPinger for health checks (set from main)
 	dbPinger interface{ PingContext(context.Context) error }
 	// schedulerProbe reports the internal scheduler's health (set from main).
@@ -67,6 +71,7 @@ var (
 	lifecycleMu sync.RWMutex
 	// maintenanceMode reports whether maintenance mode is currently active
 	maintenanceMode bool
+	maintenanceInfo *MaintenanceInfo
 	// shuttingDown reports whether a graceful shutdown is in progress
 	shuttingDown bool
 	// pendingRestart reports whether a config change requires a restart
@@ -80,9 +85,10 @@ var (
 type HealthResponse struct {
 	Project ProjectInfo `json:"project"`
 
-	Status         string   `json:"status"`
-	PendingRestart bool     `json:"pending_restart,omitempty"`
-	RestartReason  []string `json:"restart_reason,omitempty"`
+	Status         string           `json:"status"`
+	PendingRestart bool             `json:"pending_restart,omitempty"`
+	RestartReason  []string         `json:"restart_reason,omitempty"`
+	Maintenance    *MaintenanceInfo `json:"maintenance,omitempty"`
 
 	Version   string    `json:"version"`
 	GoVersion string    `json:"go_version"`
@@ -95,6 +101,21 @@ type HealthResponse struct {
 	Features FeaturesInfo `json:"features"`
 	Checks   ChecksInfo   `json:"checks"`
 	Stats    StatsInfo    `json:"stats"`
+}
+
+type MaintenanceInfo struct {
+	Reason      string          `json:"reason"`
+	Message     string          `json:"message"`
+	Since       time.Time       `json:"since"`
+	SelfHealing SelfHealingInfo `json:"self_healing"`
+}
+
+type SelfHealingInfo struct {
+	Enabled     bool       `json:"enabled"`
+	Exhausted   bool       `json:"exhausted"`
+	Attempts    int        `json:"attempts"`
+	LastAttempt *time.Time `json:"last_attempt"`
+	NextAttempt *time.Time `json:"next_attempt"`
 }
 
 // ProjectInfo is sourced from branding config (PART 16)
@@ -121,6 +142,7 @@ type FeaturesInfo struct {
 type TorInfo struct {
 	Enabled  bool   `json:"enabled"`
 	Running  bool   `json:"running"`
+	State    string `json:"state"`
 	Status   string `json:"status"`
 	Hostname string `json:"hostname"`
 }
@@ -145,6 +167,27 @@ type ChecksInfo struct {
 	Tor       string         `json:"tor,omitempty"`
 	I2P       string         `json:"i2p,omitempty"`
 	Datasets  []health.Check `json:"-"`
+}
+
+// TaggedResponseFields exposes the fixed health fields and the registry's
+// explicitly declared dataset keys to the PART 11 response serializer.
+func (c ChecksInfo) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{
+		{Name: "database", Value: c.Database},
+		{Name: "cache", Value: c.Cache},
+		{Name: "disk", Value: c.Disk},
+		{Name: "scheduler", Value: c.Scheduler},
+	}
+	if c.Tor != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "tor", Value: c.Tor})
+	}
+	if c.I2P != "" {
+		fields = append(fields, sanitize.TaggedField{Name: "i2p", Value: c.I2P})
+	}
+	for _, dataset := range c.Datasets {
+		fields = append(fields, sanitize.TaggedField{Name: dataset.Key, Value: dataset.Status})
+	}
+	return fields
 }
 
 func (c ChecksInfo) MarshalJSON() ([]byte, error) {
@@ -191,16 +234,6 @@ type StatsInfo struct {
 	RequestsTotal int64 `json:"requests_total"`
 	Requests24h   int64 `json:"requests_24h"`
 	ActiveConns   int   `json:"active_connections"`
-}
-
-// VersionResponse represents the version endpoint response
-type VersionResponse struct {
-	Version   string `json:"version"`
-	CommitID  string `json:"commit_id"`
-	BuildDate string `json:"build_date"`
-	GoVersion string `json:"go_version"`
-	Platform  string `json:"platform"`
-	Arch      string `json:"arch"`
 }
 
 // SetDatabase sets the database connection for health checks
@@ -250,6 +283,51 @@ func SetMaintenanceMode(enabled bool) {
 	lifecycleMu.Lock()
 	defer lifecycleMu.Unlock()
 	maintenanceMode = enabled
+	if !enabled {
+		maintenanceInfo = nil
+	} else if maintenanceInfo == nil {
+		maintenanceInfo = &MaintenanceInfo{Reason: "maintenance", Message: "Server is in maintenance mode", Since: time.Now().UTC(), SelfHealing: SelfHealingInfo{Enabled: true}}
+	}
+}
+
+// SetMaintenanceState publishes detailed maintenance guidance in health
+// responses. Passing nil clears maintenance mode.
+func SetMaintenanceState(info *MaintenanceInfo) {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+	if info == nil {
+		maintenanceInfo = nil
+		maintenanceMode = false
+		return
+	}
+	copyOfInfo := *info
+	copyOfInfo.SelfHealing = cloneSelfHealingInfo(info.SelfHealing)
+	maintenanceInfo = &copyOfInfo
+	maintenanceMode = true
+}
+
+// MaintenanceState returns a copy of the current health maintenance details.
+func MaintenanceState() *MaintenanceInfo {
+	lifecycleMu.RLock()
+	defer lifecycleMu.RUnlock()
+	if maintenanceInfo == nil {
+		return nil
+	}
+	copyOfInfo := *maintenanceInfo
+	copyOfInfo.SelfHealing = cloneSelfHealingInfo(maintenanceInfo.SelfHealing)
+	return &copyOfInfo
+}
+
+func cloneSelfHealingInfo(info SelfHealingInfo) SelfHealingInfo {
+	if info.LastAttempt != nil {
+		last := *info.LastAttempt
+		info.LastAttempt = &last
+	}
+	if info.NextAttempt != nil {
+		next := *info.NextAttempt
+		info.NextAttempt = &next
+	}
+	return info
 }
 
 // SetShuttingDown records that a graceful shutdown has begun, so health
@@ -277,19 +355,24 @@ func SetPendingRestart(pending bool, reason []string) {
 // lifecycleState returns a consistent snapshot of the process lifecycle
 // state. The returned slice is a copy, so callers can hand it to the JSON
 // encoder without racing later writers.
-func lifecycleState() (maintenance, shutdown, pending bool, reason []string) {
+func lifecycleState() (maintenance, shutdown, pending bool, reason []string, maintenanceDetails *MaintenanceInfo) {
 	lifecycleMu.RLock()
 	defer lifecycleMu.RUnlock()
 	if pendingRestart && len(restartReason) > 0 {
 		reason = append([]string(nil), restartReason...)
 	}
-	return maintenanceMode, shuttingDown, pendingRestart, reason
+	if maintenanceInfo != nil {
+		copyOfInfo := *maintenanceInfo
+		copyOfInfo.SelfHealing = cloneSelfHealingInfo(maintenanceInfo.SelfHealing)
+		maintenanceDetails = &copyOfInfo
+	}
+	return maintenanceMode, shuttingDown, pendingRestart, reason, maintenanceDetails
 }
 
 // BuildHealthResponse assembles the canonical health response from config and
 // live subsystem checks. Exported so it can be reused by both the frontend
 // (/server/healthz) and API (/api/{api_version}/server/healthz) routes.
-func BuildHealthResponse(cfg *config.Config) HealthResponse {
+func BuildHealthResponse(cfg *config.ServerConfig) HealthResponse {
 	torInfo := torFeature()
 	i2pInfo := i2pFeature()
 
@@ -303,7 +386,10 @@ func BuildHealthResponse(cfg *config.Config) HealthResponse {
 		Datasets:  health.Snapshot(),
 	}
 
-	maintenance, shutdown, pending, reason := lifecycleState()
+	maintenance, shutdown, pending, reason, maintenanceDetails := lifecycleState()
+	if maintenanceDetails != nil && strings.HasPrefix(maintenanceDetails.Reason, "database_") {
+		checks.Database = "error"
+	}
 
 	requestsTotal, requests24h, activeConns := statsSnapshot()
 
@@ -316,6 +402,7 @@ func BuildHealthResponse(cfg *config.Config) HealthResponse {
 		Status:         resolveStatus(checks, maintenance, shutdown, pending),
 		PendingRestart: pending,
 		RestartReason:  reason,
+		Maintenance:    maintenanceDetails,
 		Version:        Version,
 		GoVersion:      runtime.Version(),
 		Build: BuildInfo{
@@ -324,7 +411,7 @@ func BuildHealthResponse(cfg *config.Config) HealthResponse {
 		},
 		Uptime:    getUptime(),
 		Mode:      cfg.Server.Mode,
-		Timestamp: time.Now().UTC(),
+		Timestamp: time.Now().UTC().Truncate(time.Second),
 		Features: FeaturesInfo{
 			Tor:   torInfo,
 			I2P:   i2pInfo,
@@ -406,14 +493,18 @@ func healthHTTPStatus(status string) int {
 // htmlDefault is true (frontend mount only). The JSON body is BARE on every
 // route in every state — no {ok, data} envelope (PART 13 envelope exception);
 // the HTTP status code and the top-level status field carry the health state.
-func ServerHealthz(cfg *config.Config, htmlDefault bool, htmlRenderer ...func(http.ResponseWriter, *http.Request, int, HealthResponse)) http.HandlerFunc {
+func ServerHealthz(cfg *config.ServerConfig, htmlDefault bool, htmlRenderer ...func(http.ResponseWriter, *http.Request, int, HealthResponse)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		response := BuildHealthResponse(cfg)
 		code := healthHTTPStatus(response.Status)
 
 		switch negotiateHealthFormat(r, htmlDefault) {
 		case "text":
-			writeHealthText(w, code, response)
+			if htmlDefault {
+				writeHealthFrontendText(w, r, code, response)
+			} else {
+				writeHealthText(w, code, response)
+			}
 		case "html":
 			if len(htmlRenderer) == 0 || htmlRenderer[0] == nil {
 				http.Error(w, i18n.Translate(i18n.LangFromRequest(r), "errors.server_error"), http.StatusInternalServerError)
@@ -486,7 +577,9 @@ func isNonInteractiveClient(r *http.Request) bool {
 func writeHealthJSON(w http.ResponseWriter, code int, response HealthResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(response)
+	if err := sanitize.WriteTaggedJSON(w, response, mode.IsAppModeProd()); err != nil {
+		slog.Error("failed to write health JSON response", "error", err)
+	}
 }
 
 func writeHealthText(w http.ResponseWriter, code int, r HealthResponse) {
@@ -506,6 +599,24 @@ func writeHealthText(w http.ResponseWriter, code int, r HealthResponse) {
 			_, _ = fmt.Fprintf(w, "restart_reason: %s\n", strings.Join(r.RestartReason, ", "))
 		}
 	}
+	if r.Maintenance != nil {
+		_, _ = fmt.Fprintf(w, "maintenance.reason: %s\n", r.Maintenance.Reason)
+		_, _ = fmt.Fprintf(w, "maintenance.message: %s\n", r.Maintenance.Message)
+		_, _ = fmt.Fprintf(w, "maintenance.since: %s\n", r.Maintenance.Since.UTC().Format(time.RFC3339))
+		_, _ = fmt.Fprintf(w, "maintenance.self_healing.enabled: %t\n", r.Maintenance.SelfHealing.Enabled)
+		_, _ = fmt.Fprintf(w, "maintenance.self_healing.exhausted: %t\n", r.Maintenance.SelfHealing.Exhausted)
+		_, _ = fmt.Fprintf(w, "maintenance.self_healing.attempts: %d\n", r.Maintenance.SelfHealing.Attempts)
+		if r.Maintenance.SelfHealing.LastAttempt == nil {
+			_, _ = fmt.Fprintln(w, "maintenance.self_healing.last_attempt: null")
+		} else {
+			_, _ = fmt.Fprintf(w, "maintenance.self_healing.last_attempt: %s\n", r.Maintenance.SelfHealing.LastAttempt.UTC().Format(time.RFC3339))
+		}
+		if r.Maintenance.SelfHealing.NextAttempt == nil {
+			_, _ = fmt.Fprintln(w, "maintenance.self_healing.next_attempt: null")
+		} else {
+			_, _ = fmt.Fprintf(w, "maintenance.self_healing.next_attempt: %s\n", r.Maintenance.SelfHealing.NextAttempt.UTC().Format(time.RFC3339))
+		}
+	}
 
 	_, _ = fmt.Fprint(w, "# 3. Version & build\n")
 	_, _ = fmt.Fprintf(w, "version: %s\n", r.Version)
@@ -519,17 +630,13 @@ func writeHealthText(w http.ResponseWriter, code int, r HealthResponse) {
 	_, _ = fmt.Fprintf(w, "timestamp: %s\n", r.Timestamp.Format(time.RFC3339))
 
 	_, _ = fmt.Fprint(w, "# 5. Features\n")
-	_, _ = fmt.Fprintf(w, "features.tor.enabled: %t\n", r.Features.Tor.Enabled)
-	_, _ = fmt.Fprintf(w, "features.tor.running: %t\n", r.Features.Tor.Running)
-	_, _ = fmt.Fprintf(w, "features.tor.status: %s\n", r.Features.Tor.Status)
-	_, _ = fmt.Fprintf(w, "features.tor.hostname: %s\n", r.Features.Tor.Hostname)
-	_, _ = fmt.Fprintf(w, "features.i2p.enabled: %t\n", r.Features.I2P.Enabled)
-	_, _ = fmt.Fprintf(w, "features.i2p.running: %t\n", r.Features.I2P.Running)
-	_, _ = fmt.Fprintf(w, "features.i2p.status: %s\n", r.Features.I2P.Status)
-	_, _ = fmt.Fprintf(w, "features.i2p.state: %s\n", r.Features.I2P.State)
-	_, _ = fmt.Fprintf(w, "features.i2p.hostname: %s\n", r.Features.I2P.Hostname)
-	_, _ = fmt.Fprintf(w, "features.i2p.provider: %s\n", r.Features.I2P.Provider)
-	_, _ = fmt.Fprintf(w, "features.geoip: %t\n", r.Features.GeoIP)
+	writeAPIHealthFeature(w, "tor", r.Features.Tor.Status, r.Features.Tor.Hostname, "", r.Features.Tor.State)
+	writeAPIHealthFeature(w, "i2p", r.Features.I2P.Status, r.Features.I2P.Hostname, r.Features.I2P.Provider, r.Features.I2P.State)
+	geoIPStatus := "disabled"
+	if r.Features.GeoIP {
+		geoIPStatus = "enabled"
+	}
+	_, _ = fmt.Fprintf(w, "features.geoip: %s\n", geoIPStatus)
 
 	_, _ = fmt.Fprint(w, "# 6. Checks\n")
 	_, _ = fmt.Fprintf(w, "checks.database: %s\n", r.Checks.Database)
@@ -552,6 +659,152 @@ func writeHealthText(w http.ResponseWriter, code int, r HealthResponse) {
 	_, _ = fmt.Fprintf(w, "stats.requests_total: %d\n", r.Stats.RequestsTotal)
 	_, _ = fmt.Fprintf(w, "stats.requests_24h: %d\n", r.Stats.Requests24h)
 	_, _ = fmt.Fprintf(w, "stats.active_connections: %d\n", r.Stats.ActiveConns)
+}
+
+func writeAPIHealthFeature(w http.ResponseWriter, name, status, hostname, provider, state string) {
+	_, _ = fmt.Fprintf(w, "features.%s: %s", name, status)
+	if hostname != "" {
+		_, _ = fmt.Fprintf(w, " %s", hostname)
+	}
+	if provider != "" && provider != "none" {
+		_, _ = fmt.Fprintf(w, " provider=%s", provider)
+	}
+	if state != "" {
+		_, _ = fmt.Fprintf(w, " state=%s", state)
+	}
+	_, _ = fmt.Fprintln(w)
+}
+
+func writeHealthFrontendText(w http.ResponseWriter, r *http.Request, code int, response HealthResponse) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(code)
+	lang := i18n.LangFromRequest(r)
+	if response.Project.Tagline == "" {
+		_, _ = fmt.Fprintln(w, response.Project.Name)
+	} else {
+		_, _ = fmt.Fprintf(w, "%s - %s\n", response.Project.Name, response.Project.Tagline)
+	}
+	_, _ = fmt.Fprintln(w)
+	_, _, statusKey := HealthStatusPresentation(response.Status)
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.field.status"), i18n.Translate(lang, statusKey))
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.field.version"), response.Version)
+	buildDate := response.Build.Date
+	if builtAt, err := time.Parse(time.RFC3339, buildDate); err == nil {
+		buildDate = humanHealthTimestamp(builtAt)
+	}
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.field.build_commit"), response.Build.Commit+" ("+buildDate+")")
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.field.go_version"), response.GoVersion)
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.field.uptime"), humanHealthUptime(time.Since(startTime)))
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.field.mode"), i18n.Translate(lang, "health.mode."+response.Mode))
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.field.timestamp"), humanHealthTimestamp(response.Timestamp))
+
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, i18n.Translate(lang, "health.section.features"))
+	writeFrontendHealthFeature(w, lang, "tor", response.Features.Tor.Enabled, response.Features.Tor.Status, response.Features.Tor.Hostname)
+	writeFrontendHealthFeature(w, lang, "i2p", response.Features.I2P.Enabled, response.Features.I2P.Status, response.Features.I2P.Hostname)
+	geoIPStatus := i18n.Translate(lang, "health.feature_status.disabled")
+	if response.Features.GeoIP {
+		geoIPStatus = i18n.Translate(lang, "health.feature_status.enabled")
+	}
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.feature.geoip"), geoIPStatus)
+
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, i18n.Translate(lang, "health.section.checks"))
+	coreChecks := []struct{ key, value string }{
+		{"database", response.Checks.Database}, {"cache", response.Checks.Cache},
+		{"disk", response.Checks.Disk}, {"scheduler", response.Checks.Scheduler},
+		{"tor", response.Checks.Tor}, {"i2p", response.Checks.I2P},
+	}
+	for _, check := range coreChecks {
+		if check.value != "" {
+			writeFrontendHealthField(w, i18n.Translate(lang, "health.check."+check.key), i18n.Translate(lang, "health.check_status."+check.value))
+		}
+	}
+	for _, check := range response.Checks.Datasets {
+		writeFrontendHealthField(w, healthDatasetLabel(lang, check.Key), i18n.Translate(lang, "health.check_status."+check.Status))
+	}
+
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, i18n.Translate(lang, "health.section.stats"))
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.stat.requests_total"), groupedHealthCount(response.Stats.RequestsTotal))
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.stat.requests_24h"), groupedHealthCount(response.Stats.Requests24h))
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.stat.active_connections"), groupedHealthCount(int64(response.Stats.ActiveConns)))
+}
+
+func writeFrontendHealthField(w http.ResponseWriter, label, value string) {
+	_, _ = fmt.Fprintf(w, "%-24s %s\n", label+":", value)
+}
+
+func writeFrontendHealthFeature(w http.ResponseWriter, lang, key string, enabled bool, status, hostname string) {
+	statusKey := "health.feature_status." + status
+	if !enabled {
+		statusKey = "health.feature_status.disabled"
+	}
+	value := i18n.Translate(lang, statusKey)
+	if hostname != "" {
+		value += " - " + hostname
+	}
+	writeFrontendHealthField(w, i18n.Translate(lang, "health.feature."+key), value)
+}
+
+func healthDatasetLabel(lang, key string) string {
+	switch {
+	case key == "cve_nvd", key == "trivy_db":
+		return i18n.Translate(lang, "health.check."+key)
+	case strings.HasPrefix(key, "blocklist_"):
+		return i18n.TranslateFormat(lang, "health.check.blocklist_source", map[string]string{"source_id": strings.TrimPrefix(key, "blocklist_")})
+	default:
+		return i18n.TranslateFormat(lang, "health.check.unknown", map[string]string{"check_id": key})
+	}
+}
+
+func humanHealthTimestamp(value time.Time) string {
+	return value.UTC().Format("January 02, 2006 at 15:04:05 MST")
+}
+
+func humanHealthUptime(duration time.Duration) string {
+	if duration < 0 {
+		duration = 0
+	}
+	days := int(duration.Hours()) / 24
+	hours := int(duration.Hours()) % 24
+	minutes := int(duration.Minutes()) % 60
+	seconds := int(duration.Seconds())
+	switch {
+	case days > 0:
+		return healthUnitCount(days, "day") + optionalHealthUnitCount(hours, "hour")
+	case hours > 0:
+		return healthUnitCount(hours, "hour") + optionalHealthUnitCount(minutes, "minute")
+	case minutes > 0:
+		return healthUnitCount(minutes, "minute")
+	default:
+		return healthUnitCount(seconds, "second")
+	}
+}
+
+func healthUnitCount(value int, unit string) string {
+	if value != 1 {
+		unit += "s"
+	}
+	return strconv.Itoa(value) + " " + unit
+}
+
+func optionalHealthUnitCount(value int, unit string) string {
+	if value == 0 {
+		return ""
+	}
+	return " " + healthUnitCount(value, unit)
+}
+
+func groupedHealthCount(value int64) string {
+	if value < 0 {
+		return strconv.FormatInt(value, 10)
+	}
+	text := strconv.FormatInt(value, 10)
+	for index := len(text) - 3; index > 0; index -= 3 {
+		text = text[:index] + "," + text[index:]
+	}
+	return text
 }
 
 // healthBanner maps a PART 13 status value onto its banner class, icon, and translation key.
@@ -594,21 +847,6 @@ func HumanizeHealthCheckKey(key string) string {
 	return humanizeCheckKey(key)
 }
 
-// HandleVersion handles /api/v1/version endpoint
-func HandleVersion(w http.ResponseWriter, r *http.Request) {
-	response := VersionResponse{
-		Version:   Version,
-		CommitID:  CommitID,
-		BuildDate: BuildDate,
-		GoVersion: runtime.Version(),
-		Platform:  runtime.GOOS,
-		Arch:      runtime.GOARCH,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
-}
-
 // UptimeSeconds returns server uptime in whole seconds, for callers (such as
 // the GraphQL resolvers) that need a numeric value rather than the
 // human-readable string used by the REST/HTML health endpoint.
@@ -618,7 +856,7 @@ func UptimeSeconds() int64 {
 
 // Status reports the overall health status using the same component checks
 // and lifecycle state as the REST health endpoint, for callers that don't
-// have a *config.Config (such as the GraphQL resolvers).
+// have a *config.ServerConfig (such as the GraphQL resolvers).
 func Status() string {
 	checks := ChecksInfo{
 		Database:  checkDatabase(),
@@ -627,7 +865,7 @@ func Status() string {
 		Scheduler: checkScheduler(),
 		Datasets:  health.Snapshot(),
 	}
-	maintenance, shutdown, pending, _ := lifecycleState()
+	maintenance, shutdown, pending, _, _ := lifecycleState()
 	return resolveStatus(checks, maintenance, shutdown, pending)
 }
 
@@ -669,19 +907,50 @@ func checkScheduler() string {
 // binary was never found and the feature is simply off.
 func torFeature() TorInfo {
 	if torProbe != nil {
-		return torProbe()
+		return normalizeTorInfo(torProbe())
 	}
 
 	manager := tor.Get()
 	if manager == nil {
-		return TorInfo{Status: "disabled"}
+		return TorInfo{State: "no_provider", Status: "disabled"}
 	}
 
 	enabled, running, status, hostname := manager.StatusSnapshot()
 	if !enabled {
-		return TorInfo{Status: "disabled"}
+		return TorInfo{State: "no_provider", Status: "disabled"}
 	}
-	return TorInfo{Enabled: enabled, Running: running, Status: status, Hostname: hostname}
+	return normalizeTorInfo(TorInfo{Enabled: enabled, Running: running, Status: status, Hostname: hostname})
+}
+
+func normalizeTorInfo(info TorInfo) TorInfo {
+	if !info.Enabled {
+		info.Running = false
+		info.Status = "disabled"
+		info.State = "no_provider"
+		info.Hostname = ""
+		return info
+	}
+	if info.Running {
+		info.State = "running"
+		info.Status = "healthy"
+		return info
+	}
+	switch info.State {
+	case "starting", "building":
+		info.Status = "starting"
+	case "error", "unavailable":
+		info.State = "error"
+		info.Status = "unavailable"
+	default:
+		if info.Status == "starting" {
+			info.State = "starting"
+		} else {
+			info.State = "error"
+			info.Status = "unavailable"
+		}
+	}
+	info.Hostname = ""
+	return info
 }
 
 // i2pFeature reports the eepsite state (PART 31.2). I2P is opt-in, so without
@@ -693,7 +962,7 @@ func i2pFeature() I2PInfo {
 		info = i2pProbe()
 	} else if manager := i2p.Get(); manager != nil {
 		snapshot := manager.Snapshot()
-		info = I2PInfo{Enabled: snapshot.Enabled, Running: snapshot.Running, Status: normalizeI2PHealthStatus(i2pLifecycleState(snapshot.State)), State: string(snapshot.State), Hostname: snapshot.Address, Provider: string(snapshot.Provider)}
+		info = I2PInfo{Enabled: snapshot.Enabled, Running: snapshot.Running, Status: normalizeI2PHealthStatus(i2pLifecycleState(snapshot.I2PState)), State: string(snapshot.I2PState), Hostname: snapshot.Address, Provider: string(snapshot.Provider)}
 	} else {
 		return I2PInfo{Status: "disabled", State: "disabled", Provider: "none"}
 	}
@@ -757,7 +1026,7 @@ func normalizeI2PHealthStatus(state i2pLifecycleState) string {
 // geoipFeature reports whether GeoIP lookups are actually available
 // (PART 19). The configured toggle is authoritative for "off"; a registered
 // probe can additionally report "on in config but not loaded yet".
-func geoipFeature(cfg *config.Config) bool {
+func geoipFeature(cfg *config.ServerConfig) bool {
 	if !cfg.Server.GeoIP.Enabled {
 		return false
 	}

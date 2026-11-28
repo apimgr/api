@@ -19,13 +19,12 @@ func replaceBinary(currentPath, newBinaryPath string) error {
 		return fmt.Errorf("failed to stat current binary: %w", err)
 	}
 
-	// Atomic rename: new binary replaces current.
+	if err := os.Chmod(newBinaryPath, info.Mode()); err != nil {
+		return fmt.Errorf("failed to set replacement permissions: %w", err)
+	}
+	// Atomic rename: new binary replaces current after its mode is prepared.
 	if err := os.Rename(newBinaryPath, currentPath); err != nil {
 		return fmt.Errorf("failed to replace binary: %w", err)
-	}
-
-	if err := os.Chmod(currentPath, info.Mode()); err != nil {
-		return fmt.Errorf("failed to restore permissions: %w", err)
 	}
 
 	return nil

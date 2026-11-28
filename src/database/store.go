@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/apimgr/api/src/config"
+	"github.com/apimgr/api/src/critical"
 	"github.com/apimgr/api/src/metrics"
 )
 
@@ -21,6 +23,30 @@ import (
 type Store struct {
 	writeDB *sql.DB
 	readDB  *sql.DB
+}
+
+var maintenanceProbeSequence atomic.Uint64
+
+// ProbeServerDBWrite verifies a transactional write and rollback-safe cleanup
+// against the server database without retaining a row after the transaction.
+func ProbeServerDBWrite(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	db := GetServerDB()
+	if db == nil {
+		return errors.New("database handle is unavailable")
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	key := fmt.Sprintf("__maintenance_probe_%d_%d", time.Now().UnixNano(), maintenanceProbeSequence.Add(1))
+	return withWriteTransaction(probeCtx, db, func(tx *sql.Tx) error {
+		if _, err := execTxContext(probeCtx, tx, `INSERT INTO app_secrets (name, value) VALUES (?, 'maintenance-probe')`, key); err != nil {
+			return err
+		}
+		_, err := execTxContext(probeCtx, tx, `DELETE FROM app_secrets WHERE name = ?`, key)
+		return err
+	})
 }
 
 // SnapshotServerSQLite writes a transactionally consistent snapshot of the
@@ -152,7 +178,8 @@ func (s *Store) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	if fn == nil {
 		return errors.New("database write callback is required")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	parentCtx := ctx
+	ctx, cancel := context.WithTimeout(parentCtx, 10*time.Second)
 	defer cancel()
 	caller := "unknown"
 	if pc, _, _, ok := runtime.Caller(1); ok {
@@ -162,7 +189,7 @@ func (s *Store) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	}
 	var waited time.Duration
 	defer func() {
-		metrics.Get().ObserveDBWriteWait(waited)
+		metrics.GetMetrics().ObserveDBWriteWait(waited)
 		if waited > time.Second {
 			slog.Warn("db.busy", "wait_ms", waited.Milliseconds(), "caller", caller)
 		}
@@ -174,11 +201,17 @@ func (s *Store) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 		waited += attemptWait
 		if !isSQLiteBusy(lastErr) || ctx.Err() != nil {
 			if ctx.Err() != nil {
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) && parentCtx.Err() == nil {
+					critical.ReportWriteFailure("database_write")
+				}
 				return ctx.Err()
+			}
+			if isCriticalDatabaseWriteError(lastErr) {
+				critical.ReportWriteFailure("database_write")
 			}
 			return lastErr
 		}
-		metrics.Get().RecordDBBusy()
+		metrics.GetMetrics().RecordDBBusy()
 		if attempt == 4 {
 			break
 		}
@@ -190,8 +223,14 @@ func (s *Store) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 			if !timer.Stop() {
 				<-timer.C
 			}
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) && parentCtx.Err() == nil {
+				critical.ReportWriteFailure("database_write")
+			}
 			return ctx.Err()
 		}
+	}
+	if isCriticalDatabaseWriteError(lastErr) {
+		critical.ReportWriteFailure("database_write")
 	}
 	return lastErr
 }
@@ -223,14 +262,40 @@ func withWriteTransaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) erro
 			err = store.Write(ctx, fn)
 		} else {
 			err = writeDatabaseTransaction(ctx, db, fn)
+			if isCriticalDatabaseWriteError(err) {
+				critical.ReportWriteFailure("database_write")
+			}
 		}
 	} else {
 		err = writeDatabaseTransaction(ctx, db, fn)
+		if isCriticalDatabaseWriteError(err) {
+			critical.ReportWriteFailure("database_write")
+		}
 	}
 	if err == nil {
 		refreshServerCacheAfterWrite(ctx, db)
 	}
 	return err
+}
+
+func isCriticalDatabaseWriteError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"sqlite_full", "database is full", "disk is full", "disk quota", "no space left",
+		"sqlite_ioerr", "disk i/o error", "i/o error", "sqlite_readonly", "readonly database",
+		"read-only database", "unable to open database file", "database handle is unavailable", "database is closed",
+		"permission denied", "access is denied", "no such file or directory", "connection refused", "connection reset", "connection closed", "connection is unavailable",
+		"server closed", "failed to connect", "broken pipe", "i/o timeout", "database is locked",
+		"database table is locked", "sqlite_busy", "sqlite_locked",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func writeDatabaseTransaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {

@@ -8,12 +8,12 @@
 // must never prevent the server from starting or keep it from running.
 package tor
 
-// Config holds the operator-configurable Tor settings. It mirrors
+// TorConfig holds the operator-configurable Tor settings. It mirrors
 // AI.md PART 31's TorConfig field set and is decoupled from
-// src/config.Config (the YAML-tagged config struct) the same way
-// src/ssl.Config is decoupled from src/config's SSL settings - the caller
+// src/config.ServerConfig (the YAML-tagged config struct) the same way
+// src/ssl.SSLConfig is decoupled from src/config's SSL settings - the caller
 // (src/main.go) maps config.TorConfig fields into this struct.
-type Config struct {
+type TorConfig struct {
 	// Binary is the path to the tor executable. Empty means auto-detect via
 	// config > PATH > common per-OS install locations.
 	Binary string
@@ -67,8 +67,8 @@ type Config struct {
 }
 
 // DefaultConfig returns AI.md PART 31's documented default Tor settings.
-func DefaultConfig() Config {
-	return Config{
+func DefaultConfig() TorConfig {
+	return TorConfig{
 		Binary:                    "",
 		UseNetwork:                false,
 		MaxCircuits:               32,

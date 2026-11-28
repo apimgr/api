@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -38,16 +39,16 @@ func IsElevated() bool {
 	return startedElevated
 }
 
-// Init initializes the paths with optional overrides
-func Init(config, data, logs string) {
-	if config != "" {
-		configDir = config
+// SetApplicationPathOverrides sets non-empty configuration, data, and log directory overrides.
+func SetApplicationPathOverrides(configurationDirectory, dataDirectory, logDirectory string) {
+	if configurationDirectory != "" {
+		configDir = configurationDirectory
 	}
-	if data != "" {
-		dataDir = data
+	if dataDirectory != "" {
+		dataDir = dataDirectory
 	}
-	if logs != "" {
-		logsDir = logs
+	if logDirectory != "" {
+		logsDir = logDirectory
 	}
 }
 
@@ -78,13 +79,19 @@ func LogDir() string {
 	return logs
 }
 
-// GetDatabaseDir returns the SQLite database directory: DATABASE_DIR env var
-// if set, else {data_dir}/db. dataDir is already container-aware (see
-// GetDefaultDirs), so no separate container branch is needed here — doing
-// so would ignore an explicitly passed dataDir (e.g. in tests).
+// GetDatabaseDir returns the configured SQLite directory or the platform
+// default. Containers use their dedicated SQLite mount; native systems use
+// dataDir/db.
 func GetDatabaseDir(dataDir string) string {
-	if envValue := os.Getenv("DATABASE_DIR"); envValue != "" {
-		return envValue
+	return databaseDirFor(dataDir, os.Getenv("DATABASE_DIR"), runtime.GOOS, IsRunningInContainer(), startedElevated)
+}
+
+func databaseDirFor(dataDir, override, operatingSystem string, inContainer, elevated bool) string {
+	if override != "" {
+		return override
+	}
+	if inContainer {
+		return filepath.Join(string(filepath.Separator), "data", "db", "sqlite")
 	}
 	return filepath.Join(dataDir, "db")
 }
@@ -279,17 +286,66 @@ func EnsureDirectories() error {
 
 // IsRunningInContainer checks if running inside a container
 func IsRunningInContainer() bool {
-	// Check for Docker
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return true
-	}
-	// Check for common container init systems
-	data, err := os.ReadFile("/proc/1/comm")
-	if err != nil {
+	return detectContainerSignals(os.Getenv, func(path string) bool {
+		_, err := os.Stat(path)
+		return err == nil
+	}, func(path string) string {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return ""
+		}
+		return string(data)
+	}, func() string {
+		return processName(os.Getppid())
+	}, os.Getppid())
+}
+
+func detectContainerSignals(getenv func(string) string, exists func(string) bool, readFile func(string) string, parentName func() string, parentPID int) bool {
+	// A full system container with systemd or OpenRC keeps normal service
+	// manager behavior; those signals take priority over its container marker.
+	if getenv("INVOCATION_ID") != "" ||
+		getenv("RC_SVCNAME") != "" ||
+		exists("/run/systemd/system") ||
+		(exists("/sbin/openrc-run") && exists("/run/openrc")) ||
+		(parentPID == 1 && exists("/run/openrc")) {
 		return false
 	}
-	comm := string(data)
-	return comm == "tini\n" || comm == "tini" || comm == "dumb-init\n"
+	for _, path := range []string{"/.dockerenv", "/run/.containerenv", "/dev/lxc"} {
+		if exists(path) {
+			return true
+		}
+	}
+	if getenv("container") != "" || getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return true
+	}
+	parent := strings.TrimSpace(parentName())
+	switch parent {
+	case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir", "catatonit":
+		return true
+	}
+	if strings.EqualFold(parent, ProjectName) {
+		return true
+	}
+	for _, path := range []string{"/proc/1/cgroup", "/proc/self/cgroup"} {
+		content := strings.ToLower(readFile(path))
+		for _, marker := range []string{"docker", "kubepods", "lxc", "libpod", "podman", "containerd", "cri-o", "incus"} {
+			if strings.Contains(content, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func processName(pid int) string {
+	if pid <= 0 {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // GetBackupDir returns the default backup directory. It prefers the

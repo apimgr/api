@@ -208,8 +208,8 @@ func TestResetGuestPreferencesClearsNonCredentialCookies(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "keep"})
 	req.AddCookie(&http.Cookie{Name: "owner_token", Value: "keep"})
 	w := httptest.NewRecorder()
-	resetGuestPreferences(w, req)
-	assert.Equal(t, `"storage"`, w.Header().Get("Clear-Site-Data"))
+	resetGuestPreferences(w, req, config.DefaultConfig())
+	assert.Equal(t, `"cache", "storage"`, w.Header().Get("Clear-Site-Data"))
 	deleted := map[string]bool{}
 	for _, cookie := range w.Result().Cookies() {
 		if cookie.MaxAge < 0 {

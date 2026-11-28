@@ -41,8 +41,8 @@ func StorePreviousEncryptionKey(ctx context.Context, previousKey, currentKey []b
 			{SecretEncryptionKeyPreviousUntil, until.UTC().Format(time.RFC3339Nano)},
 		}
 		for _, entry := range entries {
-			if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, created_at) VALUES (?, ?, ?)
-			ON CONFLICT(name) DO UPDATE SET value = excluded.value`, entry.name, entry.value, time.Now().UTC().Unix()); err != nil {
+			if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?)
+			ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, entry.name, entry.value, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 				return fmt.Errorf("store previous encryption-key metadata: %w", err)
 			}
 		}
@@ -112,8 +112,8 @@ func storeAppSecretValues(ctx context.Context, values map[string]string) error {
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, created_at) VALUES (?, ?, ?)
-				ON CONFLICT(name) DO UPDATE SET value = excluded.value`, name, values[name], time.Now().UTC().Unix()); err != nil {
+			if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?)
+				ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, name, values[name], time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 				return fmt.Errorf("store app secret metadata %s: %w", name, err)
 			}
 		}
@@ -201,6 +201,9 @@ func CleanupPreviousEncryptionKey(ctx context.Context, now time.Time) error {
 	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
 	defer cancel()
 	for _, record := range []struct{ expiry, value string }{
+		{expiry: SecretInstallationSecret + "_previous_until", value: SecretInstallationSecret + "_previous"},
+		{expiry: SecretCookieSigningKey + "_previous_until", value: SecretCookieSigningKey + "_previous"},
+		{expiry: SecretCSRFTokenSecret + "_previous_until", value: SecretCSRFTokenSecret + "_previous"},
 		{expiry: SecretEncryptionKeyPreviousUntil, value: SecretEncryptionKeyPrevious},
 		{expiry: SecretEncryptionKeyPendingUntil, value: SecretEncryptionKeyPending},
 	} {

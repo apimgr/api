@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"embed"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	stdhtml "html"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -16,11 +17,13 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/common/theme"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/graphql"
 	"github.com/apimgr/api/src/i2p"
 	"github.com/apimgr/api/src/metrics"
+	"github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/paths"
 	"github.com/apimgr/api/src/server/handler"
 	"github.com/apimgr/api/src/service/crypto"
@@ -40,14 +43,14 @@ var staticFS embed.FS
 
 // Version information
 var (
-	Version      = "1.0.0"
-	CommitID     = "unknown"
-	BuildDate    = "unknown"
+	Version      = "devel"
+	CommitID     = "N/A"
+	BuildDate    = "N/A"
 	OfficialSite = ""
 )
 
-// New creates a new HTTP server
-func New(cfg *config.Config) *http.Server {
+// NewHTTPServer creates the configured HTTP server.
+func NewHTTPServer(cfg *config.ServerConfig) *http.Server {
 	limits, _ := cfg.Server.Limits.Normalized()
 	// Initialize page templates
 	if err := initTemplates(); err != nil {
@@ -57,33 +60,42 @@ func New(cfg *config.Config) *http.Server {
 
 	r := chi.NewRouter()
 	apiRoutes := make([]swagger.Route, 0)
+	apiCacheRoutes := make([]swagger.Route, 0)
 
 	// Core middleware
+	// This must be outermost so path validation and maintenance rejections are
+	// included in the persistent request count.
+	r.Use(healthStatsMiddleware)
 	r.Use(urlNormalizationMiddleware)
+	r.Use(requestIDMiddleware)
+	r.Use(pathSecurityMiddleware)
+	r.Use(MaintenanceMiddleware(cfg))
 	r.Use(serverConfigMiddleware(cfg))
 	r.Use(serverBodyLimitMiddleware(cfg))
 	r.Use(serverTimingMiddleware(cfg))
 	r.Use(realIPMiddleware(cfg))
-	r.Use(requestIDMiddleware)
-	r.Use(pathSecurityMiddleware)
 	r.Use(loggingMiddleware)
 	r.Use(debugMiddleware(cfg))
 	r.Use(buildStampMiddleware)
 	r.Use(robotsTagMiddleware(cfg))
-	// HTTP metrics are recorded for every request, including ones later
-	// rejected by rate limiting or security headers, so the counters
-	// reflect real traffic rather than only the accepted subset.
-	r.Use(metrics.Get().Middleware)
-	// The same traffic feeds the public healthz aggregates, which are counted
-	// alongside the Prometheus metrics so both see identical request volume.
-	r.Use(healthStatsMiddleware)
+	// Install one metrics recorder when metrics are enabled, so each request
+	// contributes exactly once and disabled metrics incur no request sampling.
+	if cfg.Server.Metrics.Enabled {
+		r.Use(metrics.GetMetrics().Middleware)
+	}
 	r.Use(offlinePublicCacheMiddleware)
 	// Language resolution runs after logging and before any handler so every
 	// handler and template can read the negotiated language from the request
 	// context (?lang= -> cookie -> Accept-Language -> configured default).
-	r.Use(i18n.LanguageMiddlewareFor(cfg.Server.I18N.AvailableLanguages))
+	r.Use(i18n.LanguageMiddlewareForConsent(cfg.Server.I18N.AvailableLanguages, func(request *http.Request) bool {
+		return cfg.Server.Privacy.Cookies.Preferences.Enabled && readCookieConsent(request).Preferences
+	}))
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Compress(5))
+	if cfg.Server.Compression.Enabled {
+		r.Use(middleware.Compress(cfg.Server.Compression.Level, cfg.Server.Compression.Types...))
+	}
+	r.Use(outputSanitizationMiddleware(cfg))
+	r.Use(apiCachePolicyMiddleware(func() []swagger.Route { return apiCacheRoutes }))
 	r.Use(frontendJSONMiddleware(cfg))
 	r.Use(frontendTextMiddleware(paths.ProjectName))
 	r.Use(apiTextMiddleware(paths.ProjectName, &apiRoutes))
@@ -93,6 +105,7 @@ func New(cfg *config.Config) *http.Server {
 	r.Use(func(next http.Handler) http.Handler { return inputNormalizationMiddleware(next, cfg) })
 	r.Use(func(next http.Handler) http.Handler { return formInputMiddleware(next, cfg) })
 	r.Use(allowlistMiddleware(cfg))
+	r.Use(abuseDetectionMiddleware(cfg))
 	r.Use(blocklistMiddleware(cfg))
 	r.Use(RateLimitMiddleware(cfg))
 	r.Use(geoIPMiddleware(cfg))
@@ -100,7 +113,8 @@ func New(cfg *config.Config) *http.Server {
 	r.Use(versionPurgeMiddleware)
 
 	// Static files
-	r.Handle("/static/*", staticAssetHandler())
+	r.Method(http.MethodGet, "/static/*", staticAssetHandler())
+	r.Method(http.MethodHead, "/static/*", staticAssetHandler())
 	r.Get("/locales/{lang}.json", localeJSONHandler)
 
 	// Web routes
@@ -143,10 +157,10 @@ func New(cfg *config.Config) *http.Server {
 	// query-only and accepts GET for linkable queries and POST for GraphiQL.
 	r.Get("/server/docs/swagger", swaggerUIHandler(cfg))
 	r.Get("/server/docs/graphql", graphqlUIHandler(cfg))
-	r.Get("/api/swagger", apiSwaggerSpecHandler(cfg, &apiRoutes))
+	r.Get("/api/swagger", apiSwaggerSpecHandler(cfg))
 	r.Get("/api/graphql", graphql.HandleQuery)
 	r.Post("/api/graphql", graphql.HandleQuery)
-	r.Get(APIBasePath(cfg)+"/server/swagger", apiSwaggerSpecHandler(cfg, &apiRoutes))
+	r.Get(APIBasePath(cfg)+"/server/swagger", apiSwaggerSpecHandler(cfg))
 	r.Get(APIBasePath(cfg)+"/server/graphql", graphql.HandleQuery)
 	r.Post(APIBasePath(cfg)+"/server/graphql", graphql.HandleQuery)
 
@@ -162,6 +176,7 @@ func New(cfg *config.Config) *http.Server {
 	r.Get("/server/security/policy", securityPolicyPageHandler(cfg))
 	r.Get("/server/security/thanks", securityThanksPageHandler(cfg))
 	r.Get("/server/security/report/{tracking_id}", securityReportStatusPageHandler(cfg))
+	r.Get("/server/tracking.js", trackingScriptHandler(cfg))
 	r.Get(APIBasePath(cfg)+"/server/help", helpAPIHandler(cfg))
 	r.Get(APIBasePath(cfg)+"/server/help/mcp", mcpHelpAPIHandler(cfg, func() []swagger.Route { return apiRoutes }))
 	r.Post("/server/ccpa", ccpaOptOutHandler(cfg))
@@ -232,6 +247,7 @@ func New(cfg *config.Config) *http.Server {
 		r.Post("/restart", torRestartHandler)
 		r.Post("/regenerate", torRegenerateHandler)
 		r.Post("/vanity/start", torVanityStartHandler)
+		r.Post("/vanity/stop", torVanityStopHandler)
 		r.Post("/vanity/apply", torVanityApplyHandler)
 		r.Post("/import-keys", torImportKeysHandler)
 	})
@@ -258,12 +274,10 @@ func New(cfg *config.Config) *http.Server {
 	r.Head("/.well-known/pgp-key.asc", securityPublicKeyHandler(cfg))
 	r.Get("/manifest.json", manifestHandler(cfg))
 	r.Get("/favicon.ico", faviconHandler(cfg))
-	r.Get(brandingFaviconRoute, brandingImageHandler(cfg, func(c *config.Config) string { return c.Server.Branding.Favicon }))
-	r.Get(brandingLogoRoute, brandingImageHandler(cfg, func(c *config.Config) string { return c.Server.Branding.Logo }))
-	r.Get(brandingOGImageRoute, brandingImageHandler(cfg, func(c *config.Config) string { return c.Server.SEO.OGImage }))
+	r.Get(brandingFaviconRoute, brandingImageHandler(cfg, func(c *config.ServerConfig) string { return c.Server.Branding.Favicon }))
+	r.Get(brandingLogoRoute, brandingImageHandler(cfg, func(c *config.ServerConfig) string { return c.Server.Branding.Logo }))
+	r.Get(brandingOGImageRoute, brandingImageHandler(cfg, func(c *config.ServerConfig) string { return c.Server.SEO.OGImage }))
 	r.Get("/sw.js", serviceWorkerHandler())
-
-	r.Get("/cli/binaries/{artifact}", cliBinaryDownloadHandler(cfg))
 
 	// Unversioned machine discovery endpoint. It is intentionally not an alias
 	// under the configured API version.
@@ -271,8 +285,11 @@ func New(cfg *config.Config) *http.Server {
 
 	// Versioned API routes
 	r.Route(APIBasePath(cfg), func(r chi.Router) {
-		// Version
-		r.Get("/version", handler.HandleVersion)
+		r.Get("/cli/binaries/{artifact}", cliBinaryDownloadHandler(cfg))
+
+		r.Get("/server/about", aboutAPIHandler(cfg))
+		r.Get("/server/privacy", privacyAPIHandler(cfg))
+		r.Get("/server/auth/check", authCheckAPIHandler(cfg))
 		r.Get("/server/terms", termsAPIHandler(cfg))
 		r.Get("/server/dpo", dpoAPIHandler(cfg))
 		r.Get("/server/contact", contactAPIHandler(cfg, r))
@@ -651,6 +668,7 @@ func New(cfg *config.Config) *http.Server {
 		// Research Tools
 		r.Route("/research", func(r chi.Router) {
 			r.Post("/citation", apiResearchCitationHandler)
+			r.Get("/doi/{path}", apiResearchDOIHandler)
 			r.Get("/doi/*", apiResearchDOIHandler)
 			r.Post("/arxiv", apiResearchArxivHandler)
 			r.Post("/isbn", apiResearchIsbnHandler)
@@ -713,6 +731,7 @@ func New(cfg *config.Config) *http.Server {
 			r.Post("/watermark", apiImageWatermarkHandler)
 		})
 	})
+	r.Get(APIBasePath(cfg), autodiscoverHandler(cfg))
 
 	// Give every parameterised route a parameterless variant so a plain HTML
 	// form can drive the same handler with zero JavaScript.
@@ -720,22 +739,45 @@ func New(cfg *config.Config) *http.Server {
 	registerFormFallbacks(r)
 	if err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		if strings.HasPrefix(route, "/api/") {
-			apiRoutes = append(apiRoutes, apiRouteDefinition(method, route))
+			definition := apiRouteDefinition(method, route)
+			definition.Internal = isInternalAPIRoute(route)
+			apiRoutes = append(apiRoutes, definition)
+			apiCacheRoutes = append(apiCacheRoutes, definition)
+		} else if route == "/mcp" || route == "/healthz" || route == "/metrics" || route == "/server/metrics" || strings.HasPrefix(route, "/server/metrics/") {
+			definition := apiRouteDefinition(method, route)
+			if route == "/metrics" || route == "/server/metrics" || strings.HasPrefix(route, "/server/metrics/") {
+				definition.Internal = true
+			}
+			apiCacheRoutes = append(apiCacheRoutes, definition)
 		}
 		return nil
 	}); err != nil {
 		panic(fmt.Sprintf("Failed to enumerate API routes: %v", err))
 	}
+	apiRootRoute := apiRouteDefinition(http.MethodGet, APIBasePath(cfg))
+	apiRoutes = append(apiRoutes, apiRootRoute)
+	apiCacheRoutes = append(apiCacheRoutes, apiRootRoute)
 	mcp := mcpHandler(cfg, r, r, configuredMCPAuthenticator(cfg))
-	r.Handle("/mcp", mcp)
-	r.Handle("/api/mcp", mcp)
-	r.Handle(APIBasePath(cfg)+"/server/mcp", mcp)
+	r.Post("/mcp", mcp)
+	r.Post("/api/mcp", mcp)
+	r.Post(APIBasePath(cfg)+"/server/mcp", mcp)
 	apiRoutes = append(apiRoutes,
 		apiRouteDefinition("POST", "/api/mcp"),
 		apiRouteDefinition("POST", APIBasePath(cfg)+"/server/mcp"),
 	)
+	apiCacheRoutes = append(apiCacheRoutes,
+		apiRouteDefinition("*", "/mcp"),
+		apiRouteDefinition("*", "/api/mcp"),
+		apiRouteDefinition("*", APIBasePath(cfg)+"/server/mcp"),
+	)
 	r.NotFound(frontendNotFoundHandler(cfg))
-	r.MethodNotAllowed(frontendMethodNotAllowedHandler(cfg))
+	r.MethodNotAllowed(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/mcp" || request.URL.Path == "/api/mcp" || request.URL.Path == APIBasePath(cfg)+"/server/mcp" {
+			mcp.ServeHTTP(w, request)
+			return
+		}
+		frontendMethodNotAllowedHandler(cfg)(w, request)
+	})
 
 	SetHTTPTimeouts(limits)
 	return &http.Server{
@@ -784,6 +826,7 @@ type PageData struct {
 	OfflineTitle           string
 	OfflineHeading         string
 	OfflineMessage         string
+	OfflineReload          string
 	SEOKeywords            string
 	SEOAuthor              string
 	SEOImage               string
@@ -838,6 +881,8 @@ type PageData struct {
 	PrivacyCollection      template.HTML
 	PrivacyUsage           template.HTML
 	PrivacySecurity        template.HTML
+	TrackingTags           template.HTML
+	TrackingNoscript       template.HTML
 	Categories             []CategoryInfo
 	HelpPages              []helpPageInfo
 	PreferencePages        []helpPageInfo
@@ -885,7 +930,7 @@ type CategoryInfo struct {
 // theme.go) so the server-rendered class="theme-dark|theme-light|theme-auto"
 // on <html> reflects the visitor's actual saved preference, never a global
 // config default.
-func newPageData(cfg *config.Config, r *http.Request, activePage string) PageData {
+func newPageData(cfg *config.ServerConfig, r *http.Request, activePage string) PageData {
 	r = requestWithServerConfig(r, cfg)
 	baseURL := BuildURL(r, "")
 	categories := allCategories()
@@ -910,6 +955,7 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 		OfflineTitle:           i18n.Translate(lang, "offline.title"),
 		OfflineHeading:         i18n.Translate(lang, "offline.heading"),
 		OfflineMessage:         i18n.Translate(lang, "offline.message"),
+		OfflineReload:          i18n.Translate(lang, "common.refresh"),
 		NoIndex:                cfg.Server.SEO.NoIndex || !publicIndexableRoute(r.URL.Path),
 		SEOKeywords:            strings.Join(cfg.Server.SEO.Keywords, ", "),
 		SEOAuthor:              cfg.Server.SEO.Author,
@@ -961,6 +1007,16 @@ func newPageData(cfg *config.Config, r *http.Request, activePage string) PageDat
 	data.Privacy.Cookies.Analytics.DescriptionSuffixNotSold = localizedConfigText(data.Privacy.Cookies.Analytics.DescriptionSuffixNotSold, config.DefaultPrivacyAnalyticsSuffixNotSold, lang, "cookie_consent.analytics_suffix_not_sold")
 	data.Privacy.Cookies.Analytics.DescriptionSuffixSold = localizedConfigText(data.Privacy.Cookies.Analytics.DescriptionSuffixSold, config.DefaultPrivacyAnalyticsSuffixSold, lang, "cookie_consent.analytics_suffix_sold")
 	data.ConsentVisible, data.ConsentMessage, data.ConsentPolicyURL, data.ConsentPolicyText, data.ConsentDeclineText, data.ConsentAcceptText, data.Announcements = siteBannerData(cfg, r)
+	data.ConsentAnalytics = readCookieConsent(r).Analytics
+	if trackingAllowed(cfg, r) {
+		tracking := buildTrackingOutput(cfg.Server.Tracking)
+		markup := tracking.Tags
+		if tracking.Body != "" {
+			markup += `<script async src="` + stdhtml.EscapeString(sameOriginPath(baseURL, "/server/tracking.js")) + `"></script>`
+		}
+		data.TrackingTags = template.HTML(markup)
+		data.TrackingNoscript = template.HTML(tracking.Noscript)
+	}
 	description := data.PageDescription
 	if description == "" {
 		description = data.SiteDescription
@@ -998,7 +1054,7 @@ func requestHasOwnerTokenCookie(r *http.Request) bool {
 }
 
 // APIBasePath returns the configured REST API prefix, defaulting to v1.
-func APIBasePath(cfg *config.Config) string {
+func APIBasePath(cfg *config.ServerConfig) string {
 	version := "v1"
 	if cfg != nil && strings.TrimSpace(cfg.Server.APIVersion) != "" {
 		version = strings.Trim(strings.TrimSpace(cfg.Server.APIVersion), "/")
@@ -1393,7 +1449,7 @@ func toolPages() []toolPage {
 }
 
 // toolPageHandler renders a per-tool detail page under a category
-func toolPageHandler(cfg *config.Config, category, tool, title, description string) http.HandlerFunc {
+func toolPageHandler(cfg *config.ServerConfig, category, tool, title, description string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, category)
 		data.PageTitle = title
@@ -1452,15 +1508,15 @@ func renderServerError(w http.ResponseWriter, data PageData) {
 	_, _ = w.Write(rendered.Bytes())
 }
 
-func frontendNotFoundHandler(cfg *config.Config) http.HandlerFunc {
+func frontendNotFoundHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return frontendErrorHandler(cfg, http.StatusNotFound, "errors.not_found")
 }
 
-func frontendMethodNotAllowedHandler(cfg *config.Config) http.HandlerFunc {
+func frontendMethodNotAllowedHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return frontendErrorHandler(cfg, http.StatusMethodNotAllowed, "errors.method_not_allowed")
 }
 
-func frontendErrorHandler(cfg *config.Config, status int, messageKey string) http.HandlerFunc {
+func frontendErrorHandler(cfg *config.ServerConfig, status int, messageKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			errorResponse(w, r, "", status)
@@ -1486,7 +1542,7 @@ func frontendErrorHandler(cfg *config.Config, status int, messageKey string) htt
 }
 
 // Web handlers
-func homeHandler(cfg *config.Config) http.HandlerFunc {
+func homeHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "home")
 		data.PageTitle = ""
@@ -1496,7 +1552,7 @@ func homeHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func textPageHandler(cfg *config.Config) http.HandlerFunc {
+func textPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "text")
 		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, "text")
@@ -1504,7 +1560,7 @@ func textPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
+func cryptoPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "crypto")
 		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, "crypto")
@@ -1512,7 +1568,7 @@ func cryptoPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func categoryPageHandler(cfg *config.Config, category, title, description string) http.HandlerFunc {
+func categoryPageHandler(cfg *config.ServerConfig, category, title, description string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, category)
 		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, category)
@@ -1558,7 +1614,7 @@ func allCategories() []CategoryInfo {
 	return categories
 }
 
-func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
+func categoriesPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "categories")
 		data.PageTitle = i18n.Translate(data.Lang, "nav.categories")
@@ -1568,7 +1624,7 @@ func categoriesPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func datetimePageHandler(cfg *config.Config) http.HandlerFunc {
+func datetimePageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "datetime")
 		data.PageTitle, data.PageDescription = categoryMetadata(data.Lang, "datetime")
@@ -1576,7 +1632,7 @@ func datetimePageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
+func aboutPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "about")
 		data.PageTitle = i18n.Translate(data.Lang, "about.title")
@@ -1591,7 +1647,7 @@ func aboutPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func privacyPageHandler(cfg *config.Config) http.HandlerFunc {
+func privacyPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "privacy")
 		data.PageTitle = i18n.Translate(data.Lang, "privacy.title")
@@ -1602,7 +1658,7 @@ func privacyPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func dpoPageHandler(cfg *config.Config) http.HandlerFunc {
+func dpoPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "dpo")
 		data.PageTitle = i18n.Translate(data.Lang, "dpo.title")
@@ -1612,19 +1668,15 @@ func dpoPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func dpoAPIHandler(cfg *config.Config) http.HandlerFunc {
+func dpoAPIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name, email := publicDPOContact(cfg)
 		privacyURL := BuildURL(requestWithServerConfig(r, cfg), "/server/privacy")
-		writeEnvelopeOK(w, http.StatusOK, map[string]string{
-			"name":        name,
-			"email":       email,
-			"privacy_url": privacyURL,
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("name", name), responseField("email", email), responseField("privacy_url", privacyURL)))
 	}
 }
 
-func publicDPOContact(cfg *config.Config) (name, email string) {
+func publicDPOContact(cfg *config.ServerConfig) (name, email string) {
 	if cfg == nil {
 		return "", ""
 	}
@@ -1637,7 +1689,7 @@ func publicDPOContact(cfg *config.Config) (name, email string) {
 	return name, email
 }
 
-func helpPageHandler(cfg *config.Config) http.HandlerFunc {
+func helpPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "help")
 		data.PageTitle = i18n.Translate(data.Lang, "help.title")
@@ -1650,7 +1702,7 @@ func helpPageHandler(cfg *config.Config) http.HandlerFunc {
 
 // swaggerUIHandler serves the Swagger UI at the PART 14 canonical
 // /server/docs/swagger path; it fetches its spec from /api/swagger.
-func swaggerUIHandler(cfg *config.Config) http.HandlerFunc {
+func swaggerUIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "api")
 		data.PageTitle = i18n.TranslateFormat(data.Lang, "swagger.title", map[string]string{"app_name": cfg.Server.Branding.Title})
@@ -1665,21 +1717,44 @@ func swaggerUIHandler(cfg *config.Config) http.HandlerFunc {
 // apiSwaggerSpecHandler serves the OpenAPI JSON spec. Mounted at both
 // /api/swagger (unversioned alias) and /api/{api_version}/server/swagger (versioned
 // canonical) — same handler, no redirect, per PART 14. JSON only, no YAML.
-func apiSwaggerSpecHandler(cfg *config.Config, routes *[]swagger.Route) http.HandlerFunc {
+func apiSwaggerSpecHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	apiVersion := strings.TrimPrefix(APIBasePath(cfg), "/api/")
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
-		var registered []swagger.Route
-		if routes != nil {
-			registered = *routes
-		}
-		swagger.ServeSpecWithRoutes(Version, BuildURL(r, ""), apiVersion, registered).ServeHTTP(w, r)
+		swagger.ServeEmbeddedSuperset(Version, BuildURL(r, ""), apiVersion, func(condition string) bool {
+			return apiRouteConditionEnabled(cfg, condition)
+		}).ServeHTTP(w, r)
+	}
+}
+
+func isInternalAPIRoute(path string) bool {
+	if path == "/api/metrics" || strings.HasPrefix(path, "/api/metrics/") {
+		return true
+	}
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	return len(segments) >= 4 && segments[0] == "api" && segments[2] == "server" && segments[3] == "metrics"
+}
+
+func apiRouteConditionEnabled(cfg *config.ServerConfig, condition string) bool {
+	switch strings.TrimSpace(condition) {
+	case "", "always", "true":
+		return true
+	case "server.metrics.enabled":
+		return cfg.Server.Metrics.Enabled
+	case "server.metrics.root.enabled":
+		return cfg.Server.Metrics.Root.Enabled
+	case "server.healthz.root.enabled":
+		return cfg.Server.Healthz.Root.Enabled
+	case "--debug":
+		return cfg.Runtime.Debug || mode.ShouldShowDebugEndpoints()
+	default:
+		return false
 	}
 }
 
 // graphqlUIHandler serves the GraphiQL UI at the PART 14 canonical
 // /server/docs/graphql path; it posts queries to the versioned endpoint.
-func graphqlUIHandler(cfg *config.Config) http.HandlerFunc {
+func graphqlUIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "api")
 		data.PageTitle = i18n.TranslateFormat(data.Lang, "graphql.title", map[string]string{"app_name": cfg.Server.Branding.Title})
@@ -1698,9 +1773,9 @@ func graphqlUIHandler(cfg *config.Config) http.HandlerFunc {
 // server.metrics.root.enabled — the root alias Prometheus scrapers default
 // to. Every service is wrapped in metrics.AuthMiddleware, which enforces
 // the per-service bearer token in constant time.
-func mountMetrics(r chi.Router, cfg *config.Config) {
+func mountMetrics(r chi.Router, cfg *config.ServerConfig) {
 	mc := cfg.Server.Metrics
-	m := metrics.Get()
+	m := metrics.GetMetrics()
 
 	// max_age is a duration string in server.yml; an unparseable value
 	// falls back to the documented 1h default rather than failing startup.
@@ -1717,21 +1792,35 @@ func mountMetrics(r chi.Router, cfg *config.Config) {
 	grafanaHandler := wrap(mc.Auth.Tokens.Grafana, m.GrafanaHandler(paths.ProjectName))
 	lokiHandler := wrap(mc.Auth.Tokens.Loki, m.LokiHandler(metricsLogSource(), mc.Loki.MaxEntries, maxAge))
 
-	mount := func(prefix string) {
+	mount := func(prefix string, namedServices bool) {
 		r.Get(prefix, prometheusHandler)
-		r.Get(prefix+"/prometheus", prometheusHandler)
-		r.Get(prefix+"/grafana", grafanaHandler)
-		r.Get(prefix+"/loki", lokiHandler)
+		if namedServices {
+			r.Get(prefix+"/prometheus", prometheusHandler)
+			r.Get(prefix+"/grafana", grafanaHandler)
+			r.Get(prefix+"/loki", lokiHandler)
+		}
+		r.Get(prefix+"/{service}", func(w http.ResponseWriter, request *http.Request) {
+			switch chi.URLParam(request, "service") {
+			case "prometheus":
+				prometheusHandler.ServeHTTP(w, request)
+			case "grafana":
+				grafanaHandler.ServeHTTP(w, request)
+			case "loki":
+				lokiHandler.ServeHTTP(w, request)
+			default:
+				http.NotFound(w, request)
+			}
+		})
 	}
-	mount("/server/metrics")
-	mount(APIBasePath(cfg) + "/server/metrics")
-	mount("/api/metrics")
+	mount("/server/metrics", true)
+	mount(APIBasePath(cfg)+"/server/metrics", false)
+	mount("/api/metrics", false)
 	if mc.Root.Enabled {
-		mount("/metrics")
+		mount("/metrics", false)
 	}
 }
 
-func robotsHandler(cfg *config.Config) http.HandlerFunc {
+func robotsHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		w.Header().Set("Content-Type", "text/plain")
@@ -1749,7 +1838,7 @@ func robotsHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func securityHandler(cfg *config.Config) http.HandlerFunc {
+func securityHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1774,7 +1863,7 @@ func securityHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func manifestHandler(cfg *config.Config) http.HandlerFunc {
+func manifestHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json")
 		// /manifest.json is never long-cached - a stale cached manifest
@@ -1784,28 +1873,46 @@ func manifestHandler(cfg *config.Config) http.HandlerFunc {
 		// Manifest colors trace back to theme.ThemePaletteDark (the default
 		// theme) in src/common/theme/colors.go, rather than unrelated
 		// hardcoded hex values, so installed-PWA chrome matches the site.
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"name":             cfg.Server.Branding.Title,
-			"short_name":       cfg.Server.Branding.Title,
-			"description":      cfg.Server.Branding.Description,
-			"start_url":        "/",
-			"scope":            "/",
-			"display":          "standalone",
-			"orientation":      "any",
-			"background_color": theme.ThemePaletteDark.Background,
-			"theme_color":      theme.ThemePaletteDark.Primary,
-			"categories":       []string{"utilities"},
+		if err := writeTaggedJSON(w, manifestResponse{
+			Name: cfg.Server.Branding.Title, ShortName: cfg.Server.Branding.Title,
+			Description: cfg.Server.Branding.Description, StartURL: "/", Scope: "/",
+			Display: "standalone", Orientation: "any",
+			BackgroundColor: theme.ThemePaletteDark.Background, ThemeColor: theme.ThemePaletteDark.Primary,
+			Categories: []string{"utilities"},
 			// Icon URLs carry the build stamp for the same reason every other
 			// static reference does: an installed PWA otherwise keeps serving
 			// the icons cached under the previous build.
-			"icons": []map[string]string{
-				{"src": assetURL("/static/images/icons/icon-192.png"), "sizes": "192x192", "type": "image/png", "purpose": "any"},
-				{"src": assetURL("/static/images/icons/icon-512.png"), "sizes": "512x512", "type": "image/png", "purpose": "any"},
-				{"src": assetURL("/static/images/icons/icon-192-maskable.png"), "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
-				{"src": assetURL("/static/images/icons/icon-512-maskable.png"), "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+			Icons: []manifestIcon{
+				{Src: assetURL("/static/images/icons/icon-192.png"), Sizes: "192x192", Type: "image/png", Purpose: "any"},
+				{Src: assetURL("/static/images/icons/icon-512.png"), Sizes: "512x512", Type: "image/png", Purpose: "any"},
+				{Src: assetURL("/static/images/icons/icon-192-maskable.png"), Sizes: "192x192", Type: "image/png", Purpose: "maskable"},
+				{Src: assetURL("/static/images/icons/icon-512-maskable.png"), Sizes: "512x512", Type: "image/png", Purpose: "maskable"},
 			},
-		})
+		}); err != nil {
+			log.Printf("manifest response write failed: %v", err)
+		}
 	}
+}
+
+type manifestResponse struct {
+	Name            string         `json:"name"`
+	ShortName       string         `json:"short_name"`
+	Description     string         `json:"description"`
+	StartURL        string         `json:"start_url"`
+	Scope           string         `json:"scope"`
+	Display         string         `json:"display"`
+	Orientation     string         `json:"orientation"`
+	BackgroundColor string         `json:"background_color"`
+	ThemeColor      string         `json:"theme_color"`
+	Categories      []string       `json:"categories"`
+	Icons           []manifestIcon `json:"icons"`
+}
+
+type manifestIcon struct {
+	Src     string `json:"src"`
+	Sizes   string `json:"sizes"`
+	Type    string `json:"type"`
+	Purpose string `json:"purpose"`
 }
 
 // buildETag stamps a weak ETag from the running build so /sw.js and
@@ -1863,10 +1970,9 @@ func serviceWorkerHandler() http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		// AI.md PART 16 requires the service worker cache name to follow the
-		// app's semver (api-cache-v{major}.{minor}.{patch}). The embedded
-		// source carries a placeholder so the version is stamped from the
-		// running build rather than drifting as a hardcoded literal.
+		// AI.md PART 16 requires the service worker cache name to carry the
+		// full asset stamp, including the short commit, so rebuilds with the
+		// same SemVer cannot reuse an older offline cache.
 		data = bytes.ReplaceAll(data, []byte(serviceWorkerAppNameToken), []byte(paths.ProjectName))
 		data = bytes.ReplaceAll(data, []byte(serviceWorkerAssetStampToken), []byte(assetStamp()))
 		data = bytes.Replace(data, []byte(serviceWorkerVersionToken), []byte(Version), 1)
@@ -1918,10 +2024,7 @@ func apiUUIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"uuid":    uuid,
-		"version": version,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("uuid", uuid), responseField("version", version)))
 }
 
 func apiUUIDTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -1955,11 +2058,7 @@ func apiUUIDBatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"uuids":   uuids,
-		"version": version,
-		"count":   len(uuids),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("uuids", uuids), responseField("version", version), responseField("count", len(uuids))))
 }
 
 func apiHashHandler(w http.ResponseWriter, r *http.Request) {
@@ -1972,11 +2071,7 @@ func apiHashHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"algorithm": algorithm,
-		"input":     input,
-		"hash":      hash,
-	})
+	jsonResponse(w, responseObject(responseField("algorithm", algorithm), responseField("input", input), responseField("hash", hash)))
 }
 
 func apiHashTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -1996,10 +2091,8 @@ func apiHashMultiHandler(w http.ResponseWriter, r *http.Request) {
 	input := paramValue(r, "input")
 	hashes := text.HashAll(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"input":  input,
-		"hashes": hashes,
-	})
+	hashFields := responseObject(responseField("md5", hashes["md5"]), responseField("sha1", hashes["sha1"]), responseField("sha256", hashes["sha256"]), responseField("sha384", hashes["sha384"]), responseField("sha512", hashes["sha512"]))
+	jsonResponse(w, responseObject(responseField("input", input), responseField("hashes", hashFields)))
 }
 
 type encodeParams struct {
@@ -2035,11 +2128,7 @@ func apiEncodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"encoding": encoding,
-		"input":    input,
-		"output":   output,
-	})
+	jsonResponse(w, responseObject(responseField("encoding", encoding), responseField("input", input), responseField("output", output)))
 }
 
 func apiEncodeTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2100,11 +2189,7 @@ func apiDecodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"encoding": encoding,
-		"input":    input,
-		"output":   output,
-	})
+	jsonResponse(w, responseObject(responseField("encoding", encoding), responseField("input", input), responseField("output", output)))
 }
 
 func apiDecodeTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2167,11 +2252,7 @@ func apiCaseHandler(w http.ResponseWriter, r *http.Request) {
 		output = text.ToKebabCase(input)
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"style":  style,
-		"input":  input,
-		"output": output,
-	})
+	jsonResponse(w, responseObject(responseField("style", style), responseField("input", input), responseField("output", output)))
 }
 
 func apiCaseTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2225,11 +2306,7 @@ func apiLoremHandler(w http.ResponseWriter, r *http.Request) {
 		result = text.LoremParagraphs(count)
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"type":  loremType,
-		"count": count,
-		"text":  result,
-	})
+	jsonResponse(w, responseObject(responseField("type", loremType), responseField("count", count), responseField("text", result)))
 }
 
 func apiLoremTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2268,17 +2345,15 @@ func apiTextStatsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, text.Stats(input.Text))
+	stats := text.Stats(input.Text)
+	jsonResponse(w, responseObject(responseField("characters", stats["characters"]), responseField("characters_no_space", stats["characters_no_space"]), responseField("words", stats["words"]), responseField("lines", stats["lines"]), responseField("bytes", stats["bytes"])))
 }
 
 func apiROT13Handler(w http.ResponseWriter, r *http.Request) {
 	input := paramValue(r, "input")
 	output := text.ROT13(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"input":  input,
-		"output": output,
-	})
+	jsonResponse(w, responseObject(responseField("input", input), responseField("output", output)))
 }
 
 func apiROT13TextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2290,10 +2365,7 @@ func apiReverseHandler(w http.ResponseWriter, r *http.Request) {
 	input := paramValue(r, "input")
 	output := text.Reverse(input)
 
-	jsonResponse(w, map[string]interface{}{
-		"input":  input,
-		"output": output,
-	})
+	jsonResponse(w, responseObject(responseField("input", input), responseField("output", output)))
 }
 
 func apiReverseTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2318,11 +2390,7 @@ func apiBcryptHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"algorithm": "bcrypt",
-		"cost":      cost,
-		"hash":      hash,
-	})
+	jsonResponse(w, responseObject(responseField("algorithm", "bcrypt"), responseField("cost", cost), responseField("hash", hash)))
 }
 
 func apiBcryptVerifyGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -2330,9 +2398,7 @@ func apiBcryptVerifyGetHandler(w http.ResponseWriter, r *http.Request) {
 	hash := paramValue(r, "hash")
 
 	valid := crypto.BcryptVerify(password, hash)
-	jsonResponse(w, map[string]interface{}{
-		"valid": valid,
-	})
+	jsonResponse(w, responseObject(responseField("valid", valid)))
 }
 
 func apiBcryptVerifyHandler(w http.ResponseWriter, r *http.Request) {
@@ -2347,10 +2413,7 @@ func apiBcryptVerifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	valid := crypto.BcryptVerify(input.Password, input.Hash)
 
-	jsonResponse(w, map[string]interface{}{
-		"valid": valid,
-		"cost":  crypto.BcryptCost(input.Hash),
-	})
+	jsonResponse(w, responseObject(responseField("valid", valid), responseField("cost", crypto.BcryptCost(input.Hash))))
 }
 
 func apiPasswordHandler(w http.ResponseWriter, r *http.Request) {
@@ -2383,10 +2446,7 @@ func apiPasswordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"password": password,
-		"length":   length,
-	})
+	jsonResponse(w, responseObject(responseField("password", sanitize.PublicResponseValue{Value: password}), responseField("length", length)))
 }
 
 func apiPasswordTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2416,10 +2476,7 @@ func apiPINHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"pin":    pin,
-		"length": length,
-	})
+	jsonResponse(w, responseObject(responseField("pin", pin), responseField("length", length)))
 }
 
 func apiPINTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2456,16 +2513,7 @@ func apiTOTPGenerateHandler(w http.ResponseWriter, r *http.Request) {
 	code, _ := crypto.GenerateTOTP(secret, 6, 30)
 	uri := crypto.GenerateTOTPURI(secret, issuer, account)
 
-	jsonResponse(w, map[string]interface{}{
-		"secret":       secret,
-		"uri":          uri,
-		"current_code": code,
-		"issuer":       issuer,
-		"account":      account,
-		"algorithm":    "SHA1",
-		"digits":       6,
-		"period":       30,
-	})
+	jsonResponse(w, responseObject(responseField("secret", sanitize.PublicResponseValue{Value: secret}), responseField("uri", uri), responseField("current_code", sanitize.PublicResponseValue{Value: code}), responseField("issuer", issuer), responseField("account", account), responseField("algorithm", "SHA1"), responseField("digits", 6), responseField("period", 30)))
 }
 
 func apiTOTPCodeHandler(w http.ResponseWriter, r *http.Request) {
@@ -2479,11 +2527,7 @@ func apiTOTPCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	remaining := 30 - (time.Now().Unix() % 30)
 
-	jsonResponse(w, map[string]interface{}{
-		"code":              code,
-		"remaining_seconds": remaining,
-		"period":            30,
-	})
+	jsonResponse(w, responseObject(responseField("code", sanitize.PublicResponseValue{Value: code}), responseField("remaining_seconds", remaining), responseField("period", 30)))
 }
 
 func apiTOTPCodeTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2504,9 +2548,7 @@ func apiTOTPVerifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	valid := crypto.VerifyTOTP(secret, code, 6, 30, 1)
 
-	jsonResponse(w, map[string]interface{}{
-		"valid": valid,
-	})
+	jsonResponse(w, responseObject(responseField("valid", valid)))
 }
 
 func apiRandomBytesHandler(w http.ResponseWriter, r *http.Request) {
@@ -2521,11 +2563,7 @@ func apiRandomBytesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"bytes":  bytes,
-		"hex":    hex.EncodeToString(bytes),
-		"length": len(bytes),
-	})
+	jsonResponse(w, responseObject(responseField("bytes", bytes), responseField("hex", hex.EncodeToString(bytes)), responseField("length", len(bytes))))
 }
 
 func apiRandomHexHandler(w http.ResponseWriter, r *http.Request) {
@@ -2545,7 +2583,7 @@ func apiRandomHexHandler(w http.ResponseWriter, r *http.Request) {
 
 func apiPasswordStrengthHandler(w http.ResponseWriter, r *http.Request) {
 	password := paramValue(r, "password")
-	jsonResponse(w, crypto.PasswordStrength(password))
+	jsonResponse(w, responseFieldsFromMap(crypto.PasswordStrength(password), "score", "strength", "length", "entropy_bits", "has_uppercase", "has_lowercase", "has_numbers", "has_symbols", "charset_size"))
 }
 
 func apiPasswordStrengthPostHandler(w http.ResponseWriter, r *http.Request) {
@@ -2557,7 +2595,7 @@ func apiPasswordStrengthPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, crypto.PasswordStrength(input.Password))
+	jsonResponse(w, responseFieldsFromMap(crypto.PasswordStrength(input.Password), "score", "strength", "length", "entropy_bits", "has_uppercase", "has_lowercase", "has_numbers", "has_symbols", "charset_size"))
 }
 
 // DateTime API handlers
@@ -2573,7 +2611,7 @@ func apiDateTimeNowHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, result)
+	jsonResponse(w, responseFieldsFromMap(result, "unix", "unix_ms", "unix_ns", "iso8601", "rfc2822", "rfc3339", "rfc3339_nano", "human", "date", "time", "timezone", "offset", "offset_seconds", "day_of_week", "day_of_week_name", "day_of_year", "week_number", "quarter", "is_leap_year", "days_in_month"))
 }
 
 func apiDateTimeNowTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2581,11 +2619,7 @@ func apiDateTimeNowTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiTimestampHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{
-		"unix":    time.Now().Unix(),
-		"unix_ms": time.Now().UnixMilli(),
-		"unix_ns": time.Now().UnixNano(),
-	})
+	jsonResponse(w, responseObject(responseField("unix", time.Now().Unix()), responseField("unix_ms", time.Now().UnixMilli()), responseField("unix_ns", time.Now().UnixNano())))
 }
 
 func apiTimestampTextHandler(w http.ResponseWriter, r *http.Request) {
@@ -2607,7 +2641,7 @@ func apiConvertTimestampHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, result)
+	jsonResponse(w, responseFieldsFromMap(result, "unix", "unix_ms", "iso8601", "rfc2822", "human", "date", "time", "timezone", "offset", "day_of_week", "day_of_year", "is_leap_year"))
 }
 
 func apiToUnixHandler(w http.ResponseWriter, r *http.Request) {
@@ -2619,10 +2653,7 @@ func apiToUnixHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"datetime": dt,
-		"unix":     timestamp,
-	})
+	jsonResponse(w, responseObject(responseField("datetime", dt), responseField("unix", timestamp)))
 }
 
 func apiAddDurationHandler(w http.ResponseWriter, r *http.Request) {
@@ -2640,7 +2671,7 @@ func apiAddDurationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, result)
+	jsonResponse(w, responseFieldsFromMap(result, "original", "duration", "result", "result_unix"))
 }
 
 func apiDiffHandler(w http.ResponseWriter, r *http.Request) {
@@ -2656,13 +2687,16 @@ func apiDiffHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, datetime.Diff(timestamp1, timestamp2))
+	jsonResponse(w, responseFieldsFromMap(datetime.Diff(timestamp1, timestamp2), "from", "to", "days", "hours", "minutes", "seconds", "milliseconds", "human"))
 }
 
 func apiTimezonesHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{
-		"timezones": datetime.Timezones(),
-	})
+	zones := datetime.Timezones()
+	responses := make([]taggedResponseObject, 0, len(zones))
+	for _, zone := range zones {
+		responses = append(responses, responseFieldsFromMap(zone, "name", "abbreviation", "offset", "offset_hours", "current_time"))
+	}
+	jsonResponse(w, responseObject(responseField("timezones", responses)))
 }
 
 func apiTimezoneInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -2674,7 +2708,7 @@ func apiTimezoneInfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, result)
+	jsonResponse(w, responseFieldsFromMap(result, "name", "abbreviation", "offset", "offset_seconds", "current_time", "date", "time"))
 }
 
 func apiConvertTimezoneHandler(w http.ResponseWriter, r *http.Request) {
@@ -2693,7 +2727,7 @@ func apiConvertTimezoneHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, result)
+	jsonResponse(w, responseFieldsFromMap(result, "unix", "from", "from_zone", "to", "to_zone"))
 }
 
 // Middleware functions

@@ -28,7 +28,7 @@ func TestDNS01ReusesAppManagedCertificateOnHandshake(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(managedDirectory, "fullchain.pem"), certificatePEM, 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(managedDirectory, "privkey.pem"), privateKeyPEM, 0600))
 
-	manager := NewManager(Config{
+	manager := NewManager(SSLConfig{
 		CertPath: root,
 		LetsEncrypt: LetsEncryptConfig{
 			Enabled:   true,
@@ -57,7 +57,7 @@ func TestDNS01ReusesWildcardCertificateForConfiguredHost(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(managedDirectory, "fullchain.pem"), certificatePEM, 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(managedDirectory, "privkey.pem"), privateKeyPEM, 0600))
 
-	manager := NewManager(Config{
+	manager := NewManager(SSLConfig{
 		CertPath: root,
 		LetsEncrypt: LetsEncryptConfig{
 			Enabled:   true,
@@ -99,7 +99,7 @@ func TestDNSProviderValidationReportsMissingRFC2136VariableName(t *testing.T) {
 }
 
 func TestDNSChallengeConfigurationFailsWithoutSelfSignedFallback(t *testing.T) {
-	manager := NewManager(Config{
+	manager := NewManager(SSLConfig{
 		Enabled:  true,
 		CertPath: t.TempDir(),
 		LetsEncrypt: LetsEncryptConfig{

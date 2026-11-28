@@ -9,7 +9,7 @@ import (
 	"github.com/apimgr/api/src/config"
 )
 
-func securityContacts(cfg *config.Config, r *http.Request) []string {
+func securityContacts(cfg *config.ServerConfig, r *http.Request) []string {
 	contacts := make([]string, 0, 3)
 	if reportURL := strings.TrimSpace(cfg.Web.Security.ReportURL); reportURL != "" {
 		contacts = append(contacts, reportURL)
@@ -25,7 +25,7 @@ func securityContacts(cfg *config.Config, r *http.Request) []string {
 	return contacts
 }
 
-func contactPageEnabled(cfg *config.Config) bool {
+func contactPageEnabled(cfg *config.ServerConfig) bool {
 	if cfg == nil || cfg.Server.Pages == nil {
 		return true
 	}
@@ -45,7 +45,7 @@ func securityMailto(email string) string {
 	return email
 }
 
-func securityPageHandler(cfg *config.Config) http.HandlerFunc {
+func securityPageHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		data := newPageData(cfg, r, "security")
@@ -67,7 +67,7 @@ func securityPageHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func securityAPIHandler(cfg *config.Config) http.HandlerFunc {
+func securityAPIHandler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		pgpURL, fingerprint := any(nil), any(nil)
@@ -76,32 +76,41 @@ func securityAPIHandler(cfg *config.Config) http.HandlerFunc {
 				pgpURL, fingerprint = BuildURL(r, "/.well-known/pgp-key.asc"), keyFingerprint
 			}
 		}
-		data := map[string]interface{}{
-			"contacts":   securityContactDescriptors(cfg, r),
-			"expires":    cfg.Web.Security.Expires.UTC().Format(time.RFC3339),
-			"pgp":        map[string]interface{}{"available": pgpURL != nil, "url": pgpURL, "fingerprint": fingerprint},
-			"policy_url": BuildURL(r, "/server/security/policy"),
-			"thanks_url": BuildURL(r, "/server/security/thanks"),
-		}
+		data := responseObject(
+			responseField("contacts", securityContactDescriptors(cfg, r)),
+			responseField("expires", cfg.Web.Security.Expires.UTC().Format(time.RFC3339)),
+			responseField("pgp", responseObject(
+				responseField("available", pgpURL != nil),
+				responseField("url", pgpURL),
+				responseField("fingerprint", fingerprint),
+			)),
+			responseField("policy_url", BuildURL(r, "/server/security/policy")),
+			responseField("thanks_url", BuildURL(r, "/server/security/thanks")),
+		)
 		if contactPageEnabled(cfg) {
-			data["report_url"] = BuildURL(r, "/server/contact")
+			data = append(data, responseField("report_url", BuildURL(r, "/server/contact")))
 		}
 		writeEnvelopeOK(w, http.StatusOK, data)
 	}
 }
 
-func securityContactDescriptors(cfg *config.Config, r *http.Request) []map[string]string {
-	contacts := make([]map[string]string, 0, 3)
+type securityContactDescriptor struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
+func securityContactDescriptors(cfg *config.ServerConfig, r *http.Request) []securityContactDescriptor {
+	contacts := make([]securityContactDescriptor, 0, 3)
 	if reportURL := strings.TrimSpace(cfg.Web.Security.ReportURL); reportURL != "" {
-		contacts = append(contacts, map[string]string{"type": "github", "value": reportURL})
+		contacts = append(contacts, securityContactDescriptor{Type: "github", Value: reportURL})
 	}
 	if contactPageEnabled(cfg) {
 		if id, _, err := currentSecurityID(r.Context(), time.Now().UTC()); err == nil {
-			contacts = append(contacts, map[string]string{"type": "contact_form", "value": BuildURL(r, "/server/contact?security_id="+id)})
+			contacts = append(contacts, securityContactDescriptor{Type: "contact_form", Value: BuildURL(r, "/server/contact?security_id="+id)})
 		}
 	}
 	if email := strings.TrimSpace(cfg.Server.Contact.ResolveSecurity().Email); email != "" {
-		contacts = append(contacts, map[string]string{"type": "email", "value": "mailto:" + securityMailto(email)})
+		contacts = append(contacts, securityContactDescriptor{Type: "email", Value: "mailto:" + securityMailto(email)})
 	}
 	return contacts
 }

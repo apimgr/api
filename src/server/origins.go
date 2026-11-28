@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -11,7 +12,10 @@ import (
 
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/i2p"
+	appmode "github.com/apimgr/api/src/mode"
+	"github.com/apimgr/api/src/paths"
 	"github.com/apimgr/api/src/tor"
+	"golang.org/x/net/publicsuffix"
 )
 
 // GetURLVars resolves the public origin for a request. Forwarded values are
@@ -20,7 +24,7 @@ func GetURLVars(r *http.Request) (proto, fqdn, port string) {
 	if r == nil {
 		return "http", GetFQDN(""), ""
 	}
-	cfg, _ := r.Context().Value(serverConfigKey).(*config.Config)
+	cfg, _ := r.Context().Value(serverConfigKey).(*config.ServerConfig)
 	peer := originalPeerAddr(r)
 	trusted := cfg != nil && isTrustedPeer(cfg, peer)
 	if manager := tor.Get(); manager != nil {
@@ -44,22 +48,26 @@ func GetURLVars(r *http.Request) (proto, fqdn, port string) {
 		forwardedProto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto"))
 		if strings.EqualFold(forwardedProto, "https") || strings.EqualFold(forwardedProto, "http") {
 			proto = strings.ToLower(forwardedProto)
-		} else if strings.EqualFold(firstForwardedValue(r.Header.Get("X-Forwarded-Ssl")), "on") {
+		} else if forwardedSSL := firstForwardedValue(r.Header.Get("X-Forwarded-Ssl")); strings.EqualFold(forwardedSSL, "on") {
 			proto = "https"
+		} else if strings.EqualFold(forwardedSSL, "off") {
+			proto = "http"
 		} else if scheme := firstForwardedValue(r.Header.Get("X-Url-Scheme")); strings.EqualFold(scheme, "https") || strings.EqualFold(scheme, "http") {
 			proto = strings.ToLower(scheme)
+		} else if strings.EqualFold(firstForwardedValue(r.Header.Get("Front-End-Https")), "on") {
+			proto = "https"
 		}
 	}
 
 	if trusted {
 		for _, header := range []string{"X-Forwarded-Host", "X-Real-Host", "X-Original-Host"} {
-			if candidate := firstForwardedValue(r.Header.Get(header)); validURLHost(candidate) {
+			if candidate := firstForwardedValue(r.Header.Get(header)); isPublicURLHost(candidate) {
 				fqdn, port = splitURLHost(candidate)
 				break
 			}
 		}
 	}
-	domains := strings.Split(os.Getenv("DOMAIN"), ",")
+	domains := configuredDomains(paths.ProjectName)
 	primaryDomain := ""
 	for _, domain := range domains {
 		domain = strings.TrimSpace(domain)
@@ -70,7 +78,7 @@ func GetURLVars(r *http.Request) (proto, fqdn, port string) {
 	}
 	if fqdn == "" && primaryDomain != "" {
 		fqdn, port = splitURLHost(primaryDomain)
-	} else if fqdn == "" && validURLHost(r.Host) {
+	} else if fqdn == "" && isPublicURLHost(r.Host) {
 		host, hostPort := splitURLHost(r.Host)
 		if primaryDomain == "" || domainAllowsHost(domains, host) {
 			fqdn, port = host, hostPort
@@ -79,7 +87,7 @@ func GetURLVars(r *http.Request) (proto, fqdn, port string) {
 	if fqdn == "" {
 		fqdn = fallbackHostname()
 	}
-	if port == "" && validURLHost(r.Host) {
+	if port == "" && isPublicURLHost(r.Host) {
 		host, hostPort := splitURLHost(r.Host)
 		if (primaryDomain == "" || domainAllowsHost(domains, host)) && hostPort != "" {
 			port = hostPort
@@ -88,6 +96,8 @@ func GetURLVars(r *http.Request) (proto, fqdn, port string) {
 	if trusted {
 		if forwardedPort := firstForwardedValue(r.Header.Get("X-Forwarded-Port")); validPort(forwardedPort) {
 			port = forwardedPort
+		} else if realPort := firstForwardedValue(r.Header.Get("X-Real-Port")); validPort(realPort) {
+			port = realPort
 		}
 	}
 	if port == "" && cfg != nil && validPort(cfg.Server.Port) {
@@ -102,6 +112,9 @@ func GetURLVars(r *http.Request) (proto, fqdn, port string) {
 // BuildURL returns an absolute URL using the request's resolved public origin.
 func BuildURL(r *http.Request, path string) string {
 	proto, host, port := GetURLVars(r)
+	if host == "" {
+		return ""
+	}
 	if port != "" {
 		host = net.JoinHostPort(host, port)
 	} else if strings.Contains(host, ":") && net.ParseIP(host) != nil {
@@ -111,7 +124,7 @@ func BuildURL(r *http.Request, path string) string {
 		path = "/" + path
 	}
 	if r != nil {
-		if cfg, ok := r.Context().Value(serverConfigKey).(*config.Config); ok && cfg != nil && isTrustedPeer(cfg, originalPeerAddr(r)) {
+		if cfg, ok := r.Context().Value(serverConfigKey).(*config.ServerConfig); ok && cfg != nil && isTrustedPeer(cfg, originalPeerAddr(r)) {
 			prefix := firstForwardedValue(r.Header.Get("X-Forwarded-Prefix"))
 			if prefix == "" {
 				prefix = firstForwardedValue(r.Header.Get("X-Forwarded-Path"))
@@ -124,7 +137,7 @@ func BuildURL(r *http.Request, path string) string {
 				return applyURLPrefix(path, prefix, proto, host)
 			}
 		}
-		if cfg, ok := r.Context().Value(serverConfigKey).(*config.Config); ok && cfg != nil {
+		if cfg, ok := r.Context().Value(serverConfigKey).(*config.ServerConfig); ok && cfg != nil {
 			if prefix := validURLPrefix(cfg.Server.BaseURL); prefix != "" {
 				return applyURLPrefix(path, prefix, proto, host)
 			}
@@ -136,37 +149,111 @@ func BuildURL(r *http.Request, path string) string {
 // GetFQDN resolves the static hostname used when no request context is
 // available. DOMAIN is the explicit override; server.fqdn is informational
 // configuration and is not an origin source.
-func GetFQDN(_ string) string {
-	for _, domain := range strings.Split(os.Getenv("DOMAIN"), ",") {
-		host, _ := splitURLHost(strings.TrimSpace(domain))
-		if validURLHost(host) {
+var invalidDomainWarning sync.Once
+
+func GetFQDN(projectName string) string {
+	devMode := appmode.IsVerboseMode()
+	domains := configuredDomains(projectName)
+	hostname, _ := os.Hostname()
+	return resolveFQDN(domains, hostname, os.Getenv("HOSTNAME"), globalIP(true), globalIP(false), devMode, projectName)
+}
+
+func configuredDomains(projectName string) []string {
+	devMode := appmode.IsVerboseMode()
+	domains := strings.Split(os.Getenv("DOMAIN"), ",")
+	validDomains := make([]string, 0, len(domains))
+	invalidDomain := false
+	for _, domain := range domains {
+		domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
+		if domain == "" {
+			continue
+		}
+		if isDomainNameValid(domain, devMode, projectName) {
+			validDomains = append(validDomains, domain)
+		} else {
+			invalidDomain = true
+		}
+	}
+	if invalidDomain {
+		invalidDomainWarning.Do(func() {
+			log.Print("Warning: invalid DOMAIN hostname entries were ignored")
+		})
+	}
+	return validDomains
+}
+
+func resolveFQDN(domains []string, hostname, environmentHostname, publicIPv6, publicIPv4 string, devMode bool, projectName string) string {
+	for _, domain := range domains {
+		domain = strings.TrimSpace(domain)
+		if isDomainNameValid(domain, devMode, projectName) && !isLoopbackHost(domain) {
+			return domain
+		}
+	}
+	for _, host := range []string{strings.TrimSpace(hostname), strings.TrimSpace(environmentHostname)} {
+		if isDomainNameValid(host, devMode, projectName) && !isLoopbackHost(host) {
+			return strings.ToLower(strings.TrimSuffix(host, "."))
+		}
+	}
+	for _, host := range []string{publicIPv6, publicIPv4} {
+		if validURLHost(host) && !isLoopbackHost(host) {
 			return host
 		}
 	}
-	if hostname, err := os.Hostname(); err == nil && validURLHost(hostname) && !isLoopbackHost(hostname) {
-		return hostname
+	return ""
+}
+
+func isDomainNameValid(host string, devMode bool, projectName string) bool {
+	host = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(host, ".")))
+	if host == "" || strings.Contains(host, ":") || !validURLHost(host) || net.ParseIP(host) != nil {
+		return false
 	}
-	if hostname := strings.TrimSpace(os.Getenv("HOSTNAME")); validURLHost(hostname) && !isLoopbackHost(hostname) {
-		return hostname
+	if host == "localhost" {
+		return devMode
 	}
-	if ip := globalIP(true); ip != "" {
-		return ip
+	if !strings.Contains(host, ".") {
+		return false
 	}
-	if ip := globalIP(false); ip != "" {
-		return ip
+	if strings.HasSuffix(host, ".onion") || strings.HasSuffix(host, ".i2p") || strings.HasSuffix(host, ".exit") {
+		return false
 	}
-	return "localhost"
+	if projectName != "" && strings.HasSuffix(host, "."+strings.ToLower(strings.TrimSpace(projectName))) {
+		return devMode
+	}
+	suffix, isICANN := publicsuffix.PublicSuffix(host)
+	for _, devSuffix := range []string{"localhost", "test", "example", "invalid", "local", "lan", "internal", "home", "localdomain", "home.arpa", "intranet", "corp", "private"} {
+		if suffix == devSuffix || host == devSuffix || strings.HasSuffix(host, "."+devSuffix) {
+			return devMode
+		}
+	}
+	if !isICANN && !devMode {
+		return false
+	}
+	_, err := publicsuffix.EffectiveTLDPlusOne(host)
+	return err == nil
+}
+
+func isPublicURLHost(value string) bool {
+	if !validURLHost(value) {
+		return false
+	}
+	host, _ := splitURLHost(value)
+	return !isLoopbackHost(host)
 }
 
 // GetDisplayURL chooses an externally useful startup URL, replacing local or
 // development-only names with a public interface address when one exists.
 func GetDisplayURL(projectName string, port int, isHTTPS bool) string {
 	host := GetFQDN(projectName)
+	if host == "" {
+		return ""
+	}
 	if isDevTLD(host, projectName) || strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil {
 		if ip := globalIP(true); ip != "" {
 			host = ip
 		} else if ip := globalIP(false); ip != "" {
 			host = ip
+		} else if isLoopbackHost(host) {
+			return ""
 		}
 	}
 
@@ -376,8 +463,8 @@ func domainEnvOrigins() []string {
 	}
 	var origins []string
 	for _, part := range strings.Split(raw, ",") {
-		host := strings.TrimSpace(part)
-		if host == "" {
+		host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(part), "."))
+		if host == "" || !isDomainNameValid(host, appmode.IsVerboseMode(), paths.ProjectName) {
 			continue
 		}
 		origins = append(origins, "https://"+host)
@@ -403,7 +490,7 @@ func originalPeerAddr(r *http.Request) string {
 // excludes the operator's explicit server.cors.allowed_origins list (step 1)
 // and the "*" fallback (step 4), since those aren't "learned", they're
 // configured or defaulted.
-func learnedOrigins(cfg *config.Config, r *http.Request) []string {
+func learnedOrigins(cfg *config.ServerConfig, r *http.Request) []string {
 	result := domainEnvOrigins()
 
 	if r != nil {
@@ -445,7 +532,7 @@ func learnedOrigins(cfg *config.Config, r *http.Request) []string {
 // wildcard mode, since mixing a literal "*" with specific origins in the
 // same Access-Control-Allow-Origin response is not meaningful and would
 // make "credentials never sent with *" ambiguous to enforce.
-func resolveCORSOrigins(cfg *config.Config, r *http.Request) (origins []string, disabled bool) {
+func resolveCORSOrigins(cfg *config.ServerConfig, r *http.Request) (origins []string, disabled bool) {
 	explicit := cfg.Web.CORS.AllowedOrigins
 
 	if len(explicit) == 1 && explicit[0] == "" {

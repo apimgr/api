@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/apimgr/api/src/common/sanitize"
 )
 
 // LogEntry is one log line offered to the Loki push-API handler.
@@ -31,16 +33,14 @@ func (m *Metrics) PrometheusHandler() http.Handler {
 	return http.HandlerFunc(m.ServePrometheus)
 }
 
-// GrafanaHandler returns a handler serving the fixed 9-panel dashboard
-// document for projectName as JSON.
+// GrafanaHandler returns the importable V2 dashboard document for projectName
+// as JSON.
 func (m *Metrics) GrafanaHandler(projectName string) http.Handler {
 	dashboard := buildGrafanaDashboard(projectName)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(dashboard); err != nil {
-			log.Printf("Metrics: failed to encode Grafana dashboard: %v", err)
+		if err := sanitize.WriteTaggedJSON(w, dashboard, true); err != nil {
+			log.Printf("Metrics: failed to encode Grafana dashboard: %s", sanitize.SanitizeLogText(err.Error()))
 		}
 	})
 }
@@ -48,8 +48,8 @@ func (m *Metrics) GrafanaHandler(projectName string) http.Handler {
 // lokiStream is one label set and its associated log lines, in the Loki
 // push-API JSON stream shape.
 type lokiStream struct {
-	Stream map[string]string `json:"stream"`
-	Values [][2]string       `json:"values"`
+	Stream sanitize.TaggedObject `json:"stream"`
+	Values [][2]string           `json:"values"`
 }
 
 // lokiPushBody is the top-level Loki push-API document.
@@ -71,7 +71,7 @@ func (m *Metrics) LokiHandler(source LogSource, maxEntries int, maxAge time.Dura
 			key := labelKey(e.Labels)
 			s, ok := streamsByKey[key]
 			if !ok {
-				s = &lokiStream{Stream: e.Labels}
+				s = &lokiStream{Stream: lokiResponseLabels(e.Labels)}
 				streamsByKey[key] = s
 				order = append(order, key)
 			}
@@ -85,12 +85,20 @@ func (m *Metrics) LokiHandler(source LogSource, maxEntries int, maxAge time.Dura
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(body); err != nil {
-			log.Printf("Metrics: failed to encode Loki response: %v", err)
+		if err := sanitize.WriteTaggedJSON(w, body, true); err != nil {
+			log.Printf("Metrics: failed to encode Loki response: %s", sanitize.SanitizeLogText(err.Error()))
 		}
 	})
+}
+
+func lokiResponseLabels(labels map[string]string) sanitize.TaggedObject {
+	fields := make(sanitize.TaggedObject, 0, 2)
+	for _, key := range []string{"level", "log"} {
+		if value, ok := labels[key]; ok {
+			fields = append(fields, sanitize.TaggedField{Name: key, Value: value})
+		}
+	}
+	return fields
 }
 
 // labelKey builds a stable map key from a label set so entries sharing the

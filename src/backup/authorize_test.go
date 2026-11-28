@@ -59,7 +59,7 @@ func TestRequiresPassword(t *testing.T) {
 // when no password was supplied, before any decryption is attempted.
 func TestRestorePasswordRequired(t *testing.T) {
 	dir := t.TempDir()
-	manager := NewManager(Options{Dir: dir, Sources: []string{dir}})
+	manager := NewManager(BackupManagerOptions{Dir: dir, Sources: []string{dir}})
 
 	err := manager.Restore(Caller{FirstRun: true}, "api_backup_2026-01-15.tar.gz.enc", "")
 	require.ErrorIs(t, err, ErrRestorePasswordRequired)

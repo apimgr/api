@@ -33,6 +33,7 @@
       {{/* A real form submit, so switching themes works with JavaScript
            disabled; app.js only adds instant preview. The target is nextTheme
            of the theme actually in effect, never a fixed value. */}}
+      {{if ne .CurrentPath "/server/preferences"}}
       <form action="{{path .BaseURL .PreferencesHubPath}}" method="POST" class="theme-toggle-form">
         {{csrfField .CSRFToken}}
         <input type="hidden" name="theme" value="{{nextTheme .Theme}}">
@@ -40,6 +41,7 @@
           <span class="theme-icon" aria-hidden="true">{{if eq .Theme "light"}}☀{{else if eq .Theme "auto"}}◐{{else}}☾{{end}}</span>
         </button>
       </form>
+      {{end}}
 
     </div>
   </div>

@@ -83,29 +83,6 @@ func apiTextMetadata(r *http.Request, routeSets []*[]swagger.Route) (string, str
 	return definition.Primary, definition.TextMessage
 }
 
-func apiRoutePatternMatches(pattern, path string) bool {
-	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	pathParts := strings.Split(strings.Trim(path, "/"), "/")
-	for i, part := range patternParts {
-		if part == "*" {
-			return i < len(pathParts)
-		}
-		if i >= len(pathParts) {
-			return false
-		}
-		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
-			if pathParts[i] == "" {
-				return false
-			}
-			continue
-		}
-		if part != pathParts[i] {
-			return false
-		}
-	}
-	return len(patternParts) == len(pathParts)
-}
-
 func apiRequestWantsText(r *http.Request, projectName string) bool {
 	if strings.HasSuffix(r.URL.Path, ".txt") {
 		return true

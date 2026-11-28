@@ -3,11 +3,14 @@ package backup
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"os/user"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -19,8 +22,8 @@ var (
 // ManifestName is the archive entry holding the PART 21 manifest.
 const ManifestName = "manifest.json"
 
-// legacyMetadataName is the pre-manifest metadata entry. It is still written
-// so older restores keep working, and it is part of the checksummed payload.
+// legacyMetadataName is retained as a compatibility metadata entry and is
+// excluded from the canonical content-file checksum.
 const legacyMetadataName = "backup.json"
 
 // EncryptionMethod is the only algorithm PART 21 permits for backups.
@@ -31,12 +34,11 @@ const EncryptionMethod = "AES-256-GCM"
 const manifestVersion = "1.0.0"
 
 // Manifest is the PART 21 manifest.json stored as the final entry of every
-// archive. It is written last so the payload checksum can be streamed rather
-// than buffering the whole archive in memory.
+// archive.
 type Manifest struct {
 	Version    string    `json:"version"`
 	CreatedAt  time.Time `json:"created_at"`
-	SnapshotAt time.Time `json:"snapshot_at,omitempty"`
+	SnapshotAt time.Time `json:"snapshot_at"`
 	CreatedBy  string    `json:"created_by"`
 	AppVersion string    `json:"app_version"`
 	Contents   []string  `json:"contents"`
@@ -44,16 +46,15 @@ type Manifest struct {
 	Encrypted  bool      `json:"encrypted"`
 	// EncryptionMethod is omitted entirely for unencrypted archives.
 	EncryptionMethod string `json:"encryption_method,omitempty"`
-	// Checksum is "sha256:" plus the hex digest of every payload entry.
-	Checksum string `json:"checksum"`
-	SHA256   string `json:"sha256,omitempty"`
+	// SHA256 is the canonical digest of the sorted per-file manifest lines.
+	SHA256 string `json:"sha256"`
 	// Kind records which PART 21 naming pattern produced this archive.
 	Kind Kind `json:"kind"`
 	// BaseBackup names the full backup an incremental was taken against.
 	BaseBackup string         `json:"base_backup,omitempty"`
 	BaseSHA256 string         `json:"base_sha256,omitempty"`
 	Deleted    []string       `json:"deleted,omitempty"`
-	Files      []ManifestFile `json:"files,omitempty"`
+	Files      []ManifestFile `json:"files"`
 	// ModifiedSince is the cutoff an incremental archive was built from.
 	ModifiedSince *time.Time `json:"modified_since,omitempty"`
 }
@@ -62,8 +63,34 @@ type Manifest struct {
 type ManifestFile struct {
 	Path     string    `json:"path"`
 	Size     int64     `json:"size"`
-	Modified time.Time `json:"modified_at"`
+	Modified time.Time `json:"-"`
 	SHA256   string    `json:"sha256"`
+}
+
+func (file ManifestFile) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Path   string `json:"path"`
+		Size   int64  `json:"size"`
+		MTime  int64  `json:"mtime"`
+		SHA256 string `json:"sha256"`
+	}{Path: file.Path, Size: file.Size, MTime: file.Modified.UTC().Unix(), SHA256: file.SHA256})
+}
+
+func (file *ManifestFile) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Path   string `json:"path"`
+		Size   int64  `json:"size"`
+		MTime  int64  `json:"mtime"`
+		SHA256 string `json:"sha256"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	file.Path = wire.Path
+	file.Size = wire.Size
+	file.Modified = time.Unix(wire.MTime, 0).UTC()
+	file.SHA256 = wire.SHA256
+	return nil
 }
 
 func manifestType(kind Kind) string {
@@ -77,41 +104,32 @@ func manifestType(kind Kind) string {
 	}
 }
 
-// payloadDigest accumulates the SHA-256 checksum recorded in the manifest.
-// Every archive entry except the manifest itself contributes its name, its
-// declared size and its bytes, so both reordering and truncation are caught.
-type payloadDigest struct {
-	hash hash.Hash
+// ManifestSHA256 computes the canonical PART 21 digest from sorted file rows.
+func ManifestSHA256(files []ManifestFile) string {
+	ordered := append([]ManifestFile(nil), files...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Path < ordered[j].Path })
+	lines := make([]string, 0, len(ordered))
+	for _, file := range ordered {
+		lines = append(lines, strings.TrimPrefix(file.SHA256, "sha256:")+"  "+file.Path)
+	}
+	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
+	return hex.EncodeToString(sum[:])
 }
 
-// newPayloadDigest returns a digest ready to accept archive entries.
-func newPayloadDigest() *payloadDigest {
-	return &payloadDigest{hash: sha256.New()}
-}
+type payloadDigest struct{ hash hash.Hash }
 
-// entry mixes an archive entry's identity into the digest before its bytes.
+func newPayloadDigest() *payloadDigest { return &payloadDigest{hash: sha256.New()} }
+
 func (d *payloadDigest) entry(name string, size int64) {
-	if d == nil {
-		return
+	if d != nil {
+		_, _ = fmt.Fprintf(d.hash, "%s\x00%d\n", name, size)
 	}
-	_, _ = fmt.Fprintf(d.hash, "%s\x00%d\n", name, size)
 }
 
-// Write mixes payload bytes into the digest, satisfying io.Writer so entries
-// can be streamed through an io.MultiWriter.
-func (d *payloadDigest) Write(p []byte) (int, error) {
-	if d == nil {
-		return len(p), nil
-	}
-	return d.hash.Write(p)
-}
+func (d *payloadDigest) Write(data []byte) (int, error) { return d.hash.Write(data) }
 
-// Sum returns the manifest checksum string.
-func (d *payloadDigest) Sum() string {
-	return "sha256:" + hex.EncodeToString(d.hash.Sum(nil))
-}
+func (d *payloadDigest) Sum() string { return hex.EncodeToString(d.hash.Sum(nil)) }
 
-// writer returns the sink an entry's bytes should be copied through.
 func (d *payloadDigest) writer(w io.Writer) io.Writer {
 	if d == nil {
 		return w

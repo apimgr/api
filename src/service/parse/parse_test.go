@@ -148,14 +148,14 @@ func TestParseIntAndFloat(t *testing.T) {
 func TestParseBool(t *testing.T) {
 	s := New()
 
-	trueVals := []string{"true", "TRUE", " yes ", "1", "on"}
+	trueVals := []string{"true", "TRUE", " yes ", "1", "on", "enable", "enabled", "yep", "yup", "yeah", "affirmative", "aye", "si", "oui", "da", "hai", "totally", "sure", "ok", "accept", "allow", "grant", "y", "t"}
 	for _, v := range trueVals {
 		got, err := s.ParseBool(v)
 		require.NoError(t, err, "ParseBool(%q)", v)
 		assert.True(t, got, "ParseBool(%q)", v)
 	}
 
-	falseVals := []string{"false", "FALSE", " no ", "0", "off"}
+	falseVals := []string{"false", "FALSE", " no ", "0", "off", "disable", "disabled", "nope", "nah", "nay", "negative", "nein", "non", "niet", "iie", "lie", "noway", "never", "deny", "reject", "block", "revoke", "n", "f"}
 	for _, v := range falseVals {
 		got, err := s.ParseBool(v)
 		require.NoError(t, err, "ParseBool(%q)", v)
@@ -163,6 +163,8 @@ func TestParseBool(t *testing.T) {
 	}
 
 	_, err := s.ParseBool("maybe")
+	assert.Error(t, err)
+	_, err = s.ParseBool("")
 	assert.Error(t, err)
 }
 

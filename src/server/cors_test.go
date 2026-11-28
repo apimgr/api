@@ -11,7 +11,7 @@ import (
 )
 
 // newCORSTestHandler wraps corsMiddleware around a trivial 200-OK handler.
-func newCORSTestHandler(cfg *config.Config) http.Handler {
+func newCORSTestHandler(cfg *config.ServerConfig) http.Handler {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -25,7 +25,7 @@ func newCORSTestHandler(cfg *config.Config) http.Handler {
 func TestCORSMiddleware_Wildcard(t *testing.T) {
 	resetLearnedOrigins()
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	handler := newCORSTestHandler(cfg)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -45,7 +45,7 @@ func TestCORSMiddleware_Wildcard(t *testing.T) {
 func TestCORSMiddleware_ExplicitOriginAllowed(t *testing.T) {
 	resetLearnedOrigins()
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Web.CORS.AllowedOrigins = []string{"https://allowed.example.com"}
 	handler := newCORSTestHandler(cfg)
 
@@ -65,7 +65,7 @@ func TestCORSMiddleware_ExplicitOriginAllowed(t *testing.T) {
 func TestCORSMiddleware_ExplicitOriginRejected(t *testing.T) {
 	resetLearnedOrigins()
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Web.CORS.AllowedOrigins = []string{"https://allowed.example.com"}
 	handler := newCORSTestHandler(cfg)
 
@@ -84,7 +84,7 @@ func TestCORSMiddleware_ExplicitOriginRejected(t *testing.T) {
 func TestCORSMiddleware_Disabled(t *testing.T) {
 	resetLearnedOrigins()
 	t.Setenv("DOMAIN", "example.com")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Web.CORS.AllowedOrigins = []string{""}
 	handler := newCORSTestHandler(cfg)
 
@@ -103,7 +103,7 @@ func TestCORSMiddleware_Disabled(t *testing.T) {
 func TestCORSMiddleware_PreflightAllowed(t *testing.T) {
 	resetLearnedOrigins()
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Web.CORS.AllowedOrigins = []string{"https://allowed.example.com"}
 	handler := newCORSTestHandler(cfg)
 
@@ -128,7 +128,7 @@ func TestCORSMiddleware_PreflightAllowed(t *testing.T) {
 func TestCORSMiddleware_PreflightRejected(t *testing.T) {
 	resetLearnedOrigins()
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	cfg.Web.CORS.AllowedOrigins = []string{"https://allowed.example.com"}
 	handler := newCORSTestHandler(cfg)
 
@@ -149,7 +149,7 @@ func TestCORSMiddleware_PreflightRejected(t *testing.T) {
 func TestCORSMiddleware_NonPreflightOptionsWithoutOrigin(t *testing.T) {
 	resetLearnedOrigins()
 	t.Setenv("DOMAIN", "")
-	cfg := &config.Config{}
+	cfg := &config.ServerConfig{}
 	handler := newCORSTestHandler(cfg)
 
 	req := httptest.NewRequest(http.MethodOptions, "/", nil)

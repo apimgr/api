@@ -88,17 +88,49 @@ func generateSecretBytes() ([]byte, error) {
 func EnsureAppSecrets(ctx context.Context) error {
 	offlineReadOnly := CacheReadOnlyOffline()
 	names := []string{SecretInstallationSecret, SecretCookieSigningKey, SecretCSRFTokenSecret}
+	missing := make(map[string][]byte)
 	for _, name := range names {
-		secret, err := LoadSecret(ctx, name)
+		_, err := LoadSecret(ctx, name)
 		if errors.Is(err, ErrSecretNotFound) {
 			if offlineReadOnly {
 				return fmt.Errorf("required secret %s is missing from the fresh read-only libsql cache", name)
 			}
-			if _, err := generateSecret(ctx, name); err != nil {
+			value, err := generateSecretBytes()
+			if err != nil {
 				return err
 			}
+			missing[name] = value
 			continue
 		}
+		if err != nil {
+			return err
+		}
+	}
+	if len(missing) > 0 {
+		queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		err := withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
+			for _, name := range names {
+				value, needed := missing[name]
+				if !needed {
+					continue
+				}
+				if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO NOTHING`, name, base64.StdEncoding.EncodeToString(value), now); err != nil {
+					return err
+				}
+				if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO NOTHING`, name+"_at", now, now); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		cancel()
+		if err != nil {
+			return fmt.Errorf("initialize app secrets transaction: %w", err)
+		}
+	}
+	for _, name := range names {
+		secret, err := LoadSecret(ctx, name)
 		if err != nil {
 			return err
 		}
@@ -137,11 +169,14 @@ func generateSecret(ctx context.Context, name string) (Secret, error) {
 	}
 	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
 	defer cancel()
-	now := time.Now().UTC()
-	_, err = execContext(queryCtx, serverDB,
-		`INSERT INTO app_secrets (name, value, created_at) VALUES (?, ?, ?)
-		 ON CONFLICT(name) DO NOTHING`,
-		name, base64.StdEncoding.EncodeToString(value), now.Unix())
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	err = withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
+		if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO NOTHING`, name, base64.StdEncoding.EncodeToString(value), now); err != nil {
+			return err
+		}
+		_, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO NOTHING`, name+"_at", now, now)
+		return err
+	})
 	if err != nil {
 		return Secret{}, fmt.Errorf("store secret %s: %w", name, err)
 	}
@@ -154,18 +189,11 @@ func LoadSecret(ctx context.Context, name string) (Secret, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
 	defer cancel()
 
-	var (
-		encoded         string
-		previous        sql.NullString
-		previousExpires sql.NullInt64
-		createdAt       int64
-		rotatedAt       sql.NullInt64
-	)
-	const loadSecretQuery = `SELECT value, previous_value, previous_expires_at, created_at, rotated_at
-		 FROM app_secrets WHERE name = ?`
+	var encoded, updatedAt string
+	const loadSecretQuery = `SELECT value, updated_at FROM app_secrets WHERE name = ?`
 
 	row := queryRowContext(queryCtx, serverDB, loadSecretQuery, name)
-	if err := row.Scan(&encoded, &previous, &previousExpires, &createdAt, &rotatedAt); err != nil {
+	if err := row.Scan(&encoded, &updatedAt); err != nil {
 		recordQueryError(loadSecretQuery, err)
 		if errors.Is(err, sql.ErrNoRows) {
 			return Secret{}, ErrSecretNotFound
@@ -178,23 +206,34 @@ func LoadSecret(ctx context.Context, name string) (Secret, error) {
 		return Secret{}, fmt.Errorf("decode secret %s: %w", name, err)
 	}
 
-	secret := Secret{
-		Name:      name,
-		Value:     value,
-		CreatedAt: time.Unix(createdAt, 0).UTC(),
+	secret := Secret{Name: name, Value: value}
+	if parsed, err := time.Parse(time.RFC3339Nano, updatedAt); err == nil {
+		secret.CreatedAt = parsed.UTC()
 	}
-	if previous.Valid && previous.String != "" {
-		prev, err := base64.StdEncoding.DecodeString(previous.String)
+	if previousValue, err := GetAppSecretValue(ctx, name+"_previous"); err == nil && previousValue != "" {
+		prev, err := base64.StdEncoding.DecodeString(previousValue)
 		if err != nil {
 			return Secret{}, fmt.Errorf("decode previous secret %s: %w", name, err)
 		}
 		secret.Previous = prev
+	} else if err != nil && !errors.Is(err, ErrSecretNotFound) {
+		return Secret{}, err
 	}
-	if previousExpires.Valid {
-		secret.PreviousExpiresAt = time.Unix(previousExpires.Int64, 0).UTC()
+	if expiry, err := GetAppSecretValue(ctx, name+"_previous_until"); err == nil {
+		secret.PreviousExpiresAt, err = time.Parse(time.RFC3339Nano, expiry)
+		if err != nil {
+			return Secret{}, fmt.Errorf("decode previous secret expiry %s: %w", name, err)
+		}
+	} else if !errors.Is(err, ErrSecretNotFound) {
+		return Secret{}, err
 	}
-	if rotatedAt.Valid {
-		secret.RotatedAt = time.Unix(rotatedAt.Int64, 0).UTC()
+	if rotatedAt, err := GetAppSecretValue(ctx, name+"_at"); err == nil {
+		secret.RotatedAt, err = time.Parse(time.RFC3339Nano, rotatedAt)
+		if err != nil {
+			return Secret{}, fmt.Errorf("decode secret rotation time %s: %w", name, err)
+		}
+	} else if !errors.Is(err, ErrSecretNotFound) {
+		return Secret{}, err
 	}
 	return secret, nil
 }
@@ -205,9 +244,9 @@ func SetAppSecretValue(ctx context.Context, name, value string) error {
 	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
 	defer cancel()
 	_, err := execContext(queryCtx, serverDB,
-		`INSERT INTO app_secrets (name, value, created_at) VALUES (?, ?, ?)
-		 ON CONFLICT(name) DO UPDATE SET value = excluded.value`,
-		name, value, time.Now().UTC().Unix())
+		`INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		name, value, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("store app secret value %s: %w", name, err)
 	}
@@ -275,20 +314,13 @@ func RotateSecretWithTransition(ctx context.Context, name string, transition fun
 	queryCtx, cancel := context.WithTimeout(ctx, secretQueryTimeout)
 	defer cancel()
 	if err := withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
-		result, err := execTxContext(queryCtx, tx,
-			`UPDATE app_secrets SET previous_value = ?, previous_expires_at = ? WHERE name = ?`,
-			base64.StdEncoding.EncodeToString(current.Value),
-			now.Add(secretGraceWindow).Unix(),
-			name)
-		if err != nil {
-			return err
-		}
-		updated, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if updated != 1 {
-			return fmt.Errorf("secret row changed during rotation")
+		for _, row := range []struct{ name, value string }{
+			{name + "_previous", base64.StdEncoding.EncodeToString(current.Value)},
+			{name + "_previous_until", now.Add(secretGraceWindow).UTC().Format(time.RFC3339Nano)},
+		} {
+			if _, err := execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, row.name, row.value, now.Format(time.RFC3339Nano)); err != nil {
+				return err
+			}
 		}
 		return nil
 	}); err != nil {
@@ -296,8 +328,8 @@ func RotateSecretWithTransition(ctx context.Context, name string, transition fun
 	}
 	if err := withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
 		result, err := execTxContext(queryCtx, tx,
-			`UPDATE app_secrets SET value = ?, rotated_at = ? WHERE name = ?`,
-			base64.StdEncoding.EncodeToString(next), now.Unix(), name)
+			`UPDATE app_secrets SET value = ?, updated_at = ? WHERE name = ?`,
+			base64.StdEncoding.EncodeToString(next), now.Format(time.RFC3339Nano), name)
 		if err != nil {
 			return err
 		}
@@ -308,10 +340,11 @@ func RotateSecretWithTransition(ctx context.Context, name string, transition fun
 		if updated != 1 {
 			return fmt.Errorf("secret row changed during rotation")
 		}
-		return nil
+		_, err = execTxContext(queryCtx, tx, `INSERT INTO app_secrets (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, name+"_at", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+		return err
 	}); err != nil {
 		clearErr := withWriteTransaction(queryCtx, serverDB, func(tx *sql.Tx) error {
-			_, clearErr := execTxContext(queryCtx, tx, `UPDATE app_secrets SET previous_value = NULL, previous_expires_at = NULL WHERE name = ?`, name)
+			_, clearErr := execTxContext(queryCtx, tx, `DELETE FROM app_secrets WHERE name IN (?, ?)`, name+"_previous", name+"_previous_until")
 			return clearErr
 		})
 		return fmt.Errorf("persist rotated secret %s: %w", name, errors.Join(err, clearErr))

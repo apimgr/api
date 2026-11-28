@@ -28,13 +28,13 @@ type TaskInfo struct {
 // HistoryEntry is one row of a task's execution history, backing
 // `scheduler history <id>`.
 type HistoryEntry struct {
-	ID          int64     `json:"id"`
-	TaskID      string    `json:"task_id"`
-	StartedAt   time.Time `json:"started_at"`
-	CompletedAt time.Time `json:"completed_at"`
-	Status      string    `json:"status"`
-	Error       string    `json:"error"`
-	DurationMS  int64     `json:"duration_ms"`
+	ID         any       `json:"id"`
+	TaskID     string    `json:"task_id"`
+	StartedAt  time.Time `json:"started_at"`
+	FinishedAt time.Time `json:"finished_at"`
+	Status     string    `json:"status"`
+	Error      string    `json:"error"`
+	DurationMS int64     `json:"duration_ms"`
 }
 
 // ErrUnknownTask is returned when a CLI command names a task that is not
@@ -148,13 +148,13 @@ func (s *Scheduler) TaskHistory(id string, limit int) ([]HistoryEntry, error) {
 	entries := make([]HistoryEntry, 0, len(rows))
 	for _, row := range rows {
 		entries = append(entries, HistoryEntry{
-			ID:          row.ID,
-			TaskID:      row.TaskID,
-			StartedAt:   row.StartedAt,
-			CompletedAt: row.CompletedAt,
-			Status:      row.Status,
-			Error:       row.Error,
-			DurationMS:  row.DurationMS,
+			ID:         row.ID,
+			TaskID:     row.TaskID,
+			StartedAt:  row.StartedAt,
+			FinishedAt: row.FinishedAt,
+			Status:     row.Status,
+			Error:      row.Error,
+			DurationMS: row.DurationMS,
 		})
 	}
 

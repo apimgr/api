@@ -39,6 +39,29 @@ func TestClaimRuntimeDirsNoOpWithoutTarget(t *testing.T) {
 	assert.NoError(t, ClaimRuntimeDirs(-1, -1))
 }
 
+func TestRuntimeDirectoryModeAndPermissions(t *testing.T) {
+	assert.Equal(t, os.FileMode(0o755), runtimeDirectoryMode(true))
+	assert.Equal(t, os.FileMode(0o700), runtimeDirectoryMode(false))
+
+	for _, test := range []struct {
+		name string
+		mode os.FileMode
+	}{
+		{"system", runtimeDirectoryMode(true)},
+		{"user", runtimeDirectoryMode(false)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := filepath.Join(t.TempDir(), "runtime")
+			require.NoError(t, os.Mkdir(directory, 0o777))
+			require.NoError(t, os.Chmod(directory, 0o777))
+			require.NoError(t, prepareRuntimeDirs([]string{directory}, test.mode))
+			info, err := os.Stat(directory)
+			require.NoError(t, err)
+			assert.Equal(t, test.mode, info.Mode().Perm())
+		})
+	}
+}
+
 // chownTree must walk the whole tree and must not fail when re-applying
 // the ownership the caller already holds.
 func TestChownTreeIsRecursive(t *testing.T) {

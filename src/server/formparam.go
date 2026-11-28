@@ -42,7 +42,7 @@ var formBodyContextKey = formBodyContextKeyType{}
 // Existing shapes are untouched: any other content type (JSON, raw text) is
 // passed through unread, and an explicit query parameter always wins over a
 // form field of the same name.
-func formInputMiddleware(next http.Handler, configs ...*config.Config) http.Handler {
+func formInputMiddleware(next http.Handler, configs ...*config.ServerConfig) http.Handler {
 	limit := int64(formValueLimit)
 	if len(configs) > 0 && configs[0] != nil {
 		limit = configs[0].Server.Limits.MaxBodySizeBytes()
@@ -208,6 +208,9 @@ func registerFormFallbacks(router *chi.Mux) {
 		if !strings.HasPrefix(route, "/api/") {
 			return nil
 		}
+		if !apiRouteHasFormFallback(method, route) {
+			return nil
+		}
 		pattern := formFallbackPattern(route)
 		if pattern == "" {
 			return nil
@@ -236,4 +239,14 @@ func registerFormFallbacks(router *chi.Mux) {
 		}
 		router.Method(route.method, route.pattern, route.handler)
 	}
+}
+
+// apiRouteHasFormFallback excludes machine-driven routes without an HTML form
+// whose parameterless URL would be an unintended public endpoint.
+func apiRouteHasFormFallback(method, route string) bool {
+	if strings.Contains(route, "/cli/binaries/") || strings.Contains(route, "/server/reports/") {
+		return false
+	}
+	return !(strings.HasPrefix(route, "/api/") && strings.Contains(route, "/server/preferences/tokens/") &&
+		(method == http.MethodPatch || method == http.MethodDelete))
 }

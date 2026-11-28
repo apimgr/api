@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/swagger"
@@ -47,18 +48,29 @@ func TestMCPToolsUseRegisteredRoutesAndMethodAnnotations(t *testing.T) {
 	cfg := config.DefaultConfig()
 	routes := []swagger.Route{
 		{Method: http.MethodGet, Path: "/api/v1/health"},
+		{Method: http.MethodGet, Path: "/api/v1/text/uuid"},
 		{Method: http.MethodDelete, Path: "/api/v1/items/{id}"},
 		{Method: http.MethodPost, Path: "/api/v1/server/preferences/tokens/primary"},
 		{Method: http.MethodGet, Path: "/api/v1/server/metrics"},
 	}
 	tools := mcpTools(cfg, routes)
 	require.Contains(t, tools, "get_api_v1_health")
+	require.Contains(t, tools, "get_api_api_version_text_uuid")
 	require.Contains(t, tools, "delete_api_v1_items_id")
 	require.NotContains(t, tools, "post_api_v1_server_preferences_tokens_primary")
 	require.NotContains(t, tools, "get_api_v1_server_metrics")
-	require.Equal(t, true, tools["get_api_v1_health"].Annotations["readOnlyHint"])
-	require.Equal(t, true, tools["delete_api_v1_items_id"].Annotations["destructiveHint"])
-	require.Equal(t, true, tools["delete_api_v1_items_id"].Annotations["idempotentHint"])
+	require.Equal(t, true, mcpAnnotationValue(tools["get_api_v1_health"].Annotations, "readOnlyHint"))
+	require.Equal(t, true, mcpAnnotationValue(tools["delete_api_v1_items_id"].Annotations, "destructiveHint"))
+	require.Equal(t, true, mcpAnnotationValue(tools["delete_api_v1_items_id"].Annotations, "idempotentHint"))
+}
+
+func mcpAnnotationValue(fields sanitize.TaggedObject, name string) interface{} {
+	for _, field := range fields {
+		if field.Name == name {
+			return field.Value
+		}
+	}
+	return nil
 }
 
 func TestDecodeMCPNameBase64EncodedHeader(t *testing.T) {
@@ -104,4 +116,26 @@ func TestMCPHeaderMismatchAndSuccessfulToolDispatch(t *testing.T) {
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &result))
 	require.Len(t, result.Result.Content, 1)
 	require.JSONEq(t, `{"ok":true}`, result.Result.Content[0].Text)
+}
+
+func TestOwnerTokenScopeAllowsMethod(t *testing.T) {
+	for _, test := range []struct {
+		scope  string
+		method string
+		allow  bool
+	}{
+		{"read", http.MethodGet, true},
+		{"read", http.MethodHead, true},
+		{"read", http.MethodOptions, true},
+		{"read", http.MethodPost, false},
+		{"read", http.MethodPut, false},
+		{"read", http.MethodPatch, false},
+		{"read", http.MethodDelete, false},
+		{"read-write", http.MethodPost, true},
+		{"global", http.MethodDelete, true},
+	} {
+		if got := ownerTokenScopeAllowsMethod(test.scope, test.method); got != test.allow {
+			t.Errorf("ownerTokenScopeAllowsMethod(%q, %q) = %v, want %v", test.scope, test.method, got, test.allow)
+		}
+	}
 }

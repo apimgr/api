@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // Service provides language/translation utilities
@@ -100,7 +102,7 @@ func (s *Service) Dictionary(ctx context.Context, word string) (*DictionaryResul
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := httpClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("dictionary provider request failed: %w", err)
 	}
@@ -192,7 +194,7 @@ func datamuseWords(ctx context.Context, relation, word string) ([]string, error)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := httpClient.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("thesaurus provider request failed: %w", err)
 	}

@@ -55,20 +55,12 @@ func loopbackOnlyMiddleware(next http.Handler) http.Handler {
 func torStatusHandler(w http.ResponseWriter, r *http.Request) {
 	m := tor.Get()
 	if m == nil {
-		writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-			"running": false,
-			"address": "",
-		})
+		writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("running", false), responseField("address", "")))
 		return
 	}
 
 	cfg := m.ConfigSnapshot()
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"running":      m.Running(),
-		"address":      m.OnionAddress(),
-		"virtual_port": cfg.VirtualPort,
-		"use_network":  cfg.UseNetwork,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("running", m.Running()), responseField("address", m.OnionAddress()), responseField("virtual_port", cfg.VirtualPort), responseField("use_network", cfg.UseNetwork)))
 }
 
 // torValidateHandler implements POST /server/tor/validate (INTERNAL,
@@ -92,10 +84,7 @@ func torValidateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"valid":  len(issues) == 0,
-		"issues": issues,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("valid", len(issues) == 0), responseField("issues", issues)))
 }
 
 // torRestartHandler implements POST /server/tor/restart (INTERNAL,
@@ -115,9 +104,7 @@ func torRestartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"address": m.OnionAddress(),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("address", m.OnionAddress())))
 }
 
 // torRegenerateHandler implements POST /server/tor/regenerate (INTERNAL,
@@ -138,9 +125,7 @@ func torRegenerateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"address": address,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("address", address)))
 }
 
 // torVanityStartRequest is the POST /server/tor/vanity/start body.
@@ -183,6 +168,11 @@ func torVanityStartHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
+	if !m.SetVanityCancel(cancel, req.Prefix) {
+		writeEnvelopeError(w, http.StatusConflict, "CONFLICT", "A vanity search is already running", responseObject(responseField("prefix", m.VanityPrefix())))
+		return
+	}
+	defer m.ClearVanityCancel()
 
 	result, err := tor.GenerateVanityAddress(ctx, req.Prefix, req.MaxAttempts)
 	if err != nil {
@@ -192,11 +182,21 @@ func torVanityStartHandler(w http.ResponseWriter, r *http.Request) {
 
 	m.SetLastVanity(result)
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"address":         result.Address,
-		"attempts":        result.Attempts,
-		"elapsed_seconds": result.Elapsed.Seconds(),
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("address", result.Address), responseField("attempts", result.Attempts), responseField("elapsed_seconds", result.Elapsed.Seconds())))
+}
+
+func torVanityStopHandler(w http.ResponseWriter, r *http.Request) {
+	m := tor.Get()
+	if m == nil {
+		writeLocalizedAPIError(w, r, http.StatusServiceUnavailable, "TOR_NOT_CONFIGURED")
+		return
+	}
+	stopped := m.StopVanity()
+	candidates := []string{}
+	if candidate := m.LastVanity(); candidate != nil {
+		candidates = append(candidates, candidate.Address)
+	}
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("stopped", stopped), responseField("candidates", candidates)))
 }
 
 // torVanityApplyHandler implements POST /server/tor/vanity/apply (INTERNAL,
@@ -218,9 +218,7 @@ func torVanityApplyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"address": address,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("address", address)))
 }
 
 // torImportKeysRequest is the POST /server/tor/import-keys body. KeyBlob is
@@ -261,7 +259,5 @@ func torImportKeysHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeEnvelopeOK(w, http.StatusOK, map[string]interface{}{
-		"address": address,
-	})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("address", address)))
 }

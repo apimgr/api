@@ -84,6 +84,7 @@ func rewriteRestoredTLSConfig(path string, external map[string]string, ensure bo
 		return err
 	}
 	if err := os.WriteFile(path, updated, info.Mode().Perm()); err != nil {
+		reportCriticalWriteError(err)
 		return err
 	}
 	return nil

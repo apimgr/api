@@ -33,6 +33,7 @@ func LangFromRequest(r *http.Request) string {
 		if lang, ok := normalizeEnabled(q, enabled); ok {
 			return lang
 		}
+		return DefaultLanguage
 	}
 
 	if c, err := r.Cookie(CookieName); err == nil && c.Value != "" {
@@ -125,17 +126,26 @@ func langFromAcceptLanguageEnabled(header string, enabled []string) (string, boo
 	return best.lang, true
 }
 
-// LanguageMiddleware resolves the request language via LangFromRequest,
-// stores it in the request context (retrievable with LangFromContext), and
-// — when the resolution came from an explicit ?lang= query parameter —
-// persists the choice to CookieName for one year.
+// LanguageMiddleware resolves the request language via LangFromRequest and
+// stores it in the request context. It does not persist a preference because
+// it has no consent decision; use LanguageMiddlewareForConsent for that.
 func LanguageMiddleware(next http.Handler) http.Handler {
 	return LanguageMiddlewareFor(SupportedLanguageCodes())(next)
 }
 
 // LanguageMiddlewareFor negotiates requests against the configured enabled
-// language set while preserving the standard fallback chain.
+// language set without persisting preferences.
 func LanguageMiddlewareFor(enabled []string) func(http.Handler) http.Handler {
+	return languageMiddlewareFor(enabled, nil)
+}
+
+// LanguageMiddlewareForConsent negotiates the request language and persists a
+// query-selected language only when the caller confirms Preferences consent.
+func LanguageMiddlewareForConsent(enabled []string, consent func(*http.Request) bool) func(http.Handler) http.Handler {
+	return languageMiddlewareFor(enabled, consent)
+}
+
+func languageMiddlewareFor(enabled []string, consent func(*http.Request) bool) func(http.Handler) http.Handler {
 	if len(enabled) == 0 {
 		enabled = SupportedLanguageCodes()
 	}
@@ -148,15 +158,17 @@ func LanguageMiddlewareFor(enabled []string) func(http.Handler) http.Handler {
 
 			if q := r.URL.Query().Get(QueryParam); q != "" {
 				if normalized, ok := normalizeEnabled(q, allowed); ok && normalized == lang {
-					http.SetCookie(w, &http.Cookie{
-						Name:     CookieName,
-						Value:    lang,
-						Path:     "/",
-						MaxAge:   int((365 * 24 * time.Hour).Seconds()),
-						HttpOnly: true,
-						Secure:   r.TLS != nil,
-						SameSite: http.SameSiteLaxMode,
-					})
+					if consent != nil && consent(r) {
+						http.SetCookie(w, &http.Cookie{
+							Name:     CookieName,
+							Value:    lang,
+							Path:     "/",
+							MaxAge:   int((365 * 24 * time.Hour).Seconds()),
+							HttpOnly: false,
+							Secure:   r.TLS != nil,
+							SameSite: http.SameSiteLaxMode,
+						})
+					}
 				}
 			}
 

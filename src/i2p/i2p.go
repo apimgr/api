@@ -27,16 +27,16 @@ import (
 	"github.com/apimgr/api/src/paths"
 )
 
-// State is the operator-safe lifecycle state used by status and health output.
-type State string
+// I2PState is the operator-safe lifecycle state used by status and health output.
+type I2PState string
 
 const (
-	StateDisabled   State = "disabled"
-	StateNoProvider State = "no_provider"
-	StateStarting   State = "starting"
-	StateBuilding   State = "building"
-	StateRunning    State = "running"
-	StateError      State = "error"
+	StateDisabled   I2PState = "disabled"
+	StateNoProvider I2PState = "no_provider"
+	StateStarting   I2PState = "starting"
+	StateBuilding   I2PState = "building"
+	StateRunning    I2PState = "running"
+	StateError      I2PState = "error"
 )
 
 // Provider identifies the SAM provider selected for the eepsite.
@@ -52,7 +52,7 @@ const (
 type Snapshot struct {
 	Enabled  bool
 	Running  bool
-	State    State
+	I2PState I2PState
 	Provider Provider
 	Address  string
 }
@@ -61,7 +61,7 @@ type Snapshot struct {
 type Manager struct {
 	mu            sync.RWMutex
 	cfg           config.I2PConfig
-	state         State
+	state         I2PState
 	provider      Provider
 	address       string
 	service       *service
@@ -331,7 +331,7 @@ func (m *Manager) monitor(ctx context.Context, svc *service, provider Provider) 
 	}
 }
 
-func (m *Manager) setState(state State, provider Provider, address string) {
+func (m *Manager) setState(state I2PState, provider Provider, address string) {
 	m.mu.Lock()
 	m.state, m.provider, m.address = state, provider, address
 	m.mu.Unlock()
@@ -341,7 +341,7 @@ func (m *Manager) setState(state State, provider Provider, address string) {
 func (m *Manager) Snapshot() Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return Snapshot{Enabled: m.cfg.Enabled && m.provider != ProviderNone, Running: m.state == StateRunning, State: m.state, Provider: m.provider, Address: m.address}
+	return Snapshot{Enabled: m.cfg.Enabled && m.provider != ProviderNone, Running: m.state == StateRunning, I2PState: m.state, Provider: m.provider, Address: m.address}
 }
 
 // Address returns the active .b32.i2p destination, if available.

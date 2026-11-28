@@ -14,8 +14,8 @@ import (
 )
 
 func TestGet_ReturnsSingleton(t *testing.T) {
-	m1 := Get()
-	m2 := Get()
+	m1 := GetMetrics()
+	m2 := GetMetrics()
 	assert.Same(t, m1, m2)
 }
 
@@ -103,4 +103,5 @@ func TestServePrometheus(t *testing.T) {
 	assert.True(t, strings.Contains(body, "api_http_requests_total"))
 	assert.True(t, strings.Contains(body, "api_app_info"))
 	assert.True(t, strings.Contains(body, "api_app_uptime_seconds"))
+	assert.NotContains(t, body, "api_auth_sessions_active")
 }

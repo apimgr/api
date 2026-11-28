@@ -47,7 +47,7 @@ func LastAutoTightenChanges() []AutoTightenChange {
 // edited or reverted. No IDEA.md, or an IDEA.md with no "## Compliance
 // declarations" section, or one that declares nothing: cfg is returned
 // unmodified ("everyone" defaults stay loose, per spec).
-func applyIdeaHeaderAutoMap(cfg *Config) {
+func applyIdeaHeaderAutoMap(cfg *ServerConfig) {
 	declared := loadComplianceDeclarations()
 
 	changes := buildHeaderAutoMap(cfg, declared)
@@ -215,7 +215,7 @@ var referrerRank = map[string]int{
 // project genuinely has no implementation path for (payment-page
 // frame-ancestors/X-Frame-Options overrides, PHI-endpoint Cache-Control)
 // are intentionally not applied — see the doc comments on each skip below.
-func buildHeaderAutoMap(cfg *Config, declared map[string][]string) []AutoTightenChange {
+func buildHeaderAutoMap(cfg *ServerConfig, declared map[string][]string) []AutoTightenChange {
 	var changes []AutoTightenChange
 
 	coppa := declHas(declared, "audience", "children") || declHas(declared, "compliance", "coppa")

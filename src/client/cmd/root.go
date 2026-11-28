@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/apimgr/api/src/client/api"
+	"github.com/apimgr/api/src/client/caps"
 	"github.com/apimgr/api/src/client/config"
 	"github.com/apimgr/api/src/client/paths"
 	cliupdate "github.com/apimgr/api/src/client/update"
@@ -129,8 +130,23 @@ func Execute(argv []string, build BuildInfo) int {
 	client.Lang = outputLanguage
 	client.Debug = flags.Debug || cfg.Debug
 
-	mode := detectMode(argv[1:])
-	if server == "" && mode != ModeTUI {
+	mode, modeError := resolveDisplayMode(detectMode(argv[1:]), cfg.Display.Mode, caps.GUISupported)
+	if modeError != "" {
+		message := "Error: GUI mode is not available in this build."
+		if modeError == "tui_unavailable" {
+			message = cliText("cli.client.tui_unavailable", "Error: TUI mode is not available in this build.")
+		} else {
+			message = cliText("cli.client.gui_unavailable", message)
+		}
+		fmt.Fprintln(os.Stderr, message)
+		return ExitUsageBad
+	}
+	if mode == ClientDisplayModeHeadless {
+		fmt.Fprintln(os.Stderr, cliText("cli.client.no_command", "Error: no command given."))
+		fmt.Fprintln(os.Stderr, cliText("cli.client.help_hint", "Run with --help for usage."))
+		return ExitUsageBad
+	}
+	if server == "" && mode != ClientDisplayModeTUI {
 		fmt.Fprintln(os.Stderr, cliText("cli.client.no_server", "Error: no server configured."))
 		fmt.Fprintln(os.Stderr, i18n.TranslateFormat(outputLanguage, "cli.client.configure_server", map[string]string{"config": paths.ConfigFile()}))
 		return ExitConn
@@ -143,8 +159,8 @@ func Execute(argv []string, build BuildInfo) int {
 	// cli.yml tui.enabled: false forces CLI-only operation for
 	// accessibility or preference; auto-detection stays the default,
 	// per PART 32.
-	if mode == ModeTUI && !cfg.TUI.Enabled {
-		mode = ModeCLI
+	if mode == ClientDisplayModeTUI && !cfg.TUI.Enabled {
+		mode = ClientDisplayModeCLI
 	}
 
 	if server != "" {
@@ -155,6 +171,9 @@ func Execute(argv []string, build BuildInfo) int {
 				return ExitConn
 			}
 		} else {
+			if decision.VersionMismatch {
+				fmt.Fprintln(os.Stderr, i18n.TranslateFormat(outputLanguage, "cli.client.version_mismatch", map[string]string{"cli_version": build.Version, "server_version": decision.Discovery.Data.Version}))
+			}
 			if flags.Update == "check" {
 				if decision.Available {
 					_, _ = fmt.Fprintln(os.Stdout, i18n.TranslateFormat(outputLanguage, "cli.client.update_available", map[string]string{"version": decision.Release.Version}))
@@ -181,7 +200,7 @@ func Execute(argv []string, build BuildInfo) int {
 					if stdinIsInteractive() && !promptForUpdate(decision.Release.Version) {
 						return ExitSuccess
 					}
-					if err := cliupdate.Install(context.Background(), server, token, build.Version, decision.Release, &http.Client{Timeout: 10 * time.Minute}, logFile); err != nil {
+					if err := cliupdate.Install(context.Background(), server, token, build.Version, decision.Discovery.Data.API.CurrentVersion, decision.Release, &http.Client{Timeout: 10 * time.Minute}, logFile); err != nil {
 						fmt.Fprintln(os.Stderr, cliText("cli.client.update_failed", "Error: CLI update failed."))
 						return ExitGeneral
 					}
@@ -197,7 +216,7 @@ func Execute(argv []string, build BuildInfo) int {
 			}
 			if decision.Available {
 				if stdinIsInteractive() && promptForUpdate(decision.Release.Version) {
-					if err := cliupdate.Install(context.Background(), server, token, build.Version, decision.Release, &http.Client{Timeout: 10 * time.Minute}, logFile); err != nil {
+					if err := cliupdate.Install(context.Background(), server, token, build.Version, decision.Discovery.Data.API.CurrentVersion, decision.Release, &http.Client{Timeout: 10 * time.Minute}, logFile); err != nil {
 						fmt.Fprintln(os.Stderr, cliText("cli.client.update_failed", "Error: CLI update failed."))
 						return ExitGeneral
 					}
@@ -210,7 +229,7 @@ func Execute(argv []string, build BuildInfo) int {
 		}
 	}
 
-	if mode == ModeTUI {
+	if mode == ClientDisplayModeTUI {
 		if TUILauncher == nil {
 			fmt.Fprintln(os.Stderr, cliText("cli.client.tui_unavailable", "Error: TUI mode is not available in this build."))
 			return ExitGeneral
@@ -452,6 +471,7 @@ func printHelp(binName string, build BuildInfo) {
 	}
 	fmt.Printf("\n%s\n\n", cliText("cli.client.shells", "Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh"))
 	fmt.Printf("%s\n", cliText("cli.client.run_tui", "Run without arguments for interactive TUI mode."))
+	fmt.Printf("%s\n", cliText("cli.client.display_mode", "Config display.mode: auto, tui, or gui (GUI is unavailable in the static build)."))
 	fmt.Printf("%s\n", i18n.TranslateFormat(outputLanguage, "cli.client.run_command", map[string]string{"command": binName + " <category> <command>"}))
 }
 

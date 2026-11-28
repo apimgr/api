@@ -17,7 +17,7 @@ import (
 // decision helper returns Blocked=false for disabled GeoIP, unparseable or
 // private addresses, allowlisted addresses, an unconfigured rule set, a
 // missing country database, and an unknown country.
-func geoIPMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func geoIPMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isAllowlistedRequest(r) {
@@ -30,7 +30,7 @@ func geoIPMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 			}
 
 			clientIP := getClientIP(r)
-			decision := geoip.Get().CheckCountry(clientIP, cfg.Server.GeoIP, cfg.Server.Security.Allowlist)
+			decision := geoip.GetGeoIPDatabase().CheckCountry(clientIP, cfg.Server.GeoIP, cfg.Server.Security.Allowlist)
 			if !decision.Blocked {
 				next.ServeHTTP(w, r)
 				return

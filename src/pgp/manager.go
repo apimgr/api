@@ -26,6 +26,7 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
+	"github.com/apimgr/api/src/common/requestid"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/paths"
@@ -67,7 +68,7 @@ func KeyPaths() (publicPath, privatePath, oldPrivatePath, statePath string) {
 }
 
 // Generate creates and persists the disclosure keypair and initial metadata.
-func Generate(ctx context.Context, cfg *config.Config) (database.SecurityPGPMetadata, error) {
+func Generate(ctx context.Context, cfg *config.ServerConfig) (database.SecurityPGPMetadata, error) {
 	keyLifecycleMu.Lock()
 	defer keyLifecycleMu.Unlock()
 	unlockReports := database.LockSecurityReportKey()
@@ -222,7 +223,7 @@ func Fingerprint(armored string) (string, error) {
 
 // Rotate generates a replacement key and re-encrypts retained PGP reports
 // transactionally before switching the on-disk keypair.
-func Rotate(ctx context.Context, cfg *config.Config) (database.SecurityPGPMetadata, error) {
+func Rotate(ctx context.Context, cfg *config.ServerConfig) (database.SecurityPGPMetadata, error) {
 	keyLifecycleMu.Lock()
 	defer keyLifecycleMu.Unlock()
 	if _, err := recoverStagedRotation(ctx, cfg); err != nil {
@@ -326,7 +327,7 @@ func Rotate(ctx context.Context, cfg *config.Config) (database.SecurityPGPMetada
 // RecoverRotation completes or discards staged PGP key files left by an
 // interrupted rotation. Call after database and app-secret initialization,
 // before accepting security-report submissions.
-func RecoverRotation(ctx context.Context, cfg *config.Config) error {
+func RecoverRotation(ctx context.Context, cfg *config.ServerConfig) error {
 	keyLifecycleMu.Lock()
 	defer keyLifecycleMu.Unlock()
 	_, err := recoverStagedRotation(ctx, cfg)
@@ -428,7 +429,7 @@ func renameStagedFile(source, destination string) error {
 	return nil
 }
 
-func recoverStagedRotation(ctx context.Context, cfg *config.Config) (bool, error) {
+func recoverStagedRotation(ctx context.Context, cfg *config.ServerConfig) (bool, error) {
 	publicStage, privateStage, stateStage := rotationStagePaths()
 	publicPath, privatePath, oldPrivatePath, statePath := KeyPaths()
 	stages := []string{publicStage, privateStage, stateStage}
@@ -636,13 +637,13 @@ func intersectsKeyIDs(left, right map[uint64]struct{}) bool {
 }
 
 // Publish submits the stored public key to configured HTTPS keyservers.
-func Publish(ctx context.Context, cfg *config.Config) error {
+func Publish(ctx context.Context, cfg *config.ServerConfig) error {
 	keyLifecycleMu.Lock()
 	defer keyLifecycleMu.Unlock()
 	return publishLocked(ctx, cfg)
 }
 
-func publishLocked(ctx context.Context, cfg *config.Config) error {
+func publishLocked(ctx context.Context, cfg *config.ServerConfig) error {
 	publicKey, err := ReadPublic()
 	if err != nil {
 		return err
@@ -715,7 +716,7 @@ func publishLocked(ctx context.Context, cfg *config.Config) error {
 }
 
 // RetryDue attempts configured keyservers whose persisted backoff time passed.
-func RetryDue(ctx context.Context, cfg *config.Config) error {
+func RetryDue(ctx context.Context, cfg *config.ServerConfig) error {
 	keyLifecycleMu.Lock()
 	defer keyLifecycleMu.Unlock()
 	state, err := loadState()
@@ -770,7 +771,7 @@ func VerifyEncryptedKeyPair(sealedPrivate, installationSecret, publicKey []byte)
 }
 
 // ImportPrivate validates, encrypts, and installs an existing private key.
-func ImportPrivate(ctx context.Context, cfg *config.Config, armored string, allowIdentityMismatch bool) (database.SecurityPGPMetadata, error) {
+func ImportPrivate(ctx context.Context, cfg *config.ServerConfig, armored string, allowIdentityMismatch bool) (database.SecurityPGPMetadata, error) {
 	keyLifecycleMu.Lock()
 	defer keyLifecycleMu.Unlock()
 	unlockReports := database.LockSecurityReportKey()
@@ -856,7 +857,7 @@ func ImportPrivate(ctx context.Context, cfg *config.Config, armored string, allo
 }
 
 // Delete removes installed key files but retains a revoked fingerprint record.
-func Delete(ctx context.Context, cfg *config.Config) error {
+func Delete(ctx context.Context, cfg *config.ServerConfig) error {
 	keyLifecycleMu.Lock()
 	defer keyLifecycleMu.Unlock()
 	unlockReports := database.LockSecurityReportKey()
@@ -906,7 +907,7 @@ func signRotation(oldPrivate, newPublic string) (string, error) {
 	return signature.String(), nil
 }
 
-func securityIdentity(cfg *config.Config) (string, string) {
+func securityIdentity(cfg *config.ServerConfig) (string, string) {
 	name := strings.TrimSpace(cfg.Server.Branding.Title)
 	if name == "" {
 		name = "API"
@@ -958,8 +959,8 @@ func installKeyMaterial(privatePath, publicPath, statePath string, sealedPrivate
 	return nil
 }
 
-func deleteKeyMaterial(cfg *config.Config, metadata database.SecurityPGPMetadata, paths []string,
-	saveConfig func(*config.Config) error, saveMetadata func(database.SecurityPGPMetadata) error, removeFile func(string) error) error {
+func deleteKeyMaterial(cfg *config.ServerConfig, metadata database.SecurityPGPMetadata, paths []string,
+	saveConfig func(*config.ServerConfig) error, saveMetadata func(database.SecurityPGPMetadata) error, removeFile func(string) error) error {
 	snapshots := make([]fileSnapshot, len(paths))
 	for i, path := range paths {
 		snapshot, err := snapshotFile(path)
@@ -1189,7 +1190,7 @@ func submitKey(ctx context.Context, host, publicKey, fingerprint string) error {
 		return publishError{retryable: false, message: err.Error()}
 	}
 	client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(request)
+	response, err := requestid.DoOutboundRequestWithID(client, request)
 	if err != nil {
 		return publishError{retryable: true, message: err.Error()}
 	}

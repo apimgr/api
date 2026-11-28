@@ -29,7 +29,7 @@ func ownerTokenCookieName(projectName, suffix string) (string, error) {
 
 // setOwnerTokenCookie writes the primary credential cookie. cookieName is
 // supplied by the project-variable resolver; it is never guessed here.
-func setOwnerTokenCookie(w http.ResponseWriter, r *http.Request, cfg *config.Config, cookieName, token string) {
+func setOwnerTokenCookie(w http.ResponseWriter, r *http.Request, cfg *config.ServerConfig, cookieName, token string) {
 	if cookieName == "" || token == "" {
 		return
 	}

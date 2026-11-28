@@ -42,7 +42,7 @@ type toolFormEndpoint struct {
 	Method        string
 }
 
-func toolFormFallbackHandler(cfg *config.Config, page toolPage, apiRouter chi.Router) http.HandlerFunc {
+func toolFormFallbackHandler(cfg *config.ServerConfig, page toolPage, apiRouter chi.Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
@@ -167,7 +167,7 @@ func loadToolFormEndpoint(page toolPage) (toolFormEndpoint, error) {
 	return spec, nil
 }
 
-func buildToolAPIRequest(r *http.Request, cfg *config.Config, spec toolFormEndpoint, endpointTemplate string) (*http.Request, error) {
+func buildToolAPIRequest(r *http.Request, cfg *config.ServerConfig, spec toolFormEndpoint, endpointTemplate string) (*http.Request, error) {
 	endpoint := strings.ReplaceAll(endpointTemplate, "{{.APIBasePath}}", APIBasePath(cfg))
 	endpoint = strings.ReplaceAll(endpoint, "{{ .APIBasePath }}", APIBasePath(cfg))
 	endpoint = fillToolEndpoint(endpoint, r.PostForm)
@@ -333,7 +333,7 @@ func toolAPIErrorMessage(body []byte) string {
 	return "The tool request failed. Please review the submitted values and try again."
 }
 
-func renderToolFormFailure(w http.ResponseWriter, cfg *config.Config, page toolPage, r *http.Request, status int, message string) {
+func renderToolFormFailure(w http.ResponseWriter, cfg *config.ServerConfig, page toolPage, r *http.Request, status int, message string) {
 	data := toolFormPageData(cfg, page, r)
 	data.ToolError = message
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -342,7 +342,7 @@ func renderToolFormFailure(w http.ResponseWriter, cfg *config.Config, page toolP
 	renderPage(w, page.category+"/"+page.tool, data)
 }
 
-func toolFormPageData(cfg *config.Config, page toolPage, r *http.Request) PageData {
+func toolFormPageData(cfg *config.ServerConfig, page toolPage, r *http.Request) PageData {
 	data := newPageData(cfg, r, page.category)
 	data.PageTitle = page.title
 	data.PageDescription = page.description

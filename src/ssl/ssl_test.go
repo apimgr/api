@@ -49,13 +49,36 @@ func TestRenewalCachePersistsAndReloadsAppManagedCertificate(t *testing.T) {
 }
 
 func TestAutocertRenewalWindowMatchesAI(t *testing.T) {
-	manager := NewManager(Config{
+	manager := NewManager(SSLConfig{
 		CertPath:    t.TempDir(),
 		LetsEncrypt: LetsEncryptConfig{Enabled: true, Challenge: "http-01"},
 	})
 	_, err := manager.getLetsEncryptTLSConfig([]string{"renewal.example.test"})
 	require.NoError(t, err)
 	assert.Equal(t, 30*24*time.Hour, manager.certManager.RenewBefore)
+}
+
+func TestFindSystemCertsAtUsesLiteralAndFQDNDirectoriesInOrder(t *testing.T) {
+	root := t.TempDir()
+	writePair := func(directory string) {
+		t.Helper()
+		path := filepath.Join(root, directory)
+		require.NoError(t, os.MkdirAll(path, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(path, "fullchain.pem"), []byte("certificate"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(path, "privkey.pem"), []byte("private key"), 0600))
+	}
+	writePair("example.test")
+	writePair("domain")
+
+	cert, key := findSystemCertsAt(root, []string{"example.test"})
+	require.Equal(t, filepath.Join(root, "domain", "fullchain.pem"), cert)
+	require.Equal(t, filepath.Join(root, "domain", "privkey.pem"), key)
+
+	require.NoError(t, os.Remove(filepath.Join(root, "domain", "fullchain.pem")))
+	require.NoError(t, os.Remove(filepath.Join(root, "domain", "privkey.pem")))
+	cert, key = findSystemCertsAt(root, []string{"example.test"})
+	require.Equal(t, filepath.Join(root, "example.test", "fullchain.pem"), cert)
+	require.Equal(t, filepath.Join(root, "example.test", "privkey.pem"), key)
 }
 
 func TestAppManagedCertificateLoadsThroughAutocertCache(t *testing.T) {
@@ -71,7 +94,7 @@ func TestAppManagedCertificateLoadsThroughAutocertCache(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(certificateDirectory, "fullchain.pem"), certificatePEM, 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(certificateDirectory, "privkey.pem"), privateKeyPEM, 0600))
 
-	manager := NewManager(Config{
+	manager := NewManager(SSLConfig{
 		Enabled:  true,
 		CertPath: root,
 		LetsEncrypt: LetsEncryptConfig{
@@ -123,7 +146,7 @@ func TestFileExists(t *testing.T) {
 // GetTLSConfig must return (nil, nil) when SSL is disabled, without
 // touching the filesystem or attempting certificate generation.
 func TestGetTLSConfigDisabled(t *testing.T) {
-	m := NewManager(Config{Enabled: false})
+	m := NewManager(SSLConfig{Enabled: false})
 	cfg, err := m.GetTLSConfig([]string{"example.com"})
 	require.NoError(t, err)
 	assert.Nil(t, cfg)
@@ -133,7 +156,7 @@ func TestGetTLSConfigDisabled(t *testing.T) {
 // with no Let's Encrypt config and no existing/manual certs on disk.
 func TestGetTLSConfigSelfSignedFallback(t *testing.T) {
 	tmp := t.TempDir()
-	m := NewManager(Config{Enabled: true, CertPath: tmp})
+	m := NewManager(SSLConfig{Enabled: true, CertPath: tmp})
 	cfg, err := m.GetTLSConfig([]string{"selfsigned.example.com"})
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
@@ -147,7 +170,7 @@ func TestGetTLSConfigSelfSignedFallback(t *testing.T) {
 // self-signed fallback rather than panicking.
 func TestGetTLSConfigNoDomains(t *testing.T) {
 	tmp := t.TempDir()
-	m := NewManager(Config{Enabled: true, CertPath: tmp})
+	m := NewManager(SSLConfig{Enabled: true, CertPath: tmp})
 	_, err := m.GetTLSConfig(nil)
 	assert.Error(t, err)
 }
@@ -172,7 +195,7 @@ func TestGetTLSConfigManualCert(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(manualDir, "cert.pem"), certBytes, 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(manualDir, "key.pem"), keyBytes, 0600))
 
-	m := NewManager(Config{Enabled: true, CertPath: tmp})
+	m := NewManager(SSLConfig{Enabled: true, CertPath: tmp})
 	cfg, err := m.GetTLSConfig([]string{domain})
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
@@ -194,7 +217,7 @@ func TestGetTLSConfigRejectsManualCertificateForDifferentDomain(t *testing.T) {
 		require.NoError(t, os.WriteFile(destination, contents, 0600))
 	}
 
-	manager := NewManager(Config{Enabled: true, CertPath: tmp})
+	manager := NewManager(SSLConfig{Enabled: true, CertPath: tmp})
 	_, err = manager.GetTLSConfig([]string{"requested.example.com"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not match configured domain")
@@ -265,7 +288,7 @@ func TestValidateCertificateHostAndValidity(t *testing.T) {
 // "<domain>.key" naming, and the fullchain.pem/privkey.pem naming.
 func TestFindManualCertsLegacyNaming(t *testing.T) {
 	tmp := t.TempDir()
-	m := NewManager(Config{Enabled: true, CertPath: tmp})
+	m := NewManager(SSLConfig{Enabled: true, CertPath: tmp})
 
 	domain := "legacy.example.com"
 	require.NoError(t, os.WriteFile(filepath.Join(tmp, domain+".crt"), []byte("cert"), 0644))
@@ -279,7 +302,7 @@ func TestFindManualCertsLegacyNaming(t *testing.T) {
 // findManualCerts with an empty CertPath must never match, avoiding a
 // join against the current working directory.
 func TestFindManualCertsEmptyCertPath(t *testing.T) {
-	m := NewManager(Config{Enabled: true, CertPath: ""})
+	m := NewManager(SSLConfig{Enabled: true, CertPath: ""})
 	cert, key := m.findManualCerts([]string{"example.com"})
 	assert.Empty(t, cert)
 	assert.Empty(t, key)
@@ -289,7 +312,7 @@ func TestFindManualCertsEmptyCertPath(t *testing.T) {
 // /etc/letsencrypt/live or CertPath/letsencrypt.
 func TestFindExistingCertsNoneFound(t *testing.T) {
 	tmp := t.TempDir()
-	m := NewManager(Config{Enabled: true, CertPath: tmp})
+	m := NewManager(SSLConfig{Enabled: true, CertPath: tmp})
 	cert, key := m.findExistingCerts([]string{"nowhere.example.com"})
 	assert.Empty(t, cert)
 	assert.Empty(t, key)
@@ -299,7 +322,7 @@ func TestFindExistingCertsNoneFound(t *testing.T) {
 // certManager has actually been set up (i.e. before any Let's Encrypt
 // config path has run).
 func TestGetHTTPHandlerNoCertManager(t *testing.T) {
-	m := NewManager(Config{Enabled: false})
+	m := NewManager(SSLConfig{Enabled: false})
 	called := false
 	fallback := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true

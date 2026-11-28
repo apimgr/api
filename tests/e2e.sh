@@ -25,6 +25,7 @@ RUN_ID="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
 NETWORK_NAME="${PROJECT_NAME}-e2e-${RUN_ID}"
 BROWSER_NAME="${PROJECT_NAME}-e2e-browser-${RUN_ID}"
 TESTS_NAME="${PROJECT_NAME}-e2e-tests-${RUN_ID}"
+E2E_SERVER_HOST="api.example.com"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "ERROR: docker is required — E2E tests never run on the host" >&2
@@ -39,6 +40,8 @@ GO_BUILD="${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}"
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 ARTIFACT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")"
 chmod 0700 "$ARTIFACT_ROOT"
+UPLOAD_DIR="${ARTIFACT_ROOT}/uploads"
+mkdir -m 0755 "$UPLOAD_DIR"
 DOCKER_MEM="${DOCKER_MEM:-4g}"
 DOCKER_CPUS="${DOCKER_CPUS:-2}"
 DOCKER_CPU_SHARES="${DOCKER_CPU_SHARES:-256}"
@@ -83,11 +86,11 @@ timeout -k 30 "$DOCKER_TIMEOUT" docker run --rm \
   -v "$GO_CACHE:/usr/local/share/go/pkg/mod" \
   -v "$GO_BUILD:/usr/local/share/go/cache" \
   -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
-  "$GO_IMAGE" sh -c "GOOS=\$(go env GOOS) GOARCH=\$(go env GOARCH) \
-    go build -buildvcs=false -trimpath -o /artifacts/${PROJECT_NAME} ./src"
+  "$GO_IMAGE" sh -c "go generate ./src/swagger && GOOS=\$(go env GOOS) GOARCH=\$(go env GOARCH) \
+    go build -tags e2e -buildvcs=false -trimpath -o /artifacts/${PROJECT_NAME} ./src"
 
 echo "=== Creating network ${NETWORK_NAME} ==="
-timeout "$DOCKER_TIMEOUT" docker network create "$NETWORK_NAME" >/dev/null
+timeout "$DOCKER_TIMEOUT" docker network create --internal --subnet=192.0.2.0/24 "$NETWORK_NAME" >/dev/null
 NETWORK_GATEWAY="$(timeout "$DOCKER_TIMEOUT" docker network inspect --format '{{(index .IPAM.Config 0).Gateway}}' "$NETWORK_NAME")"
 NETWORK_PREFIX="${NETWORK_GATEWAY%.*}"
 BROWSER_IP="${NETWORK_PREFIX}.2"
@@ -100,6 +103,7 @@ timeout -k 30 "$DOCKER_TIMEOUT" docker run -d --rm --no-healthcheck \
   --ip "$BROWSER_IP" \
   --memory="$BROWSER_MEM" --cpus="$BROWSER_CPUS" --cpu-shares="$DOCKER_CPU_SHARES" \
   --shm-size=2g \
+  -v "${UPLOAD_DIR}:/uploads:ro" \
   "$BROWSER_IMAGE" \
   --no-sandbox \
   --disable-gpu \
@@ -125,6 +129,10 @@ if [ "$READY" -ne 1 ]; then
 fi
 
 echo "=== Running E2E suite (all three tiers) ==="
+GO_TEST_ARGS=()
+if [ -n "${E2E_TEST_RUN:-}" ]; then
+  GO_TEST_ARGS+=(-run "$E2E_TEST_RUN")
+fi
 timeout -k 30 2400 docker run --rm \
   --no-healthcheck \
   --name "$TESTS_NAME" \
@@ -132,15 +140,22 @@ timeout -k 30 2400 docker run --rm \
   --network "$NETWORK_NAME" \
   --ip "$TESTS_IP" \
   --network-alias "$TESTS_NAME" \
+  --network-alias "$E2E_SERVER_HOST" \
+  --add-host "example.com:${TESTS_IP}" \
+  --add-host "whois.iana.org:${TESTS_IP}" \
   -v "$PROJECT_ROOT:/app" \
   -v "$GO_CACHE:/usr/local/share/go/pkg/mod" \
   -v "$GO_BUILD:/usr/local/share/go/cache" \
+  -v "${UPLOAD_DIR}:/uploads" \
   -v "${ARTIFACT_ROOT}:/artifacts" \
   -w /app \
   -e CGO_ENABLED=0 \
   -e GOFLAGS=-buildvcs=false \
   -e E2E_BINARY="/artifacts/${PROJECT_NAME}" \
   -e E2E_BROWSER_URL="http://${BROWSER_IP}:9222" \
-  -e E2E_SERVER_HOST="$TESTS_IP" \
+  -e E2E_SERVER_HOST="$E2E_SERVER_HOST" \
+  -e E2E_FIXTURE_IP="$TESTS_IP" \
   -e E2E_ARTIFACT_ROOT="/artifacts" \
-  "$GO_IMAGE" go test -tags e2e -count=1 -timeout 35m -v ./tests/e2e/...
+  -e E2E_UPLOAD_ROOT="/uploads" \
+  "$GO_IMAGE" sh -c "go generate ./src/swagger && go test -tags e2e -count=1 -timeout 35m -v ${GO_TEST_ARGS[*]} ./tests/e2e/..." \
+  2>&1 | tee "${ARTIFACT_ROOT}/e2e-test.log"

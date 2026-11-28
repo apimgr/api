@@ -27,7 +27,7 @@ type Service struct {
 	backendListener net.Listener
 
 	// dialer routes outbound connections through Tor; nil when
-	// Config.UseNetwork is false or the dialer could not be created.
+	// TorConfig.UseNetwork is false or the dialer could not be created.
 	dialer proxy.ContextDialer
 }
 
@@ -36,7 +36,7 @@ type Service struct {
 // configDir/dataDir are the resolved {config_dir} and {data_dir} roots
 // (paths.ConfigDir()/paths.DataDir() in the caller) - this package never
 // resolves OS paths itself so it stays decoupled from src/paths.
-func start(ctx context.Context, cfg Config, configDir, dataDir string) (*Service, error) {
+func start(ctx context.Context, cfg TorConfig, configDir, dataDir string) (*Service, error) {
 	binary, err := findBinary(cfg.Binary)
 	if err != nil {
 		return nil, err

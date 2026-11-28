@@ -8,12 +8,12 @@ import (
 
 func TestPathSecurityMiddleware(t *testing.T) {
 	tests := []struct {
-		name       string
-		path       string
-		rawPath    string
-		wantPath   string
+		name         string
+		path         string
+		rawPath      string
+		wantPath     string
 		wantLocation string
-		wantStatus int
+		wantStatus   int
 	}{
 		{name: "repeated slash", path: "/server/admin//config//settings", wantPath: "/server/admin/config/settings", wantStatus: http.StatusOK},
 		{name: "root slashes", path: "///", wantPath: "/", wantStatus: http.StatusOK},

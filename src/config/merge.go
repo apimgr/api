@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/apimgr/api/src/critical"
 	"github.com/apimgr/api/src/paths"
 	"gopkg.in/yaml.v3"
 )
@@ -36,7 +37,7 @@ var secretConfigPaths = []string{
 	"data.cve.api_key",
 }
 
-func loadMergedConfig(defaults *Config) ([]byte, error) {
+func loadMergedConfig(defaults *ServerConfig) ([]byte, error) {
 	defaultData, err := yaml.Marshal(defaults)
 	if err != nil {
 		return nil, fmt.Errorf("marshal configuration defaults: %w", err)
@@ -85,6 +86,9 @@ func loadMergedConfig(defaults *Config) ([]byte, error) {
 	if values, ok := readConfigFile(secretsPath, true, false); ok {
 		merged = mergeConfigMap(merged, defaultMap, values)
 	}
+	if err := ensureBackupPasswordEncryptionKey(merged, defaults); err != nil {
+		return nil, err
+	}
 	if changed, err := migrateConfigFiles(defaultMap, merged); err != nil {
 		log.Printf("Warning: configuration migration skipped: %v", err)
 	} else if changed {
@@ -93,7 +97,186 @@ func loadMergedConfig(defaults *Config) ([]byte, error) {
 	if err := protectDNSCredentials(merged); err != nil {
 		return nil, err
 	}
+	if err := protectBackupEncryptionPassword(merged, defaults); err != nil {
+		return nil, err
+	}
 	return yaml.Marshal(merged)
+}
+
+// loadEarlyServerSettings reads only the listener and startup lifecycle keys
+// required before the full configuration load. It never reads secrets.yml or
+// validates unrelated configuration values.
+func loadEarlyServerSettings(cfg *ServerConfig) error {
+	defaultData, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal early configuration defaults: %w", err)
+	}
+	var defaults map[string]interface{}
+	if err := yaml.Unmarshal(defaultData, &defaults); err != nil {
+		return fmt.Errorf("decode early configuration defaults: %w", err)
+	}
+	merged := cloneConfigMap(defaults)
+	serverPath := filepath.Join(paths.ConfigDir(), "server.yml")
+	if values, ok := readConfigFile(serverPath, false, false); ok {
+		merged = mergeConfigMap(merged, defaults, earlyServerSettingsOnly(values))
+	}
+	dropDir := filepath.Join(paths.ConfigDir(), "yaml.d")
+	if entries, readErr := os.ReadDir(dropDir); readErr == nil {
+		files := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".bak") || strings.HasSuffix(name, "~") || strings.HasSuffix(name, ".orig") {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(name))
+			if ext == ".yml" || ext == ".yaml" {
+				files = append(files, filepath.Join(dropDir, name))
+			}
+		}
+		sort.Slice(files, func(i, j int) bool { return filepath.Base(files[i]) < filepath.Base(files[j]) })
+		for _, path := range files {
+			if values, ok := readConfigFile(path, false, true); ok {
+				merged = mergeConfigMap(merged, defaults, earlyServerSettingsOnly(values))
+			}
+		}
+	}
+	for key, target := range map[string]*string{
+		"server.port":    &cfg.Server.Port,
+		"server.address": &cfg.Server.Address,
+	} {
+		if value, ok := getConfigPath(merged, key); ok {
+			if text, valid := value.(string); valid && strings.TrimSpace(text) != "" {
+				*target = text
+			}
+		}
+	}
+	if value, ok := getConfigPath(merged, "server.pidfile"); ok {
+		cfg.Server.PIDFile = ParseBoolOrDefault("server.pidfile", fmt.Sprint(value), true)
+	}
+	if value, ok := getConfigPath(merged, "server.daemonize"); ok {
+		cfg.Server.Daemonize = ParseBoolOrDefault("server.daemonize", fmt.Sprint(value), false)
+	}
+	applyRuntimeOptions(cfg)
+	return nil
+}
+
+func earlyServerSettingsOnly(values map[string]interface{}) map[string]interface{} {
+	server, ok := values["server"].(map[string]interface{})
+	if !ok {
+		return map[string]interface{}{}
+	}
+	filtered := make(map[string]interface{}, 4)
+	for _, key := range []string{"port", "address", "pidfile", "daemonize"} {
+		if value, exists := server[key]; exists {
+			filtered[key] = value
+		}
+	}
+	return map[string]interface{}{"server": filtered}
+}
+
+// ensureBackupPasswordEncryptionKey creates the shared at-rest key when a
+// plaintext backup password needs migration and no key has been provisioned.
+func ensureBackupPasswordEncryptionKey(merged map[string]interface{}, defaults *ServerConfig) error {
+	passwordValue, ok := getConfigPath(merged, "server.backup.encryption_password")
+	password, isString := passwordValue.(string)
+	if !ok || !isString || password == "" || strings.HasPrefix(password, atRestCipherPrefix) {
+		return nil
+	}
+	keyValue, _ := getConfigPath(merged, "server.security.encryption_key")
+	key, _ := keyValue.(string)
+	if key != "" {
+		return nil
+	}
+	generated, err := randomSecretString(encryptionKeyBytes, true)
+	if err != nil {
+		return fmt.Errorf("generate encryption key for backup password: %w", err)
+	}
+	setConfigPath(merged, "server.security.encryption_key", generated)
+	setConfigPath(merged, "server.security.encryption_key_version", 1)
+	if defaults != nil {
+		found := false
+		for _, name := range defaults.GeneratedSecrets {
+			if name == "server.security.encryption_key" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			defaults.GeneratedSecrets = append(defaults.GeneratedSecrets, "server.security.encryption_key")
+		}
+	}
+	return nil
+}
+
+// protectBackupEncryptionPassword returns a decrypted password only in the
+// merged in-memory config and atomically persists any plaintext as ciphertext.
+// An unreadable ciphertext is preserved on disk and marked for fail-closed
+// handling by scheduled backup callers.
+func protectBackupEncryptionPassword(merged map[string]interface{}, defaults *ServerConfig) error {
+	const passwordPath = "server.backup.encryption_password"
+	value, ok := getConfigPath(merged, passwordPath)
+	if !ok || value == nil {
+		return nil
+	}
+	password, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("%s must be a string", passwordPath)
+	}
+	if password == "" {
+		return nil
+	}
+	keyValue, _ := getConfigPath(merged, "server.security.encryption_key")
+	key, _ := keyValue.(string)
+	securityValue, _ := getConfigPath(merged, "server.security")
+	security, _ := securityValue.(map[string]interface{})
+	previous, _ := security["encryption_key_previous"].(string)
+	plain, err := DecryptAtRestSecret(password, key, previous)
+	if err != nil {
+		if strings.HasPrefix(password, atRestCipherPrefix) {
+			setConfigPath(merged, passwordPath, "")
+			if defaults != nil {
+				defaults.Server.Backup.EncryptionPasswordUnreadable = true
+			}
+			return nil
+		}
+		return fmt.Errorf("cannot encrypt %s", passwordPath)
+	}
+	if strings.HasPrefix(password, atRestCipherPrefix) {
+		setConfigPath(merged, passwordPath, plain)
+		return nil
+	}
+	if key == "" {
+		return fmt.Errorf("cannot encrypt %s without server.security.encryption_key", passwordPath)
+	}
+	sealed, err := EncryptAtRestSecret(plain, key)
+	if err != nil {
+		return fmt.Errorf("cannot encrypt %s", passwordPath)
+	}
+	configDir := paths.ConfigDir()
+	secretPath := filepath.Join(configDir, "secrets.yml")
+	if info, err := os.Lstat(secretPath); err == nil && (info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular()) {
+		return fmt.Errorf("secrets.yml must be a regular file for backup password encryption")
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	secrets, _ := readConfigFile(secretPath, false, false)
+	if secrets == nil {
+		secrets = map[string]interface{}{}
+	}
+	setConfigPath(secrets, passwordPath, sealed)
+	setConfigPath(secrets, "server.security.encryption_key", key)
+	if version, found := getConfigPath(merged, "server.security.encryption_key_version"); found {
+		setConfigPath(secrets, "server.security.encryption_key_version", version)
+	}
+	secretData, err := yaml.Marshal(secrets)
+	if err != nil {
+		return err
+	}
+	if err := writeConfigAtomically(secretPath, secretData, 0600); err != nil {
+		return err
+	}
+	setConfigPath(merged, passwordPath, plain)
+	return nil
 }
 
 // protectDNSCredentials keeps DNS provider values encrypted in secrets.yml,
@@ -323,6 +506,21 @@ func migrateConfigFiles(defaults, merged map[string]interface{}) (bool, error) {
 			}
 		}
 		if _, exists := getConfigPath(secrets, path); !exists {
+			if path == "server.backup.encryption_password" {
+				password, ok := value.(string)
+				if !ok {
+					return false, fmt.Errorf("%s must be a string", path)
+				}
+				if !strings.HasPrefix(password, atRestCipherPrefix) {
+					keyValue, _ := getConfigPath(merged, "server.security.encryption_key")
+					key, _ := keyValue.(string)
+					sealed, err := EncryptAtRestSecret(password, key)
+					if err != nil {
+						return false, fmt.Errorf("cannot encrypt %s", path)
+					}
+					value = sealed
+				}
+			}
 			setConfigPath(secrets, path, value)
 			writeSecrets = true
 			changed = true
@@ -330,6 +528,11 @@ func migrateConfigFiles(defaults, merged map[string]interface{}) (bool, error) {
 	}
 	if removeSecretPaths(serverCopy) {
 		changed = true
+	}
+	for _, area := range areaFiles {
+		if removeSecretPaths(area) {
+			changed = true
+		}
 	}
 	dropDir := filepath.Join(configDir, "yaml.d")
 	changedDropIns := map[string]map[string]interface{}{}
@@ -420,7 +623,7 @@ func areaFileForServerKey(key string) string {
 	switch key {
 	case "branding", "seo":
 		return "branding.yml"
-	case "healthz", "csrf", "i18n", "cors":
+	case "healthz", "csrf", "i18n", "cors", "compression":
 		return "web.yml"
 	case "pages":
 		return "pages.yml"
@@ -464,7 +667,7 @@ func removeSecretPaths(root map[string]interface{}) bool {
 	return changed
 }
 
-func saveConfig(cfg *Config) error {
+func saveConfig(cfg *ServerConfig) error {
 	configDir := paths.ConfigDir()
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return err
@@ -492,11 +695,19 @@ func saveConfig(cfg *Config) error {
 	oldKey, _ := getConfigPath(current, "server.security.encryption_key")
 	newKey, _ := getConfigPath(desired, "server.security.encryption_key")
 	if oldKey != newKey {
+		if cfg.Server.Backup.EncryptionPasswordUnreadable && cfg.Server.Backup.EncryptionPassword == "" {
+			return ErrBackupPasswordUnreadable
+		}
 		if credentialMap, ok := getConfigPath(desired, "server.ssl.letsencrypt.dns_credentials"); ok {
 			if credentials, ok := credentialMap.(map[string]interface{}); ok {
 				for name := range credentials {
 					changes = append(changes, "server.ssl.letsencrypt.dns_credentials."+name)
 				}
+			}
+		}
+		if password, ok := getConfigPath(desired, "server.backup.encryption_password"); ok {
+			if value, ok := password.(string); ok && value != "" {
+				changes = append(changes, "server.backup.encryption_password")
 			}
 		}
 	}
@@ -537,6 +748,19 @@ func saveConfig(cfg *Config) error {
 		}
 		values := loadForUpdate(target)
 		if hasValue {
+			if keyPath == "server.backup.encryption_password" {
+				password, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("%s must be a string", keyPath)
+				}
+				keyValue, _ := getConfigPath(desired, "server.security.encryption_key")
+				key, _ := keyValue.(string)
+				sealed, err := EncryptAtRestSecret(password, key)
+				if err != nil {
+					return fmt.Errorf("cannot encrypt %s", keyPath)
+				}
+				value = sealed
+			}
 			if strings.HasPrefix(keyPath, "server.ssl.letsencrypt.dns_credentials.") {
 				credential, ok := value.(string)
 				if !ok {
@@ -784,7 +1008,7 @@ func setConfigPath(root map[string]interface{}, path string, value interface{}) 
 func writeConfigAtomically(path string, data []byte, mode os.FileMode) error {
 	file, err := os.CreateTemp(filepath.Dir(path), ".config-*.tmp")
 	if err != nil {
-		return err
+		return reportConfigWriteFailure(err)
 	}
 	tmp := file.Name()
 	defer func() {
@@ -793,18 +1017,25 @@ func writeConfigAtomically(path string, data []byte, mode os.FileMode) error {
 		}
 	}()
 	if err := file.Chmod(mode); err != nil {
-		return errors.Join(err, file.Close())
+		return reportConfigWriteFailure(errors.Join(err, file.Close()))
 	}
 	if _, err := file.Write(data); err != nil {
-		return errors.Join(err, file.Close())
+		return reportConfigWriteFailure(errors.Join(err, file.Close()))
 	}
 	if err := file.Sync(); err != nil {
-		return errors.Join(err, file.Close())
+		return reportConfigWriteFailure(errors.Join(err, file.Close()))
 	}
 	if err := file.Close(); err != nil {
-		return err
+		return reportConfigWriteFailure(err)
 	}
-	return atomicConfigReplace(tmp, path)
+	return reportConfigWriteFailure(atomicConfigReplace(tmp, path))
+}
+
+func reportConfigWriteFailure(err error) error {
+	if err != nil {
+		critical.ReportWriteFailure("file_write")
+	}
+	return err
 }
 
 func prepareDropInDirectory(dir string) error {
@@ -911,10 +1142,7 @@ func mergeConfigMap(base, defaults, overlay map[string]interface{}) map[string]i
 
 // unmarshalConfigResilient applies valid values individually when a single
 // invalid YAML type would otherwise reject the merged configuration.
-func unmarshalConfigResilient(data []byte, cfg *Config) error {
-	if err := yaml.Unmarshal(data, cfg); err == nil {
-		return nil
-	}
+func unmarshalConfigResilient(data []byte, cfg *ServerConfig) error {
 	var merged map[string]interface{}
 	if err := yaml.Unmarshal(data, &merged); err != nil {
 		return err
@@ -926,6 +1154,14 @@ func unmarshalConfigResilient(data []byte, cfg *Config) error {
 	var defaults map[string]interface{}
 	if err := yaml.Unmarshal(defaultsData, &defaults); err != nil {
 		return err
+	}
+	normalizeBooleanConfigValues(merged, defaults, "")
+	data, err = yaml.Marshal(merged)
+	if err != nil {
+		return err
+	}
+	if err := yaml.Unmarshal(data, cfg); err == nil {
+		return nil
 	}
 	paths := make([]string, 0)
 	collectConfigLeaves(merged, "", &paths)
@@ -944,7 +1180,7 @@ func unmarshalConfigResilient(data []byte, cfg *Config) error {
 		}
 		trial := defaultConfig()
 		if err := yaml.Unmarshal(trialData, trial); err != nil {
-			log.Printf("Warning: invalid config value for %s; using its default", keyPath)
+			logConfigWarning(fmt.Sprintf("%s is invalid; using its default", keyPath))
 			continue
 		}
 		candidate = trialMap
@@ -954,6 +1190,36 @@ func unmarshalConfigResilient(data []byte, cfg *Config) error {
 		return err
 	}
 	return yaml.Unmarshal(finalData, cfg)
+}
+
+// normalizeBooleanConfigValues converts the project's flexible boolean
+// vocabulary before typed YAML decoding. Invalid booleans fall back to the
+// matching built-in default without masking invalid values of other types.
+func normalizeBooleanConfigValues(values, defaults map[string]interface{}, prefix string) {
+	for key, value := range values {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
+		}
+		defaultValue, hasDefault := defaults[key]
+		if defaultBool, isBoolean := defaultValue.(bool); hasDefault && isBoolean {
+			switch typed := value.(type) {
+			case bool:
+				continue
+			case string:
+				values[key] = ParseBoolOrDefault(path, typed, defaultBool)
+			default:
+				values[key] = ParseBoolOrDefault(path, fmt.Sprint(typed), defaultBool)
+			}
+			continue
+		}
+		valueMap, isMap := value.(map[string]interface{})
+		if !isMap {
+			continue
+		}
+		defaultMap, _ := defaultValue.(map[string]interface{})
+		normalizeBooleanConfigValues(valueMap, defaultMap, path)
+	}
 }
 
 func collectConfigLeaves(values map[string]interface{}, prefix string, result *[]string) {

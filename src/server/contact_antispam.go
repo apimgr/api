@@ -37,7 +37,7 @@ func contactRouteExists(router chi.Router, path string) bool {
 	return router.Match(context, "GET", path)
 }
 
-func contactAntispamConfig(cfg *config.Config) contactAntispamSettings {
+func contactAntispamConfig(cfg *config.ServerConfig) contactAntispamSettings {
 	settings := contactAntispamSettings{
 		Honeypot: true, MinFill: 3 * time.Second, MaxAge: 12 * time.Hour,
 		PerIP: 5, PerEmail: 3, Global: 60, Window: time.Hour, MaxLinks: 10,

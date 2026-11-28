@@ -1,10 +1,12 @@
 package i18n
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestIsSupported(t *testing.T) {
@@ -39,6 +41,24 @@ func TestLocaleJSONUsesOnlyEmbeddedSupportedLocales(t *testing.T) {
 func TestValidate(t *testing.T) {
 	if err := Validate(); err != nil {
 		t.Fatalf("Validate() returned an error for the shipped locale files: %v", err)
+	}
+}
+
+func TestLoadLocalesFallsBackToEnglishForBrokenLocale(t *testing.T) {
+	english, err := fs.ReadFile(localeFS, "locales/en.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := fstest.MapFS{
+		"locales/en.json": &fstest.MapFile{Data: english},
+		"locales/es.json": &fstest.MapFile{Data: []byte("{")},
+	}
+	loaded, localeFiles := loadLocales(source)
+	if got, want := loaded["es"].flat["common.save"], loaded["en"].flat["common.save"]; got != want {
+		t.Fatalf("broken locale fallback = %q, want English value %q", got, want)
+	}
+	if string(localeFiles["es"]) != string(english) {
+		t.Fatal("browser locale fallback did not return the English JSON")
 	}
 }
 
@@ -253,12 +273,14 @@ func TestLangFromRequestDefaultsToEnglish(t *testing.T) {
 
 func TestLangFromRequestUnsupportedFallsBackSilently(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/?lang=xx", nil)
+	r.AddCookie(&http.Cookie{Name: CookieName, Value: "es"})
+	r.Header.Set("Accept-Language", "de")
 	if got := LangFromRequest(r); got != DefaultLanguage {
 		t.Errorf("LangFromRequest with unsupported ?lang= = %q, want %q", got, DefaultLanguage)
 	}
 }
 
-func TestLanguageMiddlewareSetsContextAndCookie(t *testing.T) {
+func TestLanguageMiddlewareSetsContextWithoutUnconsentedCookie(t *testing.T) {
 	var seen string
 	handler := LanguageMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = LangFromContext(r.Context())
@@ -279,14 +301,35 @@ func TestLanguageMiddlewareSetsContextAndCookie(t *testing.T) {
 			cookieSet = true
 		}
 	}
-	if !cookieSet {
-		t.Error("LanguageMiddleware did not set the lang cookie for an explicit ?lang= request")
+	if cookieSet {
+		t.Error("LanguageMiddleware persisted a language preference without consent")
+	}
+}
+
+func TestLanguageMiddlewarePersistsOnlyWithPreferenceConsent(t *testing.T) {
+	handler := LanguageMiddlewareForConsent([]string{"en", "de"}, func(*http.Request) bool { return true })(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	req := httptest.NewRequest(http.MethodGet, "/?lang=de", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != CookieName || cookies[0].Value != "de" {
+		t.Fatalf("consented language cookies = %v, want lang=de", cookies)
+	}
+	if cookies[0].HttpOnly {
+		t.Fatal("language preference cookie must remain readable by the frontend")
+	}
+
+	denied := LanguageMiddlewareForConsent([]string{"en", "de"}, func(*http.Request) bool { return false })(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	rec = httptest.NewRecorder()
+	denied.ServeHTTP(rec, req)
+	if len(rec.Result().Cookies()) != 0 {
+		t.Fatalf("unconsented language cookies = %v, want none", rec.Result().Cookies())
 	}
 }
 
 func TestLanguageMiddlewareForUsesConfiguredLanguages(t *testing.T) {
 	var got string
-	handler := LanguageMiddlewareFor([]string{"en", "es", "fr", "de", "it", "ar"})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := LanguageMiddlewareForConsent([]string{"en", "es", "fr", "de", "it", "ar"}, func(*http.Request) bool { return true })(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = LangFromContext(r.Context())
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/?lang=it", nil)

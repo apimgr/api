@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/apimgr/api/src/pgp"
@@ -140,34 +141,78 @@ func VerifyWithLimits(path, password string, limits RestoreLimits) (*Manifest, e
 	if manifest == nil {
 		return nil, verificationFailure(CheckManifest, path, "archive contains no manifest.json")
 	}
-
-	if subtle.ConstantTimeCompare([]byte(manifest.Checksum), []byte(extracted.checksum)) != 1 {
-		return nil, verificationFailure(CheckChecksum, path, "payload checksum does not match the manifest")
+	if manifest.Encrypted != encrypted {
+		return nil, verificationFailure(CheckManifest, path, "manifest encryption state does not match the archive")
 	}
-	if manifest.SHA256 != "" && subtle.ConstantTimeCompare([]byte(manifest.SHA256), []byte(extracted.checksum)) != 1 {
-		return nil, verificationFailure(CheckChecksum, path, "manifest SHA-256 does not match the payload")
+	if manifest.Version != manifestVersion || manifest.CreatedAt.IsZero() || manifest.CreatedBy == "" || manifest.AppVersion == "" || len(manifest.Contents) == 0 || manifest.SnapshotAt.IsZero() || (manifest.Type != "full" && manifest.Type != "incremental") {
+		return nil, verificationFailure(CheckManifest, path, "manifest is missing a required field or has an unsupported version/type")
 	}
-	if len(manifest.Files) != 0 {
-		if len(manifest.Files) != len(extracted.records) {
-			return nil, verificationFailure(CheckManifest, path, "manifest file list does not match archive contents")
+	contents := make(map[string]struct{}, len(manifest.Contents))
+	for _, name := range manifest.Contents {
+		if err := checkArchivePath(name); err != nil {
+			return nil, verificationFailure(CheckManifest, path, "manifest contains an invalid contents path")
 		}
-		for _, expected := range manifest.Files {
-			if err := checkArchivePath(expected.Path); err != nil {
-				return nil, verificationFailure(CheckManifest, path, "manifest contains an invalid file path")
+		if _, duplicate := contents[name]; duplicate {
+			return nil, verificationFailure(CheckManifest, path, "manifest contains a duplicate contents path")
+		}
+		contents[name] = struct{}{}
+	}
+	if manifest.Encrypted && manifest.Type == "full" {
+		headerBase, headerErr := encryptedArchiveBaseName(path)
+		if headerErr != nil || headerBase != "" {
+			return nil, verificationFailure(CheckManifest, path, "full encrypted archive must have an empty header base name")
+		}
+	}
+
+	manifestFiles := make([]ManifestFile, 0, len(extracted.records))
+	for _, record := range extracted.records {
+		manifestFiles = append(manifestFiles, record)
+	}
+	if manifest.SHA256 == "" || subtle.ConstantTimeCompare([]byte(manifest.SHA256), []byte(ManifestSHA256(manifestFiles))) != 1 {
+		return nil, verificationFailure(CheckChecksum, path, "manifest SHA-256 does not match the content file records")
+	}
+	if len(manifest.Files) != len(extracted.records) {
+		return nil, verificationFailure(CheckManifest, path, "manifest file list does not match archive contents")
+	}
+	manifestPaths := make(map[string]struct{}, len(manifest.Files))
+	for _, expected := range manifest.Files {
+		if err := checkArchivePath(expected.Path); err != nil {
+			return nil, verificationFailure(CheckManifest, path, "manifest contains an invalid file path")
+		}
+		if _, duplicate := manifestPaths[expected.Path]; duplicate {
+			return nil, verificationFailure(CheckManifest, path, "manifest contains a duplicate file path")
+		}
+		manifestPaths[expected.Path] = struct{}{}
+		actual, ok := extracted.records[expected.Path]
+		if !ok {
+			return nil, verificationFailure(CheckManifest, path, "manifest file is missing from archive contents: "+expected.Path)
+		}
+		if expected.Size != actual.Size {
+			return nil, verificationFailure(CheckManifest, path, "manifest file size does not match archive contents: "+expected.Path)
+		}
+		if !expected.Modified.Equal(actual.Modified) {
+			return nil, verificationFailure(CheckManifest, path, fmt.Sprintf("manifest file timestamp does not match archive contents for %s: %s != %s", expected.Path, expected.Modified.UTC().Format(time.RFC3339Nano), actual.Modified.UTC().Format(time.RFC3339Nano)))
+		}
+		if expected.SHA256 != actual.SHA256 {
+			return nil, verificationFailure(CheckManifest, path, "manifest file checksum does not match archive contents: "+expected.Path)
+		}
+	}
+	if len(manifestPaths) != len(extracted.records) {
+		return nil, verificationFailure(CheckManifest, path, "manifest file list does not uniquely cover archive contents")
+	}
+	for archivedPath := range extracted.records {
+		if archivedPath == "app_secrets.json" || strings.HasPrefix(archivedPath, "ssl/") || strings.HasPrefix(archivedPath, "ssl-external/") {
+			continue
+		}
+		matched := false
+		for contentRoot := range contents {
+			if archivedPath == contentRoot || strings.HasPrefix(archivedPath, contentRoot+"/") {
+				matched = true
+				break
 			}
-			actual, ok := extracted.records[expected.Path]
-			if !ok {
-				return nil, verificationFailure(CheckManifest, path, "manifest file is missing from archive contents: "+expected.Path)
-			}
-			if expected.Size != actual.Size {
-				return nil, verificationFailure(CheckManifest, path, "manifest file size does not match archive contents: "+expected.Path)
-			}
-			if !expected.Modified.Equal(actual.Modified) {
-				return nil, verificationFailure(CheckManifest, path, fmt.Sprintf("manifest file timestamp does not match archive contents for %s: %s != %s", expected.Path, expected.Modified.UTC().Format(time.RFC3339Nano), actual.Modified.UTC().Format(time.RFC3339Nano)))
-			}
-			if expected.SHA256 != actual.SHA256 {
-				return nil, verificationFailure(CheckManifest, path, "manifest file checksum does not match archive contents: "+expected.Path)
-			}
+		}
+		if !matched {
+			return nil, verificationFailure(CheckManifest, path, "manifest contents do not cover an archived path: "+archivedPath)
 		}
 	}
 	if err := verifyIncrementalBase(path, password, manifest, limits); err != nil {
@@ -258,10 +303,28 @@ func verifyIncrementalBase(path, password string, manifest *Manifest, limits Res
 	if manifest.BaseBackup == "" || filepath.Base(manifest.BaseBackup) != manifest.BaseBackup || manifest.BaseSHA256 == "" {
 		return &VerificationError{Check: CheckManifest, Path: path, Err: errors.New("incremental manifest is missing a safe base name or base SHA-256")}
 	}
+	if manifest.Encrypted {
+		headerBase, err := encryptedArchiveBaseName(path)
+		if err != nil || headerBase != manifest.BaseBackup {
+			return &VerificationError{Check: CheckManifest, Path: path, Err: errors.New("encrypted header base name does not match manifest")}
+		}
+	}
+	deletedPaths := make(map[string]struct{}, len(manifest.Deleted))
+	changedPaths := make(map[string]struct{}, len(manifest.Files))
+	for _, file := range manifest.Files {
+		changedPaths[file.Path] = struct{}{}
+	}
 	for _, deleted := range manifest.Deleted {
 		if err := checkArchivePath(deleted); err != nil {
 			return &VerificationError{Check: CheckManifest, Path: path, Err: errors.New("incremental manifest contains an invalid deleted path")}
 		}
+		if _, duplicate := deletedPaths[deleted]; duplicate {
+			return &VerificationError{Check: CheckManifest, Path: path, Err: errors.New("incremental manifest contains a duplicate deleted path")}
+		}
+		if _, overlap := changedPaths[deleted]; overlap {
+			return &VerificationError{Check: CheckManifest, Path: path, Err: errors.New("incremental path cannot be both changed and deleted")}
+		}
+		deletedPaths[deleted] = struct{}{}
 	}
 	basePath := filepath.Join(filepath.Dir(path), manifest.BaseBackup)
 	info, err := os.Lstat(basePath)
@@ -271,12 +334,11 @@ func verifyIncrementalBase(path, password string, manifest *Manifest, limits Res
 	if err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("%w: %s", ErrBaseCorrupt, filepath.Base(basePath))
 	}
-	baseSHA, err := fileSHA256(basePath)
-	if err != nil || subtle.ConstantTimeCompare([]byte(baseSHA), []byte(manifest.BaseSHA256)) != 1 {
-		return fmt.Errorf("%w: %s", ErrBaseCorrupt, filepath.Base(basePath))
-	}
 	baseManifest, err := VerifyWithLimits(basePath, password, limits)
 	if err != nil {
+		return fmt.Errorf("%w: %s", ErrBaseCorrupt, filepath.Base(basePath))
+	}
+	if subtle.ConstantTimeCompare([]byte(baseManifest.SHA256), []byte(manifest.BaseSHA256)) != 1 {
 		return fmt.Errorf("%w: %s", ErrBaseCorrupt, filepath.Base(basePath))
 	}
 	baseType := baseManifest.Type
@@ -286,15 +348,43 @@ func verifyIncrementalBase(path, password string, manifest *Manifest, limits Res
 	if baseType != "full" {
 		return fmt.Errorf("%w: incremental archive names a non-full base", ErrBaseCorrupt)
 	}
+	if !sameManifestContents(manifest.Contents, baseManifest.Contents) {
+		return &VerificationError{Check: CheckManifest, Path: path, Err: errors.New("incremental contents do not match its full base")}
+	}
+	basePaths := make(map[string]struct{}, len(baseManifest.Files))
+	for _, file := range baseManifest.Files {
+		basePaths[file.Path] = struct{}{}
+	}
+	for deleted := range deletedPaths {
+		if _, exists := basePaths[deleted]; !exists {
+			return &VerificationError{Check: CheckManifest, Path: path, Err: errors.New("incremental deletes a path absent from its base")}
+		}
+	}
 	if manifest.Encrypted != baseManifest.Encrypted {
 		return fmt.Errorf("%w: incremental and base encryption states differ", ErrBaseCorrupt)
 	}
 	return nil
 }
 
+func sameManifestContents(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	leftSet := make(map[string]struct{}, len(left))
+	for _, value := range left {
+		leftSet[value] = struct{}{}
+	}
+	for _, value := range right {
+		if _, exists := leftSet[value]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
 // extractionResult carries what the extraction pass learned about an archive.
 type extractionResult struct {
-	// checksum is the recomputed payload digest.
+	// checksum is the legacy archive-payload digest retained for diagnostics.
 	checksum string
 	// databases are extracted files that carry the SQLite header.
 	databases []string
@@ -376,18 +466,22 @@ func extractForVerification(tarReader *tar.Reader, scratch, path string, limits 
 		}
 		seen[target] = struct{}{}
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+			reportCriticalWriteError(err)
 			return nil, result, &VerificationError{Check: CheckExtraction, Path: path, Err: err}
 		}
 
 		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 		if err != nil {
+			reportCriticalWriteError(err)
 			return nil, result, &VerificationError{Check: CheckExtraction, Path: path, Err: err}
 		}
 
 		digest.entry(header.Name, header.Size)
 		fileHash := sha256.New()
-		written, err := io.Copy(archiveBoundWriter{writer: io.MultiWriter(digest.writer(out), fileHash), onBytes: onBytes}, io.LimitReader(tarReader, header.Size+1))
+		writer := io.MultiWriter(digest.writer(criticalWriteReporter{writer: out}), fileHash)
+		written, err := io.Copy(archiveBoundWriter{writer: writer, onBytes: onBytes}, io.LimitReader(tarReader, header.Size+1))
 		if err := out.Close(); err != nil {
+			reportCriticalWriteError(err)
 			return nil, result, &VerificationError{Check: CheckExtraction, Path: path, Err: err}
 		}
 		if err != nil {
@@ -403,7 +497,7 @@ func extractForVerification(tarReader *tar.Reader, scratch, path string, limits 
 		}
 		result.files[header.Name] = target
 		if header.Name != legacyMetadataName {
-			result.records[header.Name] = ManifestFile{Path: header.Name, Size: header.Size, Modified: header.ModTime.UTC(), SHA256: "sha256:" + hex.EncodeToString(fileHash.Sum(nil))}
+			result.records[header.Name] = ManifestFile{Path: header.Name, Size: header.Size, Modified: header.ModTime.UTC(), SHA256: hex.EncodeToString(fileHash.Sum(nil))}
 		}
 	}
 
@@ -454,7 +548,10 @@ func checkDatabaseIntegrity(path string) error {
 func scratchDir(purpose string) (string, error) {
 	parent := filepath.Join(os.TempDir(), "apimgr")
 	if err := os.MkdirAll(parent, 0700); err != nil {
+		reportCriticalWriteError(err)
 		return "", err
 	}
-	return os.MkdirTemp(parent, AppName+"-"+purpose+"-")
+	dir, err := os.MkdirTemp(parent, AppName+"-"+purpose+"-")
+	reportCriticalWriteError(err)
+	return dir, err
 }

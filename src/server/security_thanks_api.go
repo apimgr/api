@@ -22,5 +22,5 @@ func securityThanksAPIHandler(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		entries = append(entries, securityThanksAPIEntry{Credit: row.Credit, Date: row.DisclosedOn, Severity: row.Severity})
 	}
-	writeEnvelopeOK(w, http.StatusOK, map[string]any{"entries": entries})
+	writeEnvelopeOK(w, http.StatusOK, responseObject(responseField("entries", entries)))
 }

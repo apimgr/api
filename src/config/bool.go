@@ -2,8 +2,12 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
 )
+
+var invalidBooleanWarnings sync.Map
 
 // Truthy values (case-insensitive)
 var truthyValues = map[string]bool{
@@ -49,14 +53,23 @@ func ParseBool(s string, defaultVal bool) (bool, error) {
 	return false, fmt.Errorf("invalid boolean value: %q", s)
 }
 
-// MustParseBool parses a string into a boolean, panics on invalid value.
-// Use only during initialization where invalid config should halt startup.
+// MustParseBool is retained for source compatibility and follows the
+// configuration contract: invalid values use the default and never panic.
 func MustParseBool(s string, defaultVal bool) bool {
-	val, err := ParseBool(s, defaultVal)
-	if err != nil {
-		panic(err)
+	return ParseBoolOrDefault("boolean", s, defaultVal)
+}
+
+// ParseBoolOrDefault parses a configuration boolean and uses its default on
+// invalid input. Each setting emits at most one warning per process.
+func ParseBoolOrDefault(name, value string, defaultValue bool) bool {
+	parsed, err := ParseBool(value, defaultValue)
+	if err == nil {
+		return parsed
 	}
-	return val
+	if _, loaded := invalidBooleanWarnings.LoadOrStore(name, struct{}{}); !loaded {
+		slog.Warn("invalid boolean configuration; using default", "setting", name, "value", value, "default", defaultValue)
+	}
+	return defaultValue
 }
 
 // IsTruthy returns true if the string is a truthy value.

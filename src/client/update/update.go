@@ -13,19 +13,25 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
 	clientapi "github.com/apimgr/api/src/client/api"
 	"github.com/apimgr/api/src/client/paths"
+	"github.com/apimgr/api/src/common/requestid"
+	"github.com/apimgr/api/src/common/sanitize"
 	serverupdate "github.com/apimgr/api/src/update"
 )
 
 type Discovery struct {
 	OK   bool `json:"ok"`
 	Data struct {
-		Version       string             `json:"version"`
+		Version string `json:"version"`
+		API     struct {
+			CurrentVersion string `json:"current_version"`
+		} `json:"api"`
 		CLIVersions   map[string]Release `json:"cli_versions"`
 		CLIMinVersion string             `json:"cli_min_version"`
 	} `json:"data"`
@@ -37,11 +43,12 @@ type Release struct {
 }
 
 type Decision struct {
-	Discovery Discovery
-	Release   Release
-	Platform  string
-	Available bool
-	Forced    bool
+	Discovery       Discovery
+	Release         Release
+	Platform        string
+	Available       bool
+	Forced          bool
+	VersionMismatch bool
 }
 
 func PlatformKey() string { return runtime.GOOS + "-" + runtime.GOARCH }
@@ -64,7 +71,7 @@ func Discover(ctx context.Context, baseURL, token string, httpClient *http.Clien
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
-	response, err := httpClient.Do(request)
+	response, err := requestid.DoOutboundRequestWithID(httpClient, request)
 	if err != nil {
 		return result, err
 	}
@@ -86,7 +93,11 @@ func Check(ctx context.Context, baseURL, token, currentVersion string, httpClien
 	if err != nil {
 		return Decision{}, err
 	}
-	decision := Decision{Discovery: discovery, Platform: PlatformKey()}
+	decision := Decision{
+		Discovery:       discovery,
+		Platform:        PlatformKey(),
+		VersionMismatch: hasMajorVersionMismatch(currentVersion, discovery.Data.Version),
+	}
 	decision.Release, decision.Available = discovery.Data.CLIVersions[decision.Platform]
 	decision.Forced = decision.Discovery.Data.CLIMinVersion != "" && serverupdate.IsNewerVersion(decision.Discovery.Data.CLIMinVersion, currentVersion)
 	if decision.Available && !serverupdate.IsNewerVersion(decision.Release.Version, currentVersion) {
@@ -95,17 +106,16 @@ func Check(ctx context.Context, baseURL, token, currentVersion string, httpClien
 	return decision, nil
 }
 
-func Install(ctx context.Context, baseURL, token, currentVersion string, release Release, httpClient *http.Client, logFile string) error {
+func Install(ctx context.Context, baseURL, token, currentVersion, apiVersion string, release Release, httpClient *http.Client, logFile string) error {
 	parsed, err := url.Parse(baseURL)
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 		return errors.New("CLI updates require an HTTPS server URL")
 	}
-	platform := PlatformKey()
-	filename := paths.ProjectName + "-cli-" + platform
-	if runtime.GOOS == "windows" {
-		filename += ".exe"
+	endpoint, err := cliBinaryEndpoint(baseURL, apiVersion, paths.ProjectName+"-cli-"+PlatformKey()+platformExtension())
+	if err != nil {
+		return err
 	}
-	endpoint := strings.TrimRight(baseURL, "/") + "/cli/binaries/" + filename
+	platform := PlatformKey()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return errors.New("invalid CLI download URL")
@@ -118,7 +128,7 @@ func Install(ctx context.Context, baseURL, token, currentVersion string, release
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 10 * time.Minute}
 	}
-	response, err := httpClient.Do(request)
+	response, err := requestid.DoOutboundRequestWithID(httpClient, request)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -175,6 +185,29 @@ func Install(ctx context.Context, baseURL, token, currentVersion string, release
 		return fmt.Errorf("you do not have permission to update %s; ask your admin or move the binary to a writable path", currentPath)
 	}
 	return serverupdate.Restart()
+}
+
+var apiVersionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+var semverMajorPattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([-+][0-9A-Za-z.-]+)?$`)
+
+func hasMajorVersionMismatch(clientVersion, serverVersion string) bool {
+	client := semverMajorPattern.FindStringSubmatch(clientVersion)
+	server := semverMajorPattern.FindStringSubmatch(serverVersion)
+	return len(client) == 5 && len(server) == 5 && client[1] != server[1]
+}
+
+func cliBinaryEndpoint(baseURL, apiVersion, filename string) (string, error) {
+	if !apiVersionPattern.MatchString(apiVersion) {
+		return "", errors.New("autodiscover returned an invalid API version")
+	}
+	return strings.TrimRight(baseURL, "/") + "/api/" + apiVersion + "/cli/binaries/" + url.PathEscape(filename), nil
+}
+
+func platformExtension() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
 }
 
 type completionMarker struct {
@@ -254,9 +287,13 @@ func secureTempDir() (string, error) {
 }
 
 func audit(logFile, event string, fields map[string]string) error {
-	entry := map[string]any{"timestamp": time.Now().UTC().Format(time.RFC3339), "event": event}
+	entry := map[string]interface{}{"timestamp": time.Now().UTC().Format(time.RFC3339), "event": sanitize.SanitizeLogText(event)}
+	fieldValues := make(map[string]interface{}, len(fields))
 	for key, value := range fields {
-		entry[key] = strings.NewReplacer("\n", "", "\r", "").Replace(value)
+		fieldValues[key] = value
+	}
+	for key, value := range sanitize.SanitizeLogFields(fieldValues) {
+		entry[key] = value
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {

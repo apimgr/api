@@ -26,7 +26,7 @@ const corsAllowedMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 // Behavior table aren't reproducible through go-chi/cors's dynamic
 // AllowOriginFunc mode, which always reflects the request Origin rather
 // than emitting a literal "*".
-func corsMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func corsMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origins, disabled := resolveCORSOrigins(cfg, r)

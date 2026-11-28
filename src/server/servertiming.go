@@ -159,7 +159,7 @@ func recordServerTiming(w http.ResponseWriter, name string, d time.Duration) {
 //
 // Database operations and buffered template execution record named spans
 // before the response headers are written, alongside whole-request duration.
-func serverTimingMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func serverTimingMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			enabled := mode.IsDebugEnabled() && cfg.Web.Headers.ServerTimingInDebugOnly

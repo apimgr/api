@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/apimgr/api/src/common/i18n"
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/config"
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/swagger"
@@ -35,7 +38,7 @@ func isMCPDispatch(r *http.Request) bool {
 
 type mcpAuthFunc func(context.Context, string) (database.OwnerCredential, error)
 
-func configuredMCPAuthenticator(cfg *config.Config) mcpAuthFunc {
+func configuredMCPAuthenticator(cfg *config.ServerConfig) mcpAuthFunc {
 	return func(ctx context.Context, token string) (database.OwnerCredential, error) {
 		return validateConfiguredOwnerToken(ctx, cfg, token)
 	}
@@ -50,19 +53,27 @@ type mcpRequest struct {
 }
 
 type mcpTool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	InputSchema swagger.Schema         `json:"inputSchema"`
-	Annotations map[string]interface{} `json:"annotations"`
+	Name        string                `json:"name"`
+	Description string                `json:"description,omitempty"`
+	InputSchema mcpSchema             `json:"inputSchema"`
+	Annotations sanitize.TaggedObject `json:"annotations"`
 	method      string
 	path        string
 	operation   swagger.Operation
 }
 
+type mcpSchema struct {
+	Type       string                `json:"type,omitempty"`
+	Format     string                `json:"format,omitempty"`
+	Properties sanitize.TaggedObject `json:"properties,omitempty"`
+	Items      *mcpSchema            `json:"items,omitempty"`
+	Required   []string              `json:"required,omitempty"`
+}
+
 // mcpHandler implements the stateless JSON-RPC Streamable HTTP endpoint.
 // dispatch is the existing server router so tool calls re-enter the ordinary
 // middleware and handler chain in process.
-func mcpHandler(cfg *config.Config, routes chi.Routes, dispatch http.Handler, authenticate mcpAuthFunc) http.HandlerFunc {
+func mcpHandler(cfg *config.ServerConfig, routes chi.Routes, dispatch http.Handler, authenticate mcpAuthFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = requestWithServerConfig(r, cfg)
 		if r.Method != http.MethodPost {
@@ -92,7 +103,10 @@ func mcpHandler(cfg *config.Config, routes chi.Routes, dispatch http.Handler, au
 			if requested == "" {
 				requested, _ = request.Params["protocolVersion"].(string)
 			}
-			writeMCPError(w, r, request.ID, -32022, "errors.bad_request", http.StatusBadRequest, map[string]any{"supported": []string{mcpProtocolVersion}, "requested": requested})
+			writeMCPError(w, r, request.ID, -32022, "errors.bad_request", http.StatusBadRequest, responseObject(
+				responseField("supported", []string{mcpProtocolVersion}),
+				responseField("requested", requested),
+			))
 			return
 		}
 		metaVersion, _ := request.Meta["io.modelcontextprotocol/protocolVersion"].(string)
@@ -127,7 +141,7 @@ func mcpHandler(cfg *config.Config, routes chi.Routes, dispatch http.Handler, au
 		_ = database.WriteAuditEventWithSource(r.Context(), "mcp.request", actor, getClientIP(r), "mcp", details)
 		switch request.Method {
 		case "tools/list":
-			writeMCPSuccess(w, request.ID, map[string]any{"tools": sortedMCPTools(tools)})
+			writeMCPSuccess(w, request.ID, responseObject(responseField("tools", sortedMCPTools(tools))))
 		case "tools/call":
 			name, _ := mcpRequestName(request)
 			tool, ok := tools[name]
@@ -135,16 +149,38 @@ func mcpHandler(cfg *config.Config, routes chi.Routes, dispatch http.Handler, au
 				writeMCPError(w, r, request.ID, -32602, "errors.not_found", http.StatusBadRequest, nil)
 				return
 			}
-			result, callErr := invokeMCPTool(r, dispatch, tool, request.Params)
-			if callErr != nil {
-				writeMCPSuccess(w, request.ID, map[string]any{"content": []any{map[string]string{"type": "text", "text": i18n.Translate(i18n.LangFromRequest(r), "errors.server_error")}}, "isError": true})
+			if credential.Kind == "linked" && credential.Scope == "read" && !ownerTokenScopeAllowsMethod(credential.Scope, tool.method) {
+				w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope"`)
+				writeMCPTransportError(w, r, http.StatusForbidden, "FORBIDDEN", "errors.forbidden")
 				return
 			}
-			writeMCPSuccess(w, request.ID, map[string]any{"content": []any{map[string]string{"type": "text", "text": result}}})
+			result, callErr := invokeMCPTool(r, dispatch, tool, request.Params)
+			if callErr != nil {
+				writeMCPSuccess(w, request.ID, responseObject(responseField("content", []mcpTextContent{{Type: "text", Text: i18n.Translate(i18n.LangFromRequest(r), "errors.server_error")}}), responseField("isError", true)))
+				return
+			}
+			writeMCPSuccess(w, request.ID, responseObject(responseField("content", []mcpTextContent{{Type: "text", Text: result}})))
 		default:
 			writeMCPError(w, r, request.ID, -32601, "errors.not_found", http.StatusNotFound, nil)
 		}
 	}
+}
+
+func ownerTokenScopeAllowsMethod(scope, method string) bool {
+	if scope != "read" {
+		return true
+	}
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+type mcpTextContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
 }
 
 func collectMCPRoutes(routes chi.Routes) ([]swagger.Route, error) {
@@ -172,7 +208,7 @@ func authenticateMCPRequest(ctx context.Context, r *http.Request, authenticate m
 	return authenticate(ctx, parts[1])
 }
 
-func mcpOriginAllowed(cfg *config.Config, r *http.Request) bool {
+func mcpOriginAllowed(cfg *config.ServerConfig, r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return true
@@ -191,9 +227,13 @@ func mcpOriginAllowed(cfg *config.Config, r *http.Request) bool {
 	return false
 }
 
-func mcpTools(cfg *config.Config, routes []swagger.Route) map[string]mcpTool {
+func mcpTools(cfg *config.ServerConfig, routes []swagger.Route) map[string]mcpTool {
 	apiVersion := strings.TrimPrefix(APIBasePath(cfg), "/api/")
-	baseSpec := swagger.GenerateSpecForAPIVersion(Version, "", apiVersion)
+	baseSpec, err := swagger.EmbeddedSuperset(Version, "", apiVersion)
+	if err != nil {
+		slog.Error("MCP tools unavailable: could not load the OpenAPI superset", "error", err)
+		return map[string]mcpTool{}
+	}
 	spec := &swagger.Spec{Paths: make(map[string]swagger.PathItem)}
 	for _, route := range routes {
 		if route.Path == "/api/mcp" || route.Path == "/mcp" || !strings.HasPrefix(route.Path, APIBasePath(cfg)+"/") || strings.Contains(route.Path, "/metrics") || strings.Contains(route.Path, "/admin/") || strings.Contains(route.Path, "/preferences/tokens") || strings.HasSuffix(route.Path, "/server/mcp") {
@@ -271,7 +311,7 @@ func setMCPOperation(item *swagger.PathItem, method string, operation swagger.Op
 	}
 }
 
-func mcpInputSchema(operation swagger.Operation) swagger.Schema {
+func mcpInputSchema(operation swagger.Operation) mcpSchema {
 	properties := make(map[string]swagger.Schema)
 	var required []string
 	for _, parameter := range operation.Parameters {
@@ -288,21 +328,42 @@ func mcpInputSchema(operation swagger.Operation) swagger.Schema {
 			}
 		}
 	}
-	return swagger.Schema{Type: "object", Properties: properties, Required: required}
+	return mcpSchema{Type: "object", Properties: schemaProperties(properties), Required: required}
 }
 
-func mcpAnnotations(method string) map[string]interface{} {
-	annotations := map[string]interface{}{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false}
+func schemaProperties(properties map[string]swagger.Schema) sanitize.TaggedObject {
+	keys := make([]string, 0, len(properties))
+	for key := range properties {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make(sanitize.TaggedObject, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, sanitize.TaggedField{Name: key, Value: mcpSchemaFromSwagger(properties[key])})
+	}
+	return result
+}
+
+func mcpSchemaFromSwagger(schema swagger.Schema) mcpSchema {
+	result := mcpSchema{Type: schema.Type, Format: schema.Format, Required: schema.Required, Properties: schemaProperties(schema.Properties)}
+	if schema.Items != nil {
+		item := mcpSchemaFromSwagger(*schema.Items)
+		result.Items = &item
+	}
+	return result
+}
+
+func mcpAnnotations(method string) sanitize.TaggedObject {
+	readOnly, destructive, idempotent := false, false, false
 	switch method {
 	case http.MethodGet:
-		annotations["readOnlyHint"] = true
+		readOnly = true
 	case http.MethodDelete:
-		annotations["destructiveHint"] = true
-		annotations["idempotentHint"] = true
+		destructive, idempotent = true, true
 	case http.MethodPut:
-		annotations["idempotentHint"] = true
+		idempotent = true
 	}
-	return annotations
+	return sanitize.TaggedObject{{Name: "readOnlyHint", Value: readOnly}, {Name: "destructiveHint", Value: destructive}, {Name: "idempotentHint", Value: idempotent}}
 }
 
 func invokeMCPTool(r *http.Request, dispatch http.Handler, tool mcpTool, params map[string]any) (string, error) {
@@ -445,17 +506,54 @@ func decodeMCPName(value string) string {
 func writeMCPSuccess(w http.ResponseWriter, id json.RawMessage, result any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": rawMCPID(id), "result": result})
+	if err := writeTaggedJSON(w, mcpSuccessResponse{JSONRPC: "2.0", ID: rawMCPID(id), Result: result}); err != nil {
+		log.Printf("MCP response write failed: %s", sanitize.SanitizeLogText(err.Error()))
+	}
+}
+
+type mcpSuccessResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	ID      interface{} `json:"id"`
+	Result  interface{} `json:"result"`
+}
+
+type mcpErrorResponse struct {
+	JSONRPC string                 `json:"jsonrpc"`
+	ID      interface{}            `json:"id"`
+	Error   mcpErrorResponseDetail `json:"error"`
+}
+
+type mcpErrorResponseDetail struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+func (detail mcpErrorResponseDetail) TaggedResponseFields() sanitize.TaggedObject {
+	fields := sanitize.TaggedObject{
+		{Name: "code", Value: sanitize.PublicResponseValue{Value: detail.Code}},
+		{Name: "message", Value: detail.Message},
+	}
+	if detail.Data != nil {
+		if _, ok := detail.Data.(sanitize.TaggedObject); ok {
+			fields = append(fields, sanitize.TaggedField{Name: "data", Value: detail.Data})
+		} else {
+			fields = append(fields, sanitize.TaggedField{Name: "data", Value: sanitize.OpaqueUserJSON{Value: detail.Data}})
+		}
+	}
+	return fields
 }
 
 func writeMCPError(w http.ResponseWriter, r *http.Request, id json.RawMessage, code int, messageKey string, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	object := map[string]any{"code": code, "message": i18n.Translate(i18n.LangFromRequest(r), messageKey)}
-	if data != nil {
-		object["data"] = data
+	if err := writeTaggedJSON(w, mcpErrorResponse{
+		JSONRPC: "2.0",
+		ID:      rawMCPID(id),
+		Error:   mcpErrorResponseDetail{Code: code, Message: i18n.Translate(i18n.LangFromRequest(r), messageKey), Data: data},
+	}); err != nil {
+		log.Printf("MCP error response write failed: %s", sanitize.SanitizeLogText(err.Error()))
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": rawMCPID(id), "error": object})
 }
 
 func writeMCPTransportError(w http.ResponseWriter, r *http.Request, status int, code, messageKey string) {

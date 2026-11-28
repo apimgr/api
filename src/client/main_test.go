@@ -20,9 +20,9 @@ func TestInit_WiresTUILauncher(t *testing.T) {
 // vars carry their documented ldflags-overridable defaults when the binary
 // is built without -ldflags (e.g. `go test`).
 func TestBuildInfo_Defaults(t *testing.T) {
-	assert.Equal(t, "dev", Version)
-	assert.Equal(t, "none", CommitID)
-	assert.Equal(t, "unknown", BuildDate)
+	assert.Equal(t, "devel", Version)
+	assert.Equal(t, "N/A", CommitID)
+	assert.Equal(t, "N/A", BuildDate)
 }
 
 // TestBuildInfo_ConstructsCmdBuildInfo confirms the local Version/CommitID/

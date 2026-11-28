@@ -21,8 +21,8 @@ import (
 	"github.com/apimgr/api/src/email"
 )
 
-// Config holds SSL/TLS configuration
-type Config struct {
+// SSLConfig holds SSL/TLS configuration
+type SSLConfig struct {
 	Enabled                bool
 	CertPath               string
 	LetsEncrypt            LetsEncryptConfig
@@ -40,7 +40,7 @@ type LetsEncryptConfig struct {
 
 // Manager handles SSL/TLS certificates
 type Manager struct {
-	config      Config
+	config      SSLConfig
 	certManager *autocert.Manager
 	domains     []string
 	managesACME bool
@@ -49,7 +49,7 @@ type Manager struct {
 }
 
 // NewManager creates a new SSL manager
-func NewManager(cfg Config) *Manager {
+func NewManager(cfg SSLConfig) *Manager {
 	return &Manager{
 		config: cfg,
 	}
@@ -442,16 +442,11 @@ func (m *Manager) GetHTTPHandler(fallback http.Handler) http.Handler {
 // ACME certificates must pass through autocert so its renewal state and live
 // HTTP-01/TLS-ALPN challenge handlers remain active.
 func (m *Manager) findExistingCerts(domains []string) (certPath, keyPath string) {
-	for _, domain := range domains {
-		cert := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "fullchain.pem")
-		key := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "privkey.pem")
-		if fileExists(cert) && fileExists(key) {
-			return cert, key
-		}
+	if cert, key := m.findSystemCerts(domains); cert != "" && key != "" {
+		return cert, key
 	}
-
-	if m.config.CertPath != "" && !m.config.LetsEncrypt.Enabled {
-		for _, domain := range domains {
+	for _, domain := range domains {
+		if m.config.CertPath != "" && !m.config.LetsEncrypt.Enabled {
 			cert := filepath.Join(m.config.CertPath, "letsencrypt", dnsCertificateDirectoryName(domain), "fullchain.pem")
 			key := filepath.Join(m.config.CertPath, "letsencrypt", dnsCertificateDirectoryName(domain), "privkey.pem")
 			if fileExists(cert) && fileExists(key) {
@@ -464,9 +459,17 @@ func (m *Manager) findExistingCerts(domains []string) (certPath, keyPath string)
 }
 
 func (m *Manager) findSystemCerts(domains []string) (certPath, keyPath string) {
+	return findSystemCertsAt("/etc/letsencrypt/live", domains)
+}
+
+func findSystemCertsAt(root string, domains []string) (certPath, keyPath string) {
+	candidates := []string{"domain"}
 	for _, domain := range domains {
-		cert := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "fullchain.pem")
-		key := filepath.Join("/etc/letsencrypt/live", dnsCertificateDirectoryName(domain), "privkey.pem")
+		candidates = append(candidates, dnsCertificateDirectoryName(domain))
+	}
+	for _, directory := range candidates {
+		cert := filepath.Join(root, directory, "fullchain.pem")
+		key := filepath.Join(root, directory, "privkey.pem")
 		if fileExists(cert) && fileExists(key) {
 			return cert, key
 		}

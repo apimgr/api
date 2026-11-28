@@ -1,9 +1,12 @@
 package sysservice
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,6 +17,8 @@ import (
 // runtimeDirMode is the permission applied to every runtime directory that
 // the service owns while running elevated.
 const runtimeDirMode = 0o755
+
+const userRuntimeDirMode = 0o700
 
 // RuntimeDirs returns every directory the running service needs to own,
 // in creation order. The PID file's parent directory is included because
@@ -39,20 +44,33 @@ func RuntimeDirs() []string {
 	return dirs
 }
 
-// PrepareRuntimeDirs creates every runtime directory the service needs.
-// It is safe to call repeatedly and never lowers the permissions of a
-// directory an operator has deliberately tightened.
+// PrepareRuntimeDirs creates every runtime directory with the mode required
+// for the process's locked system or user path mode.
 func PrepareRuntimeDirs() error {
-	for _, dir := range RuntimeDirs() {
+	return prepareRuntimeDirs(RuntimeDirs(), runtimeDirectoryMode(paths.IsElevated()))
+}
+
+func prepareRuntimeDirs(dirs []string, mode os.FileMode) error {
+	for _, dir := range dirs {
 		if dir == "" {
 			continue
 		}
-		if err := os.MkdirAll(dir, runtimeDirMode); err != nil {
+		if err := os.MkdirAll(dir, mode); err != nil {
 			return fmt.Errorf("failed to create %s: %w", dir, err)
+		}
+		if err := os.Chmod(dir, mode); err != nil {
+			return fmt.Errorf("failed to set permissions on %s: %w", dir, err)
 		}
 	}
 
 	return nil
+}
+
+func runtimeDirectoryMode(elevated bool) os.FileMode {
+	if elevated {
+		return runtimeDirMode
+	}
+	return userRuntimeDirMode
 }
 
 // RootSetup performs the privileged part of startup, per AI.md PART 8's
@@ -105,6 +123,15 @@ func ClaimRuntimeDirs(uid, gid int) error {
 		return nil
 	}
 
+	legacyAccount := false
+	if runtime.GOOS == "darwin" {
+		if _, err := user.Lookup("_" + ServiceUserName); err == nil {
+			legacyAccount = true
+		} else if !errors.Is(err, user.UnknownUserError("_"+ServiceUserName)) {
+			return fmt.Errorf("look up legacy service account _%s: %w", ServiceUserName, err)
+		}
+	}
+
 	for _, dir := range RuntimeDirs() {
 		if dir == "" {
 			continue
@@ -112,6 +139,9 @@ func ClaimRuntimeDirs(uid, gid int) error {
 		if err := chownTree(dir, uid, gid); err != nil {
 			return err
 		}
+	}
+	if legacyAccount {
+		log.Printf("WARNING: legacy service account _%s remains unchanged; runtime directories were transferred to %s; remove the legacy account manually when no longer needed", ServiceUserName, ServiceUserName)
 	}
 
 	return nil

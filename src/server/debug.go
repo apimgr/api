@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/url"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -61,7 +63,7 @@ func SetDebugSchedulerStatus(provider func() any) {
 	debugSchedulerMu.Unlock()
 }
 
-func registerDebugRoutes(router chi.Router, cfg *config.Config) {
+func registerDebugRoutes(router chi.Router, cfg *config.ServerConfig) {
 	if !mode.ShouldShowDebugEndpoints() {
 		return
 	}
@@ -69,7 +71,7 @@ func registerDebugRoutes(router chi.Router, cfg *config.Config) {
 		debugRouter.Use(requireDebugOperatorToken(cfg))
 		if cfg.Server.Debug.Pprof {
 			debugRouter.HandleFunc("/pprof", pprof.Index)
-			debugRouter.HandleFunc("/pprof/cmdline", pprof.Cmdline)
+			debugRouter.HandleFunc("/pprof/cmdline", debugPprofCmdlineHandler)
 			debugRouter.HandleFunc("/pprof/profile", pprof.Profile)
 			debugRouter.HandleFunc("/pprof/symbol", pprof.Symbol)
 			debugRouter.HandleFunc("/pprof/trace", pprof.Trace)
@@ -83,13 +85,13 @@ func registerDebugRoutes(router chi.Router, cfg *config.Config) {
 		if !cfg.Server.Debug.RuntimeEndpoints {
 			return
 		}
-		debugRouter.Handle("/vars", expvar.Handler())
+		debugRouter.Handle("/vars", debugVarsHandler())
 		debugRouter.Get("/config", func(w http.ResponseWriter, r *http.Request) {
 			writeDebugJSON(w, http.StatusOK, sanitizedDebugConfig(cfg, i18n.LangFromRequest(r)))
 		})
 		debugRouter.Get("/routes", debugRoutesHandler(router))
 		debugRouter.Get("/cache", func(w http.ResponseWriter, _ *http.Request) {
-			writeDebugJSON(w, http.StatusOK, metrics.Get().CacheDebugSnapshot())
+			writeDebugJSON(w, http.StatusOK, metrics.GetMetrics().CacheDebugSnapshot())
 		})
 		debugRouter.Get("/db", debugDatabaseHandler)
 		debugRouter.Get("/scheduler", debugSchedulerHandler)
@@ -99,7 +101,42 @@ func registerDebugRoutes(router chi.Router, cfg *config.Config) {
 	})
 }
 
-func requireDebugOperatorToken(cfg *config.Config) func(http.Handler) http.Handler {
+// debugPprofCmdlineHandler exposes only the executable name. The standard
+// pprof handler includes every process argument, which can contain secrets.
+func debugPprofCmdlineHandler(w http.ResponseWriter, _ *http.Request) {
+	_, _ = io.WriteString(w, debugBinaryName())
+	_, _ = io.WriteString(w, "\x00")
+}
+
+// debugVarsHandler preserves expvar output while replacing the standard
+// cmdline value, which otherwise exposes all process arguments.
+func debugVarsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		values := make(map[string]json.RawMessage)
+		expvar.Do(func(value expvar.KeyValue) {
+			if value.Key == "cmdline" {
+				return
+			}
+			values[value.Key] = json.RawMessage(value.Value.String())
+		})
+		cmdline, err := json.Marshal([]string{debugBinaryName()})
+		if err != nil {
+			http.Error(w, "debug variables unavailable", http.StatusInternalServerError)
+			return
+		}
+		values["cmdline"] = cmdline
+		writeDebugJSON(w, http.StatusOK, values)
+	})
+}
+
+func debugBinaryName() string {
+	if len(os.Args) == 0 || os.Args[0] == "" {
+		return "api"
+	}
+	return filepath.Base(os.Args[0])
+}
+
+func requireDebugOperatorToken(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	expected := sha256.Sum256([]byte(cfg.Server.Token))
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +226,7 @@ func debugGoroutinesHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func debugError500Handler(cfg *config.Config) http.HandlerFunc {
+func debugError500Handler(cfg *config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := newPageData(cfg, r, "error")
 		data.ErrorCode = "500"
@@ -203,12 +240,25 @@ func debugError500Handler(cfg *config.Config) http.HandlerFunc {
 func writeDebugJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(value); err != nil {
+	// Every caller is mounted beneath requireDebugOperatorToken. PART 11's
+	// field-tag allow-list applies to public responses; operator diagnostics
+	// intentionally retain their documented runtime/config map schemas while
+	// still passing through the shared value sanitizer for credential, path,
+	// address, and size redaction.
+	encoded, err := json.Marshal(value)
+	if err == nil {
+		var body []byte
+		body, err = sanitize.SanitizeResponseJSON(encoded, mode.IsAppModeProd())
+		if err == nil {
+			_, err = w.Write(body)
+		}
+	}
+	if err != nil {
 		slog.Debug("debug response write failed", "error", mode.Sanitize(err.Error()))
 	}
 }
 
-func sanitizedDebugConfig(cfg *config.Config, lang string) any {
+func sanitizedDebugConfig(cfg *config.ServerConfig, lang string) any {
 	encoded, err := yaml.Marshal(cfg)
 	if err != nil {
 		return map[string]string{"error": i18n.Translate(lang, "errors.server_error")}
@@ -263,7 +313,7 @@ func redactDebugURL(value string) string {
 	return parsed.String()
 }
 
-func debugMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+func debugMiddleware(cfg *config.ServerConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if !mode.IsDebugEnabled() {
 			return next

@@ -42,14 +42,14 @@ fi
 TOR_STATUS=""
 TOR_ELAPSED=0
 while [ "$TOR_ELAPSED" -lt "$TOR_BOOTSTRAP_TIMEOUT" ]; do
-  RESPONSE="$(docker exec "$RUNTIME_CONTAINER" curl -q -LsS --max-time 5 -H 'Accept: application/json' http://127.0.0.1/server/healthz 2>/dev/null || true)"
+  RESPONSE="$(docker exec "$RUNTIME_CONTAINER" curl -q -LsS --max-time 5 -H 'Accept: application/json' http://127.0.0.1/api/v1/server/healthz 2>/dev/null || true)"
   TOR_STATUS="$(jq -r '.features.tor.status // empty' <<<"$RESPONSE" 2>/dev/null || true)"
   case "$TOR_STATUS" in
     healthy)
       echo "PASS: Tor hidden service is healthy"
       break
       ;;
-    starting|unavailable|disabled)
+    starting | unavailable | disabled)
       if [ "$TOR_STATUS" = disabled ]; then
         echo "FAIL: Tor is disabled in the final image" >&2
         exit 1
@@ -76,11 +76,11 @@ if [ "$TOR_STATUS" != healthy ]; then
     exit 1
   fi
   case "$TOR_STATUS" in
-    starting|unavailable)
+    starting | unavailable)
       echo "SKIP: Tor did not become healthy (status: $TOR_STATUS)" >&2
       ;;
     "")
-      echo "FAIL: unable to read Tor status from /server/healthz" >&2
+      echo "FAIL: unable to read Tor status from /api/v1/server/healthz" >&2
       exit 1
       ;;
     *)

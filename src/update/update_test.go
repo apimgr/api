@@ -49,6 +49,7 @@ func TestIsNewerRelease(t *testing.T) {
 	assert.True(t, isNewerRelease("devel", "1.2.3"))
 	assert.False(t, isNewerRelease("1.2.3", "1.2.3"))
 	assert.False(t, isNewerRelease("1.2.2", "1.2.3"))
+	assert.True(t, isNewerRelease("1.2.3", "1.2.3-beta"))
 }
 
 func TestMatchesBranch(t *testing.T) {
@@ -60,6 +61,7 @@ func TestMatchesBranch(t *testing.T) {
 	assert.True(t, matchesBranch(stable, BranchStable))
 	assert.True(t, matchesBranch(stable, BranchBeta))
 	assert.True(t, matchesBranch(stable, BranchDaily))
+	assert.False(t, matchesBranch(Release{TagName: "latest", Prerelease: false}, BranchStable))
 
 	// Beta releases match beta and devel, never stable.
 	assert.False(t, matchesBranch(beta, BranchStable))
@@ -70,6 +72,17 @@ func TestMatchesBranch(t *testing.T) {
 	assert.False(t, matchesBranch(devel, BranchStable))
 	assert.False(t, matchesBranch(devel, BranchBeta))
 	assert.True(t, matchesBranch(devel, BranchDaily))
+}
+
+func TestCheckEligibleIgnoresDeferDaysOnDevel(t *testing.T) {
+	published := time.Now().UTC()
+	withStubGitHubAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]Release{{TagName: "devel", Prerelease: true, PublishedAt: published}})
+	})
+	release, err := CheckEligible(context.Background(), "1.2.3", BranchDevel, published.Add(-time.Hour).Unix(), 365)
+	require.NoError(t, err)
+	require.NotNil(t, release)
+	assert.Equal(t, "devel", release.TagName)
 }
 
 func TestBinaryAssetName(t *testing.T) {
@@ -91,7 +104,7 @@ func TestVerifyChecksum(t *testing.T) {
 
 func TestFetchExpectedChecksum(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("abc123  api-linux-amd64\ndef456  api-darwin-arm64\n"))
+		_, _ = w.Write([]byte("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  api-linux-amd64\ncb8379ac2098aa165029e3938a51da0bcecfc008fd6795f401178647f96c5b34  api-darwin-arm64\n"))
 	}))
 	defer srv.Close()
 
@@ -103,7 +116,7 @@ func TestFetchExpectedChecksum(t *testing.T) {
 
 	hash, err := fetchExpectedChecksum(context.Background(), release, "api-linux-amd64")
 	require.NoError(t, err)
-	assert.Equal(t, "abc123", hash)
+	assert.Equal(t, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", hash)
 
 	_, err = fetchExpectedChecksum(context.Background(), release, "api-windows-amd64.exe")
 	assert.Error(t, err)

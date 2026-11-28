@@ -1,14 +1,14 @@
 // Package pidfile implements PID file creation, staleness detection, and
-// removal per AI.md PART 8 "PID File Handling". Containers are skipped
-// entirely — the container runtime supervises the process, and a PID file
-// on a mounted volume read from the host or another container namespace
-// points at the wrong process or produces a false "already running".
+// removal per AI.md PART 8 "PID File Handling". Containers and Windows are
+// skipped entirely: containers use runtime supervision, while Windows uses
+// the Service Control Manager.
 package pidfile
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -19,6 +19,9 @@ import (
 // still running. A stale file (corrupt content, dead process, or PID reused
 // by a different binary) is removed and reported as not running.
 func CheckPIDFile(pidPath string) (bool, int, error) {
+	if shouldSkipPIDFile() {
+		return false, 0, nil
+	}
 	data, err := os.ReadFile(pidPath)
 	if os.IsNotExist(err) {
 		return false, 0, nil
@@ -52,11 +55,11 @@ func CheckPIDFile(pidPath string) (bool, int, error) {
 	return true, pid, nil
 }
 
-// WritePIDFile writes the current process PID to pidPath. Skipped entirely
-// when running inside a container. Returns an error if another instance of
-// this binary is already running per the PID file.
+// WritePIDFile writes the current process PID to pidPath. It is skipped in
+// containers and on Windows. Returns an error if another instance of this
+// binary is already running per the PID file.
 func WritePIDFile(pidPath string) error {
-	if paths.IsRunningInContainer() {
+	if shouldSkipPIDFile() {
 		return nil
 	}
 
@@ -73,14 +76,29 @@ func WritePIDFile(pidPath string) error {
 	}
 
 	pid := os.Getpid()
-	return os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0644)
+	mode := os.FileMode(0600)
+	if paths.IsElevated() {
+		mode = 0644
+	}
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), mode); err != nil {
+		return err
+	}
+	if err := os.Chmod(pidPath, mode); err != nil {
+		_ = os.Remove(pidPath)
+		return fmt.Errorf("setting pid file permissions: %w", err)
+	}
+	return nil
 }
 
-// RemovePIDFile removes the PID file on shutdown. A no-op in containers,
-// since WritePIDFile never created one.
+// RemovePIDFile removes the PID file on shutdown. It is a no-op in
+// containers and on Windows, where WritePIDFile never created one.
 func RemovePIDFile(pidPath string) error {
-	if paths.IsRunningInContainer() {
+	if shouldSkipPIDFile() {
 		return nil
 	}
 	return os.Remove(pidPath)
+}
+
+func shouldSkipPIDFile() bool {
+	return runtime.GOOS == "windows" || paths.IsRunningInContainer()
 }

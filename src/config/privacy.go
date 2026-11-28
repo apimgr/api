@@ -208,8 +208,8 @@ func defaultPrivacyConfig() PrivacyConfig {
 		},
 		Retention: PrivacyRetentionConfig{
 			Period:            "",
-			ExportAvailable:   false,
-			DeletionAvailable: false,
+			ExportAvailable:   true,
+			DeletionAvailable: true,
 		},
 		Consent: PrivacyConsentConfig{
 			ShowUntilAcknowledged: true,

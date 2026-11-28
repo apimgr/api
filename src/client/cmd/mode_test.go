@@ -22,21 +22,14 @@ func TestDetectMode_HelpAndVersionAlwaysCLI(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, ModeCLI, detectMode(tc.argv))
+			assert.Equal(t, ClientDisplayModeCLI, detectMode(tc.argv))
 		})
 	}
 }
 
-// TestDetectMode_NonTerminalStdoutForcesPlain verifies that when stdout is
-// not a terminal (always true under `go test`), detectMode returns
-// ModePlain for any argv that doesn't contain help/version, regardless of
-// whether it holds a bare command or only config-only flags. This is the
-// only mode reachable in this test binary since os.Stdout is never a real
-// TTY here; the interactive-terminal branch (bare command -> ModeCLI, or
-// no args/config-only flags -> ModeTUI) requires a real TTY on stdout and
-// cannot be exercised from `go test` without a pty, so it is not covered
-// here.
-func TestDetectMode_NonTerminalStdoutForcesPlain(t *testing.T) {
+// TestDetectMode_NonTerminal distinguishes headless startup from commands
+// that should emit plain output when stdout is not a terminal.
+func TestDetectMode_NonTerminal(t *testing.T) {
 	tests := []struct {
 		name string
 		argv []string
@@ -48,7 +41,35 @@ func TestDetectMode_NonTerminalStdoutForcesPlain(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, ModePlain, detectMode(tc.argv))
+			want := ClientDisplayModePlain
+			if tc.name == "no args" || tc.name == "config-only flags" {
+				want = ClientDisplayModeHeadless
+			}
+			assert.Equal(t, want, detectMode(tc.argv))
+		})
+	}
+}
+
+func TestResolveDisplayMode(t *testing.T) {
+	tests := []struct {
+		name      string
+		detected  ClientDisplayMode
+		requested string
+		gui       bool
+		wantMode  ClientDisplayMode
+		wantError string
+	}{
+		{"auto keeps detected mode", ClientDisplayModeTUI, "auto", false, ClientDisplayModeTUI, ""},
+		{"unsupported GUI is an explicit error", ClientDisplayModeTUI, "gui", false, ClientDisplayModeTUI, "gui_unavailable"},
+		{"GUI mode is selected only by a GUI build", ClientDisplayModeTUI, "gui", true, ClientDisplayModeGUI, ""},
+		{"TUI override selects TUI", ClientDisplayModeCLI, "tui", false, ClientDisplayModeTUI, ""},
+		{"TUI override fails without an interactive mode", ClientDisplayModeHeadless, "tui", false, ClientDisplayModeHeadless, "tui_unavailable"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mode, errKey := resolveDisplayMode(test.detected, test.requested, test.gui)
+			assert.Equal(t, test.wantMode, mode)
+			assert.Equal(t, test.wantError, errKey)
 		})
 	}
 }

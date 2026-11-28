@@ -10,7 +10,7 @@ import (
 
 func TestPrintStartupUsesPlainTextForDumbTerminal(t *testing.T) {
 	var out bytes.Buffer
-	if err := PrintStartup(Config{
+	if err := PrintStartup(BannerConfig{
 		AppName: "api", Version: "1.2.3", AppMode: "production",
 		URLs: []string{"http://localhost:8080"}, Writer: &out, Lang: "en",
 		Emojis: true, Terminal: display.DisplayEnv{IsTerminal: true, TerminalType: "dumb", Cols: 100},
@@ -38,7 +38,7 @@ func TestPrintStartupSelectsWidthVariants(t *testing.T) {
 		{39, "api localhost:8080", "🚀"},
 	} {
 		var out bytes.Buffer
-		if err := PrintStartup(Config{
+		if err := PrintStartup(BannerConfig{
 			AppName: "api", Version: "1.2.3", AppMode: "production",
 			URLs: []string{"http://localhost:8080"}, Writer: &out, Lang: "en", Emojis: true,
 			Terminal: display.DisplayEnv{IsTerminal: true, Cols: test.width},

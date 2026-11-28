@@ -18,7 +18,7 @@
         {{csrfField .CSRFToken}}
         <div class="form-group">
           <label class="form-label" for="curl-generator-form-body">{{t .Lang "tool_pages.text.request.json.0e9d4c0115"}}</label>
-          <textarea name="body" class="form-input" rows="6" required placeholder='{"method":"POST","url":"https://example.com/api","headers":{"Content-Type":"application/json"},"body":"{"key":"value"}"}' id="curl-generator-form-body"></textarea>
+          <textarea name="body" class="form-input" rows="6" required placeholder='{"method":"POST","url":"https://example.com/api","headers":{"Content-Type":"application/json"},"body":"{\"key\":\"value\"}"}' id="curl-generator-form-body"></textarea>
         </div>
         <button type="submit" class="btn btn-primary">{{t .Lang "common.generate"}}</button>
       </form>

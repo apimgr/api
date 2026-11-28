@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/apimgr/api/src/database"
 	"github.com/apimgr/api/src/mode"
 	"github.com/apimgr/api/src/paths"
+	"github.com/apimgr/api/src/scheduler"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,14 +85,14 @@ func TestDebugRoutesRequireFlagAndOperatorToken(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Server.Token = "operator-secret"
 	setDebugModeForTest(t, false)
-	srv := New(cfg)
+	srv := NewHTTPServer(cfg)
 
 	recorder := httptest.NewRecorder()
 	srv.Handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/debug/memory", nil))
 	require.Equal(t, http.StatusNotFound, recorder.Code)
 
 	setDebugModeForTest(t, true)
-	srv = New(cfg)
+	srv = NewHTTPServer(cfg)
 	recorder = httptest.NewRecorder()
 	srv.Handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/debug/memory", nil))
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
@@ -112,7 +114,7 @@ func TestDebugRoutesRequireFlagAndOperatorToken(t *testing.T) {
 func TestDebugOperatorRoutesRejectOwnerTokensAsForbidden(t *testing.T) {
 	cfg := newTestConfig(t)
 	cfg.Server.Token = "operator-secret"
-	require.NoError(t, database.Init(cfg.Server.Database, paths.DataDir()))
+	require.NoError(t, database.InitDatabase(cfg.Server.Database, paths.DataDir()))
 	t.Cleanup(func() { _ = database.Close() })
 
 	key := make([]byte, 32)
@@ -141,7 +143,7 @@ func TestDebugEndpointConfigGatesBothGroups(t *testing.T) {
 	cfg.Server.Debug.Pprof = false
 	cfg.Server.Debug.RuntimeEndpoints = false
 	setDebugModeForTest(t, true)
-	srv := New(cfg)
+	srv := NewHTTPServer(cfg)
 
 	for _, path := range []string{"/debug/pprof", "/debug/memory"} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -150,4 +152,46 @@ func TestDebugEndpointConfigGatesBothGroups(t *testing.T) {
 		srv.Handler.ServeHTTP(recorder, request)
 		require.Equal(t, http.StatusNotFound, recorder.Code, path)
 	}
+}
+
+func TestDebugSchedulerReturnsSerializableStatus(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Server.Token = "operator-secret"
+	cfg.Server.Debug.RuntimeEndpoints = true
+	SetDebugSchedulerStatus(func() any {
+		return []scheduler.TaskStatus{{Name: "backup_daily", Schedule: "0 2 * * *", Enabled: true}}
+	})
+	t.Cleanup(func() { SetDebugSchedulerStatus(nil) })
+	setDebugModeForTest(t, true)
+	srv := NewHTTPServer(cfg)
+	request := httptest.NewRequest(http.MethodGet, "/debug/scheduler", nil)
+	request.Header.Set("Authorization", "Bearer operator-secret")
+	recorder := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var tasks []scheduler.TaskStatus
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &tasks))
+	require.Len(t, tasks, 1)
+	require.Equal(t, "backup_daily", tasks[0].Name)
+}
+
+func TestDebugCmdlineEndpointsExposeOnlyBinaryName(t *testing.T) {
+	previousArgs := os.Args
+	os.Args = []string{"/opt/api/bin/api", "--token=credential-value", "--config=/private/path"}
+	t.Cleanup(func() { os.Args = previousArgs })
+
+	pprofRecorder := httptest.NewRecorder()
+	debugPprofCmdlineHandler(pprofRecorder, httptest.NewRequest(http.MethodGet, "/debug/pprof/cmdline", nil))
+	require.Equal(t, "api\x00", pprofRecorder.Body.String())
+	require.NotContains(t, pprofRecorder.Body.String(), "credential-value")
+
+	varsRecorder := httptest.NewRecorder()
+	debugVarsHandler().ServeHTTP(varsRecorder, httptest.NewRequest(http.MethodGet, "/debug/vars", nil))
+	var variables map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(varsRecorder.Body.Bytes(), &variables))
+	var commandLine []string
+	require.NoError(t, json.Unmarshal(variables["cmdline"], &commandLine))
+	require.Equal(t, []string{"api"}, commandLine)
+	require.NotContains(t, varsRecorder.Body.String(), "credential-value")
+	require.NotContains(t, varsRecorder.Body.String(), "/private/path")
 }

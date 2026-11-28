@@ -11,6 +11,20 @@
         <span class="status-text">{{.StatusLabel}}</span>
     </div>
     {{if and .Health.PendingRestart .RestartReasons}}<p class="restart-reason">{{t .Lang "health.restart_required_for"}} {{.RestartReasons}}</p>{{end}}
+    {{if .Health.Maintenance}}
+    <section class="section-card alert-warning" role="alert">
+        <h2>{{t .Lang "health.maintenance_heading"}}</h2>
+        <p>{{.MaintenanceMessage}}</p>
+        <dl class="info-list">
+            <dt>{{t .Lang "health.maintenance_since"}}</dt><dd><time datetime="{{.MaintenanceSince}}">{{.MaintenanceSince}}</time></dd>
+            <dt>{{t .Lang "health.maintenance_attempts"}}</dt><dd>{{.Health.Maintenance.SelfHealing.Attempts}}</dd>
+            {{if .Health.Maintenance.SelfHealing.NextAttempt}}
+            <dt>{{t .Lang "health.maintenance_next_attempt"}}</dt><dd><time datetime="{{.MaintenanceNextAttempt}}">{{.MaintenanceNextAttempt}}</time></dd>
+            {{end}}
+        </dl>
+        {{if .Health.Maintenance.SelfHealing.Exhausted}}<p>{{t .Lang "health.maintenance_exhausted"}}</p>{{else}}<p>{{t .Lang "health.maintenance_retrying"}}</p>{{end}}
+    </section>
+    {{end}}
 
     <section class="section-card">
         <h2>{{t .Lang "health.section.version"}}</h2>
@@ -27,7 +41,7 @@
         <dl class="info-list">
             <dt>{{t .Lang "health.field.uptime"}}</dt><dd>{{.Health.Uptime}}</dd>
             <dt>{{t .Lang "health.field.mode"}}</dt><dd><span class="badge badge-{{.Health.Mode}}">{{.ModeLabel}}</span></dd>
-            <dt>{{t .Lang "health.field.timestamp"}}</dt><dd><time datetime="{{.TimestampText}}">{{.TimestampText}}</time></dd>
+            <dt>{{t .Lang "health.field.timestamp"}}</dt><dd><time datetime="{{.TimestampISO}}">{{.TimestampText}}</time></dd>
         </dl>
     </section>
 

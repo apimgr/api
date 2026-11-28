@@ -34,6 +34,7 @@ func TestOwnerTokenIssueValidateAndReveal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, owner.OwnerID, resolved.OwnerID)
 	require.Equal(t, "primary", resolved.Kind)
+	require.Equal(t, "global", resolved.Scope)
 
 	revealed, err := RevealOwnerToken(ctx, db, owner.OwnerID, owner.TokenID, key)
 	require.NoError(t, err)
@@ -43,6 +44,38 @@ func TestOwnerTokenIssueValidateAndReveal(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	require.Equal(t, raw[len(raw)-4:], items[0].Last4)
+}
+
+func TestLinkedOwnerTokenScopePersistsAndDefaultsSafely(t *testing.T) {
+	ctx := context.Background()
+	db := newOwnerTokenTestDB(t)
+	key := []byte(strings.Repeat("k", 32))
+	_, owner, err := IssueOwnerToken(ctx, db, key)
+	require.NoError(t, err)
+
+	readToken, read, err := CreateLinkedOwnerToken(ctx, db, key, owner.OwnerID, "read-only", nil, 10, "read")
+	require.NoError(t, err)
+	require.Equal(t, "read", read.Scope)
+	resolved, err := ValidateOwnerToken(ctx, db, readToken, "")
+	require.NoError(t, err)
+	require.Equal(t, "read", resolved.Scope)
+
+	_, defaultScope, err := CreateLinkedOwnerToken(ctx, db, key, owner.OwnerID, "default-scope", nil, 10)
+	require.NoError(t, err)
+	require.Equal(t, "read-write", defaultScope.Scope)
+
+	items, err := ListOwnerTokens(ctx, db, owner.OwnerID)
+	require.NoError(t, err)
+	for _, item := range items {
+		if item.ID == read.ID {
+			require.Equal(t, "read", item.Scope)
+		}
+		if item.ID == defaultScope.ID {
+			require.Equal(t, "read-write", item.Scope)
+		}
+	}
+	_, _, err = CreateLinkedOwnerToken(ctx, db, key, owner.OwnerID, "invalid-scope", nil, 10, "global")
+	require.ErrorIs(t, err, ErrLinkedTokenValidation)
 }
 
 func TestActiveOwnerTokenCounts(t *testing.T) {
@@ -205,7 +238,7 @@ func TestOwnerTokenEncryptionRejectsWrongKey(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestLegacyTokenTableIsRebuiltWhenEmpty(t *testing.T) {
+func TestLegacyTokenTableIsExtendedWhenEmpty(t *testing.T) {
 	db, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
@@ -224,9 +257,15 @@ func TestLegacyTokenTableIsRebuiltWhenEmpty(t *testing.T) {
 	)`)
 	require.NoError(t, err)
 	require.NoError(t, createSchema(db))
-	var notNull int
-	require.NoError(t, db.QueryRow(`SELECT "notnull" FROM pragma_table_info('api_tokens') WHERE name = 'owner_id'`).Scan(&notNull))
-	require.Equal(t, 1, notNull)
+	var ownerIDNotNull int
+	require.NoError(t, db.QueryRow(`SELECT "notnull" FROM pragma_table_info('api_tokens') WHERE name = 'owner_id'`).Scan(&ownerIDNotNull))
+	require.Zero(t, ownerIDNotNull)
+	var idType string
+	require.NoError(t, db.QueryRow(`SELECT type FROM pragma_table_info('api_tokens') WHERE name = 'id'`).Scan(&idType))
+	require.Equal(t, "INTEGER", idType)
+	var publicIDColumn int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('api_tokens') WHERE name = 'public_id'`).Scan(&publicIDColumn))
+	require.Equal(t, 1, publicIDColumn)
 }
 
 func TestLegacyTokenRowsFailMigrationWithoutBeingDeleted(t *testing.T) {
@@ -256,7 +295,7 @@ func TestLegacyTokenRowsFailMigrationWithoutBeingDeleted(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
-func TestLegacyOwnerTokenIDsMigrateToUUIDv7(t *testing.T) {
+func TestLegacyOwnerTokenPublicIDPreservesIntegerPrimaryKey(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
@@ -284,12 +323,67 @@ func TestLegacyOwnerTokenIDsMigrateToUUIDv7(t *testing.T) {
 		VALUES ('owner', 'primary', 'hash', 'own_prefix', 'last', 'encrypted', 1);`)
 	require.NoError(t, err)
 	require.NoError(t, migrateOwnerTokenSchema(ctx, db, "sqlite"))
-	var id, ownerID, kind, tokenHash string
-	require.NoError(t, db.QueryRow(`SELECT id, owner_id, kind, token_hash FROM api_tokens`).Scan(&id, &ownerID, &kind, &tokenHash))
-	parsed, err := uuid.Parse(id)
+	var internalID int64
+	var publicID, ownerID, kind, tokenHash, scope string
+	require.NoError(t, db.QueryRow(`SELECT id, public_id, owner_id, kind, token_hash, scope FROM api_tokens`).Scan(&internalID, &publicID, &ownerID, &kind, &tokenHash, &scope))
+	parsed, err := uuid.Parse(publicID)
 	require.NoError(t, err)
 	require.Equal(t, uuid.Version(7), parsed.Version())
+	require.EqualValues(t, 1, internalID)
 	require.Equal(t, "owner", ownerID)
 	require.Equal(t, "primary", kind)
+	require.Equal(t, "global", scope)
 	require.Equal(t, "hash", tokenHash)
+}
+
+func TestLegacyOwnerTokenPublicIDSupportsExternalOperations(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", ":memory:")
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`CREATE TABLE owners (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL);
+		INSERT INTO owners (id, created_at, last_seen_at) VALUES ('owner', 1, 1);
+		CREATE TABLE api_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			owner_id TEXT NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
+			kind TEXT NOT NULL,
+			name TEXT,
+			token_hash TEXT NOT NULL UNIQUE,
+			token_prefix TEXT NOT NULL,
+			token_last4 TEXT NOT NULL DEFAULT '',
+			token_enc TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			rotated_at INTEGER,
+			expires_at INTEGER,
+			last_used_at INTEGER,
+			revoked_at INTEGER,
+			revoked_reason TEXT
+		);`)
+	require.NoError(t, err)
+	require.NoError(t, migrateOwnerTokenSchema(ctx, db, "sqlite"))
+	key := []byte(strings.Repeat("k", 32))
+	raw, credential, err := IssueOwnerToken(ctx, db, key)
+	require.NoError(t, err)
+	var internalID int64
+	require.NoError(t, db.QueryRow(`SELECT id FROM api_tokens WHERE public_id = ?`, credential.TokenID).Scan(&internalID))
+	require.NotEqual(t, credential.TokenID, fmt.Sprint(internalID))
+	validated, err := ValidateOwnerToken(ctx, db, raw, "")
+	require.NoError(t, err)
+	require.Equal(t, credential.TokenID, validated.TokenID)
+	rotated, err := RotateOwnerToken(ctx, db, key, credential.OwnerID, credential.TokenID)
+	require.NoError(t, err)
+	validated, err = ValidateOwnerToken(ctx, db, rotated, "")
+	require.NoError(t, err)
+	require.Equal(t, credential.TokenID, validated.TokenID)
+	linkedRaw, linked, err := CreateLinkedOwnerToken(ctx, db, key, credential.OwnerID, "legacy linked", nil, 5)
+	require.NoError(t, err)
+	linkedCredential, err := ValidateOwnerToken(ctx, db, linkedRaw, "")
+	require.NoError(t, err)
+	require.Equal(t, linked.ID, linkedCredential.TokenID)
+	require.Equal(t, "read-write", linkedCredential.Scope)
+	require.NoError(t, RevokeLinkedOwnerToken(ctx, db, credential.OwnerID, linked.ID))
+	_, err = ValidateOwnerToken(ctx, db, linkedRaw, "")
+	require.ErrorIs(t, err, ErrInvalidOwnerToken)
+	require.NoError(t, RevokeOwner(ctx, db, credential.OwnerID))
 }

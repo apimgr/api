@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+env:
+  PROJECT_NAME: api
+  INTERNAL_NAME: api
+
 concurrency:
   group: ${{ forgejo.workflow }}-${{ forgejo.ref }}
   cancel-in-progress: true
@@ -49,6 +53,8 @@ jobs:
       image: casjaysdev/go:latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Generate OpenAPI superset
+        run: go generate ./src/swagger
       - run: go vet ./...
       - run: GOTOOLCHAIN=go1.26.4 staticcheck ./...
 
@@ -62,12 +68,16 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Generate OpenAPI superset
+        run: go generate ./src/swagger
       - name: Run tests with coverage
         run: |
           mkdir -p "/tmp/${{ forgejo.repository_owner }}"
-          COVDIR=$(mktemp -d "/tmp/${{ forgejo.repository_owner }}/$(basename "${{ forgejo.repository }}")-XXXXXX")
+          COVDIR=$(mktemp -d "/tmp/${{ forgejo.repository_owner }}/${INTERNAL_NAME}-XXXXXX")
           echo "COVDIR=$COVDIR" >> "$FORGEJO_ENV"
-          go test -cover -coverprofile="$COVDIR/coverage.out" ./...
+          mkdir -p "$COVDIR/data"
+          TMPDIR="$COVDIR" go test -cover ./... -args -test.gocoverdir="$COVDIR/data"
+          go tool covdata textfmt -i="$COVDIR/data" -o="$COVDIR/coverage.out"
       - name: Enforce coverage threshold
         run: |
           THRESHOLD=60
@@ -88,6 +98,8 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Generate OpenAPI superset
+        run: go generate ./src/swagger
       - run: go build -buildvcs=false ./...
 
   vuln-scan:
@@ -97,6 +109,8 @@ jobs:
       image: casjaysdev/go:latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Generate OpenAPI superset
+        run: go generate ./src/swagger
       - run: govulncheck ./...
 
   workflow-policy:

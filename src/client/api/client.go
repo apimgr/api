@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // UserAgent is the fixed User-Agent the client sends regardless of the
@@ -194,7 +196,7 @@ func (c *Client) attempt(method, rawURL string, body []byte) ([]byte, error) {
 		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
 
-	resp, err := c.HTTP.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(c.HTTP, req)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to server at %s: %w", c.BaseURL, err)
 	}

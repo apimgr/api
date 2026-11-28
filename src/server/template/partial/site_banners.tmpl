@@ -1,5 +1,5 @@
 {{define "site-banners"}}
-{{if and .ConsentVisible (ne .CurrentPath "/server/preferences")}}
+{{if .ConsentVisible}}
 <section class="cookie-banner" role="region" aria-label="{{t .Lang "cookie_consent.manage_preferences"}}">
   <div class="cookie-banner-content">
     <p class="cookie-message">{{.ConsentMessage}} - <a class="policy-link" href="{{path .BaseURL .ConsentPolicyURL}}">{{.ConsentPolicyText}}</a></p>

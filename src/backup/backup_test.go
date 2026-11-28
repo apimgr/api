@@ -187,7 +187,7 @@ func TestRestoreLimitsNormalizeEachField(t *testing.T) {
 // fail with the wrong one.
 func TestEncryptDecryptRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
-	ew, err := encrypt(&buf, "correct-horse")
+	ew, err := encrypt(&buf, "correct-horse", "")
 	require.NoError(t, err)
 
 	plaintext := []byte("the quick brown fox jumps over the lazy dog")
@@ -203,16 +203,14 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 	assert.Equal(t, plaintext, got)
 
 	// Wrong password must fail to decrypt (GCM auth failure).
-	dr2, err := decrypt(bytes.NewReader(buf.Bytes()), "wrong-password")
-	require.NoError(t, err)
-	_, err = io.ReadAll(dr2)
+	_, err = decrypt(bytes.NewReader(buf.Bytes()), "wrong-password")
 	assert.Error(t, err)
 }
 
 // encrypt/decrypt with an empty payload must still round-trip cleanly.
 func TestEncryptDecryptEmptyPayload(t *testing.T) {
 	var buf bytes.Buffer
-	ew, err := encrypt(&buf, "pw")
+	ew, err := encrypt(&buf, "pw", "")
 	require.NoError(t, err)
 	require.NoError(t, ew.Close())
 

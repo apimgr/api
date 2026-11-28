@@ -13,11 +13,11 @@ type BuildInfo struct {
 	BuildEpoch int64
 }
 
-// BuildDate returns the UTC RFC 3339 build timestamp, or "unknown" when the
+// BuildDate returns the UTC RFC 3339 build timestamp, or "N/A" when the
 // binary was built without a valid BuildEpoch value.
 func (b BuildInfo) BuildDate() string {
 	if b.BuildEpoch <= 0 {
-		return "unknown"
+		return "N/A"
 	}
 	return time.Unix(b.BuildEpoch, 0).UTC().Format(time.RFC3339)
 }

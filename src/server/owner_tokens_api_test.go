@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apimgr/api/src/common/sanitize"
 	"github.com/apimgr/api/src/database"
 )
 
@@ -86,7 +87,7 @@ func TestOwnerTokenExpiryRequestAcceptsSpecFields(t *testing.T) {
 func TestOwnerTokenAPIItemMasksCredentialFields(t *testing.T) {
 	item := ownerTokenAPIItemFrom(database.OwnerToken{
 		ID: "018f0000-0000-7000-8000-000000000001", Kind: "linked", Name: "ci",
-		Prefix: "own_abcdefgh", Last4: "WXYZ", Status: "active",
+		Scope: "read", Prefix: "own_abcdefgh", Last4: "WXYZ", Status: "active",
 	})
 	if item.TokenMasked != "own_"+strings.Repeat("•", 28)+"WXYZ" {
 		t.Fatalf("masked token = %q", item.TokenMasked)
@@ -99,12 +100,47 @@ func TestOwnerTokenAPIItemMasksCredentialFields(t *testing.T) {
 	if err := json.Unmarshal(encoded, &response); err != nil {
 		t.Fatalf("decode API token item: %v", err)
 	}
-	if response["id"] != item.ID || response["token_masked"] != item.TokenMasked {
+	if response["id"] != item.ID || response["token_masked"] != item.TokenMasked || response["scope"] != "read" {
 		t.Fatalf("token item = %#v", response)
 	}
 	for _, key := range []string{"prefix", "last4", "owner_id"} {
 		if _, exists := response[key]; exists {
 			t.Fatalf("unexpected token field %q in %#v", key, response)
 		}
+	}
+}
+
+func TestOwnerTokenAPIExposesOneTimeCredentials(t *testing.T) {
+	const primary = "own_abcdefghijklmnopqrstuvwxyz123456"
+	primaryRecorder := httptest.NewRecorder()
+	writeEnvelopeOK(primaryRecorder, http.StatusCreated,
+		responseObject(responseField("owner_token", sanitize.PublicResponseValue{Value: primary})))
+	var primaryResponse struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			OwnerToken string `json:"owner_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(primaryRecorder.Body.Bytes(), &primaryResponse); err != nil {
+		t.Fatalf("decode primary-token response: %v", err)
+	}
+	if primaryRecorder.Code != http.StatusCreated || !primaryResponse.OK || primaryResponse.Data.OwnerToken != primary {
+		t.Fatalf("primary token response = %s", primaryRecorder.Body.String())
+	}
+
+	const linked = "own_zyxwvutsrqponmlkjihgfedcba654321"
+	linkedRecorder := httptest.NewRecorder()
+	item := ownerTokenAPIItem{ID: "018f0000-0000-7000-8000-000000000001", Kind: "linked", Scope: "read-write", Status: "active", LinkedToken: linked}
+	writeEnvelopeOK(linkedRecorder, http.StatusCreated, item)
+	var linkedResponse struct {
+		Data struct {
+			LinkedToken string `json:"linked_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(linkedRecorder.Body.Bytes(), &linkedResponse); err != nil {
+		t.Fatalf("decode linked-token response: %v", err)
+	}
+	if linkedRecorder.Code != http.StatusCreated || linkedResponse.Data.LinkedToken != linked {
+		t.Fatalf("linked token response = %s", linkedRecorder.Body.String())
 	}
 }

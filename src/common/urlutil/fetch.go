@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/apimgr/api/src/common/requestid"
 )
 
 // FetchRemoteImageConfig configures remote image fetching
@@ -24,6 +26,18 @@ type FetchRemoteImageConfig struct {
 	// User-Agent sent with the request
 	UserAgent string
 }
+
+var e2eFixtureIP net.IP
+
+var extraDisallowedCIDRs = func() []*net.IPNet {
+	nets := make([]*net.IPNet, 0, 5)
+	for _, cidr := range []string{"100.64.0.0/10", "198.18.0.0/15", "192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24"} {
+		if _, network, err := net.ParseCIDR(cidr); err == nil {
+			nets = append(nets, network)
+		}
+	}
+	return nets
+}()
 
 // DefaultFetchRemoteImageConfig returns safe defaults
 func DefaultFetchRemoteImageConfig() FetchRemoteImageConfig {
@@ -101,13 +115,27 @@ func validateNotPrivateIP(hostname string) error {
 // space and therefore an SSRF risk (RFC 1918, loopback, link-local, ULA,
 // unspecified, and multicast).
 func isDisallowedIP(ip net.IP) bool {
-	return ip.IsPrivate() ||
+	if e2eFixtureIP != nil && e2eFixtureIP.Equal(ip) {
+		return false
+	}
+	if ip == nil {
+		return true
+	}
+	if ip.IsPrivate() ||
 		ip.IsLoopback() ||
 		ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() ||
 		ip.IsInterfaceLocalMulticast() ||
 		ip.IsUnspecified() ||
-		ip.IsMulticast()
+		ip.IsMulticast() {
+		return true
+	}
+	for _, network := range extraDisallowedCIDRs {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // FetchRemoteImage safely fetches an image from a remote URL
@@ -143,7 +171,7 @@ func FetchRemoteImage(ctx context.Context, rawURL string, cfg FetchRemoteImageCo
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", strings.Join(cfg.AllowedTypes, ", "))
 
-	resp, err := client.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(client, req)
 	if err != nil {
 		return nil, "", fmt.Errorf("fetching URL: %w", err)
 	}

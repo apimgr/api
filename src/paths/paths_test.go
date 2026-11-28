@@ -39,7 +39,7 @@ func TestIsElevated(t *testing.T) {
 func TestInit(t *testing.T) {
 	resetOverrides(t)
 
-	Init("/custom/config", "/custom/data", "/custom/logs")
+	SetApplicationPathOverrides("/custom/config", "/custom/data", "/custom/logs")
 	assert.Equal(t, "/custom/config", ConfigDir())
 	assert.Equal(t, "/custom/data", DataDir())
 	assert.Equal(t, "/custom/logs", LogDir())
@@ -48,10 +48,10 @@ func TestInit(t *testing.T) {
 func TestInit_EmptyValuesDoNotOverride(t *testing.T) {
 	resetOverrides(t)
 
-	Init("/first/config", "/first/data", "/first/logs")
+	SetApplicationPathOverrides("/first/config", "/first/data", "/first/logs")
 	// Calling Init again with empty strings must not clear the existing
 	// overrides.
-	Init("", "", "")
+	SetApplicationPathOverrides("", "", "")
 	assert.Equal(t, "/first/config", ConfigDir())
 	assert.Equal(t, "/first/data", DataDir())
 	assert.Equal(t, "/first/logs", LogDir())
@@ -185,19 +185,46 @@ func TestEnsureDirectories(t *testing.T) {
 }
 
 func TestIsRunningInContainer(t *testing.T) {
-	// Just verify it doesn't panic and returns a stable bool consistent
-	// with the actual environment markers.
-	got := IsRunningInContainer()
-	_, dockerErr := os.Stat("/.dockerenv")
-	expected := dockerErr == nil
-	if !expected {
-		data, err := os.ReadFile("/proc/1/comm")
-		if err == nil {
-			comm := string(data)
-			expected = comm == "tini\n" || comm == "tini" || comm == "dumb-init\n"
-		}
+	assert.IsType(t, false, IsRunningInContainer())
+}
+
+func TestDetectContainerSignals(t *testing.T) {
+	tests := []struct {
+		name      string
+		env       map[string]string
+		files     map[string]bool
+		cgroup    string
+		parent    string
+		parentPID int
+		want      bool
+	}{
+		{name: "docker marker", files: map[string]bool{"/.dockerenv": true}, want: true},
+		{name: "podman marker", files: map[string]bool{"/run/.containerenv": true}, want: true},
+		{name: "kubernetes environment", env: map[string]string{"KUBERNETES_SERVICE_HOST": "10.0.0.1"}, want: true},
+		{name: "lxc environment", env: map[string]string{"container": "lxc"}, want: true},
+		{name: "init wrapper", parent: "s6-svscan", want: true},
+		{name: "self wrapper", parent: ProjectName, want: true},
+		{name: "podman cgroup", cgroup: "0::/libpod-123.scope", want: true},
+		{name: "systemd service wins", env: map[string]string{"container": "lxc", "INVOCATION_ID": "abc"}, want: false},
+		{name: "openrc system container wins", env: map[string]string{"container": "lxc", "RC_SVCNAME": "api"}, want: false},
+		{name: "systemd shell in system container wins", files: map[string]bool{"/dev/lxc": true, "/run/systemd/system": true}, want: false},
+		{name: "openrc shell in system container wins", files: map[string]bool{"/dev/lxc": true, "/sbin/openrc-run": true, "/run/openrc": true}, want: false},
+		{name: "openrc init process wins", files: map[string]bool{"/dev/lxc": true, "/run/openrc": true}, parentPID: 1, want: false},
+		{name: "host", want: false},
 	}
-	assert.Equal(t, expected, got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			getenv := func(key string) string { return tt.env[key] }
+			exists := func(path string) bool { return tt.files[path] }
+			readFile := func(path string) string {
+				if path == "/proc/1/cgroup" {
+					return tt.cgroup
+				}
+				return ""
+			}
+			assert.Equal(t, tt.want, detectContainerSignals(getenv, exists, readFile, func() string { return tt.parent }, tt.parentPID))
+		})
+	}
 }
 
 func TestGetBackupDir(t *testing.T) {
@@ -286,7 +313,24 @@ func TestGetDatabaseDir_EnvOverride(t *testing.T) {
 
 func TestGetDatabaseDir_DefaultsToDataDbSubdir(t *testing.T) {
 	t.Setenv("DATABASE_DIR", "")
+	if IsRunningInContainer() {
+		assert.Equal(t, filepath.Join("/data", "db", "sqlite"), GetDatabaseDir("/some/data"))
+		return
+	}
 	assert.Equal(t, filepath.Join("/some/data", "db"), GetDatabaseDir("/some/data"))
+}
+
+func TestDatabaseDirForWindowsSystemMode(t *testing.T) {
+	dataDir := filepath.Join("ProgramData", "apimgr", "api", "data")
+	assert.Equal(t, filepath.Join("ProgramData", "apimgr", "api", "data", "db"), databaseDirFor(dataDir, "", "windows", false, true))
+}
+
+func TestDatabaseDirForContainer(t *testing.T) {
+	assert.Equal(t, filepath.Join(string(filepath.Separator), "data", "db", "sqlite"), databaseDirFor("/data/api", "", "linux", true, false))
+}
+
+func TestDatabaseDirOverridePrecedesPlatformDefaults(t *testing.T) {
+	assert.Equal(t, "/custom/db", databaseDirFor("/data/api", "/custom/db", "windows", true, true))
 }
 
 func TestIsWritable_ReadOnlyDirFails(t *testing.T) {

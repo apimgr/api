@@ -31,7 +31,7 @@ func TestParseMode(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    Mode
+		want    AppMode
 		wantErr bool
 	}{
 		{"development", "development", Development, false},
@@ -66,13 +66,13 @@ func TestSet(t *testing.T) {
 
 	require.NoError(t, SetMode("development"))
 	assert.Equal(t, Development, GetCurrentMode())
-	assert.True(t, IsDevelopment())
-	assert.False(t, IsProduction())
+	assert.True(t, IsAppModeDev())
+	assert.False(t, IsAppModeProd())
 
 	require.NoError(t, SetMode("production"))
 	assert.Equal(t, Production, GetCurrentMode())
-	assert.True(t, IsProduction())
-	assert.False(t, IsDevelopment())
+	assert.True(t, IsAppModeProd())
+	assert.False(t, IsAppModeDev())
 
 	// An invalid mode must not be applied and must return an error.
 	err := SetMode("nonsense")
@@ -87,7 +87,7 @@ func TestSetWithDebugDefault(t *testing.T) {
 	require.NoError(t, SetWithDebugDefault("debug"))
 	assert.Equal(t, Debug, GetCurrentMode())
 	assert.True(t, IsDebugMode())
-	assert.False(t, IsDevelopment())
+	assert.False(t, IsAppModeDev())
 	assert.True(t, IsDebugEnabled())
 
 	// Development never turns the debug flag on by itself
@@ -116,7 +116,7 @@ func TestSixOperationalStates(t *testing.T) {
 		name              string
 		mode              string
 		debug             bool
-		wantMode          Mode
+		wantMode          AppMode
 		wantEndpoints     bool
 		wantSanitization  SanitizationLevel
 		wantLogLevel      string
@@ -216,6 +216,47 @@ func TestInitialize_DefaultProductionWhenNothingSet(t *testing.T) {
 	assert.False(t, IsDebugEnabled())
 }
 
+func TestInitialize_ConfigModeFallbackAndPrecedence(t *testing.T) {
+	tests := []struct {
+		name       string
+		cliMode    string
+		envMode    string
+		configMode string
+		want       AppMode
+	}{
+		{name: "config fallback", configMode: "development", want: Development},
+		{name: "environment overrides config", envMode: "debug", configMode: "development", want: Debug},
+		{name: "CLI overrides environment and config", cliMode: "production", envMode: "debug", configMode: "development", want: Production},
+		{name: "empty config keeps production default", want: Production},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetState(t)
+			if tt.envMode == "" {
+				require.NoError(t, os.Unsetenv("MODE"))
+			} else {
+				t.Setenv("MODE", tt.envMode)
+			}
+			require.NoError(t, os.Unsetenv("DEBUG"))
+
+			require.NoError(t, Initialize(tt.cliMode, false, false, tt.configMode))
+			assert.Equal(t, tt.want, GetCurrentMode())
+			assert.Equal(t, tt.want == Debug, IsDebugEnabled())
+		})
+	}
+}
+
+func TestInitialize_ConfigDebugModeHonorsEmptyDebugEnv(t *testing.T) {
+	resetState(t)
+	require.NoError(t, os.Unsetenv("MODE"))
+	t.Setenv("DEBUG", "")
+
+	require.NoError(t, Initialize("", false, false, "debug"))
+	assert.Equal(t, Debug, GetCurrentMode())
+	assert.True(t, IsDebugEnabled())
+}
+
 func TestInitialize_CLIDebugWinsOverEnv(t *testing.T) {
 	resetState(t)
 	require.NoError(t, os.Unsetenv("MODE"))
@@ -240,6 +281,16 @@ func TestInitialize_DebugModeDefaultsDebugOnWhenNoExplicitDebug(t *testing.T) {
 	require.NoError(t, os.Unsetenv("DEBUG"))
 
 	require.NoError(t, Initialize("debug", false, false))
+	assert.Equal(t, Debug, GetCurrentMode())
+	assert.True(t, IsDebugEnabled())
+}
+
+func TestInitialize_DebugModeWithEmptyDebugEnvKeepsDefault(t *testing.T) {
+	resetState(t)
+	t.Setenv("MODE", "debug")
+	t.Setenv("DEBUG", "")
+
+	require.NoError(t, Initialize("", false, false))
 	assert.Equal(t, Debug, GetCurrentMode())
 	assert.True(t, IsDebugEnabled())
 }
@@ -440,6 +491,6 @@ func TestModeValidate(t *testing.T) {
 	assert.NoError(t, Production.Validate())
 	assert.NoError(t, Development.Validate())
 	assert.NoError(t, Debug.Validate())
-	assert.Error(t, Mode("bogus").Validate())
-	assert.Error(t, Mode("").Validate())
+	assert.Error(t, AppMode("bogus").Validate())
+	assert.Error(t, AppMode("").Validate())
 }

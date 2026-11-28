@@ -39,7 +39,7 @@ func (r ContactRoleConfig) IsEmpty() bool {
 // defaultContactConfig returns the PART 12 defaults for the given FQDN.
 func defaultContactConfig(fqdn string) ContactConfig {
 	return ContactConfig{
-		Admin:    ContactRoleConfig{Email: "admin@" + fqdn, Webhooks: defaultWebhookConfig()},
+		Admin:    ContactRoleConfig{Webhooks: defaultWebhookConfig()},
 		Security: ContactRoleConfig{Email: "security@" + fqdn, Webhooks: defaultWebhookConfig()},
 		Abuse:    ContactRoleConfig{Webhooks: defaultWebhookConfig()},
 		General:  ContactRoleConfig{Webhooks: defaultWebhookConfig()},

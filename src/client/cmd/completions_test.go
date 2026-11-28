@@ -48,8 +48,8 @@ func TestDetectShell(t *testing.T) {
 func TestNormalizeShell(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"sh", "sh"},
-		{"dash", "sh"},
-		{"ksh", "sh"},
+		{"dash", "dash"},
+		{"ksh", "ksh"},
 		{"pwsh", "powershell"},
 		{"powershell", "powershell"},
 		{"bash", "bash"},
@@ -81,7 +81,7 @@ func TestCompletionWords(t *testing.T) {
 // produces a non-empty script mentioning the binary name, and that
 // unsupported shells error.
 func TestCompletionScript_SupportedShells(t *testing.T) {
-	for _, shell := range []string{"bash", "zsh", "fish", "sh", "powershell"} {
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell", "pwsh"} {
 		t.Run(shell, func(t *testing.T) {
 			script, err := completionScript(shell)
 			require.NoError(t, err)
@@ -129,15 +129,6 @@ func TestFishCompletionScript(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(got, "-a 'text'"))
 }
 
-// TestShCompletionScript verifies the fallback comment-only listing
-// mentions every distinct command and the binary name.
-func TestShCompletionScript(t *testing.T) {
-	got := shCompletionScript([]string{"text", "text uuid"})
-	assert.Contains(t, got, "POSIX sh has no native completion")
-	assert.Contains(t, got, binName)
-	assert.Contains(t, got, "#   text\n")
-}
-
 // TestPowershellCompletionScript verifies the ArgumentCompleter block
 // references the binary name and lists distinct commands.
 func TestPowershellCompletionScript(t *testing.T) {
@@ -165,7 +156,9 @@ func TestPrintInitSnippet(t *testing.T) {
 		{"bash", false, "source <(api-cli --shell completions bash)"},
 		{"zsh", false, "source <(api-cli --shell completions zsh)"},
 		{"fish", false, "api-cli --shell completions fish | source"},
-		{"sh", false, ". <(api-cli --shell completions sh)"},
+		{"sh", false, "# api-cli: sh has no programmable completion, nothing to load"},
+		{"dash", false, "# api-cli: dash has no programmable completion, nothing to load"},
+		{"ksh", false, "# api-cli: ksh has no programmable completion, nothing to load"},
 		{"powershell", false, "Invoke-Expression"},
 		{"cmd.exe", true, ""},
 	}
@@ -206,8 +199,21 @@ func TestRunCompletions(t *testing.T) {
 	})
 
 	t.Run("completions action with unsupported shell errors", func(t *testing.T) {
-		err := runCompletions("completions", "cmd.exe")
-		require.Error(t, err)
+		for _, shell := range []string{"sh", "dash", "ksh", "cmd.exe"} {
+			err := runCompletions("completions", shell)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), shell)
+		}
+	})
+
+	t.Run("init supports shells without programmable completions", func(t *testing.T) {
+		for _, shell := range []string{"sh", "dash", "ksh"} {
+			out := captureStdout(t, func() {
+				err := runCompletions("init", shell)
+				require.NoError(t, err)
+			})
+			assert.Contains(t, out, "has no programmable completion, nothing to load")
+		}
 	})
 
 	t.Run("init action with explicit shell", func(t *testing.T) {

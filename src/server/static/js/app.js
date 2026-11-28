@@ -3,8 +3,101 @@
 const appBaseURL = document.documentElement.dataset.baseUrl || window.location.origin;
 const appBasePath = new URL(appBaseURL, window.location.href).pathname.replace(/\/+$/, '');
 const renderedBuildStamp = document.querySelector('meta[name="build-stamp"]')?.content || '';
+const bootRecoveryKey = `${document.querySelector('meta[name="app-name"]')?.content || 'api'}_recovered`;
+const bootRecoveryDefaults = {
+  lang: 'en', dir: 'ltr', title: 'Offline', heading: 'You are offline',
+  message: 'This page could not be loaded and no cached copy is available. Check your connection and try again.',
+  reload: 'Refresh',
+};
+let bootTimer = setTimeout(recoverStalledBoot, 10000);
 let newBuildAvailable = false;
 let pendingBuildStamp = '';
+
+function finishFirstRender() {
+  if (bootTimer === null) return;
+  clearTimeout(bootTimer);
+  bootTimer = null;
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', finishFirstRender, { once: true });
+} else {
+  requestAnimationFrame(finishFirstRender);
+}
+
+async function recoverStalledBoot() {
+  bootTimer = null;
+  let recoveryAlreadyAttempted;
+  try {
+    recoveryAlreadyAttempted = sessionStorage.getItem(bootRecoveryKey) !== null;
+    if (!recoveryAlreadyAttempted) sessionStorage.setItem(bootRecoveryKey, 'boot-recovery');
+  } catch (_) {
+    await showBootRecoveryFailure();
+    return;
+  }
+  if (recoveryAlreadyAttempted) {
+    await showBootRecoveryFailure();
+    return;
+  }
+
+  const cleanup = [];
+  if ('serviceWorker' in navigator) {
+    cleanup.push(navigator.serviceWorker.getRegistrations()
+      .then(registrations => Promise.all(registrations.map(registration => registration.unregister()))));
+  }
+  if ('caches' in window) {
+    cleanup.push(caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))));
+  }
+  await withBootTimeout(Promise.allSettled(cleanup), 2000, null);
+  window.location.reload();
+}
+
+function withBootTimeout(promise, timeout, fallback) {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(fallback), timeout);
+    Promise.resolve(promise).then(
+      value => { clearTimeout(timer); resolve(value); },
+      () => { clearTimeout(timer); resolve(fallback); },
+    );
+  });
+}
+
+async function showBootRecoveryFailure() {
+  let strings = await withBootTimeout(readStoredOfflineStrings(), 500, bootRecoveryDefaults);
+  if (!strings) strings = bootRecoveryDefaults;
+  document.title = strings.title;
+  const main = document.createElement('main');
+  main.setAttribute('role', 'alert');
+  const heading = document.createElement('h1');
+  heading.textContent = strings.heading;
+  const message = document.createElement('p');
+  message.textContent = strings.message;
+  const reload = document.createElement('a');
+  reload.href = window.location.href;
+  reload.textContent = strings.reload;
+  main.append(heading, message, reload);
+  document.body.replaceChildren(main);
+}
+
+async function readStoredOfflineStrings() {
+  try {
+    await offlineStringsReady;
+    const appName = document.querySelector('meta[name="app-name"]')?.content;
+    if (appName && 'caches' in window) {
+      const cache = await caches.open(`${appName}-offline-strings`);
+      const response = await cache.match(appPath('/offline-strings.json'));
+      if (response) {
+        const stored = await response.json();
+        if (['title', 'heading', 'message', 'reload'].every(key => typeof stored[key] === 'string' && stored[key])) {
+          return stored;
+        }
+      }
+    }
+  } catch (_) {
+    return bootRecoveryDefaults;
+  }
+  return bootRecoveryDefaults;
+}
 
 function appPath(path) {
   if (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//')) return path;
@@ -12,7 +105,7 @@ function appPath(path) {
 }
 
 function storeOfflineStrings() {
-  if (!('caches' in window)) return;
+  if (!('caches' in window)) return Promise.resolve();
   const appName = document.querySelector('meta[name="app-name"]')?.content;
   const readMeta = name => document.querySelector(`meta[name="${name}"]`)?.content || '';
   const strings = {
@@ -21,16 +114,17 @@ function storeOfflineStrings() {
     title: readMeta('offline-title'),
     heading: readMeta('offline-heading'),
     message: readMeta('offline-message'),
+    reload: readMeta('offline-reload'),
   };
-  if (!appName || !strings.title || !strings.heading || !strings.message) return;
-  caches.open(`${appName}-offline-strings`)
+  if (!appName || !strings.title || !strings.heading || !strings.message || !strings.reload) return Promise.resolve();
+  return caches.open(`${appName}-offline-strings`)
     .then(cache => cache.put(appPath('/offline-strings.json'), new Response(JSON.stringify(strings), {
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     })))
     .catch(() => {});
 }
 
-storeOfflineStrings();
+const offlineStringsReady = storeOfflineStrings();
 
 // Dynamic UI text comes from the same embedded locale files as server templates.
 const appLocale = {};
@@ -59,7 +153,7 @@ document.addEventListener('submit', async function(event) {
   }
   form.setAttribute('aria-busy', 'true');
   try {
-    const response = await fetch(form.action, {
+    const response = await fetch(form.getAttribute('action'), {
       method: 'POST',
       credentials: 'same-origin',
       headers: { Accept: 'text/html' },
@@ -224,10 +318,15 @@ function toolFormData(form) {
   return formData;
 }
 
+function toolResultElement(form, toolId) {
+  const resultId = form.dataset.resultId || `${toolId}-result`;
+  return document.getElementById(resultId) || document.getElementById(`${toolId.replace(/-form$/, '')}-result`);
+}
+
 async function executeTool(toolId, endpoint) {
   await appLocaleReady;
   const form = document.getElementById(toolId);
-  const resultDiv = document.getElementById(`${toolId}-result`);
+  const resultDiv = toolResultElement(form, toolId);
   const submitBtn = form.querySelector('button[type="submit"]');
   const originalLabel = submitBtn.textContent;
   
@@ -263,7 +362,7 @@ async function executeTool(toolId, endpoint) {
 async function executeToolTemplate(toolId, urlTemplate) {
   await appLocaleReady;
   const form = document.getElementById(toolId);
-  const resultDiv = document.getElementById(form.dataset.resultId || `${toolId}-result`);
+  const resultDiv = toolResultElement(form, toolId);
   const submitBtn = form.querySelector('button[type="submit"]');
   const originalLabel = submitBtn.textContent;
   const formData = toolFormData(form);
@@ -306,7 +405,7 @@ async function executeToolTemplate(toolId, urlTemplate) {
 async function executeToolBody(toolId, endpoint) {
   await appLocaleReady;
   const form = document.getElementById(toolId);
-  const resultDiv = document.getElementById(`${toolId}-result`);
+  const resultDiv = toolResultElement(form, toolId);
   const submitBtn = form.querySelector('button[type="submit"]');
   const originalLabel = submitBtn.textContent;
   const bodyField = form.querySelector('textarea');
@@ -343,6 +442,60 @@ async function executeToolBody(toolId, endpoint) {
       submitBtn.textContent = originalLabel;
       showToast(appText('javascript.request_failed'), 'danger');
     });
+}
+
+// executeToolMultipart submits upload forms without a document navigation.
+async function executeToolMultipart(toolId, endpoint) {
+  await appLocaleReady;
+  const form = document.getElementById(toolId);
+  let resultDiv = toolResultElement(form, toolId);
+  if (!resultDiv) {
+    resultDiv = document.createElement('div');
+    resultDiv.id = `${toolId.replace(/-form$/, '')}-result`;
+    resultDiv.className = 'tool-result';
+    resultDiv.setAttribute('role', 'status');
+    resultDiv.setAttribute('aria-live', 'polite');
+    form.insertAdjacentElement('afterend', resultDiv);
+  }
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = appText('javascript.processing');
+  resultDiv.hidden = false;
+  resultDiv.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const response = await fetch(appPath(endpoint), {
+      method: 'POST',
+      body: toolFormData(form),
+    });
+    if (!response.ok) {
+      resultDiv.textContent = await response.text();
+      return;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.startsWith('image/')) {
+      const image = document.createElement('img');
+      image.src = URL.createObjectURL(await response.blob());
+      image.alt = appText('javascript.generated_image');
+      image.className = 'tool-result-image';
+      image.addEventListener('load', function() {
+        URL.revokeObjectURL(image.src);
+      }, { once: true });
+      resultDiv.replaceChildren(image);
+      return;
+    }
+
+    resultDiv.textContent = await response.text();
+  } catch (error) {
+    resultDiv.textContent = appText('javascript.error', { message: error.message });
+    showToast(appText('javascript.request_failed'), 'danger');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalLabel;
+  }
 }
 
 // executeToolImage builds a GET URL by substituting {field} placeholders in
@@ -624,7 +777,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('form.tool-form[data-endpoint]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-      executeTool(form.id, form.dataset.endpoint);
+      executeTool(form.getAttribute('id'), form.dataset.endpoint);
     });
   });
 
@@ -632,7 +785,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('form.tool-form[data-template]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-      executeToolTemplate(form.id, form.dataset.template);
+      executeToolTemplate(form.getAttribute('id'), form.dataset.template);
     });
   });
 
@@ -640,7 +793,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('form.tool-form[data-body-endpoint]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-      executeToolBody(form.id, form.dataset.bodyEndpoint);
+      executeToolBody(form.getAttribute('id'), form.dataset.bodyEndpoint);
     });
   });
 
@@ -649,7 +802,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('form.tool-form[data-query-post-endpoint]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-      executeToolQueryPost(form.id, form.dataset.queryPostEndpoint);
+      executeToolQueryPost(form.getAttribute('id'), form.dataset.queryPostEndpoint);
     });
   });
 
@@ -658,7 +811,15 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('form.tool-form[data-image-template]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-      executeToolImage(form.id, form.dataset.imageTemplate);
+      executeToolImage(form.getAttribute('id'), form.dataset.imageTemplate);
+    });
+  });
+
+  // Wire forms that upload multipart data to API endpoints.
+  document.querySelectorAll('form.tool-form[data-api-endpoint]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      executeToolMultipart(form.getAttribute('id'), form.dataset.apiEndpoint);
     });
   });
 

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/api/src/common/requestid"
 	"github.com/apimgr/api/src/geoip"
 )
 
@@ -286,7 +287,7 @@ func (s *Service) IPLookup(ipStr string) (*IPInfo, error) {
 		return nil, ErrIPNotPermitted
 	}
 
-	entry, err := geoip.Get().Lookup(ip.String())
+	entry, err := geoip.GetGeoIPDatabase().Lookup(ip.String())
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrIPLookupFailed, err)
 	}
@@ -467,7 +468,7 @@ func (s *Service) TechStack(rawURL string) (*TechStackInfo, error) {
 		return nil, fmt.Errorf("failed to build request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := requestid.DoOutboundRequestWithID(client, req)
 	if err != nil {
 		return nil, fmt.Errorf("request to %s failed: %w", parsed.String(), err)
 	}

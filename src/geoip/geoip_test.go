@@ -112,9 +112,18 @@ func buildMinimalMMDB(t *testing.T, ipVersion uint8) []byte {
 }
 
 func TestGet_ReturnsSingleton(t *testing.T) {
-	g1 := Get()
-	g2 := Get()
+	g1 := GetGeoIPDatabase()
+	g2 := GetGeoIPDatabase()
 	assert.Same(t, g1, g2)
+}
+
+func TestCountryRecordPrefersCanonicalNestedISOCode(t *testing.T) {
+	record := countryRecord{CountryCode: "ZZ"}
+	record.Country.ISOCode = "US"
+	assert.Equal(t, "US", record.code())
+
+	record.Country.ISOCode = ""
+	assert.Equal(t, "ZZ", record.code(), "deprecated top-level field remains a fallback")
 }
 
 func TestGeoipDir(t *testing.T) {
@@ -270,6 +279,32 @@ func TestDownloadVerifiedFileChecksChecksumBeforeReplacing(t *testing.T) {
 	assert.Equal(t, data, got)
 }
 
+func TestDownloadWithRecoveryRetriesAndInstallsValidUnverifiedFirstCopy(t *testing.T) {
+	data := buildMinimalMMDB(t, 4)
+	checksumRequests, dataRequests := 0, 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/checksum" {
+			checksumRequests++
+			_, _ = fmt.Fprintf(w, "%064x  database.mmdb\n", 0)
+			return
+		}
+		dataRequests++
+		_, _ = w.Write(data)
+	}))
+	defer srv.Close()
+
+	target := filepath.Join(t.TempDir(), "database.mmdb")
+	err := downloadWithRecovery(dbFile{name: "database.mmdb", url: srv.URL + "/database", checksumURL: srv.URL + "/checksum"}, target)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "installed a valid unverified database")
+	assert.Equal(t, 2, checksumRequests, "both checksum and data are fetched again once after mismatch")
+	assert.Equal(t, 2, dataRequests)
+	require.NoError(t, validateMMDB(target))
+	got, readErr := os.ReadFile(target)
+	require.NoError(t, readErr)
+	assert.Equal(t, data, got)
+}
+
 // Download's MkdirAll failure path is exercised by pointing dataDir at a
 // location where the required geoip subdirectory cannot be created (its
 // parent already exists as a regular file, not a directory).
@@ -306,10 +341,10 @@ func TestDownloadWritesFreshnessMarkerAfterAllDatasets(t *testing.T) {
 	geoipHTTPClient = &http.Client{Transport: geoipTestTransport{database: buildMinimalMMDB(t, 4)}}
 	t.Cleanup(func() {
 		geoipHTTPClient = oldClient
-		Get().mu.Lock()
-		Get().closeLocked()
-		Get().loaded = false
-		Get().mu.Unlock()
+		GetGeoIPDatabase().mu.Lock()
+		GetGeoIPDatabase().closeLocked()
+		GetGeoIPDatabase().loaded = false
+		GetGeoIPDatabase().mu.Unlock()
 	})
 
 	dataDir := t.TempDir()

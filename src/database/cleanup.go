@@ -11,7 +11,7 @@ import (
 // CleanupExpiredRateLimits removes stale rate-limit sliding-window rows.
 // A window row is stale once it is more than one hour past window_start.
 func CleanupExpiredRateLimits() (int64, error) {
-	db := GetServerDB()
+	db := serverWriteDB()
 	if db == nil {
 		return 0, nil
 	}
@@ -38,7 +38,7 @@ func CleanupExpiredRateLimits() (int64, error) {
 // CleanupOldAuditLogs removes audit logs older than the retention period
 // Default retention: 90 days per spec
 func CleanupOldAuditLogs(retentionDays int) (int64, error) {
-	db := GetServerDB()
+	db := serverWriteDB()
 	if db == nil {
 		return 0, nil
 	}
@@ -49,7 +49,8 @@ func CleanupOldAuditLogs(retentionDays int) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutBulk)
 	defer cancel()
 
-	count, err := deleteBatches(ctx, db, `DELETE FROM audit_log WHERE id IN (SELECT id FROM audit_log WHERE timestamp < ? LIMIT 500)`, cutoff)
+	table := TableName("audit_log")
+	count, err := deleteBatches(ctx, db, fmt.Sprintf(`DELETE FROM %s WHERE id IN (SELECT id FROM %s WHERE timestamp < ? LIMIT 500)`, table, table), cutoff)
 	if err != nil {
 		return count, err
 	}
@@ -63,7 +64,7 @@ func CleanupOldAuditLogs(retentionDays int) (int64, error) {
 // CleanupOldSchedulerHistory removes old scheduler execution history
 // Keep last 100 executions per task
 func CleanupOldSchedulerHistory() (int64, error) {
-	db := GetServerDB()
+	db := serverWriteDB()
 	if db == nil {
 		return 0, nil
 	}
@@ -72,12 +73,13 @@ func CleanupOldSchedulerHistory() (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutBulk)
 	defer cancel()
 
-	count, err := deleteBatches(ctx, db, `DELETE FROM scheduler_history WHERE id IN (
+	table := TableName("scheduler_history")
+	count, err := deleteBatches(ctx, db, fmt.Sprintf(`DELETE FROM %s WHERE id IN (
 		SELECT id FROM (
 			SELECT id, row_number() OVER (PARTITION BY task_id ORDER BY started_at DESC, id DESC) AS position
-			FROM scheduler_history
+			FROM %s
 		) WHERE position > 100 LIMIT 500
-	)`)
+	)`, table, table))
 	if err != nil {
 		return count, err
 	}

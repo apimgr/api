@@ -22,6 +22,7 @@ import (
 // (AI.md PART 22 "Update Visibility").
 const lastNotifiedKey = "scheduler.update_check.last_notified_version"
 const lastFailedKey = "scheduler.update_check.last_failed_version"
+const lastStagedKey = "scheduler.update_check.last_staged_version"
 
 // updateCheckTask implements AI.md PART 18's update_check task: it runs the
 // defer_days-gated equivalent of `--update check` and, depending on
@@ -29,7 +30,7 @@ const lastFailedKey = "scheduler.update_check.last_failed_version"
 // install. Update availability is operator-only information - it is logged
 // and emailed, never surfaced on any public endpoint.
 func (s *Scheduler) updateCheckTask() error {
-	cfg, err := config.Load()
+	cfg, err := config.Load(nil)
 	if err != nil {
 		log.Printf("Scheduler: Update check skipped, failed to load config: %v", err)
 		return err
@@ -53,7 +54,6 @@ func (s *Scheduler) updateCheckTask() error {
 		return nil
 	}
 	if !cfg.Server.Update.AutoInstall {
-		log.Printf("Scheduler: Update available on the %s channel: %s (current: %s)", branch, release.TagName, s.opts.Version)
 		s.notifyUpdateAvailable(s.opts.Version, release.TagName, branch)
 		return nil
 	}
@@ -61,10 +61,13 @@ func (s *Scheduler) updateCheckTask() error {
 		log.Printf("Scheduler: Update %s previously failed; waiting for the next release", release.TagName)
 		return nil
 	}
+	if lastStagedUpdateVersion() == release.TagName {
+		return nil
+	}
 	if !paths.IsElevated() || runtime.GOOS == "windows" {
-		log.Printf("Scheduler: Update %s is available; automatic installation requires a root-started server", release.TagName)
-		s.auditUpdate("update.install_skipped", map[string]interface{}{"reason": "not_elevated", "version": release.TagName})
-		s.notifyUpdateAvailable(s.opts.Version, release.TagName, branch)
+		if s.notifyUpdateAvailable(s.opts.Version, release.TagName, branch) {
+			s.auditUpdate("update.install_skipped", map[string]interface{}{"reason": "not_elevated", "version": release.TagName})
+		}
 		return nil
 	}
 
@@ -81,6 +84,7 @@ func (s *Scheduler) updateCheckTask() error {
 		return err
 	}
 	setLastFailedUpdateVersion("")
+	setLastStagedUpdateVersion(release.TagName)
 	s.auditUpdate("update.staged", map[string]interface{}{"version": release.TagName})
 	if supervisorRestartsAfterTempFail() {
 		log.Printf("Scheduler: Update %s staged; shutting down for privileged restart", release.TagName)
@@ -118,6 +122,21 @@ func setLastFailedUpdateVersion(version string) {
 	}
 }
 
+func lastStagedUpdateVersion() string {
+	value, err := database.GetConfigValue(context.Background(), lastStagedKey)
+	if err != nil {
+		log.Printf("Scheduler: Failed to read last staged update version: %v", err)
+		return ""
+	}
+	return value
+}
+
+func setLastStagedUpdateVersion(version string) {
+	if err := database.SetConfigValue(context.Background(), lastStagedKey, version); err != nil {
+		log.Printf("Scheduler: Failed to record staged update version: %v", err)
+	}
+}
+
 func supervisorRestartsAfterTempFail() bool {
 	switch sysservice.DetectServiceManager() {
 	case sysservice.ServiceSystemd:
@@ -128,6 +147,8 @@ func supervisorRestartsAfterTempFail() bool {
 		return hasLinuxSupervisorAncestor("s6-supervise", "s6-svscan")
 	case sysservice.ServiceLaunchd:
 		return os.Getenv("LAUNCH_JOBKEY_LABEL") != "" || os.Getenv("XPC_SERVICE_NAME") != ""
+	case sysservice.ServiceBSDRC:
+		return true
 	default:
 		return false
 	}
@@ -179,19 +200,19 @@ func (s *Scheduler) auditUpdate(event string, details map[string]interface{}) {
 // notifyUpdateAvailable sends the update_available notification exactly once
 // per newly-seen version, remembering the announced version in the config
 // table so a restart does not re-announce it.
-func (s *Scheduler) notifyUpdateAvailable(currentVersion, newVersion, branch string) {
+func (s *Scheduler) notifyUpdateAvailable(currentVersion, newVersion, branch string) bool {
 	if lastNotifiedVersion() == newVersion {
-		return
+		return false
 	}
+	setLastNotifiedVersion(newVersion)
+	log.Printf("Scheduler: [WARN] Update available on the %s channel: %s (current: %s)", branch, newVersion, currentVersion)
 
 	if s.opts.Notifier != nil && len(s.opts.NotifyTo) > 0 {
 		if err := s.opts.Notifier.NotifyUpdateAvailable(s.opts.NotifyTo, currentVersion, newVersion, branch); err != nil {
 			log.Printf("Scheduler: Failed to send update_available notification: %v", err)
-			return
 		}
 	}
-
-	setLastNotifiedVersion(newVersion)
+	return true
 }
 
 // lastNotifiedVersion reads the most recently announced update version. A

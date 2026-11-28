@@ -34,23 +34,26 @@ func EventTogglesFromConfig(events config.EmailEventsConfig) EventToggles {
 // already-resolved app title and FQDN because src/email deliberately does
 // no FQDN resolution of its own; they fill in the AI.md PART 17 "Default
 // Sender" fallbacks (From Name = app title, From Address =
-// no-reply@{fqdn}) whenever the operator left those fields empty.
+// no-reply@{fqdn}) whenever the operator left those fields empty. If no FQDN
+// is available, email is disabled instead of using a localhost sender.
 // SMTP_* env overrides are applied earlier, when src/config loads the
 // file, so the values arriving here are already final.
-func ClientConfigFromConfig(email config.EmailConfig, appTitle, fqdn string, enabled bool) Config {
+func ClientConfigFromConfig(email config.EmailConfig, appTitle, fqdn string, enabled bool) EmailConfig {
 	fromName := email.From.Name
 	if fromName == "" {
 		fromName = appTitle
 	}
 	fromEmail := email.From.Email
 	if fromEmail == "" {
-		host := fqdn
-		if host == "" {
-			host = "localhost"
+		if fqdn != "" {
+			fromEmail = "no-reply@" + fqdn
 		}
-		fromEmail = "no-reply@" + host
 	}
-	return Config{
+	// A stable FQDN is required for the default sender and Message-ID domain.
+	// PART 17 explicitly disables email when the FQDN is unavailable; never
+	// manufacture a localhost identity as a substitute.
+	enabled = enabled && fqdn != ""
+	return EmailConfig{
 		Enabled:   enabled,
 		SMTPHost:  email.SMTP.Host,
 		SMTPPort:  email.SMTP.Port,
